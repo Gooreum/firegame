@@ -6,9 +6,9 @@ namespace FireGame.Core.Tests
 {
     public class SuppressionTests
     {
-        private static readonly Agent Water = new Agent(AgentType.Water, 0.6f, 0.5f);
-        private static readonly Agent Foam = new Agent(AgentType.Foam, 0.8f, 0.6f);
-        private static readonly Agent Co2 = new Agent(AgentType.CO2, 0.5f, 0f);
+        private static readonly Agent Water = new Agent(AgentType.Water, 0.6f, 0.5f, 0.5f);
+        private static readonly Agent Foam = new Agent(AgentType.Foam, 0.8f, 0.6f, 3.0f);
+        private static readonly Agent Co2 = new Agent(AgentType.CO2, 0.5f, 0f, 2.5f);
 
         /// <summary>해당 셀이 자기 발열로 안정될 때까지 돌린다.</summary>
         private static FireSim Settled(string[] rows, int ticks = 60)

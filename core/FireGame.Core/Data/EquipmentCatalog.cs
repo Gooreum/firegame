@@ -16,16 +16,23 @@ namespace FireGame.Core.Data
     /// <summary>
     /// 장비 정의 테이블.
     ///
-    /// 진압력은 <see cref="SimConfig.SelfHeatFactor"/> 기준 유지 열량과 맞물려 설계했다.
-    /// 단독 연소 시 유지 열량은 목재 0.625 / 유류 1.25 / 전기 0.375 이므로,
-    /// "맞는 장비는 한두 방, 틀린 장비는 여러 방 또는 역효과"가 성립한다.
+    /// 진압력은 <b>군집 화재의 열 재생 속도</b>를 기준으로 잡았다.
+    /// 이웃이 함께 타면 한 칸의 열이 초당 목재 1.85 / 전기 1.11 / 유류 3.70 씩 되살아난다.
+    /// 이보다 느린 장비는 아무리 쏴도 진압이 되지 않는다.
+    ///
+    /// 장비별 해당 등급 초당 진압력:
+    ///   양동이 → 목재 1.60  : 1칸 폭 목조 벽(재생 1.50)은 감당하지만
+    ///                          빽빽한 군집(재생 1.85)에는 밀린다 — 능력의 경계가 뚜렷하다
+    ///   CO2   → 전기 2.40  : 제압 가능(재생 1.11)
+    ///   호스   → 목재 2.50 x 5칸 : 제압 가능(재생 1.85). 대형 화재의 답이다
+    ///   폼    → 유류 4.80  : 제압 가능(재생 3.70)
     /// </summary>
     public static class EquipmentCatalog
     {
         public static readonly EquipmentDef Bucket = new EquipmentDef(
             id: EquipmentId.Bucket,
             name: "BUCKET",
-            agent: new Agent(AgentType.Water, 0.7f, 0.5f),
+            agent: new Agent(AgentType.Water, 1.6f, 0.5f, 0.5f),
             pattern: AimPattern.Single,
             range: 1,
             resource: ResourceKind.Cooldown,
@@ -38,7 +45,7 @@ namespace FireGame.Core.Data
         public static readonly EquipmentDef Extinguisher = new EquipmentDef(
             id: EquipmentId.Extinguisher,
             name: "CO2 EXT",
-            agent: new Agent(AgentType.CO2, 0.5f, 0f),
+            agent: new Agent(AgentType.CO2, 1.0f, 0f, 2.5f),
             pattern: AimPattern.Cone,
             range: 1,
             resource: ResourceKind.Charges,
@@ -51,7 +58,7 @@ namespace FireGame.Core.Data
         public static readonly EquipmentDef Hose = new EquipmentDef(
             id: EquipmentId.Hose,
             name: "HOSE",
-            agent: new Agent(AgentType.Water, 0.5f, 0.35f),
+            agent: new Agent(AgentType.Water, 0.5f, 0.35f, 0.5f),
             pattern: AimPattern.Line,
             range: 5,
             resource: ResourceKind.Cooldown,
@@ -64,12 +71,14 @@ namespace FireGame.Core.Data
         public static readonly EquipmentDef FoamExtinguisher = new EquipmentDef(
             id: EquipmentId.FoamExtinguisher,
             name: "FOAM",
-            agent: new Agent(AgentType.Foam, 0.8f, 0.6f),
+            agent: new Agent(AgentType.Foam, 2.0f, 0.6f, 3.0f),
             pattern: AimPattern.Cone,
             range: 1,
             resource: ResourceKind.Charges,
             cooldownSeconds: 0.5f,
-            maxCharges: 8,
+            // 유류 풀은 스스로 꺼지지 않아 진압해야 할 셀 수가 많다.
+            // 8회로는 풀 하나도 못 덮는다.
+            maxCharges: 30,
             requiresHydrant: false,
             hydrantRadius: 0f,
             price: 10000);

@@ -170,15 +170,23 @@ namespace FireGame.Core.Tests
                 "WWWWWWWWWWWWWWWWWWWW",
             }, timeLimit: 600f);
 
-            for (int i = 0; i < 100; i++) runner.Update(0.1f, default);
-            float hpAfterFrontPassed = runner.Player.Hp;
+            float lowest = GameConfig.PlayerMaxHp;
+            for (int i = 0; i < 100; i++)
+            {
+                runner.Update(0.1f, default);
+                if (runner.Player.Hp < lowest) lowest = runner.Player.Hp;
+            }
 
-            Assert.True(hpAfterFrontPassed > 0f, "전선이 지나가면 살아남아야 한다");
-            Assert.True(hpAfterFrontPassed < GameConfig.PlayerMaxHp, "지나가는 동안에는 다쳐야 한다");
+            Assert.True(lowest > 0f, "전선이 지나가면 살아남아야 한다");
+            Assert.True(lowest < GameConfig.PlayerMaxHp, "지나가는 동안에는 다쳐야 한다");
 
+            // 전선이 멀어지면 더 이상 다치지 않고, 안전해진 뒤에는 회복까지 된다.
+            float beforeRecovery = runner.Player.Hp;
             for (int i = 0; i < 50 && !runner.IsOver; i++) runner.Update(0.1f, default);
 
-            Assert.Equal(hpAfterFrontPassed, runner.Player.Hp, 3);
+            Assert.True(runner.Player.Hp >= beforeRecovery,
+                "안전해진 뒤에는 체력이 줄지 않아야 한다");
+            Assert.True(runner.Player.Hp > lowest, "불에서 벗어나면 회복돼야 한다");
         }
 
         // --- TC-6 ---

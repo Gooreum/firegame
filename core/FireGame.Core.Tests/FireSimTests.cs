@@ -261,7 +261,7 @@ namespace FireGame.Core.Tests
 
         // --- TC-11 ---
         [Fact]
-        public void Oil_IgnitesAndBurnsOutFasterThanWood()
+        public void Oil_IgnitesFasterThanWood_ButKeepsBurningLonger()
         {
             // 왼쪽은 유류, 오른쪽은 목재. 각각 발화점과 직교로 맞닿아 있다.
             var map = MapLoader.Parse(new[]
@@ -292,10 +292,12 @@ namespace FireGame.Core.Tests
             Assert.True(oilIgnite.Value < woodIgnite.Value,
                 "유류(" + oilIgnite + ")가 목재(" + woodIgnite + ")보다 먼저 붙어야 한다");
 
-            Assert.NotNull(oilBurnt);
+            // 목재는 연료를 다 쓰고 스스로 꺼지지만, 유류는 40초가 지나도 계속 탄다.
+            // 유류가 금방 꺼져버리면 물이 역효과여도 그냥 기다리면 되기 때문에
+            // 폼 소화기를 살 이유가 사라진다. A급만 스스로 꺼진다.
             Assert.NotNull(woodBurnt);
-            Assert.True(oilBurnt.Value < woodBurnt.Value,
-                "유류(" + oilBurnt + ")가 목재(" + woodBurnt + ")보다 먼저 소진돼야 한다");
+            Assert.Null(oilBurnt);
+            Assert.Equal(CellState.Burning, sim.Grid[1, 1].State);
         }
 
         // --- TC-12 ---

@@ -171,6 +171,12 @@ namespace FireGame.Core.Sim
                     cells[i].Wet -= SimConfig.WetDecay * dt;
                     if (cells[i].Wet < 0f) cells[i].Wet = 0f;
                 }
+
+                if (cells[i].Inert > 0f)
+                {
+                    cells[i].Inert -= SimConfig.InertDecay * dt;
+                    if (cells[i].Inert < 0f) cells[i].Inert = 0f;
+                }
             }
         }
 
@@ -183,6 +189,7 @@ namespace FireGame.Core.Sim
             {
                 if (cells[i].State != CellState.Intact) continue;
                 if (cells[i].Wet > 0f) continue;
+                if (cells[i].Inert > 0f) continue;
                 if (cells[i].Fuel <= 0f) continue;
 
                 CellMaterial material = Materials.Of(cells[i].Material);

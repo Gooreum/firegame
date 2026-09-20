@@ -31,6 +31,9 @@ namespace FireGame.Core.Game
         /// <summary>업고 있는 시민이 있는지. 있으면 이동이 느려진다.</summary>
         public bool CarryingCivilian;
 
+        /// <summary>마지막으로 피해를 받은 뒤 경과한 시간.</summary>
+        public float TimeSinceDamage = float.MaxValue;
+
         public int CellX
         {
             get { return (int)Math.Floor(X); }
@@ -78,6 +81,7 @@ namespace FireGame.Core.Game
 
             Move(dt, grid, inputX, inputY);
             ApplyFireDamage(dt, grid);
+            ApplyRegen(dt);
         }
 
         private void TickCooldowns(float dt)
@@ -175,6 +179,18 @@ namespace FireGame.Core.Game
         {
             Hp -= amount;
             if (Hp < 0f) Hp = 0f;
+            TimeSinceDamage = 0f;
+        }
+
+        /// <summary>불에서 충분히 떨어져 숨을 돌리면 서서히 회복한다.</summary>
+        private void ApplyRegen(float dt)
+        {
+            if (TimeSinceDamage < float.MaxValue) TimeSinceDamage += dt;
+            if (TimeSinceDamage < GameConfig.RegenDelaySeconds) return;
+            if (Hp >= GameConfig.PlayerMaxHp) return;
+
+            Hp += GameConfig.RegenPerSecond * dt;
+            if (Hp > GameConfig.PlayerMaxHp) Hp = GameConfig.PlayerMaxHp;
         }
 
         /// <summary>

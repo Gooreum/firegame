@@ -20,17 +20,21 @@ namespace FireGame.Core.Sim
 
         /// <summary>
         /// 부여하는 젖음. CO2는 기체라 0이다.
-        /// 젖음은 재점화를 막아주지만 정산에서 수손 피해로 차감되므로,
-        /// "물은 확실히 끄지만 돈이 깎이고, CO2는 깨끗하지만 다시 붙는다"는
+        /// 젖음은 오래 남아 재점화를 확실히 막지만 정산에서 수손 피해로 차감된다.
+        /// "물은 확실하지만 돈이 깎이고, CO2는 깨끗하지만 보호가 짧다"는
         /// 선택이 여기서 생긴다.
         /// </summary>
         public readonly float Wetness;
 
-        public Agent(AgentType type, float power, float wetness)
+        /// <summary>부여하는 불활성 시간(초). 수손 피해로 세지 않는다.</summary>
+        public readonly float Inerting;
+
+        public Agent(AgentType type, float power, float wetness, float inerting)
         {
             Type = type;
             Power = power;
             Wetness = wetness;
+            Inerting = inerting;
         }
     }
 
@@ -116,6 +120,11 @@ namespace FireGame.Core.Sim
                 if (cell.Wet > 1f) cell.Wet = 1f;
             }
 
+            if (agent.Inerting > 0f && agent.Inerting > cell.Inert)
+            {
+                cell.Inert = agent.Inerting;
+            }
+
             if (cell.State == CellState.Burning && cell.Heat <= 0f)
             {
                 cell.Heat = 0f;
@@ -142,6 +151,7 @@ namespace FireGame.Core.Sim
                 ref Cell target = ref grid[nx, ny];
                 if (target.State != CellState.Intact) continue;
                 if (target.Wet > 0f) continue;
+                if (target.Inert > 0f) continue;
                 if (target.Fuel <= 0f) continue;
 
                 CellMaterial targetMaterial = Materials.Of(target.Material);

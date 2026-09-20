@@ -78,6 +78,14 @@ namespace FireGame.Core.Grid
 
         /// <summary>
         /// 인덱스 = <see cref="MaterialId"/> 값. 순서를 바꾸면 저장된 맵이 전부 깨진다.
+        ///
+        /// 연소속도(BurnRate) 설계 원칙: <b>A급만 스스로 꺼진다.</b>
+        /// 목재는 연료를 태워 없애고 저절로 진화되지만, 유류와 전기는 사실상
+        /// 꺼지지 않는다(유류 200초, 전기 250초 — 어떤 스테이지 제한시간보다도 길다).
+        ///
+        /// 이 규칙이 장비 진행의 근거다. B·C급이 알아서 꺼지면 맞는 약제를 살 이유가
+        /// 없어진다. 못 끄는 장비를 들고도 그냥 기다리면 이기기 때문이다.
+        /// 실제로도 배전반 화재는 전원을 끊어야, 유류 풀 화재는 덮어야 꺼진다.
         /// </summary>
         public static readonly CellMaterial[] All =
         {
@@ -85,8 +93,14 @@ namespace FireGame.Core.Grid
             new CellMaterial("Floor",    Inf,   0f,     0f,   FireClass.None, true),
             new CellMaterial("Wood",     0.35f, 0.25f,  1.0f, FireClass.A,    false),
             new CellMaterial("Concrete", Inf,   0f,     0f,   FireClass.None, false),
-            new CellMaterial("Oil",      0.15f, 0.50f,  2.0f, FireClass.B,    true),
-            new CellMaterial("Electric", 0.25f, 0.10f,  0.6f, FireClass.C,    false),
+            // 유류 풀 화재는 덮어서 질식시키기 전에는 꺼지지 않는다(200초).
+            //
+            // 발열 2.0 / 발화점 0.15 였을 때는 확산은 빨랐지만 군집 유지 열량이 너무 높아
+            // 폼으로도 진압이 불가능했다. 발열을 1.2로 낮추고 발화점을 0.10으로 함께 낮춰
+            // 확산 속도(5칸/초, 플레이어보다 빠르다)는 그대로 두고 진압만 가능하게 했다.
+            new CellMaterial("Oil",      0.10f, 0.005f, 1.2f, FireClass.B,    true),
+            // 배전반 화재는 전원을 끊거나 CO2로 덮기 전에는 사실상 꺼지지 않는다(250초).
+            new CellMaterial("Electric", 0.25f, 0.004f, 0.6f, FireClass.C,    false),
             new CellMaterial("Hydrant",  Inf,   0f,     0f,   FireClass.None, false),
             new CellMaterial("Door",     0.40f, 0.20f,  0.8f, FireClass.A,    true),
             new CellMaterial("Exit",     Inf,   0f,     0f,   FireClass.None, true),
@@ -132,8 +146,10 @@ namespace FireGame.Core.Grid
                 case '@': materialId = MaterialId.Floor; return true;
                 case '!': materialId = MaterialId.Floor; return true;
 
-                // 초기 발화점. 목재를 깔고 곧바로 연소 상태로 만든다.
+                // 초기 발화점. 재질을 깔고 곧바로 연소 상태로 만든다.
                 case '*': materialId = MaterialId.Wood; return true;
+                case '%': materialId = MaterialId.Oil; return true;
+                case '$': materialId = MaterialId.Electric; return true;
 
                 default:
                     materialId = MaterialId.Floor;

@@ -32,6 +32,14 @@ namespace FireGame.Core.Sim
         /// <summary>초당 젖음이 마르는 양.</summary>
         public const float WetDecay = 0.01f;
 
+        /// <summary>
+        /// 초당 불활성 상태가 풀리는 양.
+        /// 1.0이므로 <see cref="Suppression"/>의 Inerting 값이 곧 '초'가 된다.
+        /// 단위를 어긋나게 두면 "2.5초 보호"라고 적어놓고 실제로는 6초가 보호되는 식으로
+        /// 문서와 동작이 조용히 갈라진다.
+        /// </summary>
+        public const float InertDecay = 1.0f;
+
         /// <summary>대각선 이웃으로의 열 전파 감쇠 계수.</summary>
         public const float DiagonalWeight = 0.7f;
 

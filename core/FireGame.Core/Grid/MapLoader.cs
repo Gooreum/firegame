@@ -30,7 +30,8 @@ namespace FireGame.Core.Grid
         /// 맵 문자 정의:
         /// <c>.</c> 바닥, <c>#</c> 콘크리트, <c>W</c> 목재, <c>~</c> 유류,
         /// <c>E</c> 전기, <c>H</c> 급수전, <c>D</c> 문, <c>X</c> 출구,
-        /// <c>@</c> 플레이어, <c>!</c> 시민, <c>*</c> 초기 발화점.
+        /// <c>@</c> 플레이어, <c>!</c> 시민,
+        /// <c>*</c> 목재 발화점, <c>%</c> 유류 발화점, <c>$</c> 전기 발화점.
         /// </summary>
         /// <param name="rows">위에서 아래 순서의 맵 행. 모든 행의 길이가 같아야 한다.</param>
         public static ParsedMap Parse(string[] rows)
@@ -109,6 +110,8 @@ namespace FireGame.Core.Grid
                             result.Hydrants.Add(point);
                             break;
                         case '*':
+                        case '%':
+                        case '$':
                             cell.State = CellState.Burning;
                             result.IgnitionPoints.Add(point);
                             break;
