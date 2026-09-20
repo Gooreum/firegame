@@ -1,0 +1,29 @@
+# ---- dotnet ----
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# ---- Unity ----
+unity/Library/
+unity/Temp/
+unity/Obj/
+unity/Build/
+unity/Builds/
+unity/Logs/
+unity/UserSettings/
+unity/MemoryCaptures/
+unity/Recordings/
+*.csproj.user
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+sysinfo.txt
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# ---- macOS ----
+.DS_Store
