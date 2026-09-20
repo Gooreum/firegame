@@ -1,0 +1,105 @@
+using FireGame.Core.Sim;
+
+namespace FireGame.Core.Game
+{
+    /// <summary>레벨 하나의 정의. 맵과 난이도 설정을 담는다.</summary>
+    public sealed class StageDef
+    {
+        public readonly int Id;
+        public readonly string Name;
+
+        /// <summary>문자열 맵. <see cref="Grid.MapLoader"/> 문자 규칙을 따른다.</summary>
+        public readonly string[] Map;
+
+        /// <summary>바람. 사실상 이 스테이지의 난이도 다이얼이다.</summary>
+        public readonly Wind Wind;
+
+        public readonly float TimeLimitSeconds;
+        public readonly int BasePayout;
+
+        /// <summary>이 스테이지를 열기 위해 클리어해야 하는 이전 스테이지 수.</summary>
+        public readonly int RequiredClears;
+
+        public StageDef(
+            int id,
+            string name,
+            string[] map,
+            Wind wind,
+            float timeLimitSeconds,
+            int basePayout,
+            int requiredClears)
+        {
+            Id = id;
+            Name = name;
+            Map = map;
+            Wind = wind;
+            TimeLimitSeconds = timeLimitSeconds;
+            BasePayout = basePayout;
+            RequiredClears = requiredClears;
+        }
+    }
+
+    /// <summary>한 판의 진행 상태.</summary>
+    public enum StageOutcome : byte
+    {
+        InProgress = 0,
+        Won = 1,
+
+        /// <summary>건물이 너무 많이 타버렸다.</summary>
+        LostBuildingDestroyed = 2,
+
+        /// <summary>소방관이 쓰러졌다.</summary>
+        LostPlayerDown = 3,
+
+        LostTimeUp = 4,
+    }
+
+    /// <summary>한 프레임의 플레이어 입력.</summary>
+    public struct StageInput
+    {
+        public float MoveX;
+        public float MoveY;
+
+        /// <summary>이번 프레임에 발사를 시도하는지.</summary>
+        public bool Fire;
+
+        /// <summary>사용할 장비 슬롯.</summary>
+        public int Slot;
+    }
+
+    /// <summary>구조 대상 시민.</summary>
+    public sealed class Civilian
+    {
+        public float X;
+        public float Y;
+
+        /// <summary>플레이어가 업고 있는 중.</summary>
+        public bool Carried;
+
+        public bool Rescued;
+
+        /// <summary>불에 휩싸여 구조하지 못한 상태.</summary>
+        public bool Lost;
+
+        /// <summary>아직 맵 위에서 구조를 기다리는 중인지.</summary>
+        public bool Pending
+        {
+            get { return !Rescued && !Lost; }
+        }
+    }
+
+    /// <summary>한 판이 끝난 뒤 정산에 넘기는 집계값.</summary>
+    public struct StageResult
+    {
+        public int StageId;
+        public int BasePayout;
+        public bool Won;
+        public int Rescued;
+        public int CiviliansTotal;
+        public float IntactRatio;
+        public float TimeLeft;
+
+        /// <summary>물을 머금은 셀 수. 수손 피해로 정산에서 차감된다.</summary>
+        public int WetCellCount;
+    }
+}
