@@ -45,7 +45,15 @@ namespace FireGame.Core.Sim
         /// <summary>풍하 방향 전파 계수의 상한.</summary>
         public const float WindFactorMax = 2.0f;
 
-        /// <summary>이 값을 넘는 젖음이 남아 있으면 재점화되지 않는다.</summary>
-        public const float WetExtinguishThreshold = 0.2f;
+        /// <summary>
+        /// 연소 셀이 자기 자신에게 되돌리는 열의 비율.
+        /// 이게 없으면 모든 연소 셀의 열이 0 근처에 머물러
+        /// 물 한 방울에 다 꺼져버린다. 이 값 덕분에
+        /// "불이 클수록(이웃 화염이 많을수록) 끄기 어렵다"가 성립한다.
+        ///
+        /// 1.0 기준 단독 연소 시 유지 열량:
+        ///   목재 0.625 / 유류 1.25 / 전기 0.375 / 문 0.5
+        /// </summary>
+        public const float SelfHeatFactor = 1.0f;
     }
 }

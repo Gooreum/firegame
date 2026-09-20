@@ -115,6 +115,11 @@ namespace FireGame.Core.Sim
                     CellMaterial material = Materials.Of(cells[index].Material);
                     float output = material.HeatOutput * SimConfig.SpreadScale * dt;
 
+                    // 자기 자신도 데운다. 이웃에게 주는 열에는 영향이 없으므로
+                    // 확산 타이밍은 그대로이고, 대신 연소 셀이 고유의 열량을 유지해
+                    // 진압에 필요한 방수량이 불의 규모에 비례하게 된다.
+                    _heatDelta[index] += output * SimConfig.SelfHeatFactor;
+
                     for (int n = 0; n < 8; n++)
                     {
                         int nx = x + NeighborDx[n];
