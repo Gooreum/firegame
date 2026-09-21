@@ -32,9 +32,9 @@ sysinfo.txt
 unity/Assets/Scripts/Core/
 unity/Assets/Scripts/Core.meta
 
-# ---- Unity 스텁 컴파일 검사 산출물 ----
-tools/unity-compile-check/bin/
-tools/unity-compile-check/obj/
 
 # ---- import-art.py 다운로드 캐시 ----
 tools/.art-cache/
+
+# ---- unity-check.sh 스크린샷 ----
+tools/.shots/
