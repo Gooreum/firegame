@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FireGame.Core.Grid;
 using FireGame.Core.Sim;
@@ -73,6 +74,38 @@ namespace FireGame.Core.Game
             CooldownSeconds = cooldownSeconds;
             MaxCharges = maxCharges;
             Price = price;
+        }
+
+        /// <summary>레벨 하나당 위력 증가율.</summary>
+        public const float PowerPerLevel = 0.2f;
+
+        /// <summary>레벨 하나당 사용 횟수 증가율(소화기류).</summary>
+        public const float ChargesPerLevel = 0.25f;
+
+        /// <summary>레벨 하나당 쿨다운 감소율(양동이).</summary>
+        public const float CooldownCutPerLevel = 0.1f;
+
+        /// <summary>
+        /// 레벨이 반영된 정의. Lv1이 기본값이고, 레벨마다
+        /// 위력 +20%, 소화기는 사용 횟수 +25%, 호스는 사거리 +1, 양동이는 쿨다운 −10%.
+        /// </summary>
+        public EquipmentDef AtLevel(int level)
+        {
+            int steps = Math.Max(0, level - 1);
+            if (steps == 0) return this;
+
+            var agent = new Agent(Agent.Type, Agent.Power * (1f + (PowerPerLevel * steps)), Agent.Wetness, Agent.Inerting);
+
+            int range = Pattern == AimPattern.Line ? Range + steps : Range;
+
+            // 호스는 이미 0.2초마다 나가므로 사거리로 키우고, 쿨다운 장비만 연사를 빠르게 한다.
+            float cooldown = Resource == ResourceKind.Cooldown && Pattern != AimPattern.Line
+                ? CooldownSeconds * (1f - (CooldownCutPerLevel * steps))
+                : CooldownSeconds;
+
+            int charges = MaxCharges == 0 ? 0 : (int)Math.Round(MaxCharges * (1f + (ChargesPerLevel * steps)));
+
+            return new EquipmentDef(Id, Name, agent, Pattern, range, Resource, cooldown, charges, Price);
         }
     }
 
