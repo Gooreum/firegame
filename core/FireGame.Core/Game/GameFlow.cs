@@ -1,45 +1,37 @@
 using System;
-using System.Collections.Generic;
-using FireGame.Core.Data;
-using FireGame.Core.Render;
 
 namespace FireGame.Core.Game
 {
     /// <summary>게임의 화면 단위.</summary>
     public enum GameScreen : byte
     {
-        /// <summary>스테이지 선택과 상점 입구.</summary>
-        Hub = 0,
-        Shop = 1,
+        /// <summary>출동 지도. 현장 선택과 상점 입구.</summary>
+        Map = 0,
+
+        /// <summary>출동 전 서장의 브리핑.</summary>
+        Briefing = 1,
+
         Playing = 2,
 
-        /// <summary>한 판이 끝난 뒤의 정산.</summary>
+        /// <summary>현장이 끝난 뒤의 별점·정산.</summary>
         Result = 3,
     }
 
     /// <summary>
-    /// 화면 전환과 입력 해석을 맡는다. Unity 쪽은 터치 좌표를 320x200으로 바꿔
-    /// 넘기고, <see cref="Render"/>가 채운 버퍼를 텍스처로 올리기만 한다.
+    /// 화면 전환과 입력을 맡는다. Unity 쪽 버튼·조이스틱은 여기 있는 명령만 호출한다.
     ///
-    /// 이 로직을 Unity 스크립트에 두면 에디터 없이는 검증할 방법이 없다.
-    /// 여기 두면 "허브에서 탭 → 플레이 → 정산 → 저장" 전체 흐름을 테스트로 돌릴 수 있다.
+    /// 흐름을 Unity 스크립트에 두면 에디터 없이는 검증할 방법이 없다.
+    /// 여기 두면 "지도 → 브리핑 → 플레이 → 결과 → 다음 현장 해금" 전체를 테스트로 돌릴 수 있다.
     /// </summary>
     public sealed class GameFlow
     {
-        private readonly HashSet<int> _firePointers = new HashSet<int>();
-
-        private int _joystickPointer = -1;
-        private float _joystickAnchorX;
-        private float _joystickAnchorY;
         private float _stickX;
         private float _stickY;
+        private bool _fireHeld;
 
         private float _keyboardX;
         private float _keyboardY;
         private bool _keyboardFire;
-
-        private int _activeSlot;
-        private float _elapsed;
 
         public readonly SaveData Save;
 
@@ -54,86 +46,128 @@ namespace FireGame.Core.Game
             Save = save ?? SaveData.NewGame();
         }
 
-        public GameScreen Screen { get; private set; } = GameScreen.Hub;
+        public GameScreen Screen { get; private set; } = GameScreen.Map;
 
-        /// <summary>플레이 중인 판. 플레이 화면이 아니면 마지막 판이 남아 있을 수 있다.</summary>
+        /// <summary>지도 위에 상점 패널이 열려 있는지.</summary>
+        public bool ShopOpen { get; private set; }
+
+        /// <summary>브리핑·플레이·결과 중인 현장. 지도에서는 마지막으로 고른 현장이 남아 있을 수 있다.</summary>
+        public MissionDef CurrentMission { get; private set; }
+
         public StageRunner Runner { get; private set; }
-
-        public int ShopCursor { get; private set; } = -1;
 
         public StageOutcome LastOutcome { get; private set; }
 
         public PayoutBreakdown LastPayout { get; private set; }
 
-        public string LastStageName { get; private set; }
+        public int LastStars { get; private set; }
 
-        public int ActiveSlot
+        /// <summary>이번 결과로 최고 별점이 올랐는지. 결과 화면 연출용.</summary>
+        public bool LastWasNewBest { get; private set; }
+
+        public int ActiveSlot { get; private set; }
+
+        /// <summary>누적 시간. 화면 애니메이션에 쓴다.</summary>
+        public float Elapsed { get; private set; }
+
+        // ------------------------------------------------------------------
+        // 지도 · 브리핑 · 결과
+        // ------------------------------------------------------------------
+
+        /// <summary>지도에서 현장을 고른다. 잠겨 있거나 지도 화면이 아니면 false.</summary>
+        public bool SelectMission(int missionId)
         {
-            get { return _activeSlot; }
+            if (Screen != GameScreen.Map || ShopOpen) return false;
+
+            MissionDef mission = Campaign.ById(missionId);
+            if (mission == null || !Save.IsMissionUnlocked(mission)) return false;
+
+            CurrentMission = mission;
+            Screen = GameScreen.Briefing;
+            return true;
         }
 
-        /// <summary>화염 애니메이션용 프레임 번호. 초당 6장.</summary>
-        public int AnimationFrame
+        /// <summary>브리핑을 마치고 출동한다.</summary>
+        public void BeginMission()
         {
-            get { return (int)(_elapsed * 6f); }
+            if (Screen != GameScreen.Briefing || CurrentMission == null) return;
+
+            StartRun();
+        }
+
+        /// <summary>결과 화면에서 같은 현장을 바로 다시 한다. 브리핑은 건너뛴다.</summary>
+        public void RetryMission()
+        {
+            if (Screen != GameScreen.Result || CurrentMission == null) return;
+
+            StartRun();
+        }
+
+        public void BackToMap()
+        {
+            if (Screen != GameScreen.Briefing && Screen != GameScreen.Result) return;
+
+            Screen = GameScreen.Map;
+        }
+
+        private void StartRun()
+        {
+            Runner = new StageRunner(CurrentMission.Stage, Save.Unlocked);
+            ActiveSlot = 0;
+            ResetInput();
+            Screen = GameScreen.Playing;
         }
 
         // ------------------------------------------------------------------
-        // 입력
+        // 상점
         // ------------------------------------------------------------------
 
-        /// <summary>손가락(또는 마우스)이 닿았다. 좌표는 프레임버퍼 기준.</summary>
-        public void PointerDown(int pointerId, float x, float y)
+        public void OpenShop()
         {
-            switch (Screen)
-            {
-                case GameScreen.Hub:
-                    HubTap(x, y);
-                    break;
-
-                case GameScreen.Shop:
-                    ShopTap(x, y);
-                    break;
-
-                case GameScreen.Result:
-                    Screen = GameScreen.Hub;
-                    break;
-
-                case GameScreen.Playing:
-                    PlayingDown(pointerId, x, y);
-                    break;
-            }
+            if (Screen == GameScreen.Map) ShopOpen = true;
         }
 
-        public void PointerMove(int pointerId, float x, float y)
+        public void CloseShop()
         {
-            if (pointerId != _joystickPointer) return;
-
-            float dx = (x - _joystickAnchorX) / ScreenLayout.JoystickRadius;
-            float dy = (y - _joystickAnchorY) / ScreenLayout.JoystickRadius;
-
-            // 끝까지 밀었으면 그 이상은 더 빨라지지 않는다.
-            float length = (float)Math.Sqrt((dx * dx) + (dy * dy));
-            if (length > 1f)
-            {
-                dx /= length;
-                dy /= length;
-            }
-
-            _stickX = dx;
-            _stickY = dy;
+            ShopOpen = false;
         }
 
-        public void PointerUp(int pointerId)
+        public PurchaseResult Buy(int equipmentId)
         {
-            if (pointerId == _joystickPointer)
-            {
-                _joystickPointer = -1;
-                _stickX = 0f;
-                _stickY = 0f;
-            }
+            // 상점이 닫혀 있을 때 사지는 걸 막는다. 버튼이 늦게 눌리는 경우를 대비한다.
+            if (!ShopOpen || Screen != GameScreen.Map) return PurchaseResult.UnknownEquipment;
 
-            _firePointers.Remove(pointerId);
+            PurchaseResult result = Shop.Buy(Save, equipmentId);
+            if (result == PurchaseResult.Success) Persist();
+            return result;
+        }
+
+        // ------------------------------------------------------------------
+        // 플레이 입력
+        // ------------------------------------------------------------------
+
+        /// <summary>가상 조이스틱. 길이 1을 넘는 입력은 단위 원으로 자른다.</summary>
+        public void SetMove(float x, float y)
+        {
+            ClampToUnit(ref x, ref y);
+            _stickX = x;
+            _stickY = y;
+        }
+
+        public void SetFire(bool held)
+        {
+            _fireHeld = held;
+        }
+
+        public void SelectSlot(int slot)
+        {
+            if (Runner == null) return;
+            if (slot < 0 || slot >= PlayerState.SlotCount) return;
+
+            // 빈 슬롯을 고르면 아무것도 못 쏘게 되므로 무시한다.
+            if (Runner.Player.Slots[slot] < 0) return;
+
+            ActiveSlot = slot;
         }
 
         /// <summary>
@@ -149,119 +183,28 @@ namespace FireGame.Core.Game
             if (slotKey >= 0) SelectSlot(slotKey);
         }
 
-        private void HubTap(float x, float y)
-        {
-            if (ScreenLayout.Inside(
-                    x, y,
-                    ScreenLayout.HubShopButtonX,
-                    ScreenLayout.HubShopButtonY,
-                    ScreenLayout.HubShopButtonWidth,
-                    ScreenLayout.HubShopButtonHeight))
-            {
-                ShopCursor = -1;
-                Screen = GameScreen.Shop;
-                return;
-            }
-
-            int row = ScreenLayout.RowAt(y, ScreenLayout.HubStageTop, StageCatalog.All.Length);
-            if (row < 0) return;
-
-            MissionDef mission = Campaign.Missions[row];
-            if (!Save.IsMissionUnlocked(mission)) return;
-
-            StartStage(mission.Stage);
-        }
-
-        private void ShopTap(float x, float y)
-        {
-            if (ScreenLayout.Inside(
-                    x, y,
-                    ScreenLayout.ShopBackButtonX,
-                    ScreenLayout.ShopBackButtonY,
-                    ScreenLayout.ShopBackButtonWidth,
-                    ScreenLayout.ShopBackButtonHeight))
-            {
-                Screen = GameScreen.Hub;
-                return;
-            }
-
-            int row = ScreenLayout.RowAt(y, ScreenLayout.ShopRowTop, EquipmentCatalog.All.Length);
-            if (row < 0) return;
-
-            ShopCursor = row;
-
-            if (Shop.Buy(Save, EquipmentCatalog.All[row].Id) == PurchaseResult.Success)
-            {
-                Persist();
-            }
-        }
-
-        private void PlayingDown(int pointerId, float x, float y)
-        {
-            // HUD 줄은 장비 선택.
-            if (y >= FrameBuffer.PlayfieldHeight)
-            {
-                int slot = ScreenLayout.SlotAt(x, PlayerState.SlotCount);
-                if (slot >= 0) SelectSlot(slot);
-                return;
-            }
-
-            // 왼쪽은 조이스틱. 누른 자리가 중심이 되므로 화면 어디를 짚어도 된다.
-            if (x < ScreenLayout.PlaySplitX)
-            {
-                if (_joystickPointer >= 0) return;
-
-                _joystickPointer = pointerId;
-                _joystickAnchorX = x;
-                _joystickAnchorY = y;
-                _stickX = 0f;
-                _stickY = 0f;
-                return;
-            }
-
-            // 오른쪽은 누르고 있는 동안 발사.
-            _firePointers.Add(pointerId);
-        }
-
-        private void SelectSlot(int slot)
-        {
-            if (Runner == null) return;
-            if (slot < 0 || slot >= PlayerState.SlotCount) return;
-
-            // 빈 슬롯을 고르면 아무것도 못 쏘게 되므로 무시한다.
-            if (Runner.Player.Slots[slot] < 0) return;
-
-            _activeSlot = slot;
-        }
-
         // ------------------------------------------------------------------
         // 진행
         // ------------------------------------------------------------------
-
-        public void StartStage(StageDef stage)
-        {
-            if (stage == null) throw new ArgumentNullException(nameof(stage));
-
-            Runner = new StageRunner(stage, Save.Unlocked);
-            _activeSlot = 0;
-            ResetPointers();
-            Screen = GameScreen.Playing;
-        }
 
         public void Update(float dt)
         {
             if (dt <= 0f) return;
 
-            _elapsed += dt;
+            Elapsed += dt;
 
             if (Screen != GameScreen.Playing || Runner == null) return;
 
+            float moveX = _stickX + _keyboardX;
+            float moveY = _stickY + _keyboardY;
+            ClampToUnit(ref moveX, ref moveY);
+
             var input = new StageInput
             {
-                MoveX = Clamp(_stickX + _keyboardX),
-                MoveY = Clamp(_stickY + _keyboardY),
-                Fire = _firePointers.Count > 0 || _keyboardFire,
-                Slot = _activeSlot,
+                MoveX = moveX,
+                MoveY = moveY,
+                Fire = _fireHeld || _keyboardFire,
+                Slot = ActiveSlot,
             };
 
             Runner.Update(dt, input);
@@ -273,25 +216,27 @@ namespace FireGame.Core.Game
         {
             StageResult result = Runner.BuildResult();
             PayoutBreakdown payout = Economy.Breakdown(result);
+            int stars = StarRating.For(result);
+
+            LastWasNewBest = stars > Save.StarsFor(CurrentMission.Id);
 
             Save.Money += payout.Total;
-            Save.RecordResult(Runner.Def.Id, StarRating.For(result));
+            Save.RecordResult(CurrentMission.Id, stars);
 
             LastOutcome = Runner.Outcome;
             LastPayout = payout;
-            LastStageName = Runner.Def.Name;
+            LastStars = stars;
 
-            ResetPointers();
+            ResetInput();
             Persist();
             Screen = GameScreen.Result;
         }
 
-        private void ResetPointers()
+        private void ResetInput()
         {
-            _joystickPointer = -1;
             _stickX = 0f;
             _stickY = 0f;
-            _firePointers.Clear();
+            _fireHeld = false;
         }
 
         private void Persist()
@@ -299,40 +244,13 @@ namespace FireGame.Core.Game
             if (SaveWriter != null) SaveWriter(Save.Serialize());
         }
 
-        private static float Clamp(float value)
+        private static void ClampToUnit(ref float x, ref float y)
         {
-            if (value > 1f) return 1f;
-            if (value < -1f) return -1f;
-            return value;
-        }
+            float length = (float)Math.Sqrt((x * x) + (y * y));
+            if (length <= 1f) return;
 
-        // ------------------------------------------------------------------
-        // 그리기
-        // ------------------------------------------------------------------
-
-        public void Render(FrameBuffer buffer)
-        {
-            if (buffer == null) return;
-
-            switch (Screen)
-            {
-                case GameScreen.Hub:
-                    HudRenderer.DrawHub(buffer, Save);
-                    break;
-
-                case GameScreen.Shop:
-                    HudRenderer.DrawShop(buffer, Save, ShopCursor);
-                    break;
-
-                case GameScreen.Playing:
-                    SceneRenderer.Render(buffer, Runner, AnimationFrame);
-                    HudRenderer.DrawHud(buffer, Runner, Save.Money);
-                    break;
-
-                case GameScreen.Result:
-                    HudRenderer.DrawResult(buffer, LastStageName, LastOutcome, LastPayout);
-                    break;
-            }
+            x /= length;
+            y /= length;
         }
     }
 }
