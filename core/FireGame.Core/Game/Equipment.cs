@@ -51,11 +51,6 @@ namespace FireGame.Core.Game
         public readonly ResourceKind Resource;
         public readonly float CooldownSeconds;
         public readonly int MaxCharges;
-
-        /// <summary>급수전 근처에서만 쓸 수 있는지. 호스는 물을 끌어와야 한다.</summary>
-        public readonly bool RequiresHydrant;
-
-        public readonly float HydrantRadius;
         public readonly int Price;
 
         public EquipmentDef(
@@ -67,8 +62,6 @@ namespace FireGame.Core.Game
             ResourceKind resource,
             float cooldownSeconds,
             int maxCharges,
-            bool requiresHydrant,
-            float hydrantRadius,
             int price)
         {
             Id = id;
@@ -79,8 +72,6 @@ namespace FireGame.Core.Game
             Resource = resource;
             CooldownSeconds = cooldownSeconds;
             MaxCharges = maxCharges;
-            RequiresHydrant = requiresHydrant;
-            HydrantRadius = hydrantRadius;
             Price = price;
         }
     }

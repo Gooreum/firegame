@@ -9,8 +9,11 @@ namespace FireGame.Core.Game
     /// </summary>
     public sealed class PlayerState
     {
-        /// <summary>장비 슬롯 수. 모바일 화면에 버튼으로 올릴 수 있는 현실적인 개수.</summary>
-        public const int SlotCount = 3;
+        /// <summary>
+        /// 장비 슬롯 수. 장비 종류(4)와 같아야 한다 — 칸이 모자라면 나중에 산 장비가
+        /// 현장에 안 나온다(3칸이던 때 폼 소화기가 빠져 주유소를 끌 수 없었다).
+        /// </summary>
+        public const int SlotCount = 4;
 
         public float X;
         public float Y;
@@ -18,7 +21,7 @@ namespace FireGame.Core.Game
         public AimDirection Aim = AimDirection.E;
 
         /// <summary>슬롯별 장비 id. -1은 빈 슬롯.</summary>
-        public readonly int[] Slots = { -1, -1, -1 };
+        public readonly int[] Slots = { -1, -1, -1, -1 };
 
         /// <summary>충전량 방식 장비의 남은 횟수.</summary>
         public readonly int[] Charges = new int[SlotCount];
@@ -194,9 +197,9 @@ namespace FireGame.Core.Game
         }
 
         /// <summary>
-        /// 지금 이 슬롯을 쏠 수 있는지. 쿨다운·충전량·급수전 거리를 한 곳에서 판단한다.
+        /// 지금 이 슬롯을 쏠 수 있는지. 쿨다운·충전량을 한 곳에서 판단한다.
         /// </summary>
-        public bool CanFire(int slot, EquipmentDef def, IReadOnlyList<GridPoint> hydrants)
+        public bool CanFire(int slot, EquipmentDef def)
         {
             if (!IsAlive) return false;
             if (def == null) return false;
@@ -206,27 +209,7 @@ namespace FireGame.Core.Game
 
             if (def.Resource == ResourceKind.Charges && Charges[slot] <= 0) return false;
 
-            if (def.RequiresHydrant && !IsNearHydrant(def.HydrantRadius, hydrants)) return false;
-
             return true;
-        }
-
-        /// <summary>호스가 물을 끌어올 수 있는 거리 안에 급수전이 있는지.</summary>
-        public bool IsNearHydrant(float radius, IReadOnlyList<GridPoint> hydrants)
-        {
-            if (hydrants == null || hydrants.Count == 0) return false;
-
-            float radiusSquared = radius * radius;
-
-            for (int i = 0; i < hydrants.Count; i++)
-            {
-                float dx = (hydrants[i].X + 0.5f) - X;
-                float dy = (hydrants[i].Y + 0.5f) - Y;
-
-                if ((dx * dx) + (dy * dy) <= radiusSquared) return true;
-            }
-
-            return false;
         }
 
         /// <summary>발사 자원을 소모한다. <see cref="CanFire"/> 통과 후에 호출한다.</summary>

@@ -24,7 +24,8 @@ namespace FireGame.Core.Data
     ///   양동이 → 목재 1.60  : 1칸 폭 목조 벽(재생 1.50)은 감당하지만
     ///                          빽빽한 군집(재생 1.85)에는 밀린다 — 능력의 경계가 뚜렷하다
     ///   CO2   → 전기 2.40  : 제압 가능(재생 1.11)
-    ///   호스   → 목재 2.50 x 5칸 : 제압 가능(재생 1.85). 대형 화재의 답이다
+    ///   호스   → 목재 6.00 x 5칸 : 어디서나 쏜다. 대형 화재의 답이다
+    ///                          (예전엔 소화전 8칸 안에서만 나가서, 불 난 곳에 닿는 자리가 거의 없었다)
     ///   폼    → 유류 4.80  : 제압 가능(재생 3.70)
     /// </summary>
     public static class EquipmentCatalog
@@ -38,8 +39,6 @@ namespace FireGame.Core.Data
             resource: ResourceKind.Cooldown,
             cooldownSeconds: 1.0f,
             maxCharges: 0,
-            requiresHydrant: false,
-            hydrantRadius: 0f,
             price: 0);
 
         public static readonly EquipmentDef Extinguisher = new EquipmentDef(
@@ -51,21 +50,17 @@ namespace FireGame.Core.Data
             resource: ResourceKind.Charges,
             cooldownSeconds: 0.5f,
             maxCharges: 12,
-            requiresHydrant: false,
-            hydrantRadius: 0f,
             price: 500);
 
         public static readonly EquipmentDef Hose = new EquipmentDef(
             id: EquipmentId.Hose,
             name: "소방 호스",
-            agent: new Agent(AgentType.Water, 0.5f, 0.35f, 0.5f),
+            agent: new Agent(AgentType.Water, 1.2f, 0.35f, 0.5f),
             pattern: AimPattern.Line,
             range: 5,
             resource: ResourceKind.Cooldown,
             cooldownSeconds: 0.2f,
             maxCharges: 0,
-            requiresHydrant: true,
-            hydrantRadius: 8f,
             price: 3000);
 
         public static readonly EquipmentDef FoamExtinguisher = new EquipmentDef(
@@ -79,8 +74,6 @@ namespace FireGame.Core.Data
             // 유류 풀은 스스로 꺼지지 않아 진압해야 할 셀 수가 많다.
             // 8회로는 풀 하나도 못 덮는다.
             maxCharges: 30,
-            requiresHydrant: false,
-            hydrantRadius: 0f,
             price: 10000);
 
         public static readonly EquipmentDef[] All =

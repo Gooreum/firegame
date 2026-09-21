@@ -214,7 +214,7 @@ namespace FireGame.Core.Tests
             {
                 EquipmentDef def = EquipmentCatalog.ById(player.Slots[slot]);
                 if (def == null) continue;
-                if (!player.CanFire(slot, def, _runner.Hydrants)) continue;
+                if (!player.CanFire(slot, def)) continue;
 
                 float effect = Sim.Suppression.EffectivenessOf(def.Agent.Type, fireClass) * def.Agent.Power;
                 if (effect > bestEffect)
@@ -302,7 +302,7 @@ namespace FireGame.Core.Tests
                 EquipmentDef def = EquipmentCatalog.ById(player.Slots[slot]);
                 if (def == null) continue;
                 if (def.Agent.Wetness <= 0f) continue;
-                if (!player.CanFire(slot, def, _runner.Hydrants)) continue;
+                if (!player.CanFire(slot, def)) continue;
 
                 return slot;
             }

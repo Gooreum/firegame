@@ -220,16 +220,16 @@ namespace FireGame.Core.Tests
             player.Spawn(new GridPoint(2, 2));
             player.Equip(0, EquipmentCatalog.Bucket);
 
-            Assert.True(player.CanFire(0, EquipmentCatalog.Bucket, null));
+            Assert.True(player.CanFire(0, EquipmentCatalog.Bucket));
             player.ConsumeFire(0, EquipmentCatalog.Bucket);
-            Assert.False(player.CanFire(0, EquipmentCatalog.Bucket, null));
+            Assert.False(player.CanFire(0, EquipmentCatalog.Bucket));
 
             // 쿨다운의 절반만 지나면 아직 못 쏜다.
             player.Update(EquipmentCatalog.Bucket.CooldownSeconds * 0.5f, grid, 0f, 0f);
-            Assert.False(player.CanFire(0, EquipmentCatalog.Bucket, null));
+            Assert.False(player.CanFire(0, EquipmentCatalog.Bucket));
 
             player.Update(EquipmentCatalog.Bucket.CooldownSeconds, grid, 0f, 0f);
-            Assert.True(player.CanFire(0, EquipmentCatalog.Bucket, null));
+            Assert.True(player.CanFire(0, EquipmentCatalog.Bucket));
         }
 
         // --- TC-14 ---
@@ -246,7 +246,7 @@ namespace FireGame.Core.Tests
             int fired = 0;
             for (int i = 0; i < ext.MaxCharges + 5; i++)
             {
-                if (player.CanFire(0, ext, null))
+                if (player.CanFire(0, ext))
                 {
                     player.ConsumeFire(0, ext);
                     fired++;
@@ -255,31 +255,23 @@ namespace FireGame.Core.Tests
             }
 
             Assert.Equal(ext.MaxCharges, fired);
-            Assert.False(player.CanFire(0, ext, null));
+            Assert.False(player.CanFire(0, ext));
         }
 
         // --- TC-15 & TC-16 ---
+        /// <summary>
+        /// 호스는 어디서나 쏜다. 예전엔 소화전 8칸 안에서만 나가고 밖에서는 조용히 무시돼
+        /// "호스를 써도 아무 효과가 없다"는 문제가 있었다.
+        /// </summary>
         [Fact]
-        public void Hose_OnlyFires_WhenWithinReachOfAHydrant()
+        public void Hose_FiresAnywhere_EvenFarFromAHydrant()
         {
-            var grid = OpenFloor(30);
-            var hydrants = new List<GridPoint> { new GridPoint(25, 25) };
-
             EquipmentDef hose = EquipmentCatalog.Hose;
             var player = new PlayerState();
             player.Equip(0, hose);
-
-            // 급수전에서 멀리 떨어진 곳
             player.Spawn(new GridPoint(2, 2));
-            Assert.False(player.CanFire(0, hose, hydrants));
 
-            // 급수전 바로 옆
-            player.Spawn(new GridPoint(24, 25));
-            Assert.True(player.CanFire(0, hose, hydrants));
-
-            // 급수전이 아예 없는 맵
-            Assert.False(player.CanFire(0, hose, new List<GridPoint>()));
-            Assert.False(player.CanFire(0, hose, null));
+            Assert.True(player.CanFire(0, hose));
         }
 
         // --- TC-17 ---
@@ -301,9 +293,6 @@ namespace FireGame.Core.Tests
             Assert.Equal(AimPattern.Single, EquipmentCatalog.Bucket.Pattern);
             Assert.Equal(AimPattern.Cone, EquipmentCatalog.Extinguisher.Pattern);
             Assert.Equal(AimPattern.Line, EquipmentCatalog.Hose.Pattern);
-
-            Assert.True(EquipmentCatalog.Hose.RequiresHydrant);
-            Assert.False(EquipmentCatalog.Bucket.RequiresHydrant);
 
             // CO2는 기체라 수손 피해를 만들지 않는다.
             Assert.Equal(0f, EquipmentCatalog.Extinguisher.Agent.Wetness);

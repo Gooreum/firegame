@@ -30,6 +30,7 @@ namespace FireGame.Core.Game
         public readonly FireSim Sim;
         public readonly PlayerState Player;
         public readonly List<Civilian> Civilians = new List<Civilian>();
+        /// <summary>소화전 위치. 지도 장식이다(호스는 어디서나 쏜다).</summary>
         public readonly List<GridPoint> Hydrants = new List<GridPoint>();
         public readonly List<GridPoint> Exits = new List<GridPoint>();
 
@@ -150,7 +151,7 @@ namespace FireGame.Core.Game
 
             EquipmentDef def = EquipmentCatalog.ById(Player.Slots[slot]);
             if (def == null) return;
-            if (!Player.CanFire(slot, def, Hydrants)) return;
+            if (!Player.CanFire(slot, def)) return;
 
             Aiming.Resolve(Grid, Player.CellX, Player.CellY, Player.Aim, def.Pattern, def.Range, _hitBuffer);
 
