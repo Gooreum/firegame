@@ -31,7 +31,7 @@ namespace FireGame.Core.Data
     {
         public static readonly EquipmentDef Bucket = new EquipmentDef(
             id: EquipmentId.Bucket,
-            name: "BUCKET",
+            name: "양동이",
             agent: new Agent(AgentType.Water, 1.6f, 0.5f, 0.5f),
             pattern: AimPattern.Single,
             range: 1,
@@ -44,7 +44,7 @@ namespace FireGame.Core.Data
 
         public static readonly EquipmentDef Extinguisher = new EquipmentDef(
             id: EquipmentId.Extinguisher,
-            name: "CO2 EXT",
+            name: "CO2 소화기",
             agent: new Agent(AgentType.CO2, 1.0f, 0f, 2.5f),
             pattern: AimPattern.Cone,
             range: 1,
@@ -57,7 +57,7 @@ namespace FireGame.Core.Data
 
         public static readonly EquipmentDef Hose = new EquipmentDef(
             id: EquipmentId.Hose,
-            name: "HOSE",
+            name: "소방 호스",
             agent: new Agent(AgentType.Water, 0.5f, 0.35f, 0.5f),
             pattern: AimPattern.Line,
             range: 5,
@@ -70,7 +70,7 @@ namespace FireGame.Core.Data
 
         public static readonly EquipmentDef FoamExtinguisher = new EquipmentDef(
             id: EquipmentId.FoamExtinguisher,
-            name: "FOAM",
+            name: "폼 소화기",
             agent: new Agent(AgentType.Foam, 2.0f, 0.6f, 3.0f),
             pattern: AimPattern.Cone,
             range: 1,

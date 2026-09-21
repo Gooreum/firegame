@@ -16,6 +16,15 @@ namespace FireGame.EditorTools
         /// <summary>1 월드 단위 = 타일 한 칸(64px). 격자 좌표를 그대로 월드 좌표로 쓸 수 있다.</summary>
         public const float PixelsPerUnit = 64f;
 
+        /// <summary>
+        /// 설정을 바꾸면 이 숫자를 올린다. 이미 임포트된 그림은 버전이 바뀌어야 다시 임포트된다.
+        /// 2: UI 버튼·패널 9분할 경계 추가
+        /// </summary>
+        public override uint GetVersion()
+        {
+            return 2;
+        }
+
         private void OnPreprocessTexture()
         {
             if (!assetPath.StartsWith(ArtRoot)) return;
@@ -31,6 +40,16 @@ namespace FireGame.EditorTools
 
             // 지도 배경은 화면 전체 크기라 최대 크기 제한에 걸리지 않게 한다.
             importer.maxTextureSize = 2048;
+
+            // UI 버튼·패널은 늘려 쓰므로 9분할 경계를 준다. 없으면 둥근 모서리가 뭉개진다.
+            // (x=왼쪽, y=아래, z=오른쪽, w=위) 아래는 입체감 있는 두께만큼 더 잡는다.
+            string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+            if (assetPath.StartsWith(ArtRoot + "UI/"))
+            {
+                if (file.StartsWith("button_") && !file.EndsWith("_round")) importer.spriteBorder = new Vector4(16, 20, 16, 16);
+                else if (file.StartsWith("panel_")) importer.spriteBorder = new Vector4(16, 20, 16, 16);
+                else if (file.StartsWith("bar_")) importer.spriteBorder = new Vector4(7, 7, 7, 7);
+            }
         }
     }
 }

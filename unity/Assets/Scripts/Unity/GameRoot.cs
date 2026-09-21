@@ -20,7 +20,9 @@ namespace FireGame.UnityLayer
 
         private GameFlow _flow;
         private Camera _camera;
+        private Canvas _canvas;
         private MissionWorldView _world;
+        private MissionHud _hud;
         private StageRunner _worldRunner;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -39,6 +41,8 @@ namespace FireGame.UnityLayer
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
             _camera = SetUpCamera();
+            _canvas = UiKit.CreateCanvas(transform, _camera, "Canvas", 0);
+            UiKit.EnsureEventSystem(transform);
             _flow = new GameFlow(LoadSave()) { SaveWriter = WriteSave };
 
             // 지도 화면이 생기기 전까지는 열린 첫 현장으로 바로 출동한다.
@@ -60,6 +64,8 @@ namespace FireGame.UnityLayer
                 _world.Refresh(_flow.Elapsed, dt);
                 _world.FrameCamera(_camera, _world.PlayerWorld);
             }
+
+            if (_hud != null) _hud.Refresh();
         }
 
         /// <summary>플레이 중인 판이 바뀌면 현장 화면을 새로 만든다.</summary>
@@ -69,7 +75,10 @@ namespace FireGame.UnityLayer
             if (runner == _worldRunner) return;
 
             if (_world != null) _world.Destroy();
+            if (_hud != null) _hud.Destroy();
+
             _world = runner != null ? new MissionWorldView(transform, runner) : null;
+            _hud = runner != null ? new MissionHud(_canvas, _flow) : null;
             _worldRunner = runner;
         }
 

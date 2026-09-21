@@ -36,6 +36,7 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("12_shopping_electric", ShoppingElectric),
                 new KeyValuePair<string, Func<Camera>>("13_gasstation_oil", GasStationOil),
                 new KeyValuePair<string, Func<Camera>>("14_spray_and_firebreak", SprayAndFirebreak),
+                new KeyValuePair<string, Func<Camera>>("20_hud", MissionWithHud),
             };
 
         public static void CaptureAll()
@@ -180,6 +181,33 @@ namespace FireGame.EditorTools
             StageRunner runner = Runner(StageCatalog.GasStation, EquipmentId.Bucket, EquipmentId.FoamExtinguisher);
             Advance(runner, 3f);
             return Show(runner, 3f, new Vector2(22, 10));
+        }
+
+        /// <summary>HUD를 올린 플레이 화면. 체력 60%, 2번 장비(CO2) 선택, 조이스틱을 오른쪽으로 민 상태.</summary>
+        private static Camera MissionWithHud()
+        {
+            SaveData save = SaveData.NewGame();
+            save.Unlocked.Add(EquipmentId.Extinguisher);
+            var flow = new GameFlow(save);
+            flow.SelectMission(0);
+            flow.BeginMission();
+            for (int i = 0; i < 40; i++) flow.Update(0.1f);
+
+            flow.Runner.Player.Hp = GameConfig.PlayerMaxHp * 0.6f;
+            flow.SelectSlot(1);
+            flow.Runner.Player.Charges[1] = 9;
+
+            Camera camera = WorldCamera();
+            var root = new GameObject("Root").transform;
+            var view = new MissionWorldView(root, flow.Runner);
+            view.Refresh(flow.Elapsed, 0f);
+            view.FrameCamera(camera, view.PlayerWorld);
+
+            Canvas canvas = UiKit.CreateCanvas(root, camera, "Canvas", 0);
+            var hud = new MissionHud(canvas, flow);
+            hud.Joystick.SetKnob(new Vector2(0.8f, 0.2f));
+            hud.Refresh();
+            return camera;
         }
 
         /// <summary>벽 몇 칸을 미리 적셔 방화선을 치고, 양동이를 벽 쪽으로 막 쏜 순간.</summary>
