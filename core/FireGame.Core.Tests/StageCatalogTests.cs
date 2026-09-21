@@ -181,10 +181,6 @@ namespace FireGame.Core.Tests
         [Fact]
         public void StageUnlockRequirements_FormAStraightProgression()
         {
-            Assert.Equal(0, StageCatalog.Residential.RequiredClears);
-            Assert.Equal(1, StageCatalog.Shopping.RequiredClears);
-            Assert.Equal(2, StageCatalog.GasStation.RequiredClears);
-
             Assert.Equal(3, StageCatalog.All.Length);
             Assert.Same(StageCatalog.Shopping, StageCatalog.ById(1));
         }
@@ -204,7 +200,7 @@ namespace FireGame.Core.Tests
             Assert.Equal(PurchaseResult.Success, Shop.Buy(save, EquipmentId.Extinguisher));
 
             // 2. 상가 — 소화기가 있어야 깬다.
-            Assert.True(save.IsStageUnlocked(StageCatalog.Shopping));
+            Assert.True(save.IsMissionUnlocked(Campaign.Missions[1]));
             StageResult second = PlayAndSettle(StageCatalog.Shopping, save);
             Assert.True(second.Won, "소화기를 갖췄으면 상가를 깰 수 있어야 한다");
 
@@ -221,11 +217,11 @@ namespace FireGame.Core.Tests
             Assert.Equal(PurchaseResult.Success, Shop.Buy(save, EquipmentId.FoamExtinguisher));
 
             // 4. 주유소 — 폼으로 클리어한다.
-            Assert.True(save.IsStageUnlocked(StageCatalog.GasStation));
+            Assert.True(save.IsMissionUnlocked(Campaign.Missions[2]));
             StageResult third = PlayAndSettle(StageCatalog.GasStation, save);
             Assert.True(third.Won, "폼을 갖췄으면 주유소를 깰 수 있어야 한다");
 
-            Assert.Equal(3, save.ClearedStages);
+            for (int id = 0; id < 3; id++) Assert.True(save.StarsFor(id) >= 1);
         }
 
         /// <summary>보유 장비로 한 판 돌리고 정산까지 반영한다.</summary>
@@ -236,7 +232,7 @@ namespace FireGame.Core.Tests
 
             StageResult result = runner.BuildResult();
             save.Money += Economy.Payout(result);
-            if (result.Won) save.RecordClear(stage.Id);
+            save.RecordResult(stage.Id, StarRating.For(result));
 
             return result;
         }

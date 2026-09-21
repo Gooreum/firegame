@@ -52,8 +52,7 @@ namespace FireGame.Core.Data
             map: ResidentialMap,
             wind: Wind.None,
             timeLimitSeconds: 90f,
-            basePayout: 300,
-            requiredClears: 0);
+            basePayout: 300);
 
         // ---------------------------------------------------------------
         // 2. 상가 — A급 + C급(전기 배전반). CO2 소화기가 필요하다.
@@ -91,8 +90,7 @@ namespace FireGame.Core.Data
             map: ShoppingMap,
             wind: Wind.From(1f, 0f, 0.3f),
             timeLimitSeconds: 110f,
-            basePayout: 600,
-            requiredClears: 1);
+            basePayout: 600);
 
         // ---------------------------------------------------------------
         // 3. 주유소 — A급 + B급(유류). 폼 소화기가 필요하다.
@@ -131,8 +129,7 @@ namespace FireGame.Core.Data
             map: GasStationMap,
             wind: Wind.From(1f, -1f, 0.8f),
             timeLimitSeconds: 150f,
-            basePayout: 1200,
-            requiredClears: 2);
+            basePayout: 1200);
 
         public static readonly StageDef[] All =
         {

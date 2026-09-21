@@ -163,14 +163,18 @@ namespace FireGame.Core.Tests
         {
             SaveData original = SaveData.NewGame();
             original.Money = 7350;
-            original.RecordClear(2);
+            original.RecordResult(0, 3);
+            original.RecordResult(1, 2);
             Shop.Buy(original, EquipmentId.Extinguisher);
             Shop.Buy(original, EquipmentId.Hose);
 
             Assert.True(SaveData.TryDeserialize(original.Serialize(), out SaveData restored));
 
             Assert.Equal(original.Money, restored.Money);
-            Assert.Equal(original.ClearedStages, restored.ClearedStages);
+            Assert.Equal(3, restored.StarsFor(0));
+            Assert.Equal(2, restored.StarsFor(1));
+            Assert.Equal(0, restored.StarsFor(2));
+            Assert.StartsWith("v2", original.Serialize());
             Assert.Equal(original.Unlocked.Count, restored.Unlocked.Count);
 
             foreach (int id in original.Unlocked)
@@ -193,6 +197,10 @@ namespace FireGame.Core.Tests
             // 저장 중 앱이 죽어 파일이 잘린 경우: money 줄이 없으면 실패로 본다.
             Assert.False(SaveData.TryDeserialize("v1\ncleared=1\n", out _));
 
+            // 별점 항목이 깨져 있으면 실패
+            Assert.False(SaveData.TryDeserialize("v2\nmoney=10\nstars=0:x\n", out _));
+            Assert.False(SaveData.TryDeserialize("v2\nmoney=10\nstars=0-3\n", out _));
+
             // 모르는 키는 무시하고 살아남는다. 나중에 항목이 늘어도 구버전이 깨지지 않는다.
             Assert.True(SaveData.TryDeserialize("v1\nmoney=50\nfuturefield=x\n", out SaveData ok));
             Assert.Equal(50, ok.Money);
@@ -205,43 +213,71 @@ namespace FireGame.Core.Tests
             SaveData save = SaveData.NewGame();
 
             Assert.Equal(0, save.Money);
-            Assert.Equal(0, save.ClearedStages);
+            Assert.Equal(0, save.TotalStars);
+            foreach (MissionDef m in Campaign.Missions) Assert.Equal(0, save.StarsFor(m.Id));
             Assert.Single(save.Unlocked);
             Assert.True(save.Owns(EquipmentId.Bucket));
             Assert.False(save.Owns(EquipmentId.Hose));
         }
 
-        // --- TC-15 ---
+        // --- TC-15 (v2: 최고 기록만 유지) ---
         [Fact]
-        public void RecordingAnEarlierStageClear_DoesNotRollBackProgress()
+        public void RecordingAWorseResult_KeepsTheBestStars()
         {
             SaveData save = SaveData.NewGame();
 
-            save.RecordClear(0);
-            Assert.Equal(1, save.ClearedStages);
+            save.RecordResult(0, 2);
+            save.RecordResult(0, 1);
+            Assert.Equal(2, save.StarsFor(0));
 
-            save.RecordClear(2);
-            Assert.Equal(3, save.ClearedStages);
+            save.RecordResult(0, 3);
+            Assert.Equal(3, save.StarsFor(0));
 
-            // 1번 스테이지를 다시 깨도 진행도가 뒤로 가면 안 된다.
-            save.RecordClear(1);
-            Assert.Equal(3, save.ClearedStages);
+            // 범위를 벗어난 값은 0..3으로 잘린다.
+            save.RecordResult(1, 5);
+            Assert.Equal(3, save.StarsFor(1));
+            save.RecordResult(2, -1);
+            Assert.Equal(0, save.StarsFor(2));
         }
 
-        // --- TC-16 ---
+        // --- TC-16 (v2: 캠페인 해금) ---
         [Fact]
-        public void StageUnlocking_RespectsRequiredClears()
+        public void Missions_UnlockOnlyAfterThePreviousOneIsCleared()
         {
-            var gated = new StageDef(2, "GAS", new[] { "##", "##" }, Wind.None, 120f, 1200, requiredClears: 2);
             SaveData save = SaveData.NewGame();
+            MissionDef first = Campaign.Missions[0];
+            MissionDef second = Campaign.Missions[1];
+            MissionDef third = Campaign.Missions[2];
 
-            Assert.False(save.IsStageUnlocked(gated));
+            Assert.True(save.IsMissionUnlocked(first));
+            Assert.False(save.IsMissionUnlocked(second));
 
-            save.RecordClear(0);
-            Assert.False(save.IsStageUnlocked(gated));
+            // 패배(별 0)는 클리어가 아니다.
+            save.RecordResult(first.Id, 0);
+            Assert.False(save.IsMissionUnlocked(second));
 
-            save.RecordClear(1);
-            Assert.True(save.IsStageUnlocked(gated));
+            save.RecordResult(first.Id, 1);
+            Assert.True(save.IsMissionUnlocked(second));
+            Assert.False(save.IsMissionUnlocked(third));
+            Assert.False(save.IsMissionUnlocked(null));
+        }
+
+        [Fact]
+        public void LegacyV1Save_IsMigratedWithoutLosingProgress()
+        {
+            string v1 = "v1\nmoney=2500\ncleared=2\nunlocked=0,1\n";
+
+            Assert.True(SaveData.TryDeserialize(v1, out SaveData save));
+
+            Assert.Equal(2500, save.Money);
+            Assert.True(save.Owns(EquipmentId.Extinguisher));
+            Assert.Equal(1, save.StarsFor(0));
+            Assert.Equal(1, save.StarsFor(1));
+            Assert.Equal(0, save.StarsFor(2));
+            Assert.True(save.IsMissionUnlocked(Campaign.Missions[2]));
+
+            // 다시 저장하면 v2로 바뀐다.
+            Assert.StartsWith("v2", save.Serialize());
         }
 
         [Fact]

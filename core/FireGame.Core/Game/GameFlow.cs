@@ -166,10 +166,10 @@ namespace FireGame.Core.Game
             int row = ScreenLayout.RowAt(y, ScreenLayout.HubStageTop, StageCatalog.All.Length);
             if (row < 0) return;
 
-            StageDef stage = StageCatalog.All[row];
-            if (!Save.IsStageUnlocked(stage)) return;
+            MissionDef mission = Campaign.Missions[row];
+            if (!Save.IsMissionUnlocked(mission)) return;
 
-            StartStage(stage);
+            StartStage(mission.Stage);
         }
 
         private void ShopTap(float x, float y)
@@ -275,7 +275,7 @@ namespace FireGame.Core.Game
             PayoutBreakdown payout = Economy.Breakdown(result);
 
             Save.Money += payout.Total;
-            if (result.Won) Save.RecordClear(Runner.Def.Id);
+            Save.RecordResult(Runner.Def.Id, StarRating.For(result));
 
             LastOutcome = Runner.Outcome;
             LastPayout = payout;

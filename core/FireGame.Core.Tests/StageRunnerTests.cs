@@ -19,8 +19,7 @@ namespace FireGame.Core.Tests
                 map: map,
                 wind: wind ?? Wind.None,
                 timeLimitSeconds: timeLimit,
-                basePayout: 300,
-                requiredClears: 0);
+                basePayout: 300);
         }
 
         private static StageRunner Runner(string[] map, float timeLimit = 60f, Wind? wind = null)

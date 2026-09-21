@@ -17,17 +17,13 @@ namespace FireGame.Core.Game
         public readonly float TimeLimitSeconds;
         public readonly int BasePayout;
 
-        /// <summary>이 스테이지를 열기 위해 클리어해야 하는 이전 스테이지 수.</summary>
-        public readonly int RequiredClears;
-
         public StageDef(
             int id,
             string name,
             string[] map,
             Wind wind,
             float timeLimitSeconds,
-            int basePayout,
-            int requiredClears)
+            int basePayout)
         {
             Id = id;
             Name = name;
@@ -35,7 +31,6 @@ namespace FireGame.Core.Game
             Wind = wind;
             TimeLimitSeconds = timeLimitSeconds;
             BasePayout = basePayout;
-            RequiredClears = requiredClears;
         }
     }
 

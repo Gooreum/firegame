@@ -157,13 +157,14 @@ namespace FireGame.Core.Render
             buffer.DrawText(24, 20, "FIREFIGHTER", Palette.Yellow);
             buffer.DrawText(24, 36, "CASH $" + Pad(save.Money, 6), Palette.LightGreen);
 
-            for (int i = 0; i < StageCatalog.All.Length; i++)
+            for (int i = 0; i < Campaign.Missions.Length; i++)
             {
-                StageDef stage = StageCatalog.All[i];
+                MissionDef mission = Campaign.Missions[i];
+                StageDef stage = mission.Stage;
                 int y = ScreenLayout.HubStageRowY(i);
 
-                bool unlocked = save.IsStageUnlocked(stage);
-                bool cleared = save.ClearedStages > stage.Id;
+                bool unlocked = save.IsMissionUnlocked(mission);
+                bool cleared = save.StarsFor(mission.Id) > 0;
 
                 byte color = !unlocked ? Palette.DarkGray : Palette.White;
                 string status = !unlocked ? "LOCK" : cleared ? "CLEAR" : "OPEN";

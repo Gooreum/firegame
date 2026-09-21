@@ -66,7 +66,7 @@ namespace FireGame.Core.Tests
         {
             SaveData save = SaveData.NewGame();
             save.Money = 913;
-            save.RecordClear(0);
+            save.RecordResult(0, 1);
 
             var hub = new FrameBuffer();
             HudRenderer.DrawHub(hub, save);

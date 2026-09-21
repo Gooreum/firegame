@@ -142,13 +142,13 @@ namespace FireGame.Core.Tests
             Assert.Equal(StageOutcome.Won, flow.LastOutcome);
             Assert.True(flow.LastPayout.Total > 0);
             Assert.Equal(flow.LastPayout.Total, flow.Save.Money);
-            Assert.Equal(1, flow.Save.ClearedStages);
+            Assert.True(flow.Save.StarsFor(0) >= 1);
             Assert.Equal("RESIDENTIAL", flow.LastStageName);
 
             Assert.NotNull(written);
             Assert.True(SaveData.TryDeserialize(written, out SaveData restored));
             Assert.Equal(flow.Save.Money, restored.Money);
-            Assert.Equal(1, restored.ClearedStages);
+            Assert.Equal(flow.Save.StarsFor(0), restored.StarsFor(0));
         }
 
         // --- TC-7 ---
@@ -368,7 +368,7 @@ namespace FireGame.Core.Tests
             Assert.Equal(GameScreen.Result, flow.Screen);
             Assert.NotEqual(StageOutcome.Won, flow.LastOutcome);
             Assert.Equal(0, flow.Save.Money);
-            Assert.Equal(0, flow.Save.ClearedStages);
+            Assert.Equal(0, flow.Save.StarsFor(0));
         }
     }
 }
