@@ -27,3 +27,11 @@ sysinfo.txt
 
 # ---- macOS ----
 .DS_Store
+
+# ---- sync-core.sh가 만드는 코어 사본 (원본은 core/) ----
+unity/Assets/Scripts/Core/
+unity/Assets/Scripts/Core.meta
+
+# ---- Unity 스텁 컴파일 검사 산출물 ----
+tools/unity-compile-check/bin/
+tools/unity-compile-check/obj/

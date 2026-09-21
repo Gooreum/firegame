@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Unity 없이 Unity 레이어 스크립트를 컴파일해 보는 검사용 프로젝트.
+    Unity 6와 같은 netstandard2.1 / C# 9 조건에서, 손으로 옮겨 적은 UnityEngine 스텁에 대고 빌드한다.
+
+    잡아주는 것: C# 버전 위반, 오타, 잘못된 네임스페이스, 코어 API 오용, 전처리기 분기 누락.
+    잡지 못하는 것: 스텁이 실제 Unity API와 다른 경우. 최종 확인은 Unity 에디터에서 해야 한다.
+
+    사용법 (먼저 ../../sync-core.sh 실행):
+      dotnet build -p:InputBackend=New
+      dotnet build -p:InputBackend=Legacy
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <InputBackend Condition="'$(InputBackend)' == ''">New</InputBackend>
+    <IntermediateOutputPath>obj/$(InputBackend)/</IntermediateOutputPath>
+    <OutputPath>bin/$(InputBackend)/</OutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(InputBackend)' == 'New'">
+    <DefineConstants>$(DefineConstants);ENABLE_INPUT_SYSTEM</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(InputBackend)' == 'Legacy'">
+    <DefineConstants>$(DefineConstants);ENABLE_LEGACY_INPUT_MANAGER</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="UnityStubs.cs" />
+    <Compile Include="../../unity/Assets/Scripts/**/*.cs" />
+  </ItemGroup>
+
+</Project>
