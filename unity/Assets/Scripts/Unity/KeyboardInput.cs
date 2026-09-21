@@ -33,6 +33,7 @@ namespace FireGame.UnityLayer
             if (keyboard.digit1Key.wasPressedThisFrame) slot = 0;
             if (keyboard.digit2Key.wasPressedThisFrame) slot = 1;
             if (keyboard.digit3Key.wasPressedThisFrame) slot = 2;
+            if (keyboard.digit4Key.wasPressedThisFrame) slot = 3;
 #elif ENABLE_LEGACY_INPUT_MANAGER
             if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A)) x -= 1f;
             if (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D)) x += 1f;
@@ -42,6 +43,7 @@ namespace FireGame.UnityLayer
             if (Input.GetKeyDown(KeyCode.Alpha1)) slot = 0;
             if (Input.GetKeyDown(KeyCode.Alpha2)) slot = 1;
             if (Input.GetKeyDown(KeyCode.Alpha3)) slot = 2;
+            if (Input.GetKeyDown(KeyCode.Alpha4)) slot = 3;
 #endif
 
             // 격자는 아래로 갈수록 y가 커진다. 위쪽 키가 -y다.

@@ -102,9 +102,10 @@ namespace FireGame.UnityLayer
             {
                 int captured = slot;
                 Button button = UiKit.Button(_root, "Slot" + slot, Art.Get("UI/button_blue"), string.Empty, 0, () => _flow.SelectSlot(captured));
-                // 왼쪽부터 1·2·3번 — 키보드 숫자키와 같은 순서
+                // 왼쪽부터 1·2·3·4번 — 키보드 숫자키와 같은 순서.
+                // 4칸이 조이스틱(왼쪽 330까지)과 겹치지 않게 폭을 줄였다.
                 int fromRight = PlayerState.SlotCount - 1 - slot;
-                UiKit.Place((RectTransform)button.transform, new Vector2(1f, 0f), new Vector2(-330f - (fromRight * 250f), 70f), new Vector2(230f, 118f));
+                UiKit.Place((RectTransform)button.transform, new Vector2(1f, 0f), new Vector2(-320f - (fromRight * 226f), 70f), new Vector2(214f, 118f));
 
                 _slotImages[slot] = (Image)button.targetGraphic;
                 _slotLabels[slot] = UiKit.OutlinedLabel(button.transform, "Label", string.Empty, 28, Color.white, TextAnchor.MiddleCenter);
@@ -166,11 +167,16 @@ namespace FireGame.UnityLayer
             image.color = Color.white;
             label.color = Color.white;
 
+            bool empty = def.Resource == ResourceKind.Charges && player.Charges[slot] <= 0;
             string ammo = def.Resource == ResourceKind.Charges ? player.Charges[slot] + "회" : "무제한";
-            label.text = def.Name + "\n<size=22>" + AgentName(def.Agent.Type) + " · " + ammo + "</size>";
+            label.text = def.Name + "\n<size=22>" + AgentName(def.Agent.Type) + " · " + (empty ? "다 씀" : ammo) + "</size>";
 
-            // 다 쓴 장비는 흐리게 보여 바꿔야 한다는 걸 알린다.
-            if (def.Resource == ResourceKind.Charges && player.Charges[slot] <= 0) image.color = new Color(1f, 1f, 1f, 0.5f);
+            // 다 쓴 장비는 회색으로 바꿔, 눌러도 안 나가는 이유를 보여 준다.
+            if (empty)
+            {
+                image.sprite = Art.Get("UI/button_grey");
+                label.color = new Color(1f, 0.85f, 0.85f);
+            }
         }
 
         /// <summary>어떤 불에 맞는지 떠올리게 약제 이름을 함께 적는다.</summary>

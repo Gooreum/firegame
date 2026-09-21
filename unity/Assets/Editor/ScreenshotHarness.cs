@@ -291,11 +291,16 @@ namespace FireGame.EditorTools
             return Direct(new GameFlow(save));
         }
 
-        /// <summary>HUD를 올린 플레이 화면. 체력 60%, 2번 장비(CO2) 선택, 조이스틱을 오른쪽으로 민 상태.</summary>
+        /// <summary>
+        /// HUD를 올린 플레이 화면. 장비 4종 전부, 체력 60%, 2번 장비(CO2) 선택,
+        /// 4번(폼)은 다 쓴 상태, 조이스틱을 오른쪽으로 민 상태.
+        /// </summary>
         private static Camera MissionWithHud()
         {
             SaveData save = SaveData.NewGame();
             save.Unlocked.Add(EquipmentId.Extinguisher);
+            save.Unlocked.Add(EquipmentId.Hose);
+            save.Unlocked.Add(EquipmentId.FoamExtinguisher);
             var flow = new GameFlow(save);
             flow.SelectMission(0);
             flow.BeginMission();
@@ -304,6 +309,7 @@ namespace FireGame.EditorTools
             flow.Runner.Player.Hp = GameConfig.PlayerMaxHp * 0.6f;
             flow.SelectSlot(1);
             flow.Runner.Player.Charges[1] = 9;
+            flow.Runner.Player.Charges[3] = 0;
 
             Camera camera = WorldCamera();
             var root = new GameObject("Root").transform;

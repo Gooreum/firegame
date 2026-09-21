@@ -20,6 +20,16 @@ fi
 
 "$REPO_ROOT/sync-core.sh" >/dev/null || exit 2
 
+# 에디터가 프로젝트를 열고 있으면 배치 모드가 같은 폴더를 못 쓴다.
+# 그때는 에디터를 닫지 않고 복사본(tools/.unity-mirror)에서 돌린다.
+PROJECT="$REPO_ROOT/unity"
+if pgrep -f "Unity.app/Contents/MacOS/Unity.*-projectPath $REPO_ROOT/unity( |\$)" >/dev/null; then
+  PROJECT="$REPO_ROOT/tools/.unity-mirror"
+  mkdir -p "$PROJECT"
+  rsync -a --delete --exclude Temp --exclude Logs "$REPO_ROOT/unity/" "$PROJECT/"
+  echo "에디터가 열려 있어 복사본에서 실행: $PROJECT"
+fi
+
 report_compile_errors() {
   local count
   # Unity 로그는 같은 오류를 여러 번 찍으므로 중복을 빼고 센다.
@@ -34,7 +44,7 @@ report_compile_errors() {
 
 case "$MODE" in
   compile)
-    "$UNITY" -batchmode -nographics -quit -projectPath "$REPO_ROOT/unity" -logFile "$LOG"
+    "$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -logFile "$LOG"
     status=$?
     report_compile_errors || exit 1
     [ $status -eq 0 ] || { echo "Unity 종료 코드 $status (로그: $LOG)"; exit 1; }
@@ -46,7 +56,7 @@ case "$MODE" in
     mkdir -p "$OUT"
     rm -f "$OUT"/*.png
     # 렌더링이 필요하므로 -nographics를 붙이지 않는다.
-    "$UNITY" -batchmode -projectPath "$REPO_ROOT/unity" -logFile "$LOG" \
+    "$UNITY" -batchmode -projectPath "$PROJECT" -logFile "$LOG" \
       -executeMethod FireGame.EditorTools.ScreenshotHarness.CaptureAll -shotDir "$OUT"
     status=$?
     report_compile_errors || exit 1
