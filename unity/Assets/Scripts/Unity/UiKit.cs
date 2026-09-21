@@ -16,6 +16,9 @@ namespace FireGame.UnityLayer
         public const float ReferenceWidth = 1920f;
         public const float ReferenceHeight = 1080f;
 
+        /// <summary>UI 캔버스의 정렬 순서 기준. 현장 스프라이트(0~30)보다 위.</summary>
+        public const int UiSortingOrder = 1000;
+
         public static readonly Color Ink = new Color(0.16f, 0.16f, 0.2f);
         public static readonly Color Paper = new Color(0.97f, 0.96f, 0.93f);
         public static readonly Color Shade = new Color(0f, 0f, 0f, 0.55f);
@@ -33,7 +36,10 @@ namespace FireGame.UnityLayer
             canvas.renderMode = RenderMode.ScreenSpaceCamera;
             canvas.worldCamera = camera;
             canvas.planeDistance = 1f;
-            canvas.sortingOrder = order;
+
+            // 카메라에 붙은 캔버스는 거리가 아니라 정렬 순서로 앞뒤가 정해진다.
+            // 현장 그림이 0~30을 쓰므로 UI는 그보다 확실히 위에 둔다. 안 그러면 불꽃·벽이 패널을 뚫고 나온다.
+            canvas.sortingOrder = UiSortingOrder + order;
 
             var scaler = go.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -57,6 +63,17 @@ namespace FireGame.UnityLayer
 #else
             go.AddComponent<StandaloneInputModule>();
 #endif
+        }
+
+        /// <summary>
+        /// 게임 중에는 Destroy, 에디터(스크린샷 하네스)에서는 DestroyImmediate로 지운다.
+        /// 에디터에서 Destroy를 부르면 오류가 나고 아무것도 지워지지 않는다.
+        /// </summary>
+        public static void Discard(GameObject target)
+        {
+            if (target == null) return;
+            if (Application.isPlaying) UnityEngine.Object.Destroy(target);
+            else UnityEngine.Object.DestroyImmediate(target);
         }
 
         public static RectTransform Node(Transform parent, string name)

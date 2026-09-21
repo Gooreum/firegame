@@ -139,7 +139,7 @@ namespace FireGame.UnityLayer
 
         public void Destroy()
         {
-            Object.Destroy(_root.gameObject);
+            UiKit.Discard(_root.gameObject);
         }
 
         // ------------------------------------------------------------------
