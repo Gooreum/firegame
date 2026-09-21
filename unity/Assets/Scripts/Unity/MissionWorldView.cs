@@ -194,16 +194,44 @@ namespace FireGame.UnityLayer
         // 바닥·벽 구성
         // ------------------------------------------------------------------
 
+        /// <summary>실내·실외 바닥 그림. a/b는 섞어 깔아 단조로움을 깬다(변형이 없으면 같은 그림).</summary>
+        private readonly struct FloorTheme
+        {
+            public readonly string IndoorA;
+            public readonly string IndoorB;
+            public readonly string OutdoorA;
+            public readonly string OutdoorB;
+
+            public FloorTheme(string indoorA, string indoorB, string outdoorA, string outdoorB)
+            {
+                IndoorA = indoorA;
+                IndoorB = indoorB;
+                OutdoorA = outdoorA;
+                OutdoorB = outdoorB;
+            }
+        }
+
+        /// <summary>현장 id별 바닥 분위기. 없는 id는 주택(0)을 쓴다.</summary>
+        private static readonly Dictionary<int, FloorTheme> FloorThemes = new Dictionary<int, FloorTheme>
+        {
+            { 0, new FloorTheme("floor_wood_a", "floor_wood_b", "grass_a", "grass_b") },               // 주택: 나무 마루 + 잔디
+            { 1, new FloorTheme("floor_tile_a", "floor_tile_b", "grass_a", "grass_b") },               // 상가: 타일
+            { 2, new FloorTheme("floor_wood_a", "floor_wood_b", "dirt", "dirt") },                     // 주유소: 흙 마당
+            { 3, new FloorTheme("floor_concrete_a", "floor_concrete_b", "asphalt", "asphalt") },       // 창고: 콘크리트 + 아스팔트
+            { 4, new FloorTheme("floor_tile_a", "floor_tile_b", "asphalt", "asphalt") },               // 공장: 타일 + 아스팔트
+            { 5, new FloorTheme("floor_wood_a", "floor_wood_b", "floor_concrete_a", "floor_concrete_b") }, // 항구: 부두 콘크리트
+        };
+
         private void BuildTiles()
         {
             bool[] outdoor = FindOutdoor();
-            int stage = _runner.Def.Id;
+            FloorTheme theme;
+            if (!FloorThemes.TryGetValue(_runner.Def.Id, out theme)) theme = FloorThemes[0];
 
-            // 현장마다 바닥 분위기를 다르게 한다: 주택=나무 마루, 상가=타일, 주유소=흙 마당
-            string indoorA = stage == 1 ? "TopDown/floor_tile_a" : "TopDown/floor_wood_a";
-            string indoorB = stage == 1 ? "TopDown/floor_tile_b" : "TopDown/floor_wood_b";
-            string outdoorA = stage == 2 ? "TopDown/dirt" : "TopDown/grass_a";
-            string outdoorB = stage == 2 ? "TopDown/dirt" : "TopDown/grass_b";
+            string indoorA = "TopDown/" + theme.IndoorA;
+            string indoorB = "TopDown/" + theme.IndoorB;
+            string outdoorA = "TopDown/" + theme.OutdoorA;
+            string outdoorB = "TopDown/" + theme.OutdoorB;
 
             for (int y = 0; y < _grid.Height; y++)
             {

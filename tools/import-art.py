@@ -51,6 +51,9 @@ SELECTION = {
     ("TopDown", "floor_wood_b"): f"{TD}/Tiles/tile_44.png",
     ("TopDown", "floor_tile_a"): f"{TD}/Tiles/tile_08.png",
     ("TopDown", "floor_tile_b"): f"{TD}/Tiles/tile_09.png",
+    ("TopDown", "floor_concrete_a"): f"{TD}/Tiles/tile_12.png",
+    ("TopDown", "floor_concrete_b"): f"{TD}/Tiles/tile_127.png",
+    ("TopDown", "asphalt"): f"{TD}/Tiles/tile_169.png",
     ("TopDown", "oil_puddle"): f"{TD}/Tiles/tile_320.png",
     ("TopDown", "electric_panel"): f"{TD}/Tiles/tile_296.png",
     ("TopDown", "door_vertical"): f"{TD}/Tiles/tile_441.png",
@@ -78,6 +81,9 @@ SELECTION = {
     ("Map", "node_1"): "map-pack/PNG/mapTile_131.png",
     ("Map", "node_2"): "map-pack/PNG/mapTile_132.png",
     ("Map", "node_3"): "map-pack/PNG/mapTile_133.png",
+    ("Map", "node_4"): "map-pack/PNG/mapTile_134.png",
+    ("Map", "node_5"): "map-pack/PNG/mapTile_135.png",
+    ("Map", "node_6"): "map-pack/PNG/mapTile_148.png",
     # ---- 차량 (Racing Pack) ----
     ("Vehicles", "firetruck"): "racing-pack/PNG/Cars/car_red_1.png",
     ("Vehicles", "cone"): "racing-pack/PNG/Objects/cone_straight.png",
@@ -124,7 +130,7 @@ SUIT_SOURCE = f"{TD}/Man Blue/manBlue_hold.png"
 
 # 현장 지도 좌표. core Campaign.cs의 MapX/MapY와 같아야 길이 노드에 닿는다.
 STATION = (0.10, 0.16)
-MISSIONS = [(0.22, 0.30), (0.50, 0.62), (0.78, 0.35)]
+MISSIONS = [(0.22, 0.30), (0.50, 0.62), (0.78, 0.35), (0.88, 0.66), (0.64, 0.86), (0.36, 0.80)]
 
 
 def download(url):
@@ -281,11 +287,11 @@ def compose_map(packs):
         if img.getpixel((x, y)) == GRASS and img.getpixel((x + 18, y + 10)) == GRASS:
             d.ellipse((x, y, x + 18, y + 10), fill=GRASS_DARK)
 
-    # 길: 소방서 → 현장 1 → 2 → 3. 곧은 선이면 현장 1이 소방서→현장 2 직선 위에 묻혀
-    # 갈림길처럼 보이지 않으므로 구간마다 옆으로 휘게 그린다.
+    # 길: 소방서 → 현장 1 → … → 6으로 섬을 한 바퀴 돈다. 곧은 선이면 현장 1이 소방서→현장 2
+    # 직선 위에 묻혀 갈림길처럼 보이지 않으므로 구간마다 옆으로 휘게 그린다.
     points = [to_px(p, w, h) for p in [STATION] + MISSIONS]
     curve = []
-    bends = [140, -160, 130]
+    bends = [140, -160, 130, -120, 110, -100]
     for i, ((ax, ay), (bx, by)) in enumerate(zip(points, points[1:])):
         mx, my = (ax + bx) / 2, (ay + by) / 2
         nx, ny = -(by - ay), (bx - ax)
