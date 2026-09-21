@@ -199,6 +199,33 @@ namespace FireGame.Core.Tests
             Assert.True(save.IsMissionUnlocked(warehouse));
         }
 
+        // --- 공장 ---
+        [Fact]
+        public void Factory_IsBeatenOnceYouHaveBothCo2AndFoam()
+        {
+            Assert.Equal(StageOutcome.Won,
+                PlayWith(StageCatalog.Factory,
+                    EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.FoamExtinguisher));
+        }
+
+        [Fact]
+        public void Factory_CannotBeBeatenWithoutFoam()
+        {
+            // 기름은 CO2로 조금 누그러질 뿐 꺼지지 않는다.
+            Assert.NotEqual(StageOutcome.Won,
+                PlayWith(StageCatalog.Factory,
+                    EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.Hose));
+        }
+
+        [Fact]
+        public void Factory_CannotBeBeatenWithoutCo2()
+        {
+            // 배전반은 폼이 듣지 않고 물은 역효과다.
+            Assert.NotEqual(StageOutcome.Won,
+                PlayWith(StageCatalog.Factory,
+                    EquipmentId.Bucket, EquipmentId.Hose, EquipmentId.FoamExtinguisher));
+        }
+
         // --- TC-9 ---
         [Fact]
         public void StageUnlockRequirements_FormAStraightProgression()

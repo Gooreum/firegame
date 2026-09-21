@@ -136,6 +136,26 @@ namespace FireGame.Core.Game
                 mapX: 0.88f,
                 mapY: 0.66f,
                 requiresMission: 2),
+
+            new MissionDef(
+                id: 4,
+                title: "공장 복합 화재",
+                location: "강변 공장",
+                stage: StageCatalog.Factory,
+                briefing: new[]
+                {
+                    "강변 공장이다. 배전반실, 목조 작업장, 기름통 마당에 동시에 불이 붙었다.",
+                    "배전반에는 CO2, 기름에는 폼, 나무에는 물. 장비를 바꿔 가며 끊어야 한다.",
+                    "장비 버튼이나 숫자 키 1~4로 바꾼다. 불마다 맞는 걸 골라!",
+                },
+                debrief: new[]
+                {
+                    "세 가지 불을 한 번에 잡았군. 이제 진짜 소방관이다.",
+                    "마지막이다. 푸른항구 유류 저장소에서 대형 화재가 났다. 방화복과 소방화를 챙겨라.",
+                },
+                mapX: 0.64f,
+                mapY: 0.86f,
+                requiresMission: 3),
         };
 
         public static MissionDef ById(int id)
