@@ -53,32 +53,33 @@ dotnet test --filter MeasureEveryStageAgainstEveryLoadout --logger "console;verb
 ## 2. Unity에서 실행
 
 ### 준비
-1. [Unity Hub](https://unity.com/download) 설치
-2. Hub → Installs → **Unity 6 (6000.x) LTS** 설치. 모듈에서 **Android Build Support** 와/또는 **iOS Build Support** 체크
+1. Unity Hub 설치: `brew install --cask unity-hub`
+2. Hub에서 Unity 계정으로 로그인하고 **Personal(무료) 라이선스** 발급
+3. 에디터 설치: **6000.3.24f1** (이 프로젝트가 검증된 버전. `unity/ProjectSettings/ProjectVersion.txt`에 고정돼 있다)
+   ```bash
+   "/Applications/Unity Hub.app/Contents/MacOS/Unity Hub" -- --headless \
+     install --version 6000.3.24f1 --module android android-sdk-ndk-tools android-open-jdk --childModules
+   ```
+   `--childModules`를 빼면 하위 모듈 설치 여부를 묻는 질문에서 멈춘다. 폰 빌드를 안 할 거면 `--module` 이후는 생략해도 된다.
 
-### 방법 A — 저장소의 `unity/` 폴더를 바로 열기 (권장)
+### 열고 실행하기
 ```bash
 ./sync-core.sh
+open -a /Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app --args -projectPath "$PWD/unity"
 ```
-Hub → Projects → **Add → Add project from disk** → 이 저장소의 `unity` 폴더 선택 → Unity 6로 열기.
+또는 Hub → Projects → **Add → Add project from disk** → 이 저장소의 `unity` 폴더.
 
-처음 열 때 Unity가 `ProjectSettings/`, `Packages/`를 만든다. 열리면 **Play** 를 누른다.
-씬에 아무것도 배치할 필요가 없다 — 스크립트가 알아서 카메라와 화면을 만든다.
+열리면 **Play** 를 누른다. 씬에 아무것도 배치할 필요가 없다 — 스크립트가 알아서 카메라와 화면을 만든다.
+Game 창에서 마우스 드래그가 터치 대신이고, 키보드도 된다(아래 조작 표).
 
-### 방법 B — Hub가 A를 거부하면
-Hub → New project → **Universal 2D가 아니라 "2D (Built-In Render Pipeline)"** 템플릿으로 아무 곳에나 생성한 뒤:
-```bash
-./sync-core.sh /경로/새로만든프로젝트
-```
-Unity로 돌아가 **Play**.
-
-Built-In을 쓰는 이유: 화면 전체가 스프라이트 한 장이라 URP가 줄 이득이 없고, 모바일에서 더 가볍다.
+렌더 파이프라인은 Built-In이다. 화면 전체가 스프라이트 한 장이라 URP가 줄 이득이 없고, 모바일에서 더 가볍다.
 
 ### 코어를 고쳤다면
 `./sync-core.sh` 를 다시 실행하면 된다. `unity/Assets/Scripts/Core/`는 사본이라 직접 고치지 않는다.
 
 ### 입력 설정
-Unity 6 신규 프로젝트의 기본 입력(새 Input System)과 구형 Input Manager 둘 다 지원하므로 따로 바꿀 필요가 없다.
+새 Input System과 구형 Input Manager를 둘 다 지원하므로 따로 바꿀 필요가 없다.
+이 프로젝트는 현재 구형 Input Manager로 설정돼 있다(`activeInputHandler: 0`).
 
 ### 폰에서 실행
 File → Build Profiles → Android(또는 iOS) → Switch Platform → Player Settings에서
@@ -109,11 +110,10 @@ File → Build Profiles → Android(또는 iOS) → Switch Platform → Player S
 | 3스테이지가 "맞는 장비로만 클리어 가능"한지 | ✅ 자동 플레이 봇으로 측정 |
 | 화면 모양(도스풍 렌더) | ✅ 스크린샷으로 육안 확인 |
 | Unity 스크립트 문법·C# 9 호환 | ✅ 스텁 컴파일 검사 (두 입력 방식 모두) |
-| **Unity 에디터에서 실제 실행** | ⚠️ **미확인** — 개발 환경에 Unity가 없었다 |
-| **폰 실기기 조작감** | ⚠️ **미확인** |
+| **실제 Unity 6000.3.24f1 컴파일** | ✅ 배치 모드로 오류 0건, 경고 0건 |
+| **폰 실기기 조작감** | ⚠️ **미확인** — 폰 빌드는 아직 하지 않았다 |
 
-스텁 컴파일은 손으로 옮겨 적은 Unity API에 대고 하는 검사라, 실제 API와 다른 곳이 있으면 못 잡는다.
-Unity에서 컴파일 오류가 나면 콘솔 메시지를 그대로 알려주면 된다.
+스텁 컴파일(`tools/unity-compile-check`)은 Unity 없이 빠르게 돌리는 1차 검사고, 최종 판정은 실제 Unity 컴파일이다.
 
 ### 알려진 한계
 - 화면을 비율 유지로 늘리기 때문에 해상도에 따라 도트 크기가 한두 픽셀씩 고르지 않을 수 있다(정수배 스케일링은 아직 없음)
