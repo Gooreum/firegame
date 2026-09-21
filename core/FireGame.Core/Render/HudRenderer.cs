@@ -21,8 +21,6 @@ namespace FireGame.Core.Render
         private const int BarWidth = 56;
         private const int BarHeight = 6;
 
-        private const int SlotWidth = 104;
-
         /// <summary>상점에 진열되는 장비 수.</summary>
         public static int ShopEntryCount
         {
@@ -74,7 +72,7 @@ namespace FireGame.Core.Render
         {
             for (int slot = 0; slot < PlayerState.SlotCount; slot++)
             {
-                int x = 4 + (slot * SlotWidth);
+                int x = ScreenLayout.HudSlotLeft + (slot * ScreenLayout.HudSlotWidth);
                 EquipmentDef def = EquipmentCatalog.ById(runner.Player.Slots[slot]);
 
                 bool active = slot == runner.Player.ActiveSlot;
@@ -117,7 +115,7 @@ namespace FireGame.Core.Render
             for (int i = 0; i < EquipmentCatalog.All.Length; i++)
             {
                 EquipmentDef def = EquipmentCatalog.All[i];
-                int y = 64 + (i * 20);
+                int y = ScreenLayout.ShopRowY(i);
 
                 bool owned = save.Owns(def.Id);
                 bool affordable = !owned && save.Money >= def.Price;
@@ -139,6 +137,116 @@ namespace FireGame.Core.Render
             }
 
             buffer.DrawText(24, 168, "TAP ITEM TO BUY", Palette.LightCyan);
+            DrawButton(
+                buffer,
+                ScreenLayout.ShopBackButtonX,
+                ScreenLayout.ShopBackButtonY,
+                ScreenLayout.ShopBackButtonWidth,
+                ScreenLayout.ShopBackButtonHeight,
+                "BACK");
+        }
+
+        /// <summary>허브. 스테이지 선택과 상점 입구를 겸한다.</summary>
+        public static void DrawHub(FrameBuffer buffer, SaveData save)
+        {
+            if (buffer == null || save == null) return;
+
+            buffer.Clear(Palette.Red);
+            buffer.FillRect(8, 8, FrameBuffer.Width - 16, FrameBuffer.Height - 16, Palette.Black);
+
+            buffer.DrawText(24, 20, "FIREFIGHTER", Palette.Yellow);
+            buffer.DrawText(24, 36, "CASH $" + Pad(save.Money, 6), Palette.LightGreen);
+
+            for (int i = 0; i < StageCatalog.All.Length; i++)
+            {
+                StageDef stage = StageCatalog.All[i];
+                int y = ScreenLayout.HubStageRowY(i);
+
+                bool unlocked = save.IsStageUnlocked(stage);
+                bool cleared = save.ClearedStages > stage.Id;
+
+                byte color = !unlocked ? Palette.DarkGray : Palette.White;
+                string status = !unlocked ? "LOCK" : cleared ? "CLEAR" : "OPEN";
+                byte statusColor = !unlocked ? Palette.DarkGray : cleared ? Palette.LightGreen : Palette.Yellow;
+
+                buffer.DrawText(24, y, (i + 1).ToString(CultureInfo.InvariantCulture) + " " + stage.Name, color);
+                buffer.DrawText(240, y, status, statusColor);
+            }
+
+            DrawButton(
+                buffer,
+                ScreenLayout.HubShopButtonX,
+                ScreenLayout.HubShopButtonY,
+                ScreenLayout.HubShopButtonWidth,
+                ScreenLayout.HubShopButtonHeight,
+                "SHOP");
+
+            buffer.DrawText(24, 168, "TAP A STAGE", Palette.LightCyan);
+        }
+
+        /// <summary>한 판이 끝난 뒤의 정산 화면.</summary>
+        public static void DrawResult(
+            FrameBuffer buffer, string stageName, StageOutcome outcome, PayoutBreakdown payout)
+        {
+            if (buffer == null) return;
+
+            bool won = outcome == StageOutcome.Won;
+
+            buffer.Clear(won ? Palette.Green : Palette.Red);
+            buffer.FillRect(8, 8, FrameBuffer.Width - 16, FrameBuffer.Height - 16, Palette.Black);
+
+            buffer.DrawText(24, 20, stageName ?? string.Empty, Palette.LightGray);
+            buffer.DrawText(24, 36, won ? "STAGE CLEAR" : "FAILED", won ? Palette.LightGreen : Palette.LightRed);
+
+            if (!won)
+            {
+                buffer.DrawText(24, 56, FailureReason(outcome), Palette.Yellow);
+            }
+            else
+            {
+                // 무엇이 보상을 깎았는지 보여줘야 다음 판에 물을 아껴 쓴다.
+                DrawPayoutLine(buffer, 56, "BASE", payout.Base);
+                DrawPayoutLine(buffer, 68, "RESCUE", payout.Rescue);
+                DrawPayoutLine(buffer, 80, "BUILDING", payout.Integrity);
+                DrawPayoutLine(buffer, 92, "TIME", payout.Time);
+                DrawPayoutLine(buffer, 104, "WATER", payout.WaterDamage);
+                buffer.FillRect(24, 116, 208, 1, Palette.DarkGray);
+                DrawPayoutLine(buffer, 122, "TOTAL", payout.Total);
+            }
+
+            buffer.DrawText(24, 168, "TAP TO CONTINUE", Palette.LightCyan);
+        }
+
+        private static string FailureReason(StageOutcome outcome)
+        {
+            switch (outcome)
+            {
+                case StageOutcome.LostBuildingDestroyed: return "BUILDING BURNED DOWN";
+                case StageOutcome.LostPlayerDown: return "YOU WERE OVERCOME";
+                case StageOutcome.LostTimeUp: return "OUT OF TIME";
+                default: return string.Empty;
+            }
+        }
+
+        private static void DrawPayoutLine(FrameBuffer buffer, int y, string label, int amount)
+        {
+            buffer.DrawText(24, y, label, Palette.LightGray);
+
+            string sign = amount < 0 ? "-" : "+";
+            int magnitude = amount < 0 ? -amount : amount;
+            byte color = amount < 0 ? Palette.LightRed : Palette.White;
+
+            buffer.DrawText(144, y, sign + "$" + Pad(magnitude, 5), color);
+        }
+
+        private static void DrawButton(FrameBuffer buffer, int x, int y, int width, int height, string label)
+        {
+            buffer.FillRect(x, y, width, height, Palette.Brown);
+            buffer.FillRect(x + 1, y + 1, width - 2, height - 2, Palette.Red);
+
+            int textX = x + ((width - (label.Length * Glyphs.Width)) / 2);
+            int textY = y + ((height - Glyphs.Height) / 2);
+            buffer.DrawText(textX, textY, label, Palette.Yellow);
         }
 
         /// <summary>자리수를 고정해 숫자가 흔들리지 않게 한다. 넘치면 자르지 않고 그대로 둔다.</summary>

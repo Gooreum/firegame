@@ -61,6 +61,26 @@ namespace FireGame.Core.Tests
             WritePpm(buffer, Path.Combine(OutputDirectory, "shop.ppm"));
         }
 
+        [Fact]
+        public void DumpHubAndResultScreensToPpm()
+        {
+            SaveData save = SaveData.NewGame();
+            save.Money = 913;
+            save.RecordClear(0);
+
+            var hub = new FrameBuffer();
+            HudRenderer.DrawHub(hub, save);
+            WritePpm(hub, Path.Combine(OutputDirectory, "hub.ppm"));
+
+            var runner = new StageRunner(StageCatalog.Residential, new List<int> { EquipmentId.Bucket });
+            new GreedyBot(runner).Play();
+
+            var result = new FrameBuffer();
+            HudRenderer.DrawResult(
+                result, StageCatalog.Residential.Name, runner.Outcome, Economy.Breakdown(runner.BuildResult()));
+            WritePpm(result, Path.Combine(OutputDirectory, "result.ppm"));
+        }
+
         private static void WritePpm(FrameBuffer buffer, string path)
         {
             using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write))
