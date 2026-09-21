@@ -20,14 +20,24 @@ TARGET="$(cd "$TARGET" 2>/dev/null && pwd)" || {
 SCRIPTS="$TARGET/Assets/Scripts"
 mkdir -p "$SCRIPTS/Core"
 
+# 원본(core)에서 사라진 파일·폴더의 .meta를 먼저 지운다.
+# .meta는 Unity가 만든 것이라 아래 rsync에서 보호(제외)하는데, 그러면 코어에서 파일이나
+# 폴더를 지웠을 때 사본에 .meta만 남아 rsync가 폴더를 지우지 못하고 실패한다.
+SRC="$REPO_ROOT/core/FireGame.Core"
+if [ -d "$SCRIPTS/Core" ]; then
+  find "$SCRIPTS/Core" -name '*.meta' | while read -r meta; do
+    rel="${meta#"$SCRIPTS/Core/"}"
+    [ -e "$SRC/${rel%.meta}" ] || rm -f "$meta"
+  done
+fi
+
 # 코어 복사. 빌드 산출물과 .csproj는 제외한다(Unity가 자체 프로젝트를 만든다).
-# .meta는 Unity가 만든 것이므로 지우지 않는다.
 rsync -a --delete \
   --exclude 'bin/' \
   --exclude 'obj/' \
   --exclude '*.csproj' \
   --exclude '*.meta' \
-  "$REPO_ROOT/core/FireGame.Core/" "$SCRIPTS/Core/"
+  "$SRC/" "$SCRIPTS/Core/"
 
 # 저장소 밖 프로젝트라면 Unity 레이어 스크립트도 함께 넣는다.
 if [ "$TARGET" != "$REPO_ROOT/unity" ]; then
