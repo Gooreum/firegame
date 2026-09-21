@@ -21,6 +21,9 @@ namespace FireGame.Core.Game
         private const float PickupRadius = 0.7f;
 
         private readonly List<GridPoint> _hitBuffer = new List<GridPoint>();
+
+        // 슬롯별 레벨 반영 장비. Player.Slots에는 id만 있다.
+        private readonly EquipmentDef[] _slotDefs = new EquipmentDef[PlayerState.SlotCount];
         // float으로 누적하면 2분짜리 스테이지를 60fps로 돌릴 때 7200번 더해지며
         // 오차가 쌓여 실제 경과 시간과 틱 수가 어긋난다. double로 누적한다.
         private double _tickAccumulator;
@@ -40,8 +43,15 @@ namespace FireGame.Core.Game
         /// <summary>지금까지 실행한 고정 틱 수. 프레임레이트 독립성 검증에 쓴다.</summary>
         public int TicksElapsed;
 
+        /// <summary>장비 id 목록으로 시작한다. 전부 Lv1, 방화복·소방화 없음.</summary>
         public StageRunner(StageDef def, IReadOnlyList<int> unlockedEquipment)
+            : this(def, Loadout.FromIds(unlockedEquipment))
         {
+        }
+
+        public StageRunner(StageDef def, Loadout loadout)
+        {
+            if (loadout == null) throw new ArgumentNullException(nameof(loadout));
             if (def == null) throw new ArgumentNullException(nameof(def));
 
             Def = def;
@@ -59,25 +69,36 @@ namespace FireGame.Core.Game
 
             Player = new PlayerState();
             Player.Spawn(map.PlayerSpawn);
-            EquipLoadout(unlockedEquipment);
+            Player.SuitLevel = loadout.SuitLevel;
+            Player.DamageMultiplier = GearStats.DamageMultiplier(loadout.SuitLevel);
+            Player.SpeedMultiplier = GearStats.SpeedMultiplier(loadout.BootsLevel);
+            EquipLoadout(loadout.Equipment);
 
             TimeLeft = def.TimeLimitSeconds;
         }
 
-        /// <summary>보유한 장비를 앞에서부터 슬롯에 채운다.</summary>
-        private void EquipLoadout(IReadOnlyList<int> unlockedEquipment)
+        /// <summary>장비를 앞에서부터 슬롯에 채운다.</summary>
+        private void EquipLoadout(IReadOnlyList<EquipmentDef> equipment)
         {
-            IReadOnlyList<int> owned = unlockedEquipment ?? EquipmentCatalog.StartingEquipment;
-
             int slot = 0;
-            for (int i = 0; i < owned.Count && slot < PlayerState.SlotCount; i++)
+            for (int i = 0; i < equipment.Count && slot < PlayerState.SlotCount; i++)
             {
-                EquipmentDef def = EquipmentCatalog.ById(owned[i]);
-                if (def == null) continue;
+                if (equipment[i] == null) continue;
 
-                Player.Equip(slot, def);
+                Player.Equip(slot, equipment[i]);
+                _slotDefs[slot] = equipment[i];
                 slot++;
             }
+        }
+
+        /// <summary>
+        /// 슬롯의 레벨 반영 장비. 비었거나 범위 밖이면 null.
+        /// 발사·HUD·화면 연출이 모두 이걸 써야 레벨이 어디서나 같게 보인다.
+        /// </summary>
+        public EquipmentDef SlotEquipment(int slot)
+        {
+            if (slot < 0 || slot >= PlayerState.SlotCount) return null;
+            return _slotDefs[slot];
         }
 
         public bool IsOver
@@ -149,7 +170,7 @@ namespace FireGame.Core.Game
         {
             if (slot < 0 || slot >= PlayerState.SlotCount) return;
 
-            EquipmentDef def = EquipmentCatalog.ById(Player.Slots[slot]);
+            EquipmentDef def = SlotEquipment(slot);
             if (def == null) return;
             if (!Player.CanFire(slot, def)) return;
 

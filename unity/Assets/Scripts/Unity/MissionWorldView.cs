@@ -478,7 +478,7 @@ namespace FireGame.UnityLayer
                 _lastCooldowns[slot] = now;
                 if (!fired) continue;
 
-                EquipmentDef def = EquipmentCatalog.ById(player.Slots[slot]);
+                EquipmentDef def = _runner.SlotEquipment(slot);
                 if (def == null) continue;
 
                 Aiming.Resolve(_grid, player.CellX, player.CellY, player.Aim, def.Pattern, def.Range, _hitBuffer);

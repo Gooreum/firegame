@@ -143,13 +143,14 @@ namespace FireGame.UnityLayer
 
             for (int slot = 0; slot < PlayerState.SlotCount; slot++)
             {
-                RefreshSlot(runner.Player, slot);
+                RefreshSlot(runner, slot);
             }
         }
 
-        private void RefreshSlot(PlayerState player, int slot)
+        private void RefreshSlot(StageRunner runner, int slot)
         {
-            EquipmentDef def = EquipmentCatalog.ById(player.Slots[slot]);
+            PlayerState player = runner.Player;
+            EquipmentDef def = runner.SlotEquipment(slot);
             Image image = _slotImages[slot];
             Text label = _slotLabels[slot];
 

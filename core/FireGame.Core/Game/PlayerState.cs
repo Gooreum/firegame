@@ -31,6 +31,15 @@ namespace FireGame.Core.Game
 
         public int ActiveSlot;
 
+        /// <summary>소방화 레벨에 따른 이동 속도 배율.</summary>
+        public float SpeedMultiplier = 1f;
+
+        /// <summary>방화복 레벨에 따른 불 피해 배율.</summary>
+        public float DamageMultiplier = 1f;
+
+        /// <summary>방화복 레벨. 화면이 옷 그림을 고르는 데 쓴다.</summary>
+        public int SuitLevel;
+
         /// <summary>업고 있는 시민이 있는지. 있으면 이동이 느려진다.</summary>
         public bool CarryingCivilian;
 
@@ -110,7 +119,7 @@ namespace FireGame.Core.Game
                 inputY /= length;
             }
 
-            float speed = GameConfig.PlayerSpeed;
+            float speed = GameConfig.PlayerSpeed * SpeedMultiplier;
             if (CarryingCivilian) speed *= GameConfig.CarrySpeedMultiplier;
 
             float stepX = inputX * speed * dt;
@@ -155,7 +164,7 @@ namespace FireGame.Core.Game
             // 불 위에 서 있는 쪽이 훨씬 아프다.
             if (grid[cx, cy].State == CellState.Burning)
             {
-                Damage(GameConfig.FireDamageInCell * dt);
+                Damage(GameConfig.FireDamageInCell * DamageMultiplier * dt);
                 return;
             }
 
@@ -171,7 +180,7 @@ namespace FireGame.Core.Game
 
                     if (grid[nx, ny].State == CellState.Burning)
                     {
-                        Damage(GameConfig.FireDamageAdjacent * dt);
+                        Damage(GameConfig.FireDamageAdjacent * DamageMultiplier * dt);
                         return;
                     }
                 }

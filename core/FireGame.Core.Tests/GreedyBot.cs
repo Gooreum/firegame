@@ -212,7 +212,7 @@ namespace FireGame.Core.Tests
 
             for (int slot = 0; slot < PlayerState.SlotCount; slot++)
             {
-                EquipmentDef def = EquipmentCatalog.ById(player.Slots[slot]);
+                EquipmentDef def = _runner.SlotEquipment(slot);
                 if (def == null) continue;
                 if (!player.CanFire(slot, def)) continue;
 
@@ -299,7 +299,7 @@ namespace FireGame.Core.Tests
 
             for (int slot = 0; slot < PlayerState.SlotCount; slot++)
             {
-                EquipmentDef def = EquipmentCatalog.ById(player.Slots[slot]);
+                EquipmentDef def = _runner.SlotEquipment(slot);
                 if (def == null) continue;
                 if (def.Agent.Wetness <= 0f) continue;
                 if (!player.CanFire(slot, def)) continue;

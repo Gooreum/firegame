@@ -112,7 +112,7 @@ namespace FireGame.Core.Game
 
         private void StartRun()
         {
-            Runner = new StageRunner(CurrentMission.Stage, Save.OwnedEquipment());
+            Runner = new StageRunner(CurrentMission.Stage, Loadout.From(Save));
             ActiveSlot = 0;
             ResetInput();
             Screen = GameScreen.Playing;
