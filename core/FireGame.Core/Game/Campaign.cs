@@ -110,12 +110,32 @@ namespace FireGame.Core.Game
                 },
                 debrief: new[]
                 {
-                    "해냈다! 이 도시 최고의 소방관이다.",
-                    "오늘은 푹 쉬어라. 다음 신고가 올 때까지.",
+                    "기름불을 덮어서 잡았군. 이제 어떤 불도 겁나지 않겠지?",
+                    "쉴 틈이 없다. 가람동 물류창고에서 연기가 난다는 신고다.",
                 },
                 mapX: 0.78f,
                 mapY: 0.35f,
                 requiresMission: 1),
+
+            new MissionDef(
+                id: 3,
+                title: "목재 창고 화재",
+                location: "가람동 물류창고",
+                stage: StageCatalog.Warehouse,
+                briefing: new[]
+                {
+                    "가람동 물류창고에 불이 났다. 나무 선반이 벽까지 이어져 있어서 그냥 두면 창고가 통째로 탄다.",
+                    "직원 셋이 아직 안에 있다. 구하는 동안에도 불은 선반을 타고 번진다.",
+                    "시민을 데려가는 길에 불이 번지는 쪽 선반 끝을 먼저 적셔 둬!",
+                },
+                debrief: new[]
+                {
+                    "셋 다 구했군. 큰불에서는 순서가 전부다.",
+                    "강변 공장에서 검은 연기가 오른다. 배전반도 기름통도 있는 곳이다.",
+                },
+                mapX: 0.88f,
+                mapY: 0.66f,
+                requiresMission: 2),
         };
 
         public static MissionDef ById(int id)

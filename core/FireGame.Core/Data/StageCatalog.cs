@@ -131,11 +131,55 @@ namespace FireGame.Core.Data
             timeLimitSeconds: 150f,
             basePayout: 1200);
 
+        // ---------------------------------------------------------------
+        // 4. 물류창고 — A급만. 목재 선반이 외벽까지 한 덩어리로 이어진 가장 큰 목조 화재.
+        //    배우는 것: 시민 셋을 구하는 동안에도 불은 선반을 타고 번진다. 무엇부터 할지 고른다.
+        //    그냥 두면 건물의 60%가 탄다(봇 실측 무결성 40%). 별 두 개를 받으려면
+        //    구조 중에도 불이 번지는 쪽 선반 끝을 먼저 적셔야 한다.
+        //
+        //    장비 위력보다 이동 거리가 승부를 가른다. 호스·양동이 차이는 봇 실측 1%p 이내라
+        //    "호스가 있어야 깬다"는 조건은 두지 않았다.
+        // ---------------------------------------------------------------
+        private static readonly string[] WarehouseMap =
+        {
+            "########################################",
+            "#......................................#",
+            "#..WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW..#",
+            "#..W................................W..#",
+            "#..WWWWWWWWWWWWWWWWWWWWWWWWWWWW.....W..#",
+            "#..W...W...........W.............!..W..#",
+            "#..W...W...........W................D..#",
+            "#..WWWWWWWWWWWWWWWWWWWWWWWWWWWW.....W..#",
+            "#..W...W...........W................W..#",
+            "#..W...W...........W................W..#",
+            "#..WWWWWWWWWWWWWWWWWWWWWWWW*WWW.....W..#",
+            "#..W................................W..#",
+            "#..W................................W..#",
+            "#..WWWWWWWWWWWWWWWWWDDWWWWWWWWWWWWWWW..#",
+            "#......................................#",
+            "#...WWWWWWWWWW...........!.............#",
+            "#...W........W........@................#",
+            "#...W..!.....D.........................#",
+            "#...W........W.........................#",
+            "#.H.WWWWWWWWWW.................XX......#",
+            "#......................................#",
+            "########################################",
+        };
+
+        public static readonly StageDef Warehouse = new StageDef(
+            id: 3,
+            name: "WAREHOUSE",
+            map: WarehouseMap,
+            wind: Wind.From(-1f, 0f, 0.5f),
+            timeLimitSeconds: 150f,
+            basePayout: 1400);
+
         public static readonly StageDef[] All =
         {
             Residential,
             Shopping,
             GasStation,
+            Warehouse,
         };
 
         public static StageDef ById(int id)

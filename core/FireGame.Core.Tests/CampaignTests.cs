@@ -14,12 +14,14 @@ namespace FireGame.Core.Tests
 
         // --- TC-1 ---
         [Fact]
-        public void Campaign_HasThreeMissionsBuiltOnTheExistingStages()
+        public void Campaign_HasOneMissionPerStage_InStageOrder()
         {
-            Assert.Equal(3, Campaign.Missions.Length);
-            Assert.Same(StageCatalog.Residential, Campaign.Missions[0].Stage);
-            Assert.Same(StageCatalog.Shopping, Campaign.Missions[1].Stage);
-            Assert.Same(StageCatalog.GasStation, Campaign.Missions[2].Stage);
+            Assert.Equal(StageCatalog.All.Length, Campaign.Missions.Length);
+            for (int i = 0; i < Campaign.Missions.Length; i++)
+            {
+                Assert.Equal(i, Campaign.Missions[i].Id);
+                Assert.Same(StageCatalog.All[i], Campaign.Missions[i].Stage);
+            }
         }
 
         // --- TC-2 ---

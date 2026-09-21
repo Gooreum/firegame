@@ -177,12 +177,38 @@ namespace FireGame.Core.Tests
                     EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.FoamExtinguisher));
         }
 
+        // --- 창고 ---
+        [Fact]
+        public void Warehouse_IsBeatableWithTheStartingBucket_AndAllThreeAreRescued()
+        {
+            var runner = new StageRunner(StageCatalog.Warehouse, new List<int> { EquipmentId.Bucket });
+            Assert.Equal(StageOutcome.Won, new GreedyBot(runner).Play());
+            Assert.Equal(3, runner.BuildResult().Rescued);
+        }
+
+        [Fact]
+        public void Warehouse_OpensOnlyAfterTheGasStation()
+        {
+            MissionDef warehouse = Campaign.ById(StageCatalog.Warehouse.Id);
+            SaveData save = SaveData.NewGame();
+            save.RecordResult(0, 3);
+            save.RecordResult(1, 3);
+            Assert.False(save.IsMissionUnlocked(warehouse));
+
+            save.RecordResult(2, 1);
+            Assert.True(save.IsMissionUnlocked(warehouse));
+        }
+
         // --- TC-9 ---
         [Fact]
         public void StageUnlockRequirements_FormAStraightProgression()
         {
-            Assert.Equal(3, StageCatalog.All.Length);
-            Assert.Same(StageCatalog.Shopping, StageCatalog.ById(1));
+            for (int i = 0; i < StageCatalog.All.Length; i++)
+            {
+                Assert.Equal(i, StageCatalog.All[i].Id);
+                Assert.Same(StageCatalog.All[i], StageCatalog.ById(i));
+            }
+            Assert.Null(StageCatalog.ById(StageCatalog.All.Length));
         }
 
         // --- TC-10 ---
