@@ -112,7 +112,7 @@ namespace FireGame.Core.Game
 
         private void StartRun()
         {
-            Runner = new StageRunner(CurrentMission.Stage, Save.Unlocked);
+            Runner = new StageRunner(CurrentMission.Stage, Save.OwnedEquipment());
             ActiveSlot = 0;
             ResetInput();
             Screen = GameScreen.Playing;
@@ -132,12 +132,13 @@ namespace FireGame.Core.Game
             ShopOpen = false;
         }
 
-        public PurchaseResult Buy(int equipmentId)
+        /// <summary>상점 항목을 한 레벨 올린다(Lv0이면 해금).</summary>
+        public PurchaseResult Upgrade(int trackId)
         {
             // 상점이 닫혀 있을 때 사지는 걸 막는다. 버튼이 늦게 눌리는 경우를 대비한다.
             if (!ShopOpen || Screen != GameScreen.Map) return PurchaseResult.UnknownEquipment;
 
-            PurchaseResult result = Shop.Buy(Save, equipmentId);
+            PurchaseResult result = Shop.Upgrade(Save, trackId);
             if (result == PurchaseResult.Success) Persist();
             return result;
         }

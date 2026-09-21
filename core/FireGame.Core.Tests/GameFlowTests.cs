@@ -154,13 +154,21 @@ namespace FireGame.Core.Tests
             flow.OpenShop();
             Assert.True(flow.ShopOpen);
 
-            Assert.Equal(PurchaseResult.Success, flow.Buy(EquipmentId.Extinguisher));
-            Assert.Equal(800 - EquipmentCatalog.Extinguisher.Price, save.Money);
+            Assert.Equal(PurchaseResult.Success, flow.Upgrade(EquipmentId.Extinguisher));
+            Assert.Equal(800 - UpgradeCatalog.Extinguisher.CostToReach(1), save.Money);
             Assert.True(save.Owns(EquipmentId.Extinguisher));
             Assert.NotNull(written);
+            Assert.StartsWith("v3", written);
+            Assert.Contains("1:1", written);
+
+            // 상점을 닫으면 레벨업도 거절된다.
+            flow.CloseShop();
+            Assert.NotEqual(PurchaseResult.Success, flow.Upgrade(EquipmentId.Extinguisher));
+            Assert.Equal(1, save.LevelOf(EquipmentId.Extinguisher));
+            flow.OpenShop();
 
             written = null;
-            Assert.Equal(PurchaseResult.NotEnoughMoney, flow.Buy(EquipmentId.FoamExtinguisher));
+            Assert.Equal(PurchaseResult.NotEnoughMoney, flow.Upgrade(EquipmentId.FoamExtinguisher));
             Assert.Null(written);
 
             flow.CloseShop();
@@ -185,7 +193,7 @@ namespace FireGame.Core.Tests
             GameFlow playing = Playing(0, save);
             playing.OpenShop();
             Assert.False(playing.ShopOpen);
-            Assert.NotEqual(PurchaseResult.Success, playing.Buy(EquipmentId.Hose));
+            Assert.NotEqual(PurchaseResult.Success, playing.Upgrade(EquipmentId.Hose));
             Assert.False(save.Owns(EquipmentId.Hose));
             Assert.Equal(GameScreen.Playing, playing.Screen);
 
@@ -238,7 +246,7 @@ namespace FireGame.Core.Tests
         public void SelectingAnEmptyOrInvalidSlot_KeepsTheCurrentOne()
         {
             SaveData save = SaveData.NewGame();
-            save.Unlocked.Add(EquipmentId.Extinguisher);
+            save.SetLevel(EquipmentId.Extinguisher, 1);
             GameFlow flow = Playing(0, save);
 
             flow.SelectSlot(1);

@@ -298,9 +298,9 @@ namespace FireGame.EditorTools
         private static Camera MissionWithHud()
         {
             SaveData save = SaveData.NewGame();
-            save.Unlocked.Add(EquipmentId.Extinguisher);
-            save.Unlocked.Add(EquipmentId.Hose);
-            save.Unlocked.Add(EquipmentId.FoamExtinguisher);
+            save.SetLevel(EquipmentId.Extinguisher, 1);
+            save.SetLevel(EquipmentId.Hose, 1);
+            save.SetLevel(EquipmentId.FoamExtinguisher, 1);
             var flow = new GameFlow(save);
             flow.SelectMission(0);
             flow.BeginMission();

@@ -280,11 +280,6 @@ namespace FireGame.Core.Tests
         {
             Assert.Equal(4, EquipmentCatalog.All.Length);
 
-            Assert.Equal(0, EquipmentCatalog.Bucket.Price);
-            Assert.Equal(500, EquipmentCatalog.Extinguisher.Price);
-            Assert.Equal(3000, EquipmentCatalog.Hose.Price);
-            Assert.Equal(10000, EquipmentCatalog.FoamExtinguisher.Price);
-
             Assert.Equal(AgentType.Water, EquipmentCatalog.Bucket.Agent.Type);
             Assert.Equal(AgentType.CO2, EquipmentCatalog.Extinguisher.Agent.Type);
             Assert.Equal(AgentType.Water, EquipmentCatalog.Hose.Agent.Type);

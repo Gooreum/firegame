@@ -41,7 +41,7 @@ namespace FireGame.Core.Game
         Charges = 1,
     }
 
-    /// <summary>장비 한 종류의 정의. 값이 바뀌지 않는 데이터다.</summary>
+    /// <summary>장비 한 종류의 Lv1 정의. 값이 바뀌지 않는 데이터다. 가격은 <see cref="UpgradeCatalog"/>에 있다.</summary>
     public sealed class EquipmentDef
     {
         public readonly int Id;
@@ -52,7 +52,6 @@ namespace FireGame.Core.Game
         public readonly ResourceKind Resource;
         public readonly float CooldownSeconds;
         public readonly int MaxCharges;
-        public readonly int Price;
 
         public EquipmentDef(
             int id,
@@ -62,8 +61,7 @@ namespace FireGame.Core.Game
             int range,
             ResourceKind resource,
             float cooldownSeconds,
-            int maxCharges,
-            int price)
+            int maxCharges)
         {
             Id = id;
             Name = name;
@@ -73,7 +71,6 @@ namespace FireGame.Core.Game
             Resource = resource;
             CooldownSeconds = cooldownSeconds;
             MaxCharges = maxCharges;
-            Price = price;
         }
 
         /// <summary>레벨 하나당 위력 증가율.</summary>
@@ -105,7 +102,7 @@ namespace FireGame.Core.Game
 
             int charges = MaxCharges == 0 ? 0 : (int)Math.Round(MaxCharges * (1f + (ChargesPerLevel * steps)));
 
-            return new EquipmentDef(Id, Name, agent, Pattern, range, Resource, cooldown, charges, Price);
+            return new EquipmentDef(Id, Name, agent, Pattern, range, Resource, cooldown, charges);
         }
     }
 

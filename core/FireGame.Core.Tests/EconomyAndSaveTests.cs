@@ -107,16 +107,20 @@ namespace FireGame.Core.Tests
 
         // --- TC-8 ---
         [Fact]
-        public void Buying_WithEnoughMoney_DeductsAndUnlocks()
+        public void Unlocking_WithEnoughMoney_DeductsAndGivesLevel1()
         {
             SaveData save = SaveData.NewGame();
             save.Money = 1000;
 
-            PurchaseResult result = Shop.Buy(save, EquipmentId.Extinguisher);
-
-            Assert.Equal(PurchaseResult.Success, result);
-            Assert.Equal(1000 - EquipmentCatalog.Extinguisher.Price, save.Money);
+            Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, EquipmentId.Extinguisher));
+            Assert.Equal(700, save.Money);
+            Assert.Equal(1, save.LevelOf(EquipmentId.Extinguisher));
             Assert.True(save.Owns(EquipmentId.Extinguisher));
+
+            // 한 번 더 사면 레벨업
+            Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, EquipmentId.Extinguisher));
+            Assert.Equal(500, save.Money);
+            Assert.Equal(2, save.LevelOf(EquipmentId.Extinguisher));
         }
 
         // --- TC-9 ---
@@ -126,24 +130,25 @@ namespace FireGame.Core.Tests
             SaveData save = SaveData.NewGame();
             save.Money = 100;
 
-            PurchaseResult result = Shop.Buy(save, EquipmentId.Hose);
-
-            Assert.Equal(PurchaseResult.NotEnoughMoney, result);
+            Assert.Equal(PurchaseResult.NotEnoughMoney, Shop.Upgrade(save, EquipmentId.Hose));
             Assert.Equal(100, save.Money);
             Assert.False(save.Owns(EquipmentId.Hose));
         }
 
         // --- TC-10 ---
         [Fact]
-        public void BuyingSomethingAlreadyOwned_DoesNotChargeAgain()
+        public void UpgradingPastTheMaxLevel_DoesNotChargeAgain()
         {
             SaveData save = SaveData.NewGame();
-            save.Money = 5000;
+            save.Money = 99999;
 
-            PurchaseResult result = Shop.Buy(save, EquipmentId.Bucket);
+            for (int i = 0; i < 4; i++) Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, EquipmentId.Bucket));
+            Assert.Equal(5, save.LevelOf(EquipmentId.Bucket));
+            int money = save.Money;
 
-            Assert.Equal(PurchaseResult.AlreadyOwned, result);
-            Assert.Equal(5000, save.Money);
+            Assert.Equal(PurchaseResult.MaxLevel, Shop.Upgrade(save, EquipmentId.Bucket));
+            Assert.Equal(money, save.Money);
+            Assert.Equal(-1, Shop.NextCost(save, EquipmentId.Bucket));
         }
 
         // --- TC-11 ---
@@ -153,8 +158,9 @@ namespace FireGame.Core.Tests
             SaveData save = SaveData.NewGame();
             save.Money = 99999;
 
-            Assert.Equal(PurchaseResult.UnknownEquipment, Shop.Buy(save, 777));
+            Assert.Equal(PurchaseResult.UnknownEquipment, Shop.Upgrade(save, 777));
             Assert.Equal(99999, save.Money);
+            Assert.Equal(-1, Shop.NextCost(save, 777));
         }
 
         // --- TC-12 ---
@@ -165,22 +171,36 @@ namespace FireGame.Core.Tests
             original.Money = 7350;
             original.RecordResult(0, 3);
             original.RecordResult(1, 2);
-            Shop.Buy(original, EquipmentId.Extinguisher);
-            Shop.Buy(original, EquipmentId.Hose);
+            original.SetLevel(EquipmentId.Bucket, 4);
+            original.SetLevel(EquipmentId.Hose, 2);
+            original.SetLevel(GearId.Suit, 3);
+            original.SetLevel(GearId.Boots, 1);
 
-            Assert.True(SaveData.TryDeserialize(original.Serialize(), out SaveData restored));
+            string text = original.Serialize();
+            Assert.StartsWith("v3", text);
+            Assert.True(SaveData.TryDeserialize(text, out SaveData restored));
 
             Assert.Equal(original.Money, restored.Money);
             Assert.Equal(3, restored.StarsFor(0));
             Assert.Equal(2, restored.StarsFor(1));
             Assert.Equal(0, restored.StarsFor(2));
-            Assert.StartsWith("v2", original.Serialize());
-            Assert.Equal(original.Unlocked.Count, restored.Unlocked.Count);
-
-            foreach (int id in original.Unlocked)
+            foreach (UpgradeTrack track in UpgradeCatalog.All)
             {
-                Assert.True(restored.Owns(id), "장비 " + id + " 가 복원되지 않았다");
+                Assert.Equal(original.LevelOf(track.Id), restored.LevelOf(track.Id));
             }
+            Assert.Equal(text, restored.Serialize());
+        }
+
+        [Fact]
+        public void V2Save_KeepsBoughtEquipmentAsLevel1()
+        {
+            Assert.True(SaveData.TryDeserialize("v2\nmoney=40\nunlocked=0,1\nstars=0:3\n", out SaveData save));
+
+            Assert.Equal(1, save.LevelOf(EquipmentId.Bucket));
+            Assert.Equal(1, save.LevelOf(EquipmentId.Extinguisher));
+            Assert.Equal(0, save.LevelOf(EquipmentId.Hose));
+            Assert.Equal(3, save.StarsFor(0));
+            Assert.StartsWith("v3", save.Serialize());
         }
 
         // --- TC-13 ---
@@ -196,6 +216,10 @@ namespace FireGame.Core.Tests
 
             // 저장 중 앱이 죽어 파일이 잘린 경우: money 줄이 없으면 실패로 본다.
             Assert.False(SaveData.TryDeserialize("v1\ncleared=1\n", out _));
+
+            // 레벨 항목이 깨져 있으면 실패
+            Assert.False(SaveData.TryDeserialize("v3\nmoney=10\nlevels=0:x\n", out _));
+            Assert.False(SaveData.TryDeserialize("v3\nmoney=10\nlevels=0-3\n", out _));
 
             // 별점 항목이 깨져 있으면 실패
             Assert.False(SaveData.TryDeserialize("v2\nmoney=10\nstars=0:x\n", out _));
@@ -215,8 +239,10 @@ namespace FireGame.Core.Tests
             Assert.Equal(0, save.Money);
             Assert.Equal(0, save.TotalStars);
             foreach (MissionDef m in Campaign.Missions) Assert.Equal(0, save.StarsFor(m.Id));
-            Assert.Single(save.Unlocked);
-            Assert.True(save.Owns(EquipmentId.Bucket));
+            Assert.Equal(new[] { EquipmentId.Bucket }, save.OwnedEquipment());
+            Assert.Equal(1, save.LevelOf(EquipmentId.Bucket));
+            Assert.Equal(0, save.LevelOf(GearId.Suit));
+            Assert.Equal(0, save.LevelOf(GearId.Boots));
             Assert.False(save.Owns(EquipmentId.Hose));
         }
 
@@ -276,8 +302,8 @@ namespace FireGame.Core.Tests
             Assert.Equal(0, save.StarsFor(2));
             Assert.True(save.IsMissionUnlocked(Campaign.Missions[2]));
 
-            // 다시 저장하면 v2로 바뀐다.
-            Assert.StartsWith("v2", save.Serialize());
+            // 다시 저장하면 최신 형식(v3)으로 바뀐다.
+            Assert.StartsWith("v3", save.Serialize());
         }
 
         [Fact]

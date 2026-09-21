@@ -194,10 +194,10 @@ namespace FireGame.Core.Tests
             // 1. 주택가 — 무료 양동이로 클리어한다.
             StageResult first = PlayAndSettle(StageCatalog.Residential, save);
             Assert.True(first.Won, "주택가는 시작 장비로 깰 수 있어야 한다");
-            Assert.True(save.Money >= EquipmentCatalog.Extinguisher.Price,
+            Assert.True(save.Money >= Shop.NextCost(save, EquipmentId.Extinguisher),
                 "주택가 보상으로 소화기를 살 수 있어야 한다. 보유 " + save.Money);
 
-            Assert.Equal(PurchaseResult.Success, Shop.Buy(save, EquipmentId.Extinguisher));
+            Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, EquipmentId.Extinguisher));
 
             // 2. 상가 — 소화기가 있어야 깬다.
             Assert.True(save.IsMissionUnlocked(Campaign.Missions[1]));
@@ -206,15 +206,15 @@ namespace FireGame.Core.Tests
 
             // 3. 폼을 살 때까지 상가를 반복한다. 무한 루프가 되지 않는지도 함께 본다.
             int replays = 0;
-            while (save.Money < EquipmentCatalog.FoamExtinguisher.Price && replays < 20)
+            while (save.Money < Shop.NextCost(save, EquipmentId.FoamExtinguisher) && replays < 20)
             {
                 PlayAndSettle(StageCatalog.Shopping, save);
                 replays++;
             }
 
-            Assert.True(save.Money >= EquipmentCatalog.FoamExtinguisher.Price,
+            Assert.True(save.Money >= Shop.NextCost(save, EquipmentId.FoamExtinguisher),
                 "상가 반복으로 폼 소화기를 모을 수 있어야 한다. 보유 " + save.Money);
-            Assert.Equal(PurchaseResult.Success, Shop.Buy(save, EquipmentId.FoamExtinguisher));
+            Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, EquipmentId.FoamExtinguisher));
 
             // 4. 주유소 — 폼으로 클리어한다.
             Assert.True(save.IsMissionUnlocked(Campaign.Missions[2]));
@@ -227,7 +227,7 @@ namespace FireGame.Core.Tests
         /// <summary>보유 장비로 한 판 돌리고 정산까지 반영한다.</summary>
         private static StageResult PlayAndSettle(StageDef stage, SaveData save)
         {
-            var runner = new StageRunner(stage, save.Unlocked);
+            var runner = new StageRunner(stage, save.OwnedEquipment());
             new GreedyBot(runner).Play();
 
             StageResult result = runner.BuildResult();

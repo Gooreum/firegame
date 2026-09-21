@@ -65,8 +65,9 @@ namespace FireGame.UnityLayer
         private static void BuildCard(Transform panel, GameFlow flow, EquipmentDef def, int index, int count)
         {
             SaveData save = flow.Save;
-            bool owned = save.Owns(def.Id);
-            bool affordable = !owned && save.Money >= def.Price;
+            int cost = Shop.NextCost(save, def.Id);
+            bool owned = cost < 0;   // 최대 레벨
+            bool affordable = !owned && save.Money >= cost;
 
             const float cardWidth = 340f;
             const float gap = 26f;
@@ -95,9 +96,9 @@ namespace FireGame.UnityLayer
 
             // 상태별 버튼: 보유 중(회색) / 구매(초록) / 잔액 부족(빨강)
             string sprite = owned ? "UI/button_grey" : affordable ? "UI/button_green" : "UI/button_red";
-            string label = owned ? "보유 중" : Format.Money(def.Price);
+            string label = owned ? "최대" : Format.Money(cost);
             int id = def.Id;
-            UnityEngine.UI.Button buy = UiKit.Button(card.transform, "Buy", Art.Get(sprite), label, 36, () => flow.Buy(id));
+            UnityEngine.UI.Button buy = UiKit.Button(card.transform, "Buy", Art.Get(sprite), label, 36, () => flow.Upgrade(id));
             UiKit.Place((RectTransform)buy.transform, new Vector2(0.5f, 0f), new Vector2(0f, 30f), new Vector2(280f, 100f));
             ((RectTransform)buy.transform).pivot = new Vector2(0.5f, 0f);
             buy.interactable = affordable;

@@ -22,9 +22,9 @@ namespace FireGame.Core.Tests
 
             var flow = new GameFlow(save);
             flow.OpenShop();
-            Assert.Equal(PurchaseResult.Success, flow.Buy(EquipmentId.Extinguisher));
-            Assert.Equal(PurchaseResult.Success, flow.Buy(EquipmentId.Hose));
-            Assert.Equal(PurchaseResult.Success, flow.Buy(EquipmentId.FoamExtinguisher));
+            Assert.Equal(PurchaseResult.Success, flow.Upgrade(EquipmentId.Extinguisher));
+            Assert.Equal(PurchaseResult.Success, flow.Upgrade(EquipmentId.Hose));
+            Assert.Equal(PurchaseResult.Success, flow.Upgrade(EquipmentId.FoamExtinguisher));
             flow.CloseShop();
             return flow;
         }

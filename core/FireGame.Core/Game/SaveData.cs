@@ -7,7 +7,7 @@ using FireGame.Core.Data;
 namespace FireGame.Core.Game
 {
     /// <summary>
-    /// 진행 상황. 돈과 해금한 장비, 현장별 최고 별점을 담는다.
+    /// 진행 상황. 돈, 상점 항목별 레벨(장비·방화복·소방화), 현장별 최고 별점을 담는다.
     ///
     /// 직렬화는 의존성 없는 줄 단위 텍스트로 한다.
     /// Unity의 JsonUtility는 Unity 밖에서 못 쓰고, System.Text.Json은
@@ -15,31 +15,57 @@ namespace FireGame.Core.Game
     /// </summary>
     public sealed class SaveData
     {
-        private const string FormatVersion = "v2";
-        private const string LegacyFormatVersion = "v1";
+        private const string FormatVersion = "v3";
+        private const string V2 = "v2";
+        private const string V1 = "v1";
 
         public int Money;
-        public readonly List<int> Unlocked = new List<int>();
+
+        /// <summary>상점 항목 id → 레벨. 없으면 그 항목의 시작 레벨.</summary>
+        private readonly Dictionary<int, int> _levels = new Dictionary<int, int>();
 
         /// <summary>현장 id → 최고 별점. 기록이 없으면 0.</summary>
         private readonly Dictionary<int, int> _bestStars = new Dictionary<int, int>();
 
         public static SaveData NewGame()
         {
-            var save = new SaveData();
+            // 시작 장비(양동이 Lv1)는 트랙의 StartLevel로 표현되므로 따로 넣을 것이 없다.
+            return new SaveData();
+        }
 
-            IReadOnlyList<int> starting = EquipmentCatalog.StartingEquipment;
-            for (int i = 0; i < starting.Count; i++)
-            {
-                save.Unlocked.Add(starting[i]);
-            }
+        public int LevelOf(int trackId)
+        {
+            if (_levels.TryGetValue(trackId, out int level)) return level;
 
-            return save;
+            UpgradeTrack track = UpgradeCatalog.ById(trackId);
+            return track != null ? track.StartLevel : 0;
+        }
+
+        /// <summary>레벨을 정한다. 0..최대 레벨로 자르고, 모르는 항목은 무시한다.</summary>
+        public void SetLevel(int trackId, int level)
+        {
+            UpgradeTrack track = UpgradeCatalog.ById(trackId);
+            if (track == null) return;
+
+            if (level < 0) level = 0;
+            if (level > track.MaxLevel) level = track.MaxLevel;
+            _levels[trackId] = level;
         }
 
         public bool Owns(int equipmentId)
         {
-            return Unlocked.Contains(equipmentId);
+            return LevelOf(equipmentId) > 0;
+        }
+
+        /// <summary>보유한(Lv1 이상) 장비 id. 상점 순서대로.</summary>
+        public List<int> OwnedEquipment()
+        {
+            var owned = new List<int>();
+            foreach (EquipmentDef def in EquipmentCatalog.All)
+            {
+                if (Owns(def.Id)) owned.Add(def.Id);
+            }
+            return owned;
         }
 
         public int StarsFor(int missionId)
@@ -84,35 +110,35 @@ namespace FireGame.Core.Game
             builder.Append(FormatVersion).Append('\n');
             builder.Append("money=").Append(Money.ToString(CultureInfo.InvariantCulture)).Append('\n');
 
-            builder.Append("unlocked=");
-            for (int i = 0; i < Unlocked.Count; i++)
-            {
-                if (i > 0) builder.Append(',');
-                builder.Append(Unlocked[i].ToString(CultureInfo.InvariantCulture));
-            }
-            builder.Append('\n');
+            AppendPairs(builder, "levels", _levels);
+            AppendPairs(builder, "stars", _bestStars);
 
-            builder.Append("stars=");
-            var ids = new List<int>(_bestStars.Keys);
+            return builder.ToString();
+        }
+
+        /// <summary>"key=id:value,id:value" 한 줄. id 순으로 적어 같은 상태면 같은 문자열이 된다.</summary>
+        private static void AppendPairs(StringBuilder builder, string key, Dictionary<int, int> pairs)
+        {
+            builder.Append(key).Append('=');
+            var ids = new List<int>(pairs.Keys);
             ids.Sort();
             for (int i = 0; i < ids.Count; i++)
             {
                 if (i > 0) builder.Append(',');
                 builder.Append(ids[i].ToString(CultureInfo.InvariantCulture))
                        .Append(':')
-                       .Append(_bestStars[ids[i]].ToString(CultureInfo.InvariantCulture));
+                       .Append(pairs[ids[i]].ToString(CultureInfo.InvariantCulture));
             }
             builder.Append('\n');
-
-            return builder.ToString();
         }
 
         /// <summary>
         /// 저장 문자열을 복원한다. 모바일에서는 저장 중 앱이 죽어 파일이
         /// 잘릴 수 있으므로, 깨진 데이터에 예외를 던지는 대신 실패를 반환한다.
         ///
-        /// v1(클리어 수 하나만 저장하던 형식)도 읽는다. 앞에서부터 N개 현장을
-        /// 별 1개로 옮겨, 업데이트 후에도 열어 둔 현장이 다시 잠기지 않게 한다.
+        /// 예전 형식도 읽는다. v1/v2의 unlocked(산 장비 목록)는 각 장비 Lv1로,
+        /// v1의 cleared=N은 앞에서부터 N개 현장 별 1개로 옮긴다.
+        /// 업데이트 후에도 산 장비와 열어 둔 현장이 사라지지 않게 하려는 것이다.
         /// </summary>
         public static bool TryDeserialize(string text, out SaveData save)
         {
@@ -121,8 +147,8 @@ namespace FireGame.Core.Game
 
             string[] lines = text.Split('\n');
             string version = lines[0].Trim();
-            bool legacy = version == LegacyFormatVersion;
-            if (!legacy && version != FormatVersion) return false;
+            bool legacy = version == V1;
+            if (!legacy && version != V2 && version != FormatVersion) return false;
 
             var parsed = new SaveData();
             bool sawMoney = false;
@@ -147,7 +173,11 @@ namespace FireGame.Core.Game
                         break;
 
                     case "unlocked":
-                        if (!TryParseIdList(value, parsed.Unlocked)) return false;
+                        if (!TryParseUnlocked(value, parsed)) return false;
+                        break;
+
+                    case "levels":
+                        if (!TryParseLevels(value, parsed)) return false;
                         break;
 
                     case "stars":
@@ -180,22 +210,33 @@ namespace FireGame.Core.Game
             return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
         }
 
-        private static bool TryParseIdList(string text, List<int> target)
+        /// <summary>v1/v2의 산 장비 목록. 산 장비는 Lv1로 옮긴다.</summary>
+        private static bool TryParseUnlocked(string text, SaveData target)
         {
-            target.Clear();
             if (text.Length == 0) return true;
 
             string[] parts = text.Split(',');
             for (int i = 0; i < parts.Length; i++)
             {
                 if (!TryParseInt(parts[i], out int id)) return false;
-                if (!target.Contains(id)) target.Add(id);
+                if (target.LevelOf(id) < 1) target.SetLevel(id, 1);
             }
 
             return true;
         }
 
+        private static bool TryParseLevels(string text, SaveData target)
+        {
+            return TryParsePairs(text, (id, level) => target.SetLevel(id, level));
+        }
+
         private static bool TryParseStars(string text, SaveData target)
+        {
+            return TryParsePairs(text, target.RecordResult);
+        }
+
+        /// <summary>"id:value,id:value"를 읽는다. 한 항목이라도 깨져 있으면 실패.</summary>
+        private static bool TryParsePairs(string text, Action<int, int> apply)
         {
             if (text.Length == 0) return true;
 
@@ -204,45 +245,56 @@ namespace FireGame.Core.Game
             {
                 string[] pair = entries[i].Split(':');
                 if (pair.Length != 2) return false;
-                if (!TryParseInt(pair[0], out int missionId)) return false;
-                if (!TryParseInt(pair[1], out int stars)) return false;
+                if (!TryParseInt(pair[0], out int id)) return false;
+                if (!TryParseInt(pair[1], out int value)) return false;
 
-                target.RecordResult(missionId, stars);
+                apply(id, value);
             }
 
             return true;
         }
     }
 
-    /// <summary>장비 구매 결과.</summary>
+    /// <summary>상점 레벨업 결과.</summary>
     public enum PurchaseResult : byte
     {
         Success = 0,
-        AlreadyOwned = 1,
+
+        /// <summary>이미 최대 레벨이다.</summary>
+        MaxLevel = 1,
+
         NotEnoughMoney = 2,
         UnknownEquipment = 3,
     }
 
-    /// <summary>장비 상점.</summary>
+    /// <summary>
+    /// 소방서 상점. 모든 항목을 한 칸씩 올린다: Lv0 → Lv1이 "해금", 그 뒤는 "레벨업".
+    /// </summary>
     public static class Shop
     {
-        public static bool CanAfford(SaveData save, EquipmentDef def)
-        {
-            return save != null && def != null && save.Money >= def.Price;
-        }
-
-        public static PurchaseResult Buy(SaveData save, int equipmentId)
+        /// <summary>다음 레벨 값. 최대 레벨이거나 모르는 항목이면 -1.</summary>
+        public static int NextCost(SaveData save, int trackId)
         {
             if (save == null) throw new ArgumentNullException(nameof(save));
 
-            EquipmentDef def = EquipmentCatalog.ById(equipmentId);
-            if (def == null) return PurchaseResult.UnknownEquipment;
+            UpgradeTrack track = UpgradeCatalog.ById(trackId);
+            if (track == null) return -1;
 
-            if (save.Owns(equipmentId)) return PurchaseResult.AlreadyOwned;
-            if (save.Money < def.Price) return PurchaseResult.NotEnoughMoney;
+            return track.CostToReach(save.LevelOf(trackId) + 1);
+        }
 
-            save.Money -= def.Price;
-            save.Unlocked.Add(equipmentId);
+        public static PurchaseResult Upgrade(SaveData save, int trackId)
+        {
+            if (save == null) throw new ArgumentNullException(nameof(save));
+
+            if (UpgradeCatalog.ById(trackId) == null) return PurchaseResult.UnknownEquipment;
+
+            int cost = NextCost(save, trackId);
+            if (cost < 0) return PurchaseResult.MaxLevel;
+            if (save.Money < cost) return PurchaseResult.NotEnoughMoney;
+
+            save.Money -= cost;
+            save.SetLevel(trackId, save.LevelOf(trackId) + 1);
             return PurchaseResult.Success;
         }
     }
