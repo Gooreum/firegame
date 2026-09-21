@@ -226,6 +226,54 @@ namespace FireGame.Core.Tests
                     EquipmentId.Bucket, EquipmentId.Hose, EquipmentId.FoamExtinguisher));
         }
 
+        // --- 항구 ---
+        private static readonly int[] AllFour =
+        {
+            EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.Hose, EquipmentId.FoamExtinguisher,
+        };
+
+        [Fact]
+        public void Harbor_IsBeatenWithAllFourAtLevelOne()
+        {
+            // 레벨업 없이도 깰 수 있어야 한다. 같은 현장을 반복해 돈을 모으게 하지 않는다.
+            Assert.Equal(StageOutcome.Won, PlayWith(StageCatalog.Harbor, AllFour));
+        }
+
+        [Fact]
+        public void Harbor_CannotBeBeatenWithoutFoam()
+        {
+            Assert.NotEqual(StageOutcome.Won,
+                PlayWith(StageCatalog.Harbor,
+                    EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.Hose));
+        }
+
+        [Fact]
+        public void Harbor_UpgradedGearEarnsMoreThanLevelOne()
+        {
+            SaveData basic = SaveData.NewGame();
+            foreach (int id in AllFour) basic.SetLevel(id, 1);
+
+            SaveData upgraded = SaveData.NewGame();
+            foreach (int id in AllFour) upgraded.SetLevel(id, 3);
+            upgraded.SetLevel(GearId.Suit, 2);
+            upgraded.SetLevel(GearId.Boots, 2);
+
+            StageResult before = PlayLoadout(StageCatalog.Harbor, Loadout.From(basic));
+            StageResult after = PlayLoadout(StageCatalog.Harbor, Loadout.From(upgraded));
+
+            Assert.True(before.Won);
+            Assert.True(after.Won);
+            Assert.True(Economy.Payout(after) > Economy.Payout(before),
+                "레벨업 " + Economy.Payout(after) + " vs Lv1 " + Economy.Payout(before));
+        }
+
+        private static StageResult PlayLoadout(StageDef stage, Loadout loadout)
+        {
+            var runner = new StageRunner(stage, loadout);
+            new GreedyBot(runner).Play();
+            return runner.BuildResult();
+        }
+
         // --- TC-9 ---
         [Fact]
         public void StageUnlockRequirements_FormAStraightProgression()
@@ -240,35 +288,36 @@ namespace FireGame.Core.Tests
 
         // --- TC-10 ---
         [Fact]
-        public void AFreshSave_CanEarnItsWayThroughAllThreeStages()
+        public void AFreshSave_CanEarnItsWayThroughAllSixStages()
         {
             SaveData save = SaveData.NewGame();
 
-            // 1. 주택가 — 무료 양동이로 클리어한다.
-            StageResult first = PlayAndSettle(StageCatalog.Residential, save);
-            Assert.True(first.Won, "주택가는 시작 장비로 깰 수 있어야 한다");
-            Assert.True(save.Money >= Shop.NextCost(save, EquipmentId.Extinguisher),
-                "주택가 보상으로 소화기를 살 수 있어야 한다. 보유 " + save.Money);
+            // 현장마다 들어가기 전에 새로 필요한 장비를 산다. 같은 현장을 반복하지 않는다.
+            (StageDef Stage, int Buy)[] route =
+            {
+                (StageCatalog.Residential, -1),
+                (StageCatalog.Shopping, EquipmentId.Extinguisher),
+                (StageCatalog.GasStation, EquipmentId.FoamExtinguisher),
+                (StageCatalog.Warehouse, EquipmentId.Hose),
+                (StageCatalog.Factory, -1),
+                (StageCatalog.Harbor, -1),
+            };
 
-            Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, EquipmentId.Extinguisher));
+            foreach ((StageDef stage, int buy) in route)
+            {
+                if (buy >= 0)
+                {
+                    Assert.True(save.Money >= Shop.NextCost(save, buy),
+                        stage.Name + " 전에 장비 " + buy + "를 살 돈이 있어야 한다. 보유 " + save.Money);
+                    Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, buy));
+                }
 
-            // 2. 상가 — 소화기가 있어야 깬다.
-            Assert.True(save.IsMissionUnlocked(Campaign.Missions[1]));
-            StageResult second = PlayAndSettle(StageCatalog.Shopping, save);
-            Assert.True(second.Won, "소화기를 갖췄으면 상가를 깰 수 있어야 한다");
+                Assert.True(save.IsMissionUnlocked(Campaign.ById(stage.Id)), stage.Name + " 이 열려 있어야 한다");
+                StageResult result = PlayAndSettle(stage, save);
+                Assert.True(result.Won, stage.Name + " 을 깰 수 있어야 한다");
+            }
 
-            // 3. 같은 현장을 반복하지 않고도 바로 폼 소화기를 살 수 있어야 한다.
-            //    (예전 가격 $10,000은 상가를 열 번 가까이 반복해야 했다.)
-            Assert.True(save.Money >= Shop.NextCost(save, EquipmentId.FoamExtinguisher),
-                "상가를 한 번 깨면 폼 소화기를 살 수 있어야 한다. 보유 " + save.Money);
-            Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, EquipmentId.FoamExtinguisher));
-
-            // 4. 주유소 — 폼으로 클리어한다.
-            Assert.True(save.IsMissionUnlocked(Campaign.Missions[2]));
-            StageResult third = PlayAndSettle(StageCatalog.GasStation, save);
-            Assert.True(third.Won, "폼을 갖췄으면 주유소를 깰 수 있어야 한다");
-
-            for (int id = 0; id < 3; id++) Assert.True(save.StarsFor(id) >= 1);
+            foreach (StageDef stage in StageCatalog.All) Assert.True(save.StarsFor(stage.Id) >= 1);
         }
 
         /// <summary>보유 장비로 한 판 돌리고 정산까지 반영한다.</summary>

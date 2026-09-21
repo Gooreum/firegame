@@ -156,6 +156,26 @@ namespace FireGame.Core.Game
                 mapX: 0.64f,
                 mapY: 0.86f,
                 requiresMission: 3),
+
+            new MissionDef(
+                id: 5,
+                title: "항구 대화재",
+                location: "푸른항구 유류 저장소",
+                stage: StageCatalog.Harbor,
+                briefing: new[]
+                {
+                    "최종 출동이다. 푸른항구 유류 저장소가 불타고 있다.",
+                    "기름이 송유관을 타고 옆 웅덩이와 창고까지 번진다. 크레인 배전반에도 불이 붙었어.",
+                    "바람이 오늘 중 가장 세다. 시민 넷을 먼저 구하고, 폼은 아껴 써라!",
+                },
+                debrief: new[]
+                {
+                    "해냈다! 이 도시 최고의 소방관이다.",
+                    "오늘은 푹 쉬어라. 다음 신고가 올 때까지.",
+                },
+                mapX: 0.36f,
+                mapY: 0.80f,
+                requiresMission: 4),
         };
 
         public static MissionDef ById(int id)
