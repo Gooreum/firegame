@@ -39,6 +39,8 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("12_shopping_electric", ShoppingElectric),
                 new KeyValuePair<string, Func<Camera>>("13_gasstation_oil", GasStationOil),
                 new KeyValuePair<string, Func<Camera>>("14_spray_and_firebreak", SprayAndFirebreak),
+                new KeyValuePair<string, Func<Camera>>("15_suit_co2", SuitAndCo2),
+                new KeyValuePair<string, Func<Camera>>("16_suits_lineup", SuitsLineup),
                 new KeyValuePair<string, Func<Camera>>("20_hud", MissionWithHud),
                 new KeyValuePair<string, Func<Camera>>("30_map_new_game", MapNewGame),
                 new KeyValuePair<string, Func<Camera>>("31_map_progress", MapProgress),
@@ -346,6 +348,47 @@ namespace FireGame.EditorTools
             runner.Update(0.01f, new StageInput { Fire = true, Slot = 0 });
             view.Refresh(2.05f, 0.05f);
             view.FrameCamera(camera, view.PlayerWorld);
+            return camera;
+        }
+
+        /// <summary>방열복(Lv4)을 입은 소방관이 전기실 안에서 CO2 소화기(Lv3)를 막 뿜은 순간.</summary>
+        private static Camera SuitAndCo2()
+        {
+            SaveData save = SaveData.NewGame();
+            save.SetLevel(GearId.Suit, 4);
+            save.SetLevel(EquipmentId.Extinguisher, 3);
+            var runner = new StageRunner(StageCatalog.Shopping, Loadout.From(save));
+            Advance(runner, 3f);
+
+            runner.Player.X = 8.5f;
+            runner.Player.Y = 5.5f;
+            runner.Player.Aim = AimDirection.W;
+
+            Camera camera = WorldCamera();
+            var view = new MissionWorldView(new GameObject("Root").transform, runner);
+            view.Refresh(3f, 0f);
+            runner.Update(0.01f, new StageInput { Fire = true, Slot = 1 });
+            view.Refresh(3.1f, 0.1f);
+            view.FrameCamera(camera, view.PlayerWorld);
+            return camera;
+        }
+
+        /// <summary>방화복 0~4단계를 나란히 세워 옷 색·헬멧이 구분되는지 본다.</summary>
+        private static Camera SuitsLineup()
+        {
+            Camera camera = WorldCamera();
+            camera.orthographicSize = 3f;
+            camera.backgroundColor = new Color(0.18f, 0.62f, 0.35f);
+            camera.transform.position = new Vector3(0f, 0f, -10f);
+
+            for (int level = 0; level <= UpgradeCatalog.Suit.MaxLevel; level++)
+            {
+                var suit = new GameObject("Suit" + level).AddComponent<SpriteRenderer>();
+                suit.sprite = Require<Sprite>("Art/" + MissionWorldView.SuitSprite(level));
+                suit.transform.position = new Vector3((level - 2) * 2f, 0.4f, 0f);
+                suit.transform.rotation = Quaternion.Euler(0f, 0f, 90f);
+                suit.transform.localScale = Vector3.one * 2f;
+            }
             return camera;
         }
 

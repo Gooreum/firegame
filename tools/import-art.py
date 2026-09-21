@@ -3,6 +3,7 @@
 Kenney CC0 에셋팩과 주아체(OFL)를 받아 Unity 프로젝트에 필요한 파일만 골라 넣는다.
 
 - 팩 전체를 넣지 않는다. 쓰는 그림만 알아보기 쉬운 이름으로 복사한다.
+- 방화복 5벌은 기본 소방관(Man Blue) 그림의 옷·머리 색을 바꿔 만든다(옷 색, 헬멧, 반사띠).
 - 출동 지도 배경은 Map Pack 색감으로 바다·섬·길을 합성해 만든다.
   섬 가장자리 타일을 번호로 이어 붙이는 것보다 틀릴 여지가 적고, 현장 좌표와 길을 정확히 맞출 수 있다.
 - 다시 실행해도 같은 결과가 나온다(선별 목록에 없는 파일은 지우고 .meta는 보존).
@@ -56,8 +57,6 @@ SELECTION = {
     ("TopDown", "door_horizontal"): f"{TD}/Tiles/tile_466.png",
     ("TopDown", "hydrant"): f"{TD}/Tiles/tile_316.png",
     # ---- 사람 ----
-    ("TopDown", "player_hold"): f"{TD}/Man Blue/manBlue_hold.png",
-    ("TopDown", "player_stand"): f"{TD}/Man Blue/manBlue_stand.png",
     ("TopDown", "civilian_woman"): f"{TD}/Woman Green/womanGreen_stand.png",
     ("TopDown", "civilian_old"): f"{TD}/Man Old/manOld_stand.png",
     ("TopDown", "civilian_man"): f"{TD}/Man Brown/manBrown_stand.png",
@@ -112,6 +111,17 @@ CLIFF_DARK = (176, 123, 81)
 PATH = (255, 204, 0)
 PATH_EDGE = (255, 255, 255)
 
+# 방화복 레벨별 (옷, 헬멧, 반사띠). core GearStats.SuitName과 같은 순서.
+# Lv0 근무복은 원본 그대로다.
+SUITS = [
+    None,                                              # 근무복
+    ((214, 170, 80), (250, 206, 40), (235, 245, 120)),  # 방화복: 황갈색 + 노란 헬멧
+    ((240, 120, 30), (220, 40, 40), (250, 250, 210)),   # 고급 방화복: 주황 + 빨간 헬멧
+    ((200, 40, 40), (245, 245, 245), (250, 230, 90)),   # 특수 방화복: 빨강 + 흰 헬멧
+    ((190, 195, 205), (215, 220, 230), (245, 248, 255)),  # 방열복: 은색
+]
+SUIT_SOURCE = f"{TD}/Man Blue/manBlue_hold.png"
+
 # 현장 지도 좌표. core Campaign.cs의 MapX/MapY와 같아야 길이 노드에 닿는다.
 STATION = (0.10, 0.16)
 MISSIONS = [(0.22, 0.30), (0.50, 0.62), (0.78, 0.35)]
@@ -165,9 +175,67 @@ def copy_selection(packs):
             with open(dest, "wb") as f:
                 f.write(data)
     wanted.setdefault("Map", set()).add("map_background.png")
+    for level in range(len(SUITS)):
+        wanted.setdefault("TopDown", set()).add(f"player_suit_{level}.png")
     for folder, names in wanted.items():
         sync_dir(os.path.join(ART, folder), names)
     return sum(len(v) for v in wanted.values())
+
+
+def _lum(c):
+    return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
+
+
+def _shade(color, ratio):
+    return tuple(max(0, min(255, int(v * ratio))) for v in color)
+
+
+def recolor_suit(src, suit, helmet, stripe):
+    """파란 옷 → 옷 색(등에 반사띠), 검은 머리 → 헬멧. 원래 명암 비율을 살려 입체감을 유지한다."""
+    img = src.copy()
+    px = img.load()
+    w, h = img.size
+    blue_ref = _lum((47, 149, 208))
+    hair_ref = _lum((51, 51, 51))
+
+    def is_cloth(r, g, b):
+        return b > r + 40 and b >= g
+
+    def is_hair(r, g, b):
+        return abs(r - g) < 8 and abs(g - b) < 8 and r < 80
+
+    hair = {(x, y) for y in range(h) for x in range(w) if px[x, y][3] > 0 and is_hair(*px[x, y][:3])}
+    stripe_from, stripe_to = int(w * 0.20), int(w * 0.26)
+
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a == 0:
+                continue
+            if is_cloth(r, g, b):
+                near_head = any((x + dx, y + dy) in hair for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+                if near_head:
+                    px[x, y] = _shade(helmet, 0.7) + (a,)                        # 헬멧 챙
+                elif stripe_from <= x <= stripe_to:
+                    px[x, y] = _shade(stripe, _lum((r, g, b)) / blue_ref) + (a,)  # 반사띠
+                else:
+                    px[x, y] = _shade(suit, _lum((r, g, b)) / blue_ref) + (a,)
+            elif (x, y) in hair:
+                px[x, y] = _shade(helmet, 0.75 + 0.25 * _lum((r, g, b)) / hair_ref) + (a,)
+    return img
+
+
+def make_suits(packs):
+    src = Image.open(io.BytesIO(read(packs, SUIT_SOURCE))).convert("RGBA")
+    for level, colors in enumerate(SUITS):
+        img = src if colors is None else recolor_suit(src, *colors)
+        buf = io.BytesIO()
+        img.save(buf, "PNG", optimize=True)
+        dest = os.path.join(ART, "TopDown", f"player_suit_{level}.png")
+        if not os.path.exists(dest) or open(dest, "rb").read() != buf.getvalue():
+            with open(dest, "wb") as f:
+                f.write(buf.getvalue())
+    return len(SUITS)
 
 
 def to_px(point, w, h):
@@ -286,6 +354,7 @@ def copy_font_and_licenses(packs):
 def main():
     packs = load_packs()
     count = copy_selection(packs)
+    count += make_suits(packs)
     background = compose_map(packs)
     copy_font_and_licenses(packs)
     print(f"완료: 스프라이트 {count}개, 지도 배경 {os.path.relpath(background, ROOT)}")

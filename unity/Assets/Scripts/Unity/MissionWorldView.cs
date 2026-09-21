@@ -95,7 +95,8 @@ namespace FireGame.UnityLayer
 
             BuildTiles();
 
-            _player = CreateRenderer("Player", Art.Get("TopDown/player_hold"), OrderPeople + 1);
+            // 방화복 레벨마다 옷 색·헬멧이 다른 그림(tools/import-art.py가 만든다)
+            _player = CreateRenderer("Player", Art.Get(SuitSprite(runner.Player.SuitLevel)), OrderPeople + 1);
             string[] civilianSprites = { "TopDown/civilian_woman", "TopDown/civilian_old", "TopDown/civilian_man" };
             for (int i = 0; i < runner.Civilians.Count; i++)
             {
@@ -425,6 +426,12 @@ namespace FireGame.UnityLayer
                 layer[i].transform.position = CellCenter(x, y);
             }
             return layer[i];
+        }
+
+        /// <summary>방화복 레벨의 소방관 그림 경로. 범위 밖 레벨은 가까운 끝으로 자른다.</summary>
+        public static string SuitSprite(int suitLevel)
+        {
+            return "TopDown/player_suit_" + Mathf.Clamp(suitLevel, 0, UpgradeCatalog.Suit.MaxLevel);
         }
 
         private void RefreshPeople()

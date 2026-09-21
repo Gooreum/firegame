@@ -61,8 +61,9 @@ case "$MODE" in
     status=$?
     report_compile_errors || exit 1
     grep -E "\[Harness\]" "$LOG" | sed 's/^/  /'
-    exceptions=$(grep -cE "Exception" "$LOG" || true)
-    [ "$exceptions" -eq 0 ] || { echo "예외 ${exceptions}건 (로그: $LOG)"; grep -E "Exception" -A2 "$LOG" | head -20; }
+    # 실제 예외는 "XxxException: 메시지"로 찍힌다. 스택의 메서드 이름(EmitExceptionAsError 등)은 세지 않는다.
+    exceptions=$(grep -cE "[A-Za-z]Exception: " "$LOG" || true)
+    [ "$exceptions" -eq 0 ] || { echo "예외 ${exceptions}건 (로그: $LOG)"; grep -E "[A-Za-z]Exception: " -A2 "$LOG" | head -20; }
     [ $status -eq 0 ] || { echo "하네스 실패, 종료 코드 $status (로그: $LOG)"; exit 1; }
     ls "$OUT"/*.png
     ;;
