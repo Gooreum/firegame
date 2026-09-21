@@ -41,10 +41,24 @@ namespace FireGame.Core.Tests
 
                 var buffer = new FrameBuffer();
                 SceneRenderer.Render(buffer, runner, 0);
+                HudRenderer.DrawHud(buffer, runner, 1250 + (stage.Id * 3000));
 
                 WritePpm(buffer, Path.Combine(OutputDirectory, "stage" + stage.Id + ".ppm"));
                 Assert.True(bot != null);
             }
+        }
+
+        [Fact]
+        public void DumpShopScreenToPpm()
+        {
+            SaveData save = SaveData.NewGame();
+            save.Money = 3800;
+            Shop.Buy(save, EquipmentId.Extinguisher);
+
+            var buffer = new FrameBuffer();
+            HudRenderer.DrawShop(buffer, save, 2);
+
+            WritePpm(buffer, Path.Combine(OutputDirectory, "shop.ppm"));
         }
 
         private static void WritePpm(FrameBuffer buffer, string path)
