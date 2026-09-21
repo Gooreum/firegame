@@ -285,8 +285,12 @@ namespace FireGame.Core.Tests
             Assert.Equal(AgentType.Water, EquipmentCatalog.Hose.Agent.Type);
             Assert.Equal(AgentType.Foam, EquipmentCatalog.FoamExtinguisher.Agent.Type);
 
-            Assert.Equal(AimPattern.Single, EquipmentCatalog.Bucket.Pattern);
+            Assert.Equal(AimPattern.Cone, EquipmentCatalog.Bucket.Pattern);
+            Assert.Equal(1, EquipmentCatalog.Bucket.Range);
             Assert.Equal(AimPattern.Cone, EquipmentCatalog.Extinguisher.Pattern);
+            Assert.Equal(2, EquipmentCatalog.Extinguisher.Range);
+            Assert.Equal(AimPattern.Cone, EquipmentCatalog.FoamExtinguisher.Pattern);
+            Assert.Equal(2, EquipmentCatalog.FoamExtinguisher.Range);
             Assert.Equal(AimPattern.Line, EquipmentCatalog.Hose.Pattern);
 
             // CO2는 기체라 수손 피해를 만들지 않는다.

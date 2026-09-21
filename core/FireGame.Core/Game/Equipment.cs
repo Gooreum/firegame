@@ -24,7 +24,7 @@ namespace FireGame.Core.Game
         /// <summary>조준 방향 1칸.</summary>
         Single = 0,
 
-        /// <summary>조준 방향과 그 양옆, 부채꼴 3칸.</summary>
+        /// <summary>조준 방향과 그 양옆 3갈래를 사거리만큼. 사거리 1이면 앞 3칸, 2면 최대 6칸.</summary>
         Cone = 1,
 
         /// <summary>조준 방향 직선. 벽에 막힌다.</summary>
@@ -156,27 +156,34 @@ namespace FireGame.Core.Game
                 case AimPattern.Cone:
                     for (int turn = -1; turn <= 1; turn++)
                     {
-                        AimDirection spoke = Rotate(direction, turn);
-                        AddIfInBounds(grid, originX + OffsetX(spoke), originY + OffsetY(spoke), results);
+                        AddRay(grid, originX, originY, Rotate(direction, turn), Math.Max(1, range), results);
                     }
                     break;
 
                 case AimPattern.Line:
-                    int dx = OffsetX(direction);
-                    int dy = OffsetY(direction);
-
-                    for (int step = 1; step <= range; step++)
-                    {
-                        int x = originX + (dx * step);
-                        int y = originY + (dy * step);
-                        if (!grid.InBounds(x, y)) break;
-
-                        results.Add(new GridPoint(x, y));
-
-                        // 막힌 칸은 맞히되 그 너머로는 나아가지 않는다.
-                        if (!Materials.Of(grid[x, y].Material).Walkable) break;
-                    }
+                    AddRay(grid, originX, originY, direction, range, results);
                     break;
+            }
+        }
+
+        /// <summary>
+        /// 한 방향으로 사거리만큼 칸을 모은다. 막힌 칸은 맞히되 그 너머로는 나아가지 않는다 —
+        /// 벽 너머로 물을 쏠 수 없어야 하지만, 불타는 벽 자체는 맞아야 한다.
+        /// </summary>
+        private static void AddRay(FireGrid grid, int originX, int originY, AimDirection direction, int range, List<GridPoint> results)
+        {
+            int dx = OffsetX(direction);
+            int dy = OffsetY(direction);
+
+            for (int step = 1; step <= range; step++)
+            {
+                int x = originX + (dx * step);
+                int y = originY + (dy * step);
+                if (!grid.InBounds(x, y)) break;
+
+                results.Add(new GridPoint(x, y));
+
+                if (!Materials.Of(grid[x, y].Material).Walkable) break;
             }
         }
 

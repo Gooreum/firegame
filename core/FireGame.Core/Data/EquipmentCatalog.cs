@@ -34,7 +34,8 @@ namespace FireGame.Core.Data
             id: EquipmentId.Bucket,
             name: "양동이",
             agent: new Agent(AgentType.Water, 1.6f, 0.5f, 0.5f),
-            pattern: AimPattern.Single,
+            // 한 칸에 찔끔 붓는 대신 앞 3칸에 확 끼얹는다.
+            pattern: AimPattern.Cone,
             range: 1,
             resource: ResourceKind.Cooldown,
             cooldownSeconds: 1.0f,
@@ -44,8 +45,9 @@ namespace FireGame.Core.Data
             id: EquipmentId.Extinguisher,
             name: "CO2 소화기",
             agent: new Agent(AgentType.CO2, 1.0f, 0f, 2.5f),
+            // 앞 두 줄까지 뿜어 한 번에 최대 6칸을 덮는다.
             pattern: AimPattern.Cone,
-            range: 1,
+            range: 2,
             resource: ResourceKind.Charges,
             cooldownSeconds: 0.5f,
             maxCharges: 12);
@@ -65,7 +67,7 @@ namespace FireGame.Core.Data
             name: "폼 소화기",
             agent: new Agent(AgentType.Foam, 2.0f, 0.6f, 3.0f),
             pattern: AimPattern.Cone,
-            range: 1,
+            range: 2,
             resource: ResourceKind.Charges,
             cooldownSeconds: 0.5f,
             // 유류 풀은 스스로 꺼지지 않아 진압해야 할 셀 수가 많다.
