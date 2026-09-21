@@ -1,89 +1,22 @@
-# FIREFIGHTER — 도스풍 소방관 어드벤처 (MVP)
+# 소방관 출동! — 캐주얼 2D 소방 어드벤처 (MVP)
 
-불을 끄고 번 돈으로 장비를 사서 더 큰 불에 도전하는 모바일 게임.
-320x200 · EGA 16색 · 8x8 도트 폰트.
+섬마을 지도에서 신고가 들어오면 출동하고, 현장에서 불을 끄고 사람을 구해 별을 모은다.
+번 돈으로 장비를 사야 다음 현장을 해결할 수 있다.
 
-| 스테이지 | 화재 | 필요한 장비 |
+```
+출동 지도 → 서장 브리핑 → 현장 진압 → 결과(별점·정산) → 다음 현장 해금
+                                    ↘ 상점에서 장비 구매 ↗
+```
+
+| 현장 | 불 | 필요한 장비 |
 |---|---|---|
-| 1 주택가 | 목재(A급) | 양동이(시작 장비) |
-| 2 상가 | 목재 + 전기(C급) | CO2 소화기 500원 — 전기엔 물이 안 듣는다 |
-| 3 주유소 | 목재 + 유류(B급) | 폼 소화기 10000원 — 유류에 물을 뿌리면 번진다 |
+| 1 햇살동 주택가 — 2층 주택 화재 | 나무 | 양동이(처음부터 보유) |
+| 2 햇살동 상가 — 배전반 화재 | 나무 + 전기 | CO2 소화기 $500 — 전기엔 물이 안 듣는다 |
+| 3 바람언덕 주유소 — 유류 화재 | 나무 + 기름 | 폼 소화기 $10,000 — 기름에 물을 뿌리면 번진다 |
 
-유류·전기 화재는 스스로 꺼지지 않는다. 맞는 약제를 사야만 끌 수 있고, 그게 장비를 사는 이유다.
-물을 많이 뿌릴수록 수손 피해로 보상이 깎인다.
-
----
-
-## 구조
-
-```
-core/FireGame.Core/          게임의 전부 (순수 C#, UnityEngine 의존성 0)
-  Grid/   격자·재질·맵 로더
-  Sim/    불 확산(셀룰러 오토마타)·진압·상성
-  Game/   플레이어·장비·스테이지 진행·경제·세이브·화면 흐름(GameFlow)
-  Data/   장비 4종·스테이지 3종
-  Render/ 320x200 프레임버퍼·폰트·HUD·상점
-core/FireGame.Core.Tests/    테스트 (xunit)
-unity/Assets/Scripts/Unity/  Unity 레이어 3개 파일 — 입력 변환과 화면 출력만 한다
-tools/unity-compile-check/   Unity 없이 Unity 스크립트를 컴파일해 보는 검사
-sync-core.sh                 core → Unity 프로젝트 복사
-```
-
-게임 로직을 Unity 밖에 둔 이유: 불이 번지는 속도, 장비 위력, 보상 같은 숫자가 게임의 재미를 결정하는데,
-이걸 Unity 컴파일을 기다리지 않고 `dotnet test`로 초 단위로 고치고 확인할 수 있다.
-
----
-
-## 1. 코어 테스트 (Unity 불필요)
-
-```bash
-brew install dotnet
-cd core
-dotnet test
-```
-
-스테이지 × 장비 조합별 밸런스 표 보기 (자동 플레이 봇이 직접 플레이한다):
-
-```bash
-dotnet test --filter MeasureEveryStageAgainstEveryLoadout --logger "console;verbosity=detailed"
-```
-
----
-
-## 2. Unity에서 실행
-
-### 준비
-1. Unity Hub 설치: `brew install --cask unity-hub`
-2. Hub에서 Unity 계정으로 로그인하고 **Personal(무료) 라이선스** 발급
-3. 에디터 설치: **6000.3.24f1** (이 프로젝트가 검증된 버전. `unity/ProjectSettings/ProjectVersion.txt`에 고정돼 있다)
-   ```bash
-   "/Applications/Unity Hub.app/Contents/MacOS/Unity Hub" -- --headless \
-     install --version 6000.3.24f1 --module android android-sdk-ndk-tools android-open-jdk --childModules
-   ```
-   `--childModules`를 빼면 하위 모듈 설치 여부를 묻는 질문에서 멈춘다. 폰 빌드를 안 할 거면 `--module` 이후는 생략해도 된다.
-
-### 열고 실행하기
-```bash
-./sync-core.sh
-open -a /Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app --args -projectPath "$PWD/unity"
-```
-또는 Hub → Projects → **Add → Add project from disk** → 이 저장소의 `unity` 폴더.
-
-열리면 **Play** 를 누른다. 씬에 아무것도 배치할 필요가 없다 — 스크립트가 알아서 카메라와 화면을 만든다.
-Game 창에서 마우스 드래그가 터치 대신이고, 키보드도 된다(아래 조작 표).
-
-렌더 파이프라인은 Built-In이다. 화면 전체가 스프라이트 한 장이라 URP가 줄 이득이 없고, 모바일에서 더 가볍다.
-
-### 코어를 고쳤다면
-`./sync-core.sh` 를 다시 실행하면 된다. `unity/Assets/Scripts/Core/`는 사본이라 직접 고치지 않는다.
-
-### 입력 설정
-새 Input System과 구형 Input Manager를 둘 다 지원하므로 따로 바꿀 필요가 없다.
-이 프로젝트는 현재 구형 Input Manager로 설정돼 있다(`activeInputHandler: 0`).
-
-### 폰에서 실행
-File → Build Profiles → Android(또는 iOS) → Switch Platform → Player Settings에서
-**Default Orientation = Landscape Left** 로 두고 Build And Run.
+- 기름·전기 불은 스스로 꺼지지 않는다. 맞는 약제로만 꺼지고, 그래서 장비를 산다.
+- 물을 많이 뿌릴수록 수손 피해로 보상이 깎인다. 별은 **승리 · 건물 60% 이상 지킴 · 물 절약**으로 매긴다.
+- 요령: 불꽃을 쫓지 말고, 불이 아직 닿지 않은 벽을 먼저 적셔 길을 끊는다(젖은 칸은 파랗게 보인다).
 
 ---
 
@@ -91,31 +24,103 @@ File → Build Profiles → Android(또는 iOS) → Switch Platform → Player S
 
 | | 터치 | 키보드(에디터) |
 |---|---|---|
-| 이동 | 화면 왼쪽 절반을 누르고 드래그 | 방향키 / WASD |
-| 발사 | 화면 오른쪽 절반을 누르고 있기 | Space |
-| 장비 선택 | 하단 슬롯 탭 | 1 · 2 · 3 |
-| 메뉴 | 항목 탭 | 마우스 클릭 |
+| 이동 | 왼쪽 아래 조이스틱 | 방향키 / WASD |
+| 발사 | 오른쪽 아래 **발사** 버튼을 누르고 있기 | Space |
+| 장비 선택 | 발사 버튼 옆 장비 버튼 | 1 · 2 · 3 |
+| 메뉴 | 버튼 탭 | 마우스 클릭 |
 
-조준 방향은 마지막으로 움직인 방향을 따른다.
-
-**요령**: 양동이로 불꽃을 쫓으면 진다. 불이 아직 닿지 않은 칸을 먼저 적셔 길을 끊어라(젖은 칸은 파랗게 보인다).
+조준 방향은 마지막으로 움직인 방향을 따른다. 시민은 닿으면 업고, 노란 출구 칸에 가면 내려놓는다.
 
 ---
 
-## 검증 상태 — 정직하게
+## 구조
+
+```
+core/FireGame.Core/            게임 규칙 전부 (순수 C#, UnityEngine 의존성 0)
+  Grid/  격자·재질·맵        Sim/  불 확산·진압·약제 상성
+  Game/  플레이어·장비·현장 진행·경제·세이브·캠페인·화면 흐름(GameFlow)
+  Data/  장비 4종·스테이지 3종
+core/FireGame.Core.Tests/      테스트 (xunit) + 자동 플레이 봇
+unity/Assets/Scripts/Unity/    화면: 현장(스프라이트), HUD·지도·브리핑·결과·상점(uGUI)
+unity/Assets/Editor/           스프라이트 임포트 설정, 스크린샷 하네스
+unity/Assets/Resources/Art/    Kenney CC0 그림 67개 + 합성 지도 배경
+tools/import-art.py            에셋 팩을 받아 필요한 그림만 골라 넣고 지도 배경을 합성
+tools/unity-check.sh           실제 Unity로 컴파일 / 화면 PNG 캡처
+sync-core.sh                   core → Unity 프로젝트 복사
+```
+
+게임 규칙과 화면 흐름은 Unity 밖(core)에 있다. 불 확산 속도·장비 위력·보상 같은 숫자를
+Unity를 켜지 않고 `dotnet test`로 초 단위로 고치고 확인할 수 있다. Unity 쪽은 화면만 그린다.
+
+---
+
+## 1. 코어 테스트 (Unity 불필요)
+
+```bash
+brew install dotnet
+cd core && dotnet test
+```
+
+스테이지 × 장비 밸런스 표 (자동 플레이 봇이 직접 플레이):
+```bash
+dotnet test --filter MeasureEveryStageAgainstEveryLoadout --logger "console;verbosity=detailed"
+```
+
+## 2. Unity에서 실행
+
+**준비** (한 번만)
+1. `brew install --cask unity-hub`
+2. Hub에서 Unity 계정 로그인 → **Personal(무료) 라이선스** 발급
+3. 에디터 **6000.3.24f1** 설치 (`unity/ProjectSettings/ProjectVersion.txt`에 고정):
+   ```bash
+   "/Applications/Unity Hub.app/Contents/MacOS/Unity Hub" -- --headless \
+     install --version 6000.3.24f1 --module android android-sdk-ndk-tools android-open-jdk --childModules
+   ```
+   `--childModules`를 빼면 하위 모듈 설치 여부를 묻는 질문에서 멈춘다. 폰 빌드를 안 할 거면 `--module` 이후는 생략해도 된다.
+4. 에디터를 처음 켜면 **Unity 이용약관 동의 창**이 뜬다. 다른 창 뒤에 가려져 멈춘 것처럼 보일 수 있다.
+
+**실행**
+```bash
+./sync-core.sh
+open -a /Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app --args -projectPath "$PWD/unity"
+```
+열리면 **▶ Play**. 씬에 아무것도 배치할 필요 없다 — 스크립트가 카메라와 화면을 만든다.
+
+코어를 고쳤다면 `./sync-core.sh`를 다시 실행한다(`unity/Assets/Scripts/Core/`는 사본이라 직접 고치지 않는다).
+
+## 3. 검증 도구
+
+```bash
+tools/unity-check.sh compile     # 실제 Unity 컴파일. 오류가 있으면 실패
+tools/unity-check.sh shots       # 화면 14장을 tools/.shots/ 에 PNG로 캡처
+```
+에디터가 같은 프로젝트를 열고 있으면 배치 모드가 실행되지 않으니 먼저 닫는다.
+
+캡처 장면: 현장(시작·불 번짐·전기·기름·방화선) · HUD · 지도(새 게임·진행·넓은 화면) · 브리핑 · 결과(승리·패배) · 상점.
+게임과 캡처가 같은 조립 코드(`ScreenDirector`)를 써서 캡처가 실제 게임 화면과 같다.
+
+에셋을 다시 받거나 고른 그림을 바꾸려면:
+```bash
+python3 tools/import-art.py      # Pillow 필요. 여러 번 실행해도 결과가 같다
+```
+
+---
+
+## 검증 상태
 
 | 부분 | 상태 |
 |---|---|
-| 불 확산·진압·장비·경제·스테이지·세이브·화면 흐름·터치 판정 | ✅ 자동 테스트로 검증 |
-| 3스테이지가 "맞는 장비로만 클리어 가능"한지 | ✅ 자동 플레이 봇으로 측정 |
-| 화면 모양(도스풍 렌더) | ✅ 스크린샷으로 육안 확인 |
-| Unity 스크립트 문법·C# 9 호환 | ✅ 스텁 컴파일 검사 (두 입력 방식 모두) |
-| **실제 Unity 6000.3.24f1 컴파일** | ✅ 배치 모드로 오류 0건, 경고 0건 |
-| **폰 실기기 조작감** | ⚠️ **미확인** — 폰 빌드는 아직 하지 않았다 |
-
-스텁 컴파일(`tools/unity-compile-check`)은 Unity 없이 빠르게 돌리는 1차 검사고, 최종 판정은 실제 Unity 컴파일이다.
+| 불 확산·진압·장비·경제·캠페인·세이브·화면 흐름 | ✅ 자동 테스트 139개 |
+| 3현장이 "맞는 장비로만 클리어 가능"한지 | ✅ 자동 플레이 봇으로 측정 |
+| 실제 Unity 6000.3.24f1 컴파일 | ✅ 오류 0건 |
+| 모든 화면 모양(한글 포함) | ✅ 배치 모드 스크린샷 14장 육안 확인 |
+| **이 버전을 에디터에서 직접 플레이** | ⚠️ **미확인** — 사용자가 플레이한 건 이전(도스풍) 버전이다 |
+| **터치 조작감(조이스틱·발사 버튼)** | ⚠️ **미확인** — 캡처로는 모양만 확인했다 |
+| **폰 실기기** | ⚠️ **미확인** — 아직 빌드하지 않았다 |
 
 ### 알려진 한계
-- 화면을 비율 유지로 늘리기 때문에 해상도에 따라 도트 크기가 한두 픽셀씩 고르지 않을 수 있다(정수배 스케일링은 아직 없음)
 - 사운드 없음
-- 스테이지 3개, 장비 4종
+- 현장 3개, 장비 4종 (현장은 `Campaign.cs`와 `StageCatalog.cs`에 데이터만 추가하면 늘어난다)
+- 지도 배경은 합성 이미지라 현장을 추가하면 `tools/import-art.py`의 좌표도 함께 고쳐야 길이 이어진다
+
+그림·글꼴 출처는 [CREDITS.md](CREDITS.md).
