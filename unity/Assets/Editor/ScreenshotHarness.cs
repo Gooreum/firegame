@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using FireGame.Core.Data;
 using FireGame.Core.Game;
+using FireGame.Core.Grid;
 using FireGame.Core.Sim;
 using FireGame.UnityLayer;
 using UnityEngine;
@@ -41,6 +42,7 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("14_spray_and_firebreak", SprayAndFirebreak),
                 new KeyValuePair<string, Func<Camera>>("15_suit_co2", SuitAndCo2),
                 new KeyValuePair<string, Func<Camera>>("16_suits_lineup", SuitsLineup),
+                new KeyValuePair<string, Func<Camera>>("17_steam", SteamAfterPuttingOut),
                 new KeyValuePair<string, Func<Camera>>("20_hud", MissionWithHud),
                 new KeyValuePair<string, Func<Camera>>("30_map_new_game", MapNewGame),
                 new KeyValuePair<string, Func<Camera>>("31_map_progress", MapProgress),
@@ -346,7 +348,7 @@ namespace FireGame.EditorTools
             var view = new MissionWorldView(new GameObject("Root").transform, runner);
             view.Refresh(2f, 0f);
             runner.Update(0.01f, new StageInput { Fire = true, Slot = 0 });
-            view.Refresh(2.05f, 0.05f);
+            for (int i = 1; i <= 3; i++) view.Refresh(2f + (i * 0.05f), 0.05f);   // 물이 날아가는 중간
             view.FrameCamera(camera, view.PlayerWorld);
             return camera;
         }
@@ -368,7 +370,31 @@ namespace FireGame.EditorTools
             var view = new MissionWorldView(new GameObject("Root").transform, runner);
             view.Refresh(3f, 0f);
             runner.Update(0.01f, new StageInput { Fire = true, Slot = 1 });
-            view.Refresh(3.1f, 0.1f);
+            for (int i = 1; i <= 3; i++) view.Refresh(3f + (i * 0.05f), 0.05f);
+            view.FrameCamera(camera, view.PlayerWorld);
+            return camera;
+        }
+
+        /// <summary>불붙은 벽 세 칸을 양동이 한 발로 끈 직후. 꺼진 칸마다 김이 피어올라야 한다.</summary>
+        private static Camera SteamAfterPuttingOut()
+        {
+            StageRunner runner = Runner(StageCatalog.Residential, EquipmentId.Bucket);
+            Advance(runner, 2f);
+
+            runner.Player.X = 16.5f;
+            runner.Player.Y = 9.5f;
+            runner.Player.Aim = AimDirection.N;
+            for (int x = 15; x <= 17; x++)
+            {
+                runner.Grid[x, 8].State = CellState.Burning;
+                runner.Grid[x, 8].Heat = 0.2f;   // 한 발이면 꺼질 만큼
+            }
+
+            Camera camera = WorldCamera();
+            var view = new MissionWorldView(new GameObject("Root").transform, runner);
+            view.Refresh(2f, 0f);
+            runner.Update(0.01f, new StageInput { Fire = true, Slot = 0 });
+            for (int i = 1; i <= 6; i++) view.Refresh(2f + (i * 0.05f), 0.05f);
             view.FrameCamera(camera, view.PlayerWorld);
             return camera;
         }

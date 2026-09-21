@@ -24,11 +24,18 @@ namespace FireGame.UnityLayer
         private const int OrderOverlay = 3;
         private const int OrderGlow = 4;
         private const int OrderPeople = 10;
-        private const int OrderSpray = 12;
+        private const int OrderSpray = 25;   // 물은 불꽃 위에 보여야 "불에 뿌린다"로 읽힌다
         private const int OrderFire = 20;
         private const int OrderSmoke = 30;
 
-        private const float SprayLifetime = 0.35f;
+        // 방수 연출 수명(초)
+        private const float StreakLifetime = 0.22f;
+        private const float DropLifetime = 0.45f;
+        private const float SplashLifetime = 0.45f;
+        private const float SteamLifetime = 0.9f;
+
+        /// <summary>맞은 칸 하나에 날리는 물방울 수. 1개일 때는 "찔끔찔끔"으로 보였다.</summary>
+        private const int DropsPerCell = 4;
 
         private readonly StageRunner _runner;
         private readonly FireGrid _grid;
@@ -53,17 +60,48 @@ namespace FireGame.UnityLayer
         private readonly Sprite[] _smokeSprites;
         private readonly Sprite[] _scorchSprites;
 
-        private readonly List<Spray> _sprays = new List<Spray>();
-        private readonly Stack<SpriteRenderer> _sprayPool = new Stack<SpriteRenderer>();
+        private readonly List<Particle> _particles = new List<Particle>();
+        private readonly Stack<SpriteRenderer> _particlePool = new Stack<SpriteRenderer>();
         private readonly List<GridPoint> _hitBuffer = new List<GridPoint>();
         private readonly float[] _lastCooldowns = new float[PlayerState.SlotCount];
+        private readonly bool[] _wasBurning;
 
-        private struct Spray
+        // 흩뿌림 위치. 시드를 고정해 같은 장면은 같은 모양으로 찍힌다.
+        private readonly System.Random _jitter = new System.Random(11);
+
+        private readonly Sprite _dropSprite;
+        private readonly Sprite _streakSprite;
+        private readonly Sprite _splashSprite;
+        private readonly Sprite _cloudSprite;
+        private readonly Sprite _steamSprite;
+
+        private enum ParticleKind : byte
+        {
+            /// <summary>손에서 목표 칸으로 날아가는 물방울·가스 덩어리.</summary>
+            Drop,
+
+            /// <summary>손과 목표 칸을 잇는 물줄기 선.</summary>
+            Streak,
+
+            /// <summary>목표 칸에서 퍼지는 물보라 고리.</summary>
+            Splash,
+
+            /// <summary>불이 꺼진 칸에서 피어오르는 김.</summary>
+            Steam,
+        }
+
+        private struct Particle
         {
             public SpriteRenderer Renderer;
+            public ParticleKind Kind;
             public float Age;
+            public float Delay;
+            public float Lifetime;
             public Vector3 From;
             public Vector3 To;
+            public float StartSize;
+            public float EndSize;
+            public float Alpha;
         }
 
         public MissionWorldView(Transform parent, StageRunner runner)
@@ -92,6 +130,15 @@ namespace FireGame.UnityLayer
             _tongueSprite = Art.Get("Effects/flame_05");
             _smokeSprites = LoadSeries("Effects/smoke_0", 1, 5);
             _scorchSprites = LoadSeries("Effects/scorch_0", 1, 3);
+
+            _dropSprite = Art.Get("Effects/water_drop");
+            _streakSprite = Art.Get("Effects/water_trace");
+            _splashSprite = Art.Get("Effects/glow");
+            _cloudSprite = Art.Get("Effects/smoke_01");
+            _steamSprite = Art.Get("Effects/smoke_01");
+
+            _wasBurning = new bool[count];
+            for (int i = 0; i < count; i++) _wasBurning[i] = _grid.Cells[i].State == CellState.Burning;
 
             BuildTiles();
 
@@ -310,7 +357,8 @@ namespace FireGame.UnityLayer
 
             RefreshPeople();
             DetectShots();
-            AdvanceSprays(dt);
+            DetectExtinguished();
+            AdvanceParticles(dt);
         }
 
         private void RefreshCell(int x, int y, float time)
@@ -489,66 +537,184 @@ namespace FireGame.UnityLayer
                 if (def == null) continue;
 
                 Aiming.Resolve(_grid, player.CellX, player.CellY, player.Aim, def.Pattern, def.Range, _hitBuffer);
-                Color color = SprayColor(def.Agent.Type);
+                SpawnShot(def.Agent.Type, PlayerWorld, _hitBuffer);
+            }
+        }
 
-                foreach (GridPoint hit in _hitBuffer)
+        /// <summary>
+        /// 한 발의 연출: 칸마다 물줄기 선 + 흩뿌린 물방울 여러 개 + 도착한 칸의 물보라.
+        /// CO2는 물방울 대신 흰 가스 덩어리를 뿜는다.
+        /// </summary>
+        private void SpawnShot(AgentType agent, Vector3 hand, List<GridPoint> hits)
+        {
+            Color color = SprayColor(agent);
+            bool gas = agent == AgentType.CO2;
+
+            foreach (GridPoint hit in hits)
+            {
+                Vector3 target = CellCenter(hit.X, hit.Y);
+
+                if (!gas) Spawn(ParticleKind.Streak, _streakSprite, color, hand, target, 0f, StreakLifetime, 1f, 1f, 0.8f);
+
+                for (int i = 0; i < DropsPerCell; i++)
                 {
-                    SpawnSpray(PlayerWorld, CellCenter(hit.X, hit.Y), color);
+                    Vector3 scatter = new Vector3(Jitter(0.35f), Jitter(0.35f), 0f);
+                    float delay = i * 0.03f;
+                    if (gas)
+                    {
+                        Spawn(ParticleKind.Drop, _cloudSprite, color, hand, target + scatter, delay, DropLifetime, 0.9f, 2.2f, 1f);
+                    }
+                    else
+                    {
+                        Spawn(ParticleKind.Drop, _dropSprite, color, hand, target + scatter, delay, DropLifetime, 1.0f, 1.7f, 0.95f);
+                    }
+                }
+
+                Spawn(ParticleKind.Splash, _splashSprite, color, target, target, 0.08f, SplashLifetime, 0.6f, 1.6f, 0.85f);
+            }
+        }
+
+        /// <summary>불이 막 꺼진 칸에서 흰 김이 피어오른다. 진압했다는 손맛을 준다.</summary>
+        private void DetectExtinguished()
+        {
+            for (int y = 0; y < _grid.Height; y++)
+            {
+                for (int x = 0; x < _grid.Width; x++)
+                {
+                    int i = _grid.Index(x, y);
+                    bool burning = _grid.Cells[i].State == CellState.Burning;
+                    bool putOut = _wasBurning[i] && _grid.Cells[i].State == CellState.Intact;
+                    _wasBurning[i] = burning;
+                    if (!putOut) continue;
+
+                    Vector3 at = CellCenter(x, y);
+                    for (int puff = 0; puff < 2; puff++)
+                    {
+                        Spawn(ParticleKind.Steam, _steamSprite, Color.white, at, at + new Vector3(Jitter(0.3f), 0.9f, 0f), puff * 0.12f, SteamLifetime, 1.0f, 2.2f, 0.9f);
+                    }
                 }
             }
+        }
+
+        private float Jitter(float amount)
+        {
+            return ((float)_jitter.NextDouble() * 2f - 1f) * amount;
         }
 
         private static Color SprayColor(AgentType agent)
         {
             switch (agent)
             {
-                case AgentType.CO2: return new Color(0.95f, 0.97f, 1f, 0.9f);
-                case AgentType.Foam: return new Color(1f, 0.98f, 0.85f, 0.95f);
-                default: return new Color(0.35f, 0.7f, 1f, 0.9f);
+                // 순백은 밝은 타일 바닥에서 안 보여 살짝 푸른 흰색으로 쓴다.
+                case AgentType.CO2: return new Color(0.8f, 0.9f, 1f);
+                case AgentType.Foam: return new Color(1f, 0.98f, 0.85f);
+                default: return new Color(0.35f, 0.7f, 1f);
             }
         }
 
-        private void SpawnSpray(Vector3 from, Vector3 to, Color color)
+        private void Spawn(ParticleKind kind, Sprite sprite, Color color, Vector3 from, Vector3 to, float delay, float lifetime, float startSize, float endSize, float alpha)
         {
-            SpriteRenderer renderer = _sprayPool.Count > 0
-                ? _sprayPool.Pop()
-                : CreateRenderer("Spray", Art.Get("Effects/water_drop"), OrderSpray);
+            SpriteRenderer renderer = _particlePool.Count > 0
+                ? _particlePool.Pop()
+                : CreateRenderer("Particle", sprite, OrderSpray);
 
+            renderer.sprite = sprite;
             renderer.color = color;
-            renderer.enabled = true;
-            _sprays.Add(new Spray { Renderer = renderer, Age = 0f, From = from, To = to });
-            PlaceSpray(_sprays[_sprays.Count - 1]);
+            // 김은 불꽃 위로, 물은 사람 위·불꽃 아래로 그린다.
+            renderer.sortingOrder = kind == ParticleKind.Steam ? OrderSmoke + 1 : OrderSpray;
+            renderer.enabled = false;
+
+            var particle = new Particle
+            {
+                Renderer = renderer,
+                Kind = kind,
+                Delay = delay,
+                Lifetime = lifetime,
+                From = from,
+                To = to,
+                StartSize = startSize,
+                EndSize = endSize,
+                Alpha = alpha,
+            };
+            _particles.Add(particle);
+            Place(particle);
         }
 
-        private void AdvanceSprays(float dt)
+        private void AdvanceParticles(float dt)
         {
-            for (int i = _sprays.Count - 1; i >= 0; i--)
+            for (int i = _particles.Count - 1; i >= 0; i--)
             {
-                Spray spray = _sprays[i];
-                spray.Age += dt;
+                Particle particle = _particles[i];
+                particle.Age += dt;
 
-                if (spray.Age >= SprayLifetime)
+                if (particle.Age >= particle.Delay + particle.Lifetime)
                 {
-                    spray.Renderer.enabled = false;
-                    _sprayPool.Push(spray.Renderer);
-                    _sprays.RemoveAt(i);
+                    particle.Renderer.enabled = false;
+                    _particlePool.Push(particle.Renderer);
+                    _particles.RemoveAt(i);
                     continue;
                 }
 
-                _sprays[i] = spray;
-                PlaceSpray(spray);
+                _particles[i] = particle;
+                Place(particle);
             }
         }
 
-        private static void PlaceSpray(Spray spray)
+        private static void Place(Particle particle)
         {
-            // 물방울이 소방관 손에서 목표 칸으로 날아가며 퍼진다.
-            float t = Mathf.Clamp01((spray.Age / SprayLifetime) + 0.35f);
-            spray.Renderer.transform.position = Vector3.Lerp(spray.From, spray.To, t);
-            spray.Renderer.transform.localScale = Vector3.one * Art.FitWidth(spray.Renderer.sprite, 0.3f + (0.5f * t));
-            Color color = spray.Renderer.color;
-            color.a = 0.9f * (1f - (spray.Age / SprayLifetime) * 0.6f);
-            spray.Renderer.color = color;
+            float local = particle.Age - particle.Delay;
+            SpriteRenderer renderer = particle.Renderer;
+            renderer.enabled = local >= 0f;
+            if (local < 0f) return;
+
+            float t = Mathf.Clamp01(local / particle.Lifetime);
+            Transform transform = renderer.transform;
+            float size = Mathf.Lerp(particle.StartSize, particle.EndSize, t);
+            float fade;
+
+            switch (particle.Kind)
+            {
+                case ParticleKind.Streak:
+                {
+                    // 가는 세로선 그림을 손→목표 방향으로 눕혀 길이만큼 늘인다.
+                    Vector3 delta = particle.To - particle.From;
+                    float unit = Art.FitWidth(renderer.sprite, 1f);
+                    transform.position = particle.From + (delta * 0.5f);
+                    transform.rotation = Quaternion.Euler(0f, 0f, (Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg) - 90f);
+                    transform.localScale = new Vector3(unit * 6f, unit * (delta.magnitude / 0.8f), 1f);
+                    fade = 1f - t;
+                    break;
+                }
+
+                case ParticleKind.Drop:
+                {
+                    // 빨리 날아가 목표에 닿은 뒤 그 자리에서 퍼지며 사라진다.
+                    float travel = Mathf.Clamp01(t / 0.45f);
+                    transform.position = Vector3.Lerp(particle.From, particle.To, 1f - ((1f - travel) * (1f - travel)));
+                    transform.rotation = Quaternion.identity;
+                    transform.localScale = Vector3.one * Art.FitWidth(renderer.sprite, size);
+                    fade = t < 0.45f ? 1f : 1f - ((t - 0.45f) / 0.55f);
+                    break;
+                }
+
+                case ParticleKind.Steam:
+                    transform.position = Vector3.Lerp(particle.From, particle.To, t);
+                    transform.rotation = Quaternion.Euler(0f, 0f, t * 40f);
+                    transform.localScale = Vector3.one * Art.FitWidth(renderer.sprite, size);
+                    fade = Mathf.Sin(t * Mathf.PI);
+                    break;
+
+                default: // Splash
+                    transform.position = particle.To;
+                    transform.rotation = Quaternion.identity;
+                    transform.localScale = Vector3.one * Art.FitWidth(renderer.sprite, size);
+                    fade = 1f - t;
+                    break;
+            }
+
+            Color color = renderer.color;
+            color.a = particle.Alpha * fade;
+            renderer.color = color;
         }
 
         // ------------------------------------------------------------------
