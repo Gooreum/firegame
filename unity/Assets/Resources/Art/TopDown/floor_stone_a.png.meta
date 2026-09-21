@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 48e801f9c28b64bb084da9cece79bf48
+guid: a4c47682cd7954a02a3f8077f343397e
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 3664476081151347988
-    second: asphalt_0
+      213: -9223264321310874389
+    second: floor_stone_a_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -113,7 +113,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: asphalt_0
+      name: floor_stone_a_0
       rect:
         serializedVersion: 2
         x: 0
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 41d01f0a495dad230800000000000000
-      internalID: 3664476081151347988
+      spriteID: be42bba77f1600080800000000000000
+      internalID: -9223264321310874389
       vertices: []
       indices: 
       edges: []

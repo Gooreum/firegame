@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: e596cb6849baf47b7b89e1aed25e89ab
+guid: ddd2daa09fff34c44846d7f231fff6ab
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -4913951164880238485
-    second: floor_concrete_a_0
+      213: 944217795679252192
+    second: brick_b_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -113,7 +113,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: floor_concrete_a_0
+      name: brick_b_0
       rect:
         serializedVersion: 2
         x: 0
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: b6842b563732ecbb0800000000000000
-      internalID: -4913951164880238485
+      spriteID: 0ee601e15198a1d00800000000000000
+      internalID: 944217795679252192
       vertices: []
       indices: 
       edges: []

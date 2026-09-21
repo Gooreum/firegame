@@ -217,9 +217,9 @@ namespace FireGame.UnityLayer
             { 0, new FloorTheme("floor_wood_a", "floor_wood_b", "grass_a", "grass_b") },               // 주택: 나무 마루 + 잔디
             { 1, new FloorTheme("floor_tile_a", "floor_tile_b", "grass_a", "grass_b") },               // 상가: 타일
             { 2, new FloorTheme("floor_wood_a", "floor_wood_b", "dirt", "dirt") },                     // 주유소: 흙 마당
-            { 3, new FloorTheme("floor_concrete_a", "floor_concrete_b", "asphalt", "asphalt") },       // 창고: 콘크리트 + 아스팔트
-            { 4, new FloorTheme("floor_tile_a", "floor_tile_b", "asphalt", "asphalt") },               // 공장: 타일 + 아스팔트
-            { 5, new FloorTheme("floor_wood_a", "floor_wood_b", "floor_concrete_a", "floor_concrete_b") }, // 항구: 부두 콘크리트
+            { 3, new FloorTheme("floor_stone_a", "floor_stone_b", "dirt", "dirt_b") },                 // 창고: 돌바닥 + 흙 마당
+            { 4, new FloorTheme("floor_tile_a", "floor_tile_b", "brick_a", "brick_b") },               // 공장: 타일 + 벽돌 마당
+            { 5, new FloorTheme("floor_wood_a", "floor_wood_b", "floor_stone_a", "floor_stone_b") },   // 항구: 목조 창고 + 돌 부두
         };
 
         private void BuildTiles()

@@ -51,6 +51,9 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("34_result_lose", ResultLose),
                 new KeyValuePair<string, Func<Camera>>("35_shop", ShopOpen),
                 new KeyValuePair<string, Func<Camera>>("36_map_wide_screen", MapWide),
+                new KeyValuePair<string, Func<Camera>>("40_warehouse_fire", WarehouseFire),
+                new KeyValuePair<string, Func<Camera>>("41_factory_mixed", FactoryMixed),
+                new KeyValuePair<string, Func<Camera>>("42_harbor_finale", HarborFinale),
             };
 
         public static void CaptureAll()
@@ -200,6 +203,28 @@ namespace FireGame.EditorTools
             return Show(runner, 3f, new Vector2(22, 10));
         }
 
+        private static Camera WarehouseFire()
+        {
+            StageRunner runner = Runner(StageCatalog.Warehouse, EquipmentId.Bucket, EquipmentId.Hose);
+            Advance(runner, 6f);
+            return Show(runner, 6f, new Vector2(24, 8));
+        }
+
+        private static Camera FactoryMixed()
+        {
+            StageRunner runner = Runner(StageCatalog.Factory, EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.FoamExtinguisher);
+            Advance(runner, 4f);
+            return Show(runner, 4f, new Vector2(19, 6));
+        }
+
+        private static Camera HarborFinale()
+        {
+            StageRunner runner = Runner(StageCatalog.Harbor,
+                EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.Hose, EquipmentId.FoamExtinguisher);
+            Advance(runner, 4f);
+            return Show(runner, 4f, new Vector2(18, 9));
+        }
+
         // ---- 게임과 같은 조립(ScreenDirector)으로 찍는 장면 ----
 
         private static Camera Direct(GameFlow flow)
@@ -221,8 +246,11 @@ namespace FireGame.EditorTools
         private static Camera MapProgress()
         {
             SaveData save = SaveData.NewGame();
+            // 1~3을 깨고 4번(창고)에 신고가 들어온 상태. 길이 6번까지 이어진 모습을 본다.
             save.Money = 1250;
-            save.RecordResult(0, 2);
+            save.RecordResult(0, 3);
+            save.RecordResult(1, 2);
+            save.RecordResult(2, 1);
             return Direct(new GameFlow(save));
         }
 
