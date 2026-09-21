@@ -170,24 +170,14 @@ namespace FireGame.UnityLayer
 
             bool empty = def.Resource == ResourceKind.Charges && player.Charges[slot] <= 0;
             string ammo = def.Resource == ResourceKind.Charges ? player.Charges[slot] + "회" : "무제한";
-            label.text = def.Name + "\n<size=22>" + AgentName(def.Agent.Type) + " · " + (empty ? "다 씀" : ammo) + "</size>";
+            int level = _flow.Save.LevelOf(def.Id);
+            label.text = def.Name + "\n<size=22>Lv." + level + " · " + (empty ? "다 씀" : ammo) + "</size>";
 
             // 다 쓴 장비는 회색으로 바꿔, 눌러도 안 나가는 이유를 보여 준다.
             if (empty)
             {
                 image.sprite = Art.Get("UI/button_grey");
                 label.color = new Color(1f, 0.85f, 0.85f);
-            }
-        }
-
-        /// <summary>어떤 불에 맞는지 떠올리게 약제 이름을 함께 적는다.</summary>
-        private static string AgentName(AgentType agent)
-        {
-            switch (agent)
-            {
-                case AgentType.CO2: return "CO2";
-                case AgentType.Foam: return "폼";
-                default: return "물";
             }
         }
     }

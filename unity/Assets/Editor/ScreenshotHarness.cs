@@ -276,11 +276,19 @@ namespace FireGame.EditorTools
             return Direct(flow);
         }
 
+        /// <summary>
+        /// 레벨이 섞인 상점: 양동이 Lv3, CO2 Lv1, 호스 잠김, 폼 최대, 방화복 Lv2, 소방화 없음, 보유금 $650.
+        /// 해금·레벨업·최대·잔액 부족 버튼이 한 화면에 다 나온다.
+        /// </summary>
         private static Camera ShopOpen()
         {
             SaveData save = SaveData.NewGame();
-            save.Money = 600;
+            save.Money = 650;
             save.RecordResult(0, 1);
+            save.SetLevel(EquipmentId.Bucket, 3);
+            save.SetLevel(EquipmentId.Extinguisher, 1);
+            save.SetLevel(EquipmentId.FoamExtinguisher, 5);
+            save.SetLevel(GearId.Suit, 2);
             var flow = new GameFlow(save);
             flow.OpenShop();
             return Direct(flow);
@@ -302,9 +310,11 @@ namespace FireGame.EditorTools
         private static Camera MissionWithHud()
         {
             SaveData save = SaveData.NewGame();
-            save.SetLevel(EquipmentId.Extinguisher, 1);
+            save.SetLevel(EquipmentId.Bucket, 3);
+            save.SetLevel(EquipmentId.Extinguisher, 2);
             save.SetLevel(EquipmentId.Hose, 1);
             save.SetLevel(EquipmentId.FoamExtinguisher, 1);
+            save.SetLevel(GearId.Suit, 2);
             var flow = new GameFlow(save);
             flow.SelectMission(0);
             flow.BeginMission();
