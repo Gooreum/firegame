@@ -3,6 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using FireGame.Core.Data;
+using FireGame.Core.Game;
+using FireGame.Core.Sim;
+using FireGame.UnityLayer;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -27,6 +31,11 @@ namespace FireGame.EditorTools
             new List<KeyValuePair<string, Func<Camera>>>
             {
                 new KeyValuePair<string, Func<Camera>>("00_smoke", SmokeScene),
+                new KeyValuePair<string, Func<Camera>>("10_residential_start", ResidentialStart),
+                new KeyValuePair<string, Func<Camera>>("11_residential_fire", ResidentialFire),
+                new KeyValuePair<string, Func<Camera>>("12_shopping_electric", ShoppingElectric),
+                new KeyValuePair<string, Func<Camera>>("13_gasstation_oil", GasStationOil),
+                new KeyValuePair<string, Func<Camera>>("14_spray_and_firebreak", SprayAndFirebreak),
             };
 
         public static void CaptureAll()
@@ -106,6 +115,97 @@ namespace FireGame.EditorTools
         // ------------------------------------------------------------------
         // 장면
         // ------------------------------------------------------------------
+
+        /// <summary>현장용 카메라. 게임과 같은 크기로 보여 준다.</summary>
+        private static Camera WorldCamera()
+        {
+            var camera = new GameObject("Camera").AddComponent<Camera>();
+            camera.orthographic = true;
+            camera.orthographicSize = GameRoot.CameraHalfHeight;
+            camera.aspect = (float)Width / Height;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.12f, 0.12f, 0.14f);
+            return camera;
+        }
+
+        /// <summary>판을 idle 상태로 진행시킨다(불이 번지게).</summary>
+        private static void Advance(StageRunner runner, float seconds)
+        {
+            for (float t = 0f; t < seconds && !runner.IsOver; t += 0.1f)
+            {
+                runner.Update(0.1f, default(StageInput));
+            }
+        }
+
+        private static Camera Show(StageRunner runner, float time, Vector2? focusCell = null)
+        {
+            Camera camera = WorldCamera();
+            var root = new GameObject("Root").transform;
+            var view = new MissionWorldView(root, runner);
+            view.Refresh(time, 0.05f);
+
+            Vector3 focus = focusCell.HasValue
+                ? view.CellCenter((int)focusCell.Value.x, (int)focusCell.Value.y)
+                : view.PlayerWorld;
+            view.FrameCamera(camera, focus);
+            return camera;
+        }
+
+        private static StageRunner Runner(StageDef stage, params int[] equipment)
+        {
+            return new StageRunner(stage, new List<int>(equipment));
+        }
+
+        private static Camera ResidentialStart()
+        {
+            return Show(Runner(StageCatalog.Residential, EquipmentId.Bucket), 0f);
+        }
+
+        private static Camera ResidentialFire()
+        {
+            StageRunner runner = Runner(StageCatalog.Residential, EquipmentId.Bucket);
+            Advance(runner, 7f);
+            return Show(runner, 7f, new Vector2(21, 9));
+        }
+
+        private static Camera ShoppingElectric()
+        {
+            StageRunner runner = Runner(StageCatalog.Shopping, EquipmentId.Bucket, EquipmentId.Extinguisher);
+            Advance(runner, 4f);
+            return Show(runner, 4f, new Vector2(10, 7));
+        }
+
+        private static Camera GasStationOil()
+        {
+            StageRunner runner = Runner(StageCatalog.GasStation, EquipmentId.Bucket, EquipmentId.FoamExtinguisher);
+            Advance(runner, 3f);
+            return Show(runner, 3f, new Vector2(22, 10));
+        }
+
+        /// <summary>벽 몇 칸을 미리 적셔 방화선을 치고, 양동이를 벽 쪽으로 막 쏜 순간.</summary>
+        private static Camera SprayAndFirebreak()
+        {
+            StageRunner runner = Runner(StageCatalog.Residential, EquipmentId.Bucket);
+            Advance(runner, 2f);
+
+            for (int x = 14; x <= 17; x++)
+            {
+                Suppression.Apply(runner.Grid, x, 8, EquipmentCatalog.Bucket.Agent);
+            }
+
+            // 칸막이 바로 아래 실내에서 북쪽 벽을 조준한다.
+            runner.Player.X = 16.5f;
+            runner.Player.Y = 9.5f;
+            runner.Player.Aim = AimDirection.N;
+
+            Camera camera = WorldCamera();
+            var view = new MissionWorldView(new GameObject("Root").transform, runner);
+            view.Refresh(2f, 0f);
+            runner.Update(0.01f, new StageInput { Fire = true, Slot = 0 });
+            view.Refresh(2.05f, 0.05f);
+            view.FrameCamera(camera, view.PlayerWorld);
+            return camera;
+        }
 
         /// <summary>
         /// 파이프라인 확인용: 스프라이트 로드, 카메라 렌더, 캔버스 렌더, 주아체 한글.
