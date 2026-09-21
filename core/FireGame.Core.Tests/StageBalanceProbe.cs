@@ -23,6 +23,7 @@ namespace FireGame.Core.Tests
             ("+소화기", new[] { EquipmentId.Bucket, EquipmentId.Extinguisher }),
             ("+호스", new[] { EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.Hose }),
             ("+폼", new[] { EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.FoamExtinguisher }),
+            ("4종 전부", new[] { EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.Hose, EquipmentId.FoamExtinguisher }),
         };
 
         [Fact]

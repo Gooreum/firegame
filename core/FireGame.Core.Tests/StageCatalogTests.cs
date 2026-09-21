@@ -204,16 +204,10 @@ namespace FireGame.Core.Tests
             StageResult second = PlayAndSettle(StageCatalog.Shopping, save);
             Assert.True(second.Won, "소화기를 갖췄으면 상가를 깰 수 있어야 한다");
 
-            // 3. 폼을 살 때까지 상가를 반복한다. 무한 루프가 되지 않는지도 함께 본다.
-            int replays = 0;
-            while (save.Money < Shop.NextCost(save, EquipmentId.FoamExtinguisher) && replays < 20)
-            {
-                PlayAndSettle(StageCatalog.Shopping, save);
-                replays++;
-            }
-
+            // 3. 같은 현장을 반복하지 않고도 바로 폼 소화기를 살 수 있어야 한다.
+            //    (예전 가격 $10,000은 상가를 열 번 가까이 반복해야 했다.)
             Assert.True(save.Money >= Shop.NextCost(save, EquipmentId.FoamExtinguisher),
-                "상가 반복으로 폼 소화기를 모을 수 있어야 한다. 보유 " + save.Money);
+                "상가를 한 번 깨면 폼 소화기를 살 수 있어야 한다. 보유 " + save.Money);
             Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, EquipmentId.FoamExtinguisher));
 
             // 4. 주유소 — 폼으로 클리어한다.
