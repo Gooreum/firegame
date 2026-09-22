@@ -27,6 +27,9 @@ namespace FireGame.Core.Game
         /// <summary>현장 id → 최고 별점. 기록이 없으면 0.</summary>
         private readonly Dictionary<int, int> _bestStars = new Dictionary<int, int>();
 
+        // 현장별 최단 클리어 시간(0.1초 단위). 장비를 올릴수록 빨라지는 걸 결과 화면이 보여 준다.
+        private readonly Dictionary<int, int> _bestTimes = new Dictionary<int, int>();
+
         public static SaveData NewGame()
         {
             // 시작 장비(양동이 Lv1)는 트랙의 StartLevel로 표현되므로 따로 넣을 것이 없다.
@@ -94,6 +97,25 @@ namespace FireGame.Core.Game
             return StarsFor(mission.RequiresMission) > 0;
         }
 
+        /// <summary>그 현장의 최단 클리어 시간(0.1초 단위). 기록이 없으면 -1.</summary>
+        public int BestTimeFor(int missionId)
+        {
+            return _bestTimes.TryGetValue(missionId, out int time) ? time : -1;
+        }
+
+        /// <summary>클리어 시간을 기록한다. 지금 기록보다 빠를 때만 바꾸고 true.</summary>
+        public bool RecordTime(int missionId, float seconds)
+        {
+            int time = (int)Math.Round(seconds * 10f);
+            if (time < 0) return false;
+
+            int best = BestTimeFor(missionId);
+            if (best >= 0 && time >= best) return false;
+
+            _bestTimes[missionId] = time;
+            return true;
+        }
+
         public int TotalStars
         {
             get
@@ -112,6 +134,7 @@ namespace FireGame.Core.Game
 
             AppendPairs(builder, "levels", _levels);
             AppendPairs(builder, "stars", _bestStars);
+            if (_bestTimes.Count > 0) AppendPairs(builder, "best", _bestTimes);
 
             return builder.ToString();
         }
@@ -182,6 +205,10 @@ namespace FireGame.Core.Game
 
                     case "stars":
                         if (!TryParseStars(value, parsed)) return false;
+                        break;
+
+                    case "best":
+                        if (!TryParsePairs(value, (id, time) => { if (time >= 0) parsed._bestTimes[id] = time; })) return false;
                         break;
 
                     case "cleared":

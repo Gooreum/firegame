@@ -65,6 +65,15 @@ namespace FireGame.Core.Game
         /// <summary>이번 결과로 최고 별점이 올랐는지. 결과 화면 연출용.</summary>
         public bool LastWasNewBest { get; private set; }
 
+        /// <summary>방금 끝난 출동의 집계(발 수·끈 칸·걸린 시간).</summary>
+        public StageResult LastResult { get; private set; }
+
+        /// <summary>이번 판 전의 최단 기록(0.1초 단위). 없었으면 -1.</summary>
+        public int LastPreviousBest { get; private set; } = -1;
+
+        /// <summary>이번 판이 최단 기록을 새로 썼는지.</summary>
+        public bool LastWasFastest { get; private set; }
+
         public int ActiveSlot { get; private set; }
 
         /// <summary>누적 시간. 화면 애니메이션에 쓴다.</summary>
@@ -229,6 +238,9 @@ namespace FireGame.Core.Game
             int stars = StarRating.For(result);
 
             LastWasNewBest = stars > Save.StarsFor(CurrentMission.Id);
+            LastPreviousBest = Save.BestTimeFor(CurrentMission.Id);
+            LastWasFastest = result.Won && Save.RecordTime(CurrentMission.Id, result.ElapsedSeconds);
+            LastResult = result;
 
             Save.Money += payout.Total;
             Save.RecordResult(CurrentMission.Id, stars);

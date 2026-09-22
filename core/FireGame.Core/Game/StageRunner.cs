@@ -43,6 +43,15 @@ namespace FireGame.Core.Game
         /// <summary>지금까지 실행한 고정 틱 수. 프레임레이트 독립성 검증에 쓴다.</summary>
         public int TicksElapsed;
 
+        /// <summary>이번 출동에서 실제로 나간 발 수.</summary>
+        public int ShotsFired;
+
+        /// <summary>이번 출동에서 끈 불 칸 수.</summary>
+        public int CellsExtinguished;
+
+        /// <summary>마지막 한 발이 끈 칸 수. 화면이 "3칸 진압!"을 띄우는 데 쓴다.</summary>
+        public int LastShotExtinguished;
+
         /// <summary>장비 id 목록으로 시작한다. 전부 Lv1, 방화복·소방화 없음.</summary>
         public StageRunner(StageDef def, IReadOnlyList<int> unlockedEquipment)
             : this(def, Loadout.FromIds(unlockedEquipment))
@@ -176,10 +185,15 @@ namespace FireGame.Core.Game
 
             Aiming.Resolve(Grid, Player.CellX, Player.CellY, Player.Aim, def.Pattern, def.Range, _hitBuffer, def.EndSpread);
 
+            int putOut = 0;
             for (int i = 0; i < _hitBuffer.Count; i++)
             {
-                Suppression.Apply(Grid, _hitBuffer[i].X, _hitBuffer[i].Y, def.Agent);
+                if (Suppression.Apply(Grid, _hitBuffer[i].X, _hitBuffer[i].Y, def.Agent) == SuppressionOutcome.Extinguished) putOut++;
             }
+
+            ShotsFired++;
+            CellsExtinguished += putOut;
+            LastShotExtinguished = putOut;
 
             Player.ConsumeFire(slot, def);
         }
@@ -276,6 +290,9 @@ namespace FireGame.Core.Game
                 IntactRatio = Grid.IntactRatio(),
                 TimeLeft = TimeLeft,
                 WetCellCount = Grid.CountWet(),
+                ShotsFired = ShotsFired,
+                CellsExtinguished = CellsExtinguished,
+                ElapsedSeconds = Def.TimeLimitSeconds - TimeLeft,
             };
         }
     }

@@ -104,5 +104,11 @@ namespace FireGame.Core.Game
 
         /// <summary>물을 머금은 셀 수. 수손 피해로 정산에서 차감된다.</summary>
         public int WetCellCount;
+
+        public int ShotsFired;
+        public int CellsExtinguished;
+
+        /// <summary>출동에서 끝날 때까지 걸린 시간(초).</summary>
+        public float ElapsedSeconds;
     }
 }
