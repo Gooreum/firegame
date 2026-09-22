@@ -64,6 +64,23 @@ namespace FireGame.UnityLayer
         private readonly Stack<SpriteRenderer> _particlePool = new Stack<SpriteRenderer>();
         private readonly List<GridPoint> _hitBuffer = new List<GridPoint>();
         private readonly float[] _lastCooldowns = new float[PlayerState.SlotCount];
+
+        // "N칸 진압!" 글자. 한 발에 여러 칸을 끄면 레벨업(특히 넓어진 부채꼴)이 손에 잡힌다.
+        private readonly List<Popup> _popups = new List<Popup>();
+        private int _lastShotsFired;
+
+        private struct Popup
+        {
+            public TextMesh Text;
+            public TextMesh Shadow;
+            public Vector3 From;
+            public float Age;
+        }
+
+        private const float PopupLifetime = 0.9f;
+
+        /// <summary>물보라가 레벨 따라 커지는 건 Lv11까지. 그 뒤로 더 키우면 화면을 덮는다.</summary>
+        private const int MaxSprayBoost = 10;
         private readonly bool[] _wasBurning;
 
         // 흩뿌림 위치. 시드를 고정해 같은 장면은 같은 모양으로 찍힌다.
@@ -387,6 +404,7 @@ namespace FireGame.UnityLayer
             DetectShots();
             DetectExtinguished();
             AdvanceParticles(dt);
+            AdvancePopups(dt);
         }
 
         private void RefreshCell(int x, int y, float time)
@@ -450,14 +468,16 @@ namespace FireGame.UnityLayer
                 SpriteRenderer body = Ensure(_body, i, x, y, OrderFire);
                 body.sprite = Art.Get("Effects/water_drop");
                 body.color = Color.Lerp(new Color(0.95f, 0.28f, 0.05f, 0.75f), new Color(1f, 0.5f, 0.08f, 0.85f), intensity);
-                body.transform.localScale = Vector3.one * Art.FitWidth(body.sprite, 1.7f + (flicker * 0.4f));
+                // 불꽃 크기가 열을 따라간다. 맞을 때마다 줄어드는 게 보여서 "몇 발이면 꺼지는지"가 눈에 들어온다.
+                float size = 0.85f + (0.5f * intensity);   // 평소(열 ~0.6) 1.0배, 막 맞으면 0.85배, 한창이면 1.35배
+                body.transform.localScale = Vector3.one * Art.FitWidth(body.sprite, (1.7f + (flicker * 0.4f)) * size);
                 body.enabled = true;
 
                 // 질감: 옅은 불덩어리를 노랗게 얹고 천천히 돌린다.
                 SpriteRenderer flame = Ensure(_flame, i, x, y, OrderFire + 1);
                 flame.sprite = _flameSprites[Mathf.Abs(seed) % _flameSprites.Length];
                 flame.color = new Color(1f, 0.85f, 0.3f, 1f);
-                flame.transform.localScale = Vector3.one * Art.FitWidth(flame.sprite, 1.3f);
+                flame.transform.localScale = Vector3.one * Art.FitWidth(flame.sprite, 1.3f * size);
                 flame.transform.rotation = Quaternion.Euler(0f, 0f, (time * 40f) + (seed % 360));
                 flame.enabled = true;
 
@@ -553,6 +573,8 @@ namespace FireGame.UnityLayer
         private void DetectShots()
         {
             PlayerState player = _runner.Player;
+            bool newShot = _runner.ShotsFired != _lastShotsFired;
+            _lastShotsFired = _runner.ShotsFired;
 
             for (int slot = 0; slot < PlayerState.SlotCount; slot++)
             {
@@ -565,7 +587,13 @@ namespace FireGame.UnityLayer
                 if (def == null) continue;
 
                 Aiming.Resolve(_grid, player.CellX, player.CellY, player.Aim, def.Pattern, def.Range, _hitBuffer, def.EndSpread);
-                SpawnShot(def.Agent.Type, PlayerWorld, _hitBuffer);
+                SpawnShot(def.Agent.Type, PlayerWorld, _hitBuffer, Mathf.Min(LevelSteps(def), MaxSprayBoost));
+
+                if (newShot && _runner.LastShotExtinguished >= 2 && _hitBuffer.Count > 0)
+                {
+                    SpawnPopup(_runner.LastShotExtinguished + "칸 진압!", Centroid(_hitBuffer));
+                    newShot = false;
+                }
             }
         }
 
@@ -573,10 +601,14 @@ namespace FireGame.UnityLayer
         /// 한 발의 연출: 칸마다 물줄기 선 + 흩뿌린 물방울 여러 개 + 도착한 칸의 물보라.
         /// CO2는 물방울 대신 흰 가스 덩어리를 뿜는다.
         /// </summary>
-        private void SpawnShot(AgentType agent, Vector3 hand, List<GridPoint> hits)
+        private void SpawnShot(AgentType agent, Vector3 hand, List<GridPoint> hits, int boost)
         {
             Color color = SprayColor(agent);
             bool gas = agent == AgentType.CO2;
+
+            // 레벨이 오를수록 물방울이 많아지고 물보라가 커진다. 같은 버튼인데 "세졌다"가 눈에 보이게.
+            int drops = DropsPerCell + (boost / 2);
+            float grow = 1f + (0.05f * boost);
 
             foreach (GridPoint hit in hits)
             {
@@ -584,21 +616,21 @@ namespace FireGame.UnityLayer
 
                 if (!gas) Spawn(ParticleKind.Streak, _streakSprite, color, hand, target, 0f, StreakLifetime, 1f, 1f, 0.8f);
 
-                for (int i = 0; i < DropsPerCell; i++)
+                for (int i = 0; i < drops; i++)
                 {
                     Vector3 scatter = new Vector3(Jitter(0.35f), Jitter(0.35f), 0f);
                     float delay = i * 0.03f;
                     if (gas)
                     {
-                        Spawn(ParticleKind.Drop, _cloudSprite, color, hand, target + scatter, delay, DropLifetime, 0.9f, 2.2f, 1f);
+                        Spawn(ParticleKind.Drop, _cloudSprite, color, hand, target + scatter, delay, DropLifetime, 0.9f, 2.2f * grow, 1f);
                     }
                     else
                     {
-                        Spawn(ParticleKind.Drop, _dropSprite, color, hand, target + scatter, delay, DropLifetime, 1.0f, 1.7f, 0.95f);
+                        Spawn(ParticleKind.Drop, _dropSprite, color, hand, target + scatter, delay, DropLifetime, 1.0f, 1.7f * grow, 0.95f);
                     }
                 }
 
-                Spawn(ParticleKind.Splash, _splashSprite, color, target, target, 0.08f, SplashLifetime, 0.6f, 1.6f, 0.85f);
+                Spawn(ParticleKind.Splash, _splashSprite, color, target, target, 0.08f, SplashLifetime, 0.6f, 1.6f * grow, 0.85f);
             }
         }
 
@@ -622,6 +654,87 @@ namespace FireGame.UnityLayer
                     }
                 }
             }
+        }
+
+        /// <summary>레벨 − 1. 장비 정의에는 레벨이 없어서 기본 위력 대비 배율로 되짚는다.</summary>
+        private static int LevelSteps(EquipmentDef def)
+        {
+            EquipmentDef base_ = EquipmentCatalog.ById(def.Id);
+            if (base_ == null || base_.Agent.Power <= 0f) return 0;
+            return Mathf.Max(0, Mathf.RoundToInt(((def.Agent.Power / base_.Agent.Power) - 1f) / EquipmentDef.PowerPerLevel));
+        }
+
+        private Vector3 Centroid(List<GridPoint> cells)
+        {
+            Vector3 sum = Vector3.zero;
+            foreach (GridPoint cell in cells) sum += CellCenter(cell.X, cell.Y);
+            return sum / cells.Count;
+        }
+
+        private void SpawnPopup(string text, Vector3 at)
+        {
+            var popup = new Popup
+            {
+                Shadow = CreateText("PopupShadow", text, new Color(0f, 0f, 0f, 0.8f), OrderSmoke + 4),
+                Text = CreateText("Popup", text, new Color(1f, 0.92f, 0.3f), OrderSmoke + 5),
+                From = at + new Vector3(0f, 0.6f, 0f),
+            };
+            _popups.Add(popup);
+            PlacePopup(popup);
+        }
+
+        private TextMesh CreateText(string name, string text, Color color, int order)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_root, false);
+            var mesh = go.AddComponent<TextMesh>();
+            mesh.font = Art.Font;
+            mesh.text = text;
+            mesh.fontSize = 64;
+            mesh.characterSize = 0.1f;
+            mesh.anchor = TextAnchor.MiddleCenter;
+            mesh.alignment = TextAlignment.Center;
+            mesh.color = color;
+            var renderer = go.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = Art.Font.material;
+            renderer.sortingOrder = order;
+            return mesh;
+        }
+
+        private void AdvancePopups(float dt)
+        {
+            for (int i = _popups.Count - 1; i >= 0; i--)
+            {
+                Popup popup = _popups[i];
+                popup.Age += dt;
+                if (popup.Age >= PopupLifetime)
+                {
+                    UiKit.Discard(popup.Text.gameObject);
+                    UiKit.Discard(popup.Shadow.gameObject);
+                    _popups.RemoveAt(i);
+                    continue;
+                }
+
+                _popups[i] = popup;
+                PlacePopup(popup);
+            }
+        }
+
+        private static void PlacePopup(Popup popup)
+        {
+            float t = popup.Age / PopupLifetime;
+            Vector3 at = popup.From + new Vector3(0f, 0.8f * t, 0f);
+            float alpha = t < 0.6f ? 1f : 1f - ((t - 0.6f) / 0.4f);
+
+            popup.Text.transform.position = at;
+            popup.Shadow.transform.position = at + new Vector3(0.05f, -0.05f, 0f);
+
+            Color text = popup.Text.color;
+            text.a = alpha;
+            popup.Text.color = text;
+            Color shadow = popup.Shadow.color;
+            shadow.a = 0.8f * alpha;
+            popup.Shadow.color = shadow;
         }
 
         private float Jitter(float amount)

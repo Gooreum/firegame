@@ -65,6 +65,7 @@ namespace FireGame.UnityLayer
                 UiKit.Place(quote.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 250f), new Vector2(980f, 60f));
                 quote.rectTransform.pivot = new Vector2(0.5f, 0f);
 
+                BuildRecord(panel.transform, flow);
                 BuildNextGoal(panel.transform, flow.Save);
             }
             else
@@ -132,6 +133,36 @@ namespace FireGame.UnityLayer
             Text totalValue = UiKit.Label(panel, "TotalValue", Format.Money(payout.Total), 44, new Color(0.15f, 0.55f, 0.2f), TextAnchor.MiddleRight);
             UiKit.Place(totalValue.rectTransform, new Vector2(0.5f, 1f), new Vector2(300f, totalY), new Vector2(300f, 56f));
             totalValue.rectTransform.pivot = new Vector2(1f, 0.5f);
+        }
+
+        /// <summary>
+        /// 이번 출동 기록과 같은 현장 최고 기록 비교. 장비를 올리고 다시 뛰면 "빨라졌다"가 숫자로 남는다.
+        /// </summary>
+        private static void BuildRecord(Transform panel, GameFlow flow)
+        {
+            StageResult result = flow.LastResult;
+            float seconds = result.ElapsedSeconds;
+            string stats = "불 " + result.CellsExtinguished + "칸 진압 · " + result.ShotsFired + "발 · " + seconds.ToString("0.0") + "초";
+
+            string compare;
+            Color color = UiKit.Ink;
+            if (flow.LastPreviousBest < 0)
+            {
+                compare = "첫 기록!";
+            }
+            else if (flow.LastWasFastest)
+            {
+                compare = "지난 최고보다 " + ((flow.LastPreviousBest / 10f) - seconds).ToString("0.0") + "초 빨리! 최고 기록";
+                color = new Color(0.15f, 0.55f, 0.2f);
+            }
+            else
+            {
+                compare = "최고 기록 " + (flow.LastPreviousBest / 10f).ToString("0.0") + "초";
+            }
+
+            Text label = UiKit.Label(panel, "Record", stats + "  —  " + compare, 28, color, TextAnchor.MiddleCenter);
+            UiKit.Place(label.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -582f), new Vector2(1040f, 44f));
+            label.rectTransform.pivot = new Vector2(0.5f, 1f);
         }
 
         /// <summary>

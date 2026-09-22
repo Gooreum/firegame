@@ -55,6 +55,8 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("38_briefing_ready", BriefingReady),
                 new KeyValuePair<string, Func<Camera>>("39_result_need_gear", ResultNeedGear),
                 new KeyValuePair<string, Func<Camera>>("43_map_need_gear", MapNeedGear),
+                new KeyValuePair<string, Func<Camera>>("44_spray_level10", SprayLevel10),
+                new KeyValuePair<string, Func<Camera>>("45_result_record", ResultRecord),
                 new KeyValuePair<string, Func<Camera>>("40_warehouse_fire", WarehouseFire),
                 new KeyValuePair<string, Func<Camera>>("41_factory_mixed", FactoryMixed),
                 new KeyValuePair<string, Func<Camera>>("42_harbor_finale", HarborFinale),
@@ -315,7 +317,12 @@ namespace FireGame.EditorTools
         /// <summary>불을 모두 끄고 시민을 출구로 옮겨 이긴 상태를 만든다(봇 없이).</summary>
         private static Camera ResultWin()
         {
-            var flow = new GameFlow(SaveData.NewGame());
+            return WinResidential(SaveData.NewGame());
+        }
+
+        private static Camera WinResidential(SaveData save)
+        {
+            var flow = new GameFlow(save);
             flow.SelectMission(0);
             flow.BeginMission();
             for (int i = 0; i < 30; i++) flow.Update(0.1f);
@@ -440,6 +447,52 @@ namespace FireGame.EditorTools
             for (int i = 1; i <= 3; i++) view.Refresh(2f + (i * 0.05f), 0.05f);   // 물이 날아가는 중간
             view.FrameCamera(camera, view.PlayerWorld);
             return camera;
+        }
+
+        /// <summary>
+        /// 양동이 Lv10(특성 두 개: 앞 9칸)을 불길에 끼얹은 순간. 굵어진 물보라와 "N칸 진압!"이 보여야 한다.
+        /// </summary>
+        private static Camera SprayLevel10()
+        {
+            SaveData save = SaveData.NewGame();
+            save.SetLevel(EquipmentId.Bucket, 10);
+            var runner = new StageRunner(StageCatalog.Warehouse, Loadout.From(save));
+            Advance(runner, 5f);
+
+            // 서쪽 칸이 걸을 수 있는, 불타는 칸을 찾아 그 옆에 세우고 동쪽(불 쪽)을 조준한다.
+            FireGrid grid = runner.Grid;
+            for (int y = 1; y < grid.Height - 1; y++)
+            {
+                for (int x = 1; x < grid.Width - 1; x++)
+                {
+                    if (grid[x, y].State != CellState.Burning) continue;
+                    if (!Materials.Of(grid[x - 1, y].Material).Walkable || grid[x - 1, y].State == CellState.Burning) continue;
+                    runner.Player.X = x - 0.5f;
+                    runner.Player.Y = y + 0.5f;
+                    runner.Player.Aim = AimDirection.E;
+                    y = grid.Height;
+                    break;
+                }
+            }
+
+            Camera camera = WorldCamera();
+            var view = new MissionWorldView(new GameObject("Root").transform, runner);
+            view.Refresh(5f, 0f);
+            runner.Update(0.01f, new StageInput { Fire = true, Slot = 0 });
+            for (int i = 1; i <= 4; i++) view.Refresh(5f + (i * 0.05f), 0.05f);
+            if (runner.LastShotExtinguished < 2) throw new InvalidOperationException("한 발에 여러 칸을 끄지 못했다: " + runner.LastShotExtinguished);
+            view.FrameCamera(camera, view.PlayerWorld);
+            return camera;
+        }
+
+        /// <summary>같은 현장을 두 번째로 깨서 최고 기록을 줄인 결과 화면.</summary>
+        private static Camera ResultRecord()
+        {
+            SaveData save = SaveData.NewGame();
+            save.RecordResult(0, 2);
+            save.RecordTime(0, 48.6f);
+            save.Money = 700;
+            return WinResidential(save);
         }
 
         /// <summary>방열복(Lv4)을 입은 소방관이 전기실 안에서 CO2 소화기(Lv3)를 막 뿜은 순간.</summary>
