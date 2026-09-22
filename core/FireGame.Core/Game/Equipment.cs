@@ -53,6 +53,11 @@ namespace FireGame.Core.Game
         public readonly float CooldownSeconds;
         public readonly int MaxCharges;
 
+        /// <summary>
+        /// 직선 끝에서 양옆으로 퍼지는 칸 수. 0이면 곧은 물줄기, 1이면 끝이 T자가 된다(호스 Lv5 특성).
+        /// </summary>
+        public readonly int EndSpread;
+
         public EquipmentDef(
             int id,
             string name,
@@ -61,7 +66,8 @@ namespace FireGame.Core.Game
             int range,
             ResourceKind resource,
             float cooldownSeconds,
-            int maxCharges)
+            int maxCharges,
+            int endSpread = 0)
         {
             Id = id;
             Name = name;
@@ -71,6 +77,7 @@ namespace FireGame.Core.Game
             Resource = resource;
             CooldownSeconds = cooldownSeconds;
             MaxCharges = maxCharges;
+            EndSpread = endSpread;
         }
 
         /// <summary>레벨 하나당 위력 증가율.</summary>
@@ -83,8 +90,32 @@ namespace FireGame.Core.Game
         public const float CooldownCutPerLevel = 0.1f;
 
         /// <summary>
+        /// 이 레벨마다 한 번씩 눈에 보이는 특성이 붙는다(Lv5, Lv10, …).
+        /// 숫자만 오르면 레벨업이 느껴지지 않아서, 뿌리는 모양 자체를 키운다.
+        /// </summary>
+        public const int MilestoneEvery = 5;
+
+        /// <summary>호스 사거리 상한. 화면 너비(40칸)를 넘겨 쏘면 조준이 의미가 없어진다.</summary>
+        public const int MaxLineRange = 12;
+
+        /// <summary>양동이 연사 하한(초).</summary>
+        public const float MinCooldownSeconds = 0.4f;
+
+        /// <summary>호스 Lv10 특성: 더 빠른 연사.</summary>
+        public const float FastLineCooldown = 0.15f;
+
+        /// <summary>지금 레벨까지 받은 특성 수. Lv5 → 1, Lv10 → 2.</summary>
+        public static int Milestones(int level)
+        {
+            return Math.Max(0, level) / MilestoneEvery;
+        }
+
+        /// <summary>
         /// 레벨이 반영된 정의. Lv1이 기본값이고, 레벨마다
-        /// 위력 +20%, 소화기는 사용 횟수 +25%, 호스는 사거리 +1, 양동이는 쿨다운 −10%.
+        /// 위력 +20%, 소화기는 사용 횟수 +25%, 호스는 사거리 +1(12칸까지), 양동이는 쿨다운 −10%(0.4초까지).
+        /// 5레벨마다 특성: 부채꼴은 한 줄 더 멀리(앞 3칸 → 6칸 → 9칸…),
+        /// 호스는 Lv5에 끝이 T자로 퍼지고 Lv10에 연사가 빨라진다.
+        /// Lv1~4는 특성이 없어 현장별 필요 장비 표가 그대로 맞는다.
         /// </summary>
         public EquipmentDef AtLevel(int level)
         {
@@ -92,17 +123,21 @@ namespace FireGame.Core.Game
             if (steps == 0) return this;
 
             var agent = new Agent(Agent.Type, Agent.Power * (1f + (PowerPerLevel * steps)), Agent.Wetness, Agent.Inerting);
+            int milestones = Milestones(level);
+            bool line = Pattern == AimPattern.Line;
 
-            int range = Pattern == AimPattern.Line ? Range + steps : Range;
+            int range = line ? Math.Min(Range + steps, MaxLineRange) : Range + milestones;
 
             // 호스는 이미 0.2초마다 나가므로 사거리로 키우고, 쿨다운 장비만 연사를 빠르게 한다.
-            float cooldown = Resource == ResourceKind.Cooldown && Pattern != AimPattern.Line
-                ? CooldownSeconds * (1f - (CooldownCutPerLevel * steps))
-                : CooldownSeconds;
+            float cooldown;
+            if (line) cooldown = milestones >= 2 ? Math.Min(CooldownSeconds, FastLineCooldown) : CooldownSeconds;
+            else if (Resource == ResourceKind.Cooldown) cooldown = Math.Max(MinCooldownSeconds, CooldownSeconds * (1f - (CooldownCutPerLevel * steps)));
+            else cooldown = CooldownSeconds;
 
             int charges = MaxCharges == 0 ? 0 : (int)Math.Round(MaxCharges * (1f + (ChargesPerLevel * steps)));
+            int spread = line && milestones >= 1 ? 1 : EndSpread;
 
-            return new EquipmentDef(Id, Name, agent, Pattern, range, Resource, cooldown, charges);
+            return new EquipmentDef(Id, Name, agent, Pattern, range, Resource, cooldown, charges, spread);
         }
     }
 
@@ -142,7 +177,8 @@ namespace FireGame.Core.Game
             AimDirection direction,
             AimPattern pattern,
             int range,
-            List<GridPoint> results)
+            List<GridPoint> results,
+            int endSpread = 0)
         {
             results.Clear();
             if (grid == null) return;
@@ -162,6 +198,7 @@ namespace FireGame.Core.Game
 
                 case AimPattern.Line:
                     AddRay(grid, originX, originY, direction, range, results);
+                    if (endSpread > 0 && results.Count > 0) AddEndSpread(grid, direction, endSpread, results);
                     break;
             }
         }
@@ -184,6 +221,20 @@ namespace FireGame.Core.Game
                 results.Add(new GridPoint(x, y));
 
                 if (!Materials.Of(grid[x, y].Material).Walkable) break;
+            }
+        }
+
+        /// <summary>직선의 마지막 칸 양옆(조준 방향에 수직)으로 퍼진다. 호스 끝이 T자가 된다.</summary>
+        private static void AddEndSpread(FireGrid grid, AimDirection direction, int spread, List<GridPoint> results)
+        {
+            GridPoint end = results[results.Count - 1];
+            AimDirection left = Rotate(direction, -2);
+            AimDirection right = Rotate(direction, 2);
+
+            for (int step = 1; step <= spread; step++)
+            {
+                AddIfInBounds(grid, end.X + (OffsetX(left) * step), end.Y + (OffsetY(left) * step), results);
+                AddIfInBounds(grid, end.X + (OffsetX(right) * step), end.Y + (OffsetY(right) * step), results);
             }
         }
 

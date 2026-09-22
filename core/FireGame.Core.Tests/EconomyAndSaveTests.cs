@@ -142,13 +142,14 @@ namespace FireGame.Core.Tests
             SaveData save = SaveData.NewGame();
             save.Money = 99999;
 
-            for (int i = 0; i < 4; i++) Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, EquipmentId.Bucket));
-            Assert.Equal(5, save.LevelOf(EquipmentId.Bucket));
+            // 장비는 사실상 무제한이라, 끝이 있는 방화복(Lv10)으로 본다.
+            for (int i = 0; i < UpgradeCatalog.Suit.MaxLevel; i++) Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, GearId.Suit));
+            Assert.Equal(10, save.LevelOf(GearId.Suit));
             int money = save.Money;
 
-            Assert.Equal(PurchaseResult.MaxLevel, Shop.Upgrade(save, EquipmentId.Bucket));
+            Assert.Equal(PurchaseResult.MaxLevel, Shop.Upgrade(save, GearId.Suit));
             Assert.Equal(money, save.Money);
-            Assert.Equal(-1, Shop.NextCost(save, EquipmentId.Bucket));
+            Assert.Equal(-1, Shop.NextCost(save, GearId.Suit));
         }
 
         // --- TC-11 ---

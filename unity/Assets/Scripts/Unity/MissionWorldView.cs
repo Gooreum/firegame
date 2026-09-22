@@ -507,7 +507,7 @@ namespace FireGame.UnityLayer
         /// <summary>방화복 레벨의 소방관 그림 경로. 범위 밖 레벨은 가까운 끝으로 자른다.</summary>
         public static string SuitSprite(int suitLevel)
         {
-            return "TopDown/player_suit_" + Mathf.Clamp(suitLevel, 0, UpgradeCatalog.Suit.MaxLevel);
+            return "TopDown/player_suit_" + GearStats.SuitLook(suitLevel);
         }
 
         private void RefreshPeople()
@@ -564,7 +564,7 @@ namespace FireGame.UnityLayer
                 EquipmentDef def = _runner.SlotEquipment(slot);
                 if (def == null) continue;
 
-                Aiming.Resolve(_grid, player.CellX, player.CellY, player.Aim, def.Pattern, def.Range, _hitBuffer);
+                Aiming.Resolve(_grid, player.CellX, player.CellY, player.Aim, def.Pattern, def.Range, _hitBuffer, def.EndSpread);
                 SpawnShot(def.Agent.Type, PlayerWorld, _hitBuffer);
             }
         }

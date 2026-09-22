@@ -31,9 +31,9 @@ namespace FireGame.Core.Tests
             Assert.Equal(200, UpgradeCatalog.Suit.CostToReach(1));
             Assert.Equal(150, UpgradeCatalog.Boots.CostToReach(1));
 
-            Assert.Equal(5, UpgradeCatalog.Bucket.MaxLevel);
-            Assert.Equal(4, UpgradeCatalog.Suit.MaxLevel);
-            Assert.Equal(4, UpgradeCatalog.Boots.MaxLevel);
+            Assert.Equal(UpgradeCatalog.EndlessLevel, UpgradeCatalog.Bucket.MaxLevel);
+            Assert.Equal(10, UpgradeCatalog.Suit.MaxLevel);
+            Assert.Equal(10, UpgradeCatalog.Boots.MaxLevel);
 
             Assert.Equal(1, UpgradeCatalog.Bucket.StartLevel);
             Assert.Equal(0, UpgradeCatalog.Hose.StartLevel);
@@ -44,7 +44,8 @@ namespace FireGame.Core.Tests
         public void CostToReach_IsMinusOne_ForLevelsYouCannotBuy()
         {
             Assert.Equal(-1, UpgradeCatalog.Hose.CostToReach(0));
-            Assert.Equal(-1, UpgradeCatalog.Hose.CostToReach(6));
+            Assert.Equal(-1, UpgradeCatalog.Hose.CostToReach(UpgradeCatalog.EndlessLevel + 1));
+            Assert.Equal(-1, UpgradeCatalog.Suit.CostToReach(11));
             Assert.Equal(-1, UpgradeCatalog.Bucket.CostToReach(1));   // 처음부터 가진 레벨
             Assert.Equal(-1, UpgradeCatalog.Suit.CostToReach(-3));
         }
@@ -112,10 +113,11 @@ namespace FireGame.Core.Tests
         public void GearStats_ClampOutOfRangeLevels()
         {
             Assert.Equal(1f, GearStats.DamageMultiplier(-1), 3);
-            Assert.Equal(0.35f, GearStats.DamageMultiplier(99), 3);
+            Assert.Equal(GearStats.DamageMultiplier(10), GearStats.DamageMultiplier(99), 3);
             Assert.Equal(1f, GearStats.SpeedMultiplier(-5), 3);
-            Assert.Equal(1.4f, GearStats.SpeedMultiplier(99), 3);
-            Assert.Equal("방열복", GearStats.SuitName(99));
+            Assert.Equal(2.0f, GearStats.SpeedMultiplier(99), 3);
+            Assert.Equal("방열복 +6", GearStats.SuitName(99));
+            Assert.Equal(4, GearStats.SuitLook(99));
         }
     }
 }

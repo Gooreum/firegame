@@ -174,7 +174,7 @@ namespace FireGame.Core.Game
             if (def == null) return;
             if (!Player.CanFire(slot, def)) return;
 
-            Aiming.Resolve(Grid, Player.CellX, Player.CellY, Player.Aim, def.Pattern, def.Range, _hitBuffer);
+            Aiming.Resolve(Grid, Player.CellX, Player.CellY, Player.Aim, def.Pattern, def.Range, _hitBuffer, def.EndSpread);
 
             for (int i = 0; i < _hitBuffer.Count; i++)
             {
