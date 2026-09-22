@@ -58,10 +58,14 @@ namespace FireGame.UnityLayer
             UiKit.Place(money.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -70f), new Vector2(600f, 60f));
             money.rectTransform.pivot = new Vector2(0.5f, 1f);
 
+            // 다음 신고에 모자란 장비. 그 카드에 리본을 달아 "뭘 사야 하는지"를 바로 보이게 한다.
+            var needed = new HashSet<int>();
+            foreach (Shortfall shortfall in Readiness.Missing(save, Readiness.NextCall(save))) needed.Add(shortfall.TrackId);
+
             for (int i = 0; i < tracks.Length; i++)
             {
                 float x = -cardsWidth / 2f + (i * (CardWidth + CardGap)) + (CardWidth / 2f);
-                BuildCard(panel.transform, flow, tracks[i], x);
+                BuildCard(panel.transform, flow, tracks[i], x, needed.Contains(tracks[i].Id));
             }
 
             UnityEngine.UI.Button close = UiKit.Button(panel.transform, "Close", Art.Get("UI/button_grey"), "닫기", 38, flow.CloseShop);
@@ -74,7 +78,7 @@ namespace FireGame.UnityLayer
             UiKit.Discard(_root.gameObject);
         }
 
-        private static void BuildCard(Transform panel, GameFlow flow, UpgradeTrack track, float x)
+        private static void BuildCard(Transform panel, GameFlow flow, UpgradeTrack track, float x, bool neededNext)
         {
             SaveData save = flow.Save;
             int level = save.LevelOf(track.Id);
@@ -134,6 +138,16 @@ namespace FireGame.UnityLayer
                 Text need = UiKit.Label(card.transform, "Need", "잔액 부족", 22, new Color(1f, 0.85f, 0.85f), TextAnchor.MiddleCenter);
                 UiKit.Place(need.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 116f), new Vector2(CardWidth - 20f, 28f));
                 need.rectTransform.pivot = new Vector2(0.5f, 0f);
+            }
+
+            if (neededNext)
+            {
+                Image ribbon = UiKit.Image(card.transform, "NeededNext", Art.Get("UI/button_yellow"), Color.white);
+                UiKit.Place(ribbon.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, 26f), new Vector2(CardWidth - 20f, 48f));
+                ribbon.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+                Text ribbonText = UiKit.OutlinedLabel(ribbon.transform, "Label", "다음 신고에 필요", 24, Color.white, TextAnchor.MiddleCenter);
+                UiKit.Stretch(ribbonText.rectTransform);
+                ribbonText.rectTransform.offsetMin = new Vector2(0f, 5f);
             }
         }
 

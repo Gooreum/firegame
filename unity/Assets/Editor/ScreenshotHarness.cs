@@ -54,6 +54,7 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("37_briefing_need_gear", BriefingNeedGear),
                 new KeyValuePair<string, Func<Camera>>("38_briefing_ready", BriefingReady),
                 new KeyValuePair<string, Func<Camera>>("39_result_need_gear", ResultNeedGear),
+                new KeyValuePair<string, Func<Camera>>("43_map_need_gear", MapNeedGear),
                 new KeyValuePair<string, Func<Camera>>("40_warehouse_fire", WarehouseFire),
                 new KeyValuePair<string, Func<Camera>>("41_factory_mixed", FactoryMixed),
                 new KeyValuePair<string, Func<Camera>>("42_harbor_finale", HarborFinale),
@@ -276,6 +277,15 @@ namespace FireGame.EditorTools
         }
 
         /// <summary>CO2 Lv2를 갖춘 상가 브리핑. 초록 칩만 나오고 상점 버튼은 없다.</summary>
+        /// <summary>주택가를 깨고 $944를 번 지도. 상가에 "장비 부족", 상점 버튼에 살 수 있는 수 배지.</summary>
+        private static Camera MapNeedGear()
+        {
+            SaveData save = SaveData.NewGame();
+            save.Money = 944;
+            save.RecordResult(0, 2);
+            return Direct(new GameFlow(save));
+        }
+
         private static Camera BriefingReady()
         {
             SaveData save = SaveData.NewGame();

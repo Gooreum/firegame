@@ -46,7 +46,7 @@ namespace FireGame.UnityLayer
             UiKit.Stretch(map.rectTransform);
 
             SaveData save = flow.Save;
-            MissionDef nextCall = NextCall(save);
+            MissionDef nextCall = Readiness.NextCall(save);
 
             for (int i = 0; i < Campaign.Missions.Length; i++)
             {
@@ -69,6 +69,17 @@ namespace FireGame.UnityLayer
 
             UnityEngine.UI.Button shop = UiKit.Button(_root, "ShopButton", Art.Get("UI/button_yellow"), "소방서 상점", 40, flow.OpenShop);
             UiKit.Place((RectTransform)shop.transform, new Vector2(1f, 0f), new Vector2(-40f, 40f), new Vector2(360f, 120f));
+
+            // 살 수 있는 게 있으면 상점 버튼에 숫자를 단다. 돈이 모였다는 걸 지도에서 바로 알게.
+            int affordable = Readiness.AffordableUpgrades(save);
+            if (affordable > 0)
+            {
+                Image badge = UiKit.Image(shop.transform, "Badge", Art.Get("UI/button_red"), Color.white);
+                UiKit.Place(badge.rectTransform, new Vector2(1f, 1f), new Vector2(20f, 26f), new Vector2(72f, 72f));
+                Text count = UiKit.OutlinedLabel(badge.transform, "Count", affordable.ToString(), 36, Color.white, TextAnchor.MiddleCenter);
+                UiKit.Stretch(count.rectTransform);
+                count.rectTransform.offsetMin = new Vector2(0f, 6f);
+            }
         }
 
         public void Destroy()
@@ -79,16 +90,6 @@ namespace FireGame.UnityLayer
         private static Vector2 ToBoard(Vector2 normalized)
         {
             return new Vector2(normalized.x * UiKit.ReferenceWidth, normalized.y * UiKit.ReferenceHeight);
-        }
-
-        /// <summary>신고가 들어온 현장 = 열려 있는데 아직 별이 없는 첫 현장.</summary>
-        private static MissionDef NextCall(SaveData save)
-        {
-            foreach (MissionDef mission in Campaign.Missions)
-            {
-                if (save.IsMissionUnlocked(mission) && save.StarsFor(mission.Id) == 0) return mission;
-            }
-            return null;
         }
 
         private void BuildNode(RectTransform board, GameFlow flow, MissionDef mission, int index, MissionDef nextCall)
@@ -131,6 +132,8 @@ namespace FireGame.UnityLayer
                 star.rectTransform.pivot = new Vector2(0.5f, 0f);
             }
 
+            BuildReadinessBand(node, save, mission, unlocked, stars);
+
             if (mission == nextCall)
             {
                 // 신고가 들어온 현장을 눈에 띄게 한다. 처음 하는 사람이 어디를 눌러야 할지 바로 알게.
@@ -141,6 +144,25 @@ namespace FireGame.UnityLayer
                 UiKit.Stretch(alert.rectTransform);
                 alert.rectTransform.offsetMin = new Vector2(0f, 6f);
             }
+        }
+
+        /// <summary>
+        /// 이름표 아래 띠: 장비가 모자라면 빨강 "장비 부족", 새 신고인데 준비됐으면 초록 "출동 준비 완료".
+        /// 이미 깬 현장은 준비됐으면 띠를 달지 않는다(지도를 어지럽히지 않게).
+        /// </summary>
+        private static void BuildReadinessBand(RectTransform node, SaveData save, MissionDef mission, bool unlocked, int stars)
+        {
+            if (!unlocked) return;
+
+            bool ready = Readiness.IsReady(save, mission);
+            if (ready && stars > 0) return;
+
+            Image band = UiKit.Image(node, "Readiness", Art.Get(ready ? "UI/button_green" : "UI/button_red"), Color.white);
+            UiKit.Place(band.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -190f), new Vector2(240f, 50f));
+            band.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            Text text = UiKit.OutlinedLabel(band.transform, "Label", ready ? "출동 준비 완료" : "장비 부족", 26, Color.white, TextAnchor.MiddleCenter);
+            UiKit.Stretch(text.rectTransform);
+            text.rectTransform.offsetMin = new Vector2(0f, 5f);
         }
 
         private void BuildTopBar(SaveData save)
