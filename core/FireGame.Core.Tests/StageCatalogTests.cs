@@ -295,13 +295,7 @@ namespace FireGame.Core.Tests
         /// <summary>필요 장비를 전부 산다. 돈이 모자라면 아무것도 사지 않고 false.</summary>
         private static bool BuyRequirements(SaveData save, MissionDef mission)
         {
-            int total = 0;
-            foreach (Requirement requirement in mission.Requirements)
-            {
-                UpgradeTrack track = UpgradeCatalog.ById(requirement.TrackId);
-                for (int level = save.LevelOf(requirement.TrackId) + 1; level <= requirement.Level; level++) total += track.CostToReach(level);
-            }
-            if (save.Money < total) return false;
+            if (save.Money < Readiness.CostToReady(save, mission)) return false;
 
             foreach (Requirement requirement in mission.Requirements)
             {

@@ -297,5 +297,38 @@ namespace FireGame.Core.Tests
             flow.BackToMap();
             Assert.False(flow.SelectMission(1));
         }
+            // --- GoToShop TC-5 ---
+        [Fact]
+        public void GoToShop_FromTheBriefingOrResult_OpensTheShopOnTheMap()
+        {
+            var flow = new GameFlow(SaveData.NewGame());
+            flow.SelectMission(0);
+            flow.GoToShop();
+            Assert.Equal(GameScreen.Map, flow.Screen);
+            Assert.True(flow.ShopOpen);
+            flow.CloseShop();
+            Assert.Equal(GameScreen.Map, flow.Screen);
+            Assert.False(flow.ShopOpen);
+
+            GameFlow played = Playing(0);
+            FinishWithBot(played);
+            played.GoToShop();
+            Assert.Equal(GameScreen.Map, played.Screen);
+            Assert.True(played.ShopOpen);
+        }
+
+        // --- GoToShop TC-6 ---
+        [Fact]
+        public void GoToShop_IsIgnoredOnTheMapAndWhilePlaying()
+        {
+            var flow = new GameFlow(SaveData.NewGame());
+            flow.GoToShop();
+            Assert.False(flow.ShopOpen);
+
+            GameFlow playing = Playing(0);
+            playing.GoToShop();
+            Assert.Equal(GameScreen.Playing, playing.Screen);
+            Assert.False(playing.ShopOpen);
+        }
     }
 }

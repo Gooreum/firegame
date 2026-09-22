@@ -127,6 +127,15 @@ namespace FireGame.Core.Game
             if (Screen == GameScreen.Map) ShopOpen = true;
         }
 
+        /// <summary>브리핑·결과에서 곧바로 상점으로 간다. 닫으면 지도다.</summary>
+        public void GoToShop()
+        {
+            if (Screen != GameScreen.Briefing && Screen != GameScreen.Result) return;
+
+            Screen = GameScreen.Map;
+            ShopOpen = true;
+        }
+
         public void CloseShop()
         {
             ShopOpen = false;
