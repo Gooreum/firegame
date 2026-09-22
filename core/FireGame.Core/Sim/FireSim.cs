@@ -65,6 +65,12 @@ namespace FireGame.Core.Sim
 
         public Wind Wind;
 
+        /// <summary>
+        /// 화재 규모. 타는 칸이 스스로 유지하는 열에만 곱한다.
+        /// 이웃에게 주는 열은 그대로라 번지는 속도는 같고, 한 칸을 끄는 데 드는 약제만 늘어난다.
+        /// </summary>
+        public float Intensity = 1f;
+
         public FireSim(FireGrid grid)
         {
             if (grid == null) throw new ArgumentNullException(nameof(grid));
@@ -118,7 +124,7 @@ namespace FireGame.Core.Sim
                     // 자기 자신도 데운다. 이웃에게 주는 열에는 영향이 없으므로
                     // 확산 타이밍은 그대로이고, 대신 연소 셀이 고유의 열량을 유지해
                     // 진압에 필요한 방수량이 불의 규모에 비례하게 된다.
-                    _heatDelta[index] += output * SimConfig.SelfHeatFactor;
+                    _heatDelta[index] += output * SimConfig.SelfHeatFactor * Intensity;
 
                     for (int n = 0; n < 8; n++)
                     {

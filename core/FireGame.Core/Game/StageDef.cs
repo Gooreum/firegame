@@ -17,13 +17,20 @@ namespace FireGame.Core.Game
         public readonly float TimeLimitSeconds;
         public readonly int BasePayout;
 
+        /// <summary>
+        /// 화재 규모. 타는 칸이 스스로 유지하는 열의 배율로, 클수록 한 칸을 끄는 데 약제가 더 든다.
+        /// 기름·전기 불은 스스로 꺼지지 않으니 이 값이 곧 "몇 레벨 소화기가 있어야 끌 수 있는가"가 된다.
+        /// </summary>
+        public readonly float FireIntensity;
+
         public StageDef(
             int id,
             string name,
             string[] map,
             Wind wind,
             float timeLimitSeconds,
-            int basePayout)
+            int basePayout,
+            float fireIntensity = 1f)
         {
             Id = id;
             Name = name;
@@ -31,6 +38,7 @@ namespace FireGame.Core.Game
             Wind = wind;
             TimeLimitSeconds = timeLimitSeconds;
             BasePayout = basePayout;
+            FireIntensity = fireIntensity;
         }
     }
 

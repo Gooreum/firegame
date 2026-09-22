@@ -363,5 +363,61 @@ namespace FireGame.Core.Tests
             Assert.True(upwind.HasValue,
                 "풍상도 결국 번져야 한다. 완전 안전지대가 생기면 플레이어가 무시하고 지나간다");
         }
+            /// <summary>5x5 기름 칸이 전부 타는 상태에서 열이 자리 잡을 때까지 돌린 뒤, 가운데를 폼으로 끄는 데 든 사격 수.</summary>
+        private static int FoamShotsToPutOutOilCenter(float intensity)
+        {
+            var grid = new FireGrid(5, 5);
+            for (int i = 0; i < grid.Count; i++)
+            {
+                grid.Cells[i].Material = (byte)MaterialId.Oil;
+                grid.Cells[i].Fuel = 1f;
+                grid.Cells[i].State = CellState.Burning;
+            }
+
+            var sim = new FireSim(grid) { Intensity = intensity };
+            for (int t = 0; t < 50; t++) sim.Tick();
+
+            Agent foam = FireGame.Core.Data.EquipmentCatalog.FoamExtinguisher.Agent;
+            for (int shot = 1; shot <= 100; shot++)
+            {
+                if (Suppression.Apply(grid, 2, 2, foam) == SuppressionOutcome.Extinguished) return shot;
+                sim.Tick();
+            }
+
+            return int.MaxValue;
+        }
+
+        // --- 화재 규모 TC-1 ---
+        [Fact]
+        public void FireIntensity_MakesTheSameFireNeedMoreShots()
+        {
+            int normal = FoamShotsToPutOutOilCenter(1f);
+            int fierce = FoamShotsToPutOutOilCenter(3f);
+
+            Assert.True(normal < 100, "화재 규모 1의 기름 불은 폼으로 꺼져야 한다");
+            Assert.True(fierce > normal, $"화재 규모 3이 더 많은 사격을 요구해야 한다 (×1 {normal}발, ×3 {fierce}발)");
+        }
+
+        // --- 화재 규모 TC-2 ---
+        [Fact]
+        public void FireIntensity_DoesNotChangeHowFastFireSpreads()
+        {
+            var normal = WoodFieldWithCenterFire(7, out int c);
+            var fierce = WoodFieldWithCenterFire(7, out _);
+            fierce.Intensity = 3f;
+
+            Assert.Equal(TicksUntilBurning(normal, c + 1, c, 100), TicksUntilBurning(fierce, c + 1, c, 100));
+        }
+
+        // --- 화재 규모 TC-3 / TC-4 ---
+        [Fact]
+        public void StageRunner_PassesTheStageFireIntensityToTheSimulation()
+        {
+            var plain = FireGame.Core.Data.StageCatalog.Residential;
+            var fierce = new FireGame.Core.Game.StageDef(99, "TEST", plain.Map, plain.Wind, plain.TimeLimitSeconds, plain.BasePayout, fireIntensity: 2f);
+
+            Assert.Equal(1f, new FireGame.Core.Game.StageDef(98, "TEST", plain.Map, plain.Wind, 60f, 100).FireIntensity);
+            Assert.Equal(2f, new FireGame.Core.Game.StageRunner(fierce, FireGame.Core.Data.EquipmentCatalog.StartingEquipment).Sim.Intensity);
+        }
     }
 }

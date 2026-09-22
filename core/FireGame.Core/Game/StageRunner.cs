@@ -58,7 +58,7 @@ namespace FireGame.Core.Game
 
             ParsedMap map = MapLoader.Parse(def.Map);
             Grid = map.Grid;
-            Sim = new FireSim(Grid) { Wind = def.Wind };
+            Sim = new FireSim(Grid) { Wind = def.Wind, Intensity = def.FireIntensity };
             Hydrants.AddRange(map.Hydrants);
             Exits.AddRange(map.Exits);
 
