@@ -112,13 +112,12 @@ namespace FireGame.Core.Game
             return false;
         }
 
+        // 상점 카드 폭이 좁아 현장 이름을 짧게 쓴다. 인덱스 = 스테이지 id.
+        private static readonly string[] ShortPlaces = { "주택가", "상가", "주유소", "창고", "공장", "항구" };
+
         private static string PlaceName(StageDef stage)
         {
-            foreach (MissionDef mission in Campaign.Missions)
-            {
-                if (mission.Stage == stage) return mission.Location;
-            }
-            return stage.Name;
+            return stage.Id >= 0 && stage.Id < ShortPlaces.Length ? ShortPlaces[stage.Id] : stage.Name;
         }
 
         /// <summary>뿌리는 칸 수: 부채꼴은 3갈래 × 사거리, 직선은 사거리 + 끝 퍼짐.</summary>
@@ -150,7 +149,7 @@ namespace FireGame.Core.Game
             {
                 case UpgradeKind.Suit:
                     lines.Add(GearStats.SuitName(next));
-                    lines.Add("불 속에서 버티는 시간 " + Change(Seconds(SecondsInFire(level)), Seconds(SecondsInFire(next)), maxed));
+                    lines.Add("불 속에서 버티는 시간\n" + Change(Seconds(SecondsInFire(level)), Seconds(SecondsInFire(next)), maxed));
                     return lines;
 
                 case UpgradeKind.Boots:
@@ -166,7 +165,7 @@ namespace FireGame.Core.Game
             if (level == 0)
             {
                 lines.Add("해금하면 현장에 들고 간다");
-                lines.Add(fire + ": " + Shots(ShotsToPutOut(def.AtLevel(1), fireClass, stage.FireIntensity)));
+                lines.Add(fire + "\n" + Shots(ShotsToPutOut(def.AtLevel(1), fireClass, stage.FireIntensity)));
                 return lines;
             }
 
@@ -179,7 +178,7 @@ namespace FireGame.Core.Game
                 if (milestone != null) lines.Add("특성! " + milestone);
             }
 
-            lines.Add(fire + ": " + Change(Shots(ShotsToPutOut(now, fireClass, stage.FireIntensity)), Shots(ShotsToPutOut(then, fireClass, stage.FireIntensity)), maxed));
+            lines.Add(fire + "\n" + Change(Shots(ShotsToPutOut(now, fireClass, stage.FireIntensity)), Shots(ShotsToPutOut(then, fireClass, stage.FireIntensity)), maxed));
 
             if (def.Resource == ResourceKind.Charges) lines.Add("횟수 " + Change(now.MaxCharges.ToString(CultureInfo.InvariantCulture), then.MaxCharges.ToString(CultureInfo.InvariantCulture), maxed));
             else if (def.Pattern == AimPattern.Line && then.Range != now.Range) lines.Add("사거리 " + Change(now.Range.ToString(CultureInfo.InvariantCulture), then.Range.ToString(CultureInfo.InvariantCulture), maxed) + "칸");

@@ -68,7 +68,7 @@ namespace FireGame.Core.Tests
 
             List<string> suit = LevelPreview.NextLevelLines(save, UpgradeCatalog.Suit);
             Assert.Equal("특수 방화복", suit[0]);
-            Assert.StartsWith("불 속에서 버티는 시간 ", suit[1]);
+            Assert.StartsWith("불 속에서 버티는 시간\n", suit[1]);
             Assert.True(LevelPreview.SecondsInFire(3) > LevelPreview.SecondsInFire(2));
 
             List<string> boots = LevelPreview.NextLevelLines(save, UpgradeCatalog.Boots);

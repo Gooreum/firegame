@@ -356,8 +356,8 @@ namespace FireGame.EditorTools
         }
 
         /// <summary>
-        /// 레벨이 섞인 상점: 양동이 Lv3, CO2 Lv1, 호스 잠김, 폼 최대, 방화복 Lv2, 소방화 없음, 보유금 $650.
-        /// 해금·레벨업·최대·잔액 부족 버튼이 한 화면에 다 나온다.
+        /// 레벨이 섞인 상점: 양동이 Lv3, CO2 Lv1, 호스 잠김, 폼 Lv4(다음이 특성), 방화복 Lv2, 소방화 없음, 보유금 $650.
+        /// 해금·레벨업·잔액 부족 버튼과 "특성!" 줄, 게임 말 효과가 한 화면에 다 나온다.
         /// </summary>
         private static Camera ShopOpen()
         {
@@ -366,7 +366,7 @@ namespace FireGame.EditorTools
             save.RecordResult(0, 1);
             save.SetLevel(EquipmentId.Bucket, 3);
             save.SetLevel(EquipmentId.Extinguisher, 1);
-            save.SetLevel(EquipmentId.FoamExtinguisher, 5);
+            save.SetLevel(EquipmentId.FoamExtinguisher, 4);
             save.SetLevel(GearId.Suit, 2);
             var flow = new GameFlow(save);
             flow.OpenShop();

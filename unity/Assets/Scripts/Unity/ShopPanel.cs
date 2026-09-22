@@ -94,29 +94,41 @@ namespace FireGame.UnityLayer
             UiKit.Stretch(name.rectTransform);
             name.rectTransform.offsetMax = new Vector2(0f, -22f);
 
-            BuildLevelRow(card.transform, level, track.MaxLevel);
-
-            string use;
-            Uses.TryGetValue(track.Id, out use);
-            Text uses = UiKit.Label(card.transform, "Use", use ?? string.Empty, 24, new Color(1f, 1f, 1f, 0.9f), TextAnchor.UpperCenter);
-            UiKit.Place(uses.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -140f), new Vector2(CardWidth - 24f, 70f));
-            uses.rectTransform.pivot = new Vector2(0.5f, 1f);
+            BuildLevelRow(card.transform, track, level);
 
             if (track.Kind == UpgradeKind.Suit)
             {
-                // 다음 레벨(최대면 지금) 옷을 미리 보여 준다.
+                // 다음 레벨(최대면 지금) 옷을 미리 보여 준다. 방화복엔 특성이 없어 그 자리를 쓴다.
                 int shown = maxed ? level : level + 1;
                 Image suit = UiKit.Image(card.transform, "Suit", Art.Get(MissionWorldView.SuitSprite(shown)), Color.white);
-                UiKit.Place(suit.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -250f), new Vector2(70f, 86f));
+                UiKit.Place(suit.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -138f), new Vector2(56f, 68f));
                 suit.rectTransform.pivot = new Vector2(0.5f, 0.5f);
                 suit.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 90f);
                 suit.preserveAspect = true;
             }
+            else
+            {
+                string milestone = LevelPreview.NextMilestone(track, level);
+                if (milestone != null)
+                {
+                    Text next = UiKit.Label(card.transform, "Milestone", "다음 특성 " + milestone, 20, new Color(1f, 0.93f, 0.6f), TextAnchor.UpperCenter);
+                    UiKit.Place(next.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -112f), new Vector2(CardWidth - 24f, 50f));
+                    next.rectTransform.pivot = new Vector2(0.5f, 1f);
+                }
+            }
 
-            Text effect = UiKit.OutlinedLabel(card.transform, "Effect", EffectText(track, level, maxed), 24, EffectColor, TextAnchor.MiddleCenter);
-            UiKit.Place(effect.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 140f), new Vector2(CardWidth - 16f, 96f));
+            string use;
+            Uses.TryGetValue(track.Id, out use);
+            Text uses = UiKit.Label(card.transform, "Use", use ?? string.Empty, 22, new Color(1f, 1f, 1f, 0.9f), TextAnchor.UpperCenter);
+            UiKit.Place(uses.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -172f), new Vector2(CardWidth - 24f, 60f));
+            uses.rectTransform.pivot = new Vector2(0.5f, 1f);
+
+            // 다음 레벨이 현장에서 무엇을 바꾸는지 "게임 말"로: 몇 발에 꺼지는지, 버티는 시간, 달리는 속도.
+            string effectText = string.Join("\n", LevelPreview.NextLevelLines(save, track).ToArray());
+            Text effect = UiKit.OutlinedLabel(card.transform, "Effect", effectText, 21, EffectColor, TextAnchor.MiddleCenter);
+            UiKit.Place(effect.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 146f), new Vector2(CardWidth - 14f, 124f));
             effect.rectTransform.pivot = new Vector2(0.5f, 0f);
-            effect.lineSpacing = 1.05f;
+            effect.lineSpacing = 1.0f;
 
             // 상태별 버튼: 최대(회색) / 살 수 있음(초록) / 잔액 부족(빨강)
             string sprite = maxed ? "UI/button_grey" : affordable ? "UI/button_green" : "UI/button_red";
@@ -151,79 +163,15 @@ namespace FireGame.UnityLayer
             }
         }
 
-        /// <summary>"Lv.2 / 5"와 레벨 칸(채운 칸 = 지금 레벨).</summary>
-        private static void BuildLevelRow(Transform card, int level, int maxLevel)
+        /// <summary>"Lv.7". 끝이 있는 방화복·소방화는 "Lv.3 / 10". 장비는 끝이 없어 칸을 그리지 않는다.</summary>
+        private static void BuildLevelRow(Transform card, UpgradeTrack track, int level)
         {
-            Text text = UiKit.Label(card, "Level", level == 0 ? "잠김" : "Lv." + level + " / " + maxLevel, 26, Color.white, TextAnchor.MiddleCenter);
-            UiKit.Place(text.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -72f), new Vector2(CardWidth - 20f, 34f));
-            text.rectTransform.pivot = new Vector2(0.5f, 1f);
-
-            const float pip = 30f;
-            const float gap = 8f;
-            float total = (maxLevel * pip) + ((maxLevel - 1) * gap);
-            for (int i = 0; i < maxLevel; i++)
-            {
-                bool filled = i < level;
-                Image box = UiKit.Image(card, "Pip" + i, Art.White, filled ? EffectColor : new Color(1f, 1f, 1f, 0.25f));
-                UiKit.Place(box.rectTransform, new Vector2(0.5f, 1f), new Vector2(-total / 2f + (i * (pip + gap)) + (pip / 2f), -112f), new Vector2(pip, 14f));
-                box.rectTransform.pivot = new Vector2(0.5f, 1f);
-            }
-        }
-
-        /// <summary>지금 → 다음 레벨에서 무엇이 좋아지는지. 최대면 지금 수치만.</summary>
-        private static string EffectText(UpgradeTrack track, int level, bool maxed)
-        {
-            int next = maxed ? level : level + 1;
-
-            switch (track.Kind)
-            {
-                case UpgradeKind.Suit:
-                    return GearStats.SuitName(next) + "\n불 피해 " + Change(DamageCut(level), DamageCut(next), maxed);
-
-                case UpgradeKind.Boots:
-                    return "속도 " + Change(Speed(level), Speed(next), maxed) + "\n칸/초";
-
-                default:
-                    return EquipmentEffect(EquipmentCatalog.ById(track.Id), level, next, maxed);
-            }
-        }
-
-        private static string EquipmentEffect(EquipmentDef def, int level, int next, bool maxed)
-        {
-            if (level == 0) return "해금하면\n현장에 들고 간다";
-
-            EquipmentDef now = def.AtLevel(level);
-            EquipmentDef then = def.AtLevel(next);
-            string power = "위력 " + Change(Percent(now.Agent.Power / def.Agent.Power), Percent(then.Agent.Power / def.Agent.Power), maxed);
-
-            string second;
-            if (def.Resource == ResourceKind.Charges) second = "횟수 " + Change(now.MaxCharges.ToString(), then.MaxCharges.ToString(), maxed);
-            else if (def.Pattern == AimPattern.Line) second = "사거리 " + Change(now.Range.ToString(), then.Range.ToString(), maxed) + "칸";
-            else second = "연사 " + Change(now.CooldownSeconds.ToString("0.0"), then.CooldownSeconds.ToString("0.0"), maxed) + "초";
-
-            return power + "\n" + second;
-        }
-
-        /// <summary>"지금 → 다음". 최대 레벨이면 바뀔 게 없으니 지금 값만.</summary>
-        private static string Change(string now, string next, bool maxed)
-        {
-            return maxed ? now : now + " → " + next;
-        }
-
-        private static string Percent(float ratio)
-        {
-            return Mathf.RoundToInt(ratio * 100f) + "%";
-        }
-
-        private static string DamageCut(int suitLevel)
-        {
-            int cut = Mathf.RoundToInt((1f - GearStats.DamageMultiplier(suitLevel)) * 100f);
-            return cut == 0 ? "0%" : "−" + cut + "%";
-        }
-
-        private static string Speed(int bootsLevel)
-        {
-            return (GameConfig.PlayerSpeed * GearStats.SpeedMultiplier(bootsLevel)).ToString("0.0");
+            string text = level == 0 ? "잠김"
+                : track.Kind == UpgradeKind.Equipment ? "Lv." + level
+                : "Lv." + level + " / " + track.MaxLevel;
+            Text label = UiKit.OutlinedLabel(card, "Level", text, 30, level == 0 ? Color.white : EffectColor, TextAnchor.MiddleCenter);
+            UiKit.Place(label.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -70f), new Vector2(CardWidth - 20f, 40f));
+            label.rectTransform.pivot = new Vector2(0.5f, 1f);
         }
     }
 }
