@@ -2,6 +2,21 @@ using FireGame.Core.Data;
 
 namespace FireGame.Core.Game
 {
+    /// <summary>현장에 가져가야 하는 상점 항목 레벨 하나. 예: CO2 소화기 Lv2.</summary>
+    public readonly struct Requirement
+    {
+        /// <summary>상점 항목 id(<see cref="UpgradeTrack.Id"/>).</summary>
+        public readonly int TrackId;
+
+        public readonly int Level;
+
+        public Requirement(int trackId, int level)
+        {
+            TrackId = trackId;
+            Level = level;
+        }
+    }
+
     /// <summary>
     /// 출동 지도 위의 현장 하나. 한 판(StageDef)에 이야기와 지도 위치를 입힌 것이다.
     /// 현장을 늘릴 때는 여기 데이터만 추가하면 된다.
@@ -27,6 +42,12 @@ namespace FireGame.Core.Game
         /// <summary>먼저 해결해야 하는 현장 id. -1이면 처음부터 열려 있다.</summary>
         public readonly int RequiresMission;
 
+        /// <summary>
+        /// 이 현장의 불을 끄려면 있어야 하는 장비 레벨. 브리핑·지도·결과·상점이 보여 주고,
+        /// "이 레벨이면 이기고 한 단계 낮으면 진다"는 것을 테스트가 보증한다.
+        /// </summary>
+        public readonly Requirement[] Requirements;
+
         public MissionDef(
             int id,
             string title,
@@ -36,7 +57,8 @@ namespace FireGame.Core.Game
             string[] debrief,
             float mapX,
             float mapY,
-            int requiresMission)
+            int requiresMission,
+            Requirement[] requirements = null)
         {
             Id = id;
             Title = title;
@@ -47,6 +69,7 @@ namespace FireGame.Core.Game
             MapX = mapX;
             MapY = mapY;
             RequiresMission = requiresMission;
+            Requirements = requirements ?? new Requirement[0];
         }
     }
 
@@ -71,7 +94,7 @@ namespace FireGame.Core.Game
                 debrief: new[]
                 {
                     "잘했다! 방화선을 치는 감각이 좋군.",
-                    "번 돈으로 소방서에서 장비를 갖춰 둬. 다음 현장은 만만치 않을 거다.",
+                    "번 돈으로 소방서 상점에서 장비를 사고 레벨을 올려 둬. 다음 현장은 장비 없이는 못 끈다.",
                 },
                 mapX: 0.22f,
                 mapY: 0.30f,
@@ -86,7 +109,7 @@ namespace FireGame.Core.Game
                 {
                     "상가 건물 배전반에서 불이 났다.",
                     "전기 화재에 물은 절대 안 된다. 아무리 부어도 꺼지지 않아.",
-                    "CO2 소화기가 필요하다. 아직 없다면 상점에서 먼저 사 와!",
+                    "배전반 불이 크다. CO2 소화기를 사서 한 단계 올려 와라. 기본형으로는 약이 모자란다!",
                 },
                 debrief: new[]
                 {
@@ -95,7 +118,8 @@ namespace FireGame.Core.Game
                 },
                 mapX: 0.50f,
                 mapY: 0.62f,
-                requiresMission: 0),
+                requiresMission: 0,
+                requirements: new[] { new Requirement(EquipmentId.Extinguisher, 2) }),
 
             new MissionDef(
                 id: 2,
@@ -105,7 +129,7 @@ namespace FireGame.Core.Game
                 briefing: new[]
                 {
                     "비상이다! 바람언덕 주유소에서 기름에 불이 붙었다.",
-                    "기름불에 물을 뿌리면 오히려 번진다. 폼 소화기로 덮어야 해.",
+                    "기름불에 물을 뿌리면 오히려 번진다. 폼 소화기로 덮어야 해. 기름이 많으니 한 단계 올린 폼이 필요하다.",
                     "바람이 세다. 불이 너보다 빠르니 쫓지 말고 앞을 막아!",
                 },
                 debrief: new[]
@@ -115,7 +139,8 @@ namespace FireGame.Core.Game
                 },
                 mapX: 0.78f,
                 mapY: 0.35f,
-                requiresMission: 1),
+                requiresMission: 1,
+                requirements: new[] { new Requirement(EquipmentId.FoamExtinguisher, 2) }),
 
             new MissionDef(
                 id: 3,
@@ -145,7 +170,7 @@ namespace FireGame.Core.Game
                 briefing: new[]
                 {
                     "강변 공장이다. 배전반실, 목조 작업장, 기름통 마당에 동시에 불이 붙었다.",
-                    "배전반에는 CO2, 기름에는 폼, 나무에는 물. 장비를 바꿔 가며 끊어야 한다.",
+                    "배전반에는 CO2, 기름에는 폼, 나무에는 물. 기름통 불이 커서 폼 소화기는 Lv3은 돼야 한다.",
                     "장비 버튼이나 숫자 키 1~4로 바꾼다. 불마다 맞는 걸 골라!",
                 },
                 debrief: new[]
@@ -155,7 +180,8 @@ namespace FireGame.Core.Game
                 },
                 mapX: 0.64f,
                 mapY: 0.86f,
-                requiresMission: 3),
+                requiresMission: 3,
+                requirements: new[] { new Requirement(EquipmentId.FoamExtinguisher, 3) }),
 
             new MissionDef(
                 id: 5,
@@ -166,7 +192,7 @@ namespace FireGame.Core.Game
                 {
                     "최종 출동이다. 푸른항구 유류 저장소가 불타고 있다.",
                     "기름이 송유관을 타고 옆 웅덩이와 창고까지 번진다. 크레인 배전반에도 불이 붙었어.",
-                    "바람이 오늘 중 가장 세다. 시민 넷을 먼저 구하고, 폼은 아껴 써라!",
+                    "바람이 오늘 중 가장 세다. 기름이 엄청나니 폼 소화기는 Lv4까지 올려 와라. 시민 넷이 먼저다!",
                 },
                 debrief: new[]
                 {
@@ -175,7 +201,8 @@ namespace FireGame.Core.Game
                 },
                 mapX: 0.36f,
                 mapY: 0.80f,
-                requiresMission: 4),
+                requiresMission: 4,
+                requirements: new[] { new Requirement(EquipmentId.FoamExtinguisher, 4) }),
         };
 
         public static MissionDef ById(int id)

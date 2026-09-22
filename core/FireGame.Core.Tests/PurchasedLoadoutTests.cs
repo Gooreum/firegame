@@ -50,6 +50,12 @@ namespace FireGame.Core.Tests
         public void GasStation_IsBeaten_WithEverythingBoughtInShopOrder()
         {
             GameFlow flow = FlowWithEverythingBought();
+
+            // 주유소는 폼 Lv2가 필요하다. 해금한 뒤 한 번 더 올린다.
+            flow.OpenShop();
+            Assert.Equal(PurchaseResult.Success, flow.Upgrade(EquipmentId.FoamExtinguisher));
+            flow.CloseShop();
+
             Assert.True(flow.SelectMission(2));
             flow.BeginMission();
 

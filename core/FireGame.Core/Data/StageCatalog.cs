@@ -90,7 +90,9 @@ namespace FireGame.Core.Data
             map: ShoppingMap,
             wind: Wind.From(1f, 0f, 0.3f),
             timeLimitSeconds: 110f,
-            basePayout: 600);
+            basePayout: 600,
+            // 배전반 불이 커서 CO2 소화기 Lv1은 횟수가 모자란다. Lv2부터 끈다.
+            fireIntensity: 2f);
 
         // ---------------------------------------------------------------
         // 3. 주유소 — A급 + B급(유류). 폼 소화기가 필요하다.
@@ -129,7 +131,9 @@ namespace FireGame.Core.Data
             map: GasStationMap,
             wind: Wind.From(1f, -1f, 0.8f),
             timeLimitSeconds: 150f,
-            basePayout: 1200);
+            basePayout: 1200,
+            // 기름 불이 커서 폼 소화기 Lv1은 약이 모자란다. Lv2부터 끈다.
+            fireIntensity: 3f);
 
         // ---------------------------------------------------------------
         // 4. 물류창고 — A급만. 목재 선반이 외벽까지 한 덩어리로 이어진 가장 큰 목조 화재.
@@ -210,7 +214,9 @@ namespace FireGame.Core.Data
             map: FactoryMap,
             wind: Wind.From(-1f, 0f, 0.5f),
             timeLimitSeconds: 160f,
-            basePayout: 1800);
+            basePayout: 1800,
+            // 기름통 불이 크다. 폼 소화기 Lv3부터 끈다(CO2 Lv2 기준).
+            fireIntensity: 6f);
 
         // ---------------------------------------------------------------
         // 6. 푸른항구 유류 저장소 — 최종 현장. A + B + C급, 가장 센 바람, 시민 넷.
@@ -249,7 +255,9 @@ namespace FireGame.Core.Data
             map: HarborMap,
             wind: Wind.From(1f, 1f, 1.0f),
             timeLimitSeconds: 180f,
-            basePayout: 2500);
+            basePayout: 2500,
+            // 대형 유류 화재. 폼 소화기 Lv4부터 끈다(CO2 Lv2 기준).
+            fireIntensity: 6f);
 
         public static readonly StageDef[] All =
         {
