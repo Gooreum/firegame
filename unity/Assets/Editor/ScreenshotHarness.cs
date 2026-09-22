@@ -51,6 +51,9 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("34_result_lose", ResultLose),
                 new KeyValuePair<string, Func<Camera>>("35_shop", ShopOpen),
                 new KeyValuePair<string, Func<Camera>>("36_map_wide_screen", MapWide),
+                new KeyValuePair<string, Func<Camera>>("37_briefing_need_gear", BriefingNeedGear),
+                new KeyValuePair<string, Func<Camera>>("38_briefing_ready", BriefingReady),
+                new KeyValuePair<string, Func<Camera>>("39_result_need_gear", ResultNeedGear),
                 new KeyValuePair<string, Func<Camera>>("40_warehouse_fire", WarehouseFire),
                 new KeyValuePair<string, Func<Camera>>("41_factory_mixed", FactoryMixed),
                 new KeyValuePair<string, Func<Camera>>("42_harbor_finale", HarborFinale),
@@ -258,6 +261,44 @@ namespace FireGame.EditorTools
         {
             var flow = new GameFlow(SaveData.NewGame());
             flow.SelectMission(0);
+            return Direct(flow);
+        }
+
+        /// <summary>주택가를 깨고 CO2가 없는 채로 상가 브리핑. 빨간 칩·경고·상점 버튼이 나와야 한다.</summary>
+        private static Camera BriefingNeedGear()
+        {
+            SaveData save = SaveData.NewGame();
+            save.Money = 320;
+            save.RecordResult(0, 2);
+            var flow = new GameFlow(save);
+            flow.SelectMission(1);
+            return Direct(flow);
+        }
+
+        /// <summary>CO2 Lv2를 갖춘 상가 브리핑. 초록 칩만 나오고 상점 버튼은 없다.</summary>
+        private static Camera BriefingReady()
+        {
+            SaveData save = SaveData.NewGame();
+            save.RecordResult(0, 2);
+            save.SetLevel(EquipmentId.Extinguisher, 2);
+            var flow = new GameFlow(save);
+            flow.SelectMission(1);
+            return Direct(flow);
+        }
+
+        /// <summary>폼 Lv1로 주유소에 나가 끝내 진 결과. "폼 소화기 Lv2 이상이 있어야" 안내가 나와야 한다.</summary>
+        private static Camera ResultNeedGear()
+        {
+            SaveData save = SaveData.NewGame();
+            save.RecordResult(0, 2);
+            save.RecordResult(1, 2);
+            save.SetLevel(EquipmentId.Extinguisher, 2);
+            save.SetLevel(EquipmentId.FoamExtinguisher, 1);
+            var flow = new GameFlow(save);
+            flow.SelectMission(2);
+            flow.BeginMission();
+            for (int i = 0; i < 5000 && flow.Screen == GameScreen.Playing; i++) flow.Update(0.1f);
+            if (flow.Screen != GameScreen.Result) throw new InvalidOperationException("패배 상태를 만들지 못했다");
             return Direct(flow);
         }
 

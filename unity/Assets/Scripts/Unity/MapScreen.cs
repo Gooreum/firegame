@@ -169,5 +169,20 @@ namespace FireGame.UnityLayer
         {
             return "$" + amount.ToString("N0");
         }
+
+        /// <summary>"CO2 소화기 Lv2"</summary>
+        public static string Requirement(int trackId, int level)
+        {
+            UpgradeTrack track = UpgradeCatalog.ById(trackId);
+            return (track != null ? track.Name : "장비") + " Lv" + level;
+        }
+
+        /// <summary>모자란 장비들을 "CO2 소화기 Lv2 · 폼 소화기 Lv3"처럼 잇는다.</summary>
+        public static string Shortfalls(System.Collections.Generic.List<Shortfall> missing)
+        {
+            var parts = new string[missing.Count];
+            for (int i = 0; i < missing.Count; i++) parts[i] = Requirement(missing[i].TrackId, missing[i].RequiredLevel);
+            return string.Join(" · ", parts);
+        }
     }
 }

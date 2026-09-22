@@ -25,7 +25,7 @@ namespace FireGame.UnityLayer
             dim.raycastTarget = true;
 
             Image panel = UiKit.Image(_root, "Panel", Art.Get("UI/panel_grey"), Color.white);
-            UiKit.Place(panel.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1100f, 860f));
+            UiKit.Place(panel.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1100f, 940f));
             panel.rectTransform.pivot = new Vector2(0.5f, 0.5f);
 
             Image header = UiKit.Image(panel.transform, "Header", Art.Get(won ? "UI/button_green" : "UI/button_red"), Color.white);
@@ -62,8 +62,10 @@ namespace FireGame.UnityLayer
 
                 string debrief = mission != null && mission.Debrief.Length > 0 ? mission.Debrief[0] : string.Empty;
                 Text quote = UiKit.Label(panel.transform, "Debrief", Campaign.ChiefName + ": " + debrief, 28, new Color(0.25f, 0.35f, 0.6f), TextAnchor.MiddleCenter);
-                UiKit.Place(quote.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 170f), new Vector2(980f, 60f));
+                UiKit.Place(quote.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 250f), new Vector2(980f, 60f));
                 quote.rectTransform.pivot = new Vector2(0.5f, 0f);
+
+                BuildNextGoal(panel.transform, flow.Save);
             }
             else
             {
@@ -71,17 +73,26 @@ namespace FireGame.UnityLayer
                 UiKit.Place(reason.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -10f), new Vector2(980f, 80f));
                 reason.rectTransform.pivot = new Vector2(0.5f, 0.5f);
 
-                Text tip = UiKit.Label(panel.transform, "Tip", FailureTip(flow.LastOutcome), 30, UiKit.Ink, TextAnchor.MiddleCenter);
+                // 장비가 모자랐다면 요령보다 "무엇을 올리면 되는지"가 먼저다.
+                var missing = Readiness.Missing(flow.Save, mission);
+                string tipText = missing.Count > 0
+                    ? Format.Shortfalls(missing) + " 이상이 있어야 끌 수 있는 불이다.\n상점에서 장비를 올리고 다시 오자."
+                    : FailureTip(flow.LastOutcome);
+                Text tip = UiKit.Label(panel.transform, "Tip", tipText, 30, missing.Count > 0 ? new Color(0.25f, 0.35f, 0.6f) : UiKit.Ink, TextAnchor.MiddleCenter);
                 UiKit.Place(tip.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -100f), new Vector2(960f, 100f));
                 tip.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             }
 
             UnityEngine.UI.Button retry = UiKit.Button(panel.transform, "Retry", Art.Get("UI/button_blue"), "다시 하기", 38, flow.RetryMission);
-            UiKit.Place((RectTransform)retry.transform, new Vector2(0.5f, 0f), new Vector2(-190f, 40f), new Vector2(340f, 110f));
+            UiKit.Place((RectTransform)retry.transform, new Vector2(0.5f, 0f), new Vector2(-350f, 40f), new Vector2(320f, 110f));
             ((RectTransform)retry.transform).pivot = new Vector2(0.5f, 0f);
 
+            UnityEngine.UI.Button shop = UiKit.Button(panel.transform, "Shop", Art.Get("UI/button_green"), "상점으로", 38, flow.GoToShop);
+            UiKit.Place((RectTransform)shop.transform, new Vector2(0.5f, 0f), new Vector2(0f, 40f), new Vector2(320f, 110f));
+            ((RectTransform)shop.transform).pivot = new Vector2(0.5f, 0f);
+
             UnityEngine.UI.Button map = UiKit.Button(panel.transform, "Map", Art.Get("UI/button_yellow"), "지도로", 38, flow.BackToMap);
-            UiKit.Place((RectTransform)map.transform, new Vector2(0.5f, 0f), new Vector2(190f, 40f), new Vector2(340f, 110f));
+            UiKit.Place((RectTransform)map.transform, new Vector2(0.5f, 0f), new Vector2(350f, 40f), new Vector2(320f, 110f));
             ((RectTransform)map.transform).pivot = new Vector2(0.5f, 0f);
         }
 
@@ -121,6 +132,53 @@ namespace FireGame.UnityLayer
             Text totalValue = UiKit.Label(panel, "TotalValue", Format.Money(payout.Total), 44, new Color(0.15f, 0.55f, 0.2f), TextAnchor.MiddleRight);
             UiKit.Place(totalValue.rectTransform, new Vector2(0.5f, 1f), new Vector2(300f, totalY), new Vector2(300f, 56f));
             totalValue.rectTransform.pivot = new Vector2(1f, 0.5f);
+        }
+
+        /// <summary>
+        /// 다음 신고에 필요한 장비까지 얼마나 모았는지. 번 돈이 곧 다음 장비로 이어진다는 걸 매 판 보여 준다.
+        /// </summary>
+        private static void BuildNextGoal(Transform panel, SaveData save)
+        {
+            MissionDef next = Readiness.NextCall(save);
+            var missing = Readiness.Missing(save, next);
+            int cost = Readiness.CostToReady(save, next);
+
+            string text;
+            float fill;
+            Color tint = new Color(0.15f, 0.55f, 0.2f);
+            if (next == null)
+            {
+                text = "모든 신고를 해결했다! 남은 돈으로 장비를 끝까지 올려 보자.";
+                fill = 1f;
+            }
+            else if (missing.Count == 0)
+            {
+                text = "다음 신고 · " + next.Location + ": 장비 준비 완료! 바로 출동할 수 있다.";
+                fill = 1f;
+            }
+            else if (save.Money >= cost)
+            {
+                text = "다음 신고 · " + next.Location + ": " + Format.Shortfalls(missing) + " — 레벨업 가능!";
+                fill = 1f;
+            }
+            else
+            {
+                text = "다음 신고 · " + next.Location + ": " + Format.Shortfalls(missing) + " — " + Format.Money(save.Money) + " / " + Format.Money(cost);
+                fill = cost > 0 ? Mathf.Clamp01((float)save.Money / cost) : 1f;
+                tint = new Color(0.9f, 0.6f, 0.1f);
+            }
+
+            Text label = UiKit.Label(panel, "NextGoal", text, 28, UiKit.Ink, TextAnchor.MiddleCenter);
+            UiKit.Place(label.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 196f), new Vector2(1000f, 44f));
+            label.rectTransform.pivot = new Vector2(0.5f, 0f);
+
+            const float barWidth = 700f;
+            Image back = UiKit.Image(panel, "GoalBar", Art.White, new Color(0f, 0f, 0f, 0.15f));
+            UiKit.Place(back.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 172f), new Vector2(barWidth, 18f));
+            back.rectTransform.pivot = new Vector2(0.5f, 0f);
+
+            Image bar = UiKit.Image(back.transform, "Fill", Art.White, tint);
+            UiKit.Place(bar.rectTransform, new Vector2(0f, 0f), Vector2.zero, new Vector2(barWidth * fill, 18f));
         }
 
         private static string FailureReason(StageOutcome outcome)
