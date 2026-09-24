@@ -62,6 +62,7 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("48_rescue_ready", RescueReady),
                 new KeyValuePair<string, Func<Camera>>("49_rescue_carry", RescueCarry),
                 new KeyValuePair<string, Func<Camera>>("50_shop_high_level", ShopHighLevel),
+                new KeyValuePair<string, Func<Camera>>("52_inside_shop", InsideShop),
                 new KeyValuePair<string, Func<Camera>>("40_warehouse_fire", WarehouseFire),
                 new KeyValuePair<string, Func<Camera>>("41_factory_mixed", FactoryMixed),
                 new KeyValuePair<string, Func<Camera>>("42_harbor_finale", HarborFinale),
@@ -269,6 +270,21 @@ namespace FireGame.EditorTools
             StageRunner runner = Runner(StageCatalog.Factory, EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.FoamExtinguisher);
             Advance(runner, 4f);
             return Show(runner, 4f, new Vector2(19, 6));
+        }
+
+        /// <summary>
+        /// 점포 안으로 들어간 시점. 그 점포의 지붕만 걷히고 카메라가 건물 상자에 맞는다.
+        /// 나머지 다섯 채는 지붕을 쓴 채로 남아 "지금 이 건물"만 보인다.
+        /// </summary>
+        private static Camera InsideShop()
+        {
+            StageRunner runner = Runner(StageCatalog.Shopping, EquipmentId.Extinguisher);
+
+            // 걸어 들어가는 과정을 재현하지 않고 안쪽 한 칸에 곧바로 세운다.
+            // 캡처는 같은 그림이 나와야 해서, 이동 시뮬레이션보다 좌표 지정이 낫다.
+            runner.Player.Spawn(new GridPoint(8, 5));
+            Advance(runner, 1f);
+            return Show(runner, 1f);
         }
 
         private static Camera HarborFinale()

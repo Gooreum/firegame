@@ -1104,21 +1104,84 @@ namespace FireGame.UnityLayer
         // 카메라
         // ------------------------------------------------------------------
 
+        /// <summary>건물 안에서 벽 바깥으로 남겨 두는 여백(칸). 벽에 코를 박은 것처럼 보이지 않게.</summary>
+        private const float IndoorMargin = 1.5f;
+
+        /// <summary>아무리 좁은 건물이라도 이만큼은 보여 준다. 한 칸이 화면을 덮으면 어디가 어딘지 모른다.</summary>
+        private const float MinCameraSize = 5f;
+
         /// <summary>
-        /// 초점을 화면 중앙에 두되 격자 밖이 보이지 않게 멈춘다.
-        /// 격자가 화면보다 작은 축은 가운데 정렬한다.
+        /// 아무리 넓어도 이 이상 물러서지 않는다.
+        /// 세로로 긴 화면에서는 맵 전체를 담으려면 한없이 멀어지는데, 그러면 소방관이 점이 된다.
+        /// 못 담은 축은 아래 클램프가 소방관을 따라가며 채운다.
+        /// </summary>
+        private const float MaxCameraSize = 12f;
+
+        /// <summary>시점이 바뀔 때 옮겨 가는 데 걸리는 시간(초). 딱 끊기면 멀미가 난다.</summary>
+        private const float CameraEase = 0.35f;
+
+        private float _cameraSize;
+        private bool _cameraReady;
+
+        /// <summary>
+        /// 밖에 있으면 맵 전체를, 건물 안에 있으면 그 건물만 담는다.
+        ///
+        /// 밖에서는 어느 건물이 타고 어디에 사람이 남았는지 한눈에 골라야 하고,
+        /// 안에서는 그 건물에만 집중해야 한다. 담을 사각형만 바꾸고 나머지 계산은 같다.
+        /// 사각형이 화면보다 작은 축은 가운데 정렬하고, 큰 축만 소방관을 따라간다.
         /// </summary>
         public void FrameCamera(Camera camera, Vector3 focus)
         {
-            float halfHeight = camera.orthographicSize;
+            Building inside = _buildings.Of((int)_runner.Player.X, (int)_runner.Player.Y);
+
+            float minX;
+            float minY;
+            float maxX;
+            float maxY;
+
+            if (inside == null)
+            {
+                minX = 0f;
+                minY = 0f;
+                maxX = _grid.Width;
+                maxY = _grid.Height;
+            }
+            else
+            {
+                // 격자는 위가 0행이고 월드는 위가 +y라 세로를 뒤집는다.
+                minX = inside.MinX - IndoorMargin;
+                maxX = inside.MaxX + 1f + IndoorMargin;
+                minY = _grid.Height - (inside.MaxY + 1) - IndoorMargin;
+                maxY = _grid.Height - inside.MinY + IndoorMargin;
+            }
+
+            float target = Mathf.Clamp(
+                Mathf.Max((maxY - minY) * 0.5f, (maxX - minX) * 0.5f / camera.aspect),
+                MinCameraSize,
+                MaxCameraSize);
+
+            // 장면을 새로 만든 첫 프레임은 곧바로 맞춘다.
+            // 보간부터 시작하면 캡처가 줌 도중 상태로 찍힌다.
+            _cameraSize = _cameraReady
+                ? Mathf.Lerp(_cameraSize, target, 1f - Mathf.Exp(-Time.unscaledDeltaTime / CameraEase))
+                : target;
+            _cameraReady = true;
+            camera.orthographicSize = _cameraSize;
+
+            float halfHeight = _cameraSize;
             float halfWidth = halfHeight * camera.aspect;
 
-            float x = _grid.Width <= halfWidth * 2f
-                ? _grid.Width / 2f
-                : Mathf.Clamp(focus.x, halfWidth, _grid.Width - halfWidth);
-            float y = _grid.Height <= halfHeight * 2f
-                ? _grid.Height / 2f
-                : Mathf.Clamp(focus.y, halfHeight, _grid.Height - halfHeight);
+            float x = (maxX - minX) <= halfWidth * 2f
+                ? (minX + maxX) * 0.5f
+                : Mathf.Clamp(focus.x, minX + halfWidth, maxX - halfWidth);
+            float y = (maxY - minY) <= halfHeight * 2f
+                ? (minY + maxY) * 0.5f
+                : Mathf.Clamp(focus.y, minY + halfHeight, maxY - halfHeight);
+
+            // 좁은 건물은 화면보다 작아서 가운데 정렬하면 격자 밖이 딸려 들어온다.
+            // 건물이 조금 치우치더라도 검은 여백을 보이지 않는 쪽이 낫다.
+            if (_grid.Width >= halfWidth * 2f) x = Mathf.Clamp(x, halfWidth, _grid.Width - halfWidth);
+            if (_grid.Height >= halfHeight * 2f) y = Mathf.Clamp(y, halfHeight, _grid.Height - halfHeight);
 
             camera.transform.position = new Vector3(x, y, -10f);
         }
