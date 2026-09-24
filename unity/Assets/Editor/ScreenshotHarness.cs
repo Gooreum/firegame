@@ -63,6 +63,7 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("49_rescue_carry", RescueCarry),
                 new KeyValuePair<string, Func<Camera>>("50_shop_high_level", ShopHighLevel),
                 new KeyValuePair<string, Func<Camera>>("52_inside_shop", InsideShop),
+                new KeyValuePair<string, Func<Camera>>("54_inside_rescue", InsideRescue),
                 new KeyValuePair<string, Func<Camera>>("40_warehouse_fire", WarehouseFire),
                 new KeyValuePair<string, Func<Camera>>("41_factory_mixed", FactoryMixed),
                 new KeyValuePair<string, Func<Camera>>("42_harbor_finale", HarborFinale),
@@ -270,6 +271,20 @@ namespace FireGame.EditorTools
             StageRunner runner = Runner(StageCatalog.Factory, EquipmentId.Bucket, EquipmentId.Extinguisher, EquipmentId.FoamExtinguisher);
             Advance(runner, 4f);
             return Show(runner, 4f, new Vector2(19, 6));
+        }
+
+        /// <summary>
+        /// 사람이 남은 점포 안으로 들어간 시점. 지붕이 걷히면서 Help! 말풍선과 입구 표시가
+        /// 함께 사라지고, 대신 시민 머리 위의 "!" 표식이 보인다.
+        /// </summary>
+        private static Camera InsideRescue()
+        {
+            StageRunner runner = Runner(StageCatalog.Shopping, EquipmentId.Extinguisher);
+
+            // 시민이 있는 아래쪽 가운데 점포(15~22열, 12~17행) 안에 세운다.
+            runner.Player.Spawn(new GridPoint(20, 14));
+            Advance(runner, 1f);
+            return Show(runner, 1f);
         }
 
         /// <summary>

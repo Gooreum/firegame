@@ -29,6 +29,12 @@ namespace FireGame.UnityLayer
         private const int OrderAim = 23;     // 조준 표시는 불 위. 불 밑에 깔면 정작 불타는 칸에서 안 보인다
         private const int OrderSmoke = 30;
 
+        /// <summary>팝업은 지붕(BuildingOverlay.OrderRoof = 40)보다 위여야 건물 위에서도 읽힌다.</summary>
+        private const int OrderPopup = 60;
+
+        /// <summary>"불이 코앞"으로 보는 거리(칸). <see cref="FireNearby"/> 주석 참고.</summary>
+        private const int FireWarnRadius = 2;
+
         // 방수 연출 수명(초)
         private const float StreakLifetime = 0.22f;
         private const float DropLifetime = 0.45f;
@@ -702,11 +708,18 @@ namespace FireGame.UnityLayer
             return best;
         }
 
+        /// <summary>
+        /// 불이 이 칸 코앞까지 왔는지. 시민 머리 위 표식을 빨갛게 바꾸는 판정이다.
+        ///
+        /// 반경이 1칸이던 때는 사실상 켜지지 않았다. 바닥은 타지 않는 재질이고 시민은 늘
+        /// 트인 바닥에 서 있어서, 바로 옆 칸이 타는 일이 없었기 때문이다. 불은 벽·기름·배전반을
+        /// 타고 오므로 두 칸까지 봐야 "저 사람이 위험하다"가 실제로 켜진다.
+        /// </summary>
         private bool FireNearby(int x, int y)
         {
-            for (int dy = -1; dy <= 1; dy++)
+            for (int dy = -FireWarnRadius; dy <= FireWarnRadius; dy++)
             {
-                for (int dx = -1; dx <= 1; dx++)
+                for (int dx = -FireWarnRadius; dx <= FireWarnRadius; dx++)
                 {
                     int nx = x + dx;
                     int ny = y + dy;
@@ -917,8 +930,8 @@ namespace FireGame.UnityLayer
         {
             var popup = new Popup
             {
-                Shadow = CreateText("PopupShadow", text, new Color(0f, 0f, 0f, 0.8f), OrderSmoke + 4),
-                Text = CreateText("Popup", text, color, OrderSmoke + 5),
+                Shadow = CreateText("PopupShadow", text, new Color(0f, 0f, 0f, 0.8f), OrderPopup),
+                Text = CreateText("Popup", text, color, OrderPopup + 1),
                 From = at + new Vector3(0f, 0.6f, 0f),
             };
             _popups.Add(popup);

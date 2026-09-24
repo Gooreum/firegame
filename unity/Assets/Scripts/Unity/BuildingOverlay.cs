@@ -62,6 +62,18 @@ namespace FireGame.UnityLayer
 
         /// <summary>타는 칸의 지붕 색. 지붕이 타 내려앉은 것처럼 보이게 한다.</summary>
         private static readonly Color CharredRoof = new Color(0.13f, 0.11f, 0.11f);
+
+        /// <summary>시민 옆 칸에 불이 붙었을 때 말풍선이 오가는 두 색. 흰색을 거치지 않는다.</summary>
+        private static readonly Color HelpUrgentDim = new Color(1f, 0.72f, 0.70f);
+        private static readonly Color HelpUrgentHot = new Color(1f, 0.30f, 0.26f);
+
+        /// <summary>건물마다 "Help!" 말풍선. 몸통·꼬리·글자 세 조각이다.</summary>
+        private readonly SpriteRenderer[] _helpPanel;
+        private readonly SpriteRenderer[] _helpTail;
+        private readonly TextMesh[] _helpText;
+
+        /// <summary>불이 났거나 사람이 남은 건물의 입구에 얹는 맥동.</summary>
+        private readonly List<SpriteRenderer>[] _doorMarks;
         private readonly List<GridPoint> _burningSample = new List<GridPoint>(MaxFireSigns);
 
         public BuildingOverlay(Transform parent, StageRunner runner, BuildingMap buildings, MissionWorldView view)
@@ -85,6 +97,13 @@ namespace FireGame.UnityLayer
 
             _fireSigns = new SpriteRenderer[buildings.All.Length, MaxFireSigns];
             _fireSmoke = new SpriteRenderer[buildings.All.Length, MaxFireSigns];
+
+            _helpPanel = new SpriteRenderer[buildings.All.Length];
+            _helpTail = new SpriteRenderer[buildings.All.Length];
+            _helpText = new TextMesh[buildings.All.Length];
+
+            _doorMarks = new List<SpriteRenderer>[buildings.All.Length];
+            for (int i = 0; i < buildings.All.Length; i++) _doorMarks[i] = BuildDoorMarks(buildings.All[i]);
         }
 
         /// <summary>
@@ -103,12 +122,17 @@ namespace FireGame.UnityLayer
                 // 들어간 건물은 진짜 불이 그대로 보인다. 지붕 위 표시를 겹쳐 그릴 이유가 없다.
                 if (covered)
                 {
-                    CharRoof(_buildings.All[i]);
-                    RefreshFireSigns(_buildings.All[i], time);
+                    Building building = _buildings.All[i];
+                    CharRoof(building);
+                    RefreshFireSigns(building, time);
+                    int waiting = RefreshHelpSign(building, time);
+                    RefreshDoorMarks(building, time, waiting > 0);
                 }
                 else
                 {
                     HideFireSigns(i, 0);
+                    HideHelpSign(i);
+                    HideDoorMarks(i);
                 }
             }
         }
@@ -154,6 +178,161 @@ namespace FireGame.UnityLayer
             }
 
             HideFireSigns(building.Id, _burningSample.Count);
+        }
+
+        /// <summary>
+        /// 구조를 기다리는 사람이 남은 건물 위에 "Help!" 말풍선을 띄운다.
+        ///
+        /// 지붕을 덮으면 시민의 머리 위 표식도 함께 가려진다. 밖에서 "저 건물에 사람이 있다"를
+        /// 알릴 방법이 사라지므로, 건물 단위로 다시 알린다.
+        /// </summary>
+        /// <returns>그 건물에서 아직 구조를 기다리는 사람 수.</returns>
+        private int RefreshHelpSign(Building building, float time)
+        {
+            int waiting = 0;
+
+            foreach (Civilian civilian in _runner.Civilians)
+            {
+                // 이미 업은 사람은 그 건물에 남은 게 아니다.
+                if (!civilian.Pending || civilian.Carried) continue;
+                if (_buildings.At((int)civilian.X, (int)civilian.Y) != building.Id) continue;
+
+                waiting++;
+            }
+
+            // "사람이 남았는데 그 건물이 타고 있다"가 붉은 말풍선이다.
+            //
+            // 처음엔 시민 바로 옆 칸이 타는지로 잡았는데, 그러면 거의 켜지지 않는다.
+            // 바닥은 타지 않는 재질이고 시민은 늘 트인 바닥에 서 있어서, 불이 두 칸 앞까지
+            // 다가오는 순간이 2초쯤밖에 안 된다. 밖에서 "어디부터 갈까"를 고르는 표시인데
+            // 고를 시간에 켜져 있지 않으면 쓸모가 없다.
+            bool urgent = waiting > 0 && building.BurningCells(_grid) > 0;
+
+            if (waiting == 0)
+            {
+                HideHelpSign(building.Id);
+                return 0;
+            }
+
+            EnsureHelpSign(building.Id);
+
+            float bob = Mathf.Sin(time * 3.2f) * 0.12f;
+            var at = new Vector3(
+                (building.MinX + building.MaxX + 1) * 0.5f,
+                _grid.Height - building.MinY + 1.1f + bob,
+                0f);
+
+            // 시민 옆 칸에 불이 붙었으면 붉게 깜빡인다. 어느 건물부터 가야 하는지가 갈린다.
+            // 흰색까지 갔다 오면 깜빡임의 절반이 평소와 같아 보여서, 옅은 붉은색과 진한 붉은색 사이만 오간다.
+            Color back = urgent
+                ? Color.Lerp(HelpUrgentDim, HelpUrgentHot, Mathf.Abs(Mathf.Sin(time * 8f)))
+                : Color.white;
+
+            SpriteRenderer panel = _helpPanel[building.Id];
+            panel.color = back;
+            panel.transform.position = at;
+            panel.transform.localScale = new Vector3(Art.FitWidth(panel.sprite, 3.4f), Art.FitWidth(panel.sprite, 1.7f), 1f);
+            panel.enabled = true;
+
+            SpriteRenderer tail = _helpTail[building.Id];
+            tail.color = back;
+            tail.transform.position = at + new Vector3(0f, -0.85f, 0f);
+            tail.enabled = true;
+
+            TextMesh text = _helpText[building.Id];
+            text.transform.position = at + new Vector3(0f, 0.05f, 0f);
+            text.color = urgent ? new Color(0.65f, 0.05f, 0.05f) : new Color(0.75f, 0.13f, 0.1f);
+            text.gameObject.SetActive(true);
+
+            return waiting;
+        }
+
+        /// <summary>
+        /// 들어갈 문을 알린다. 지붕으로 덮어 놓은 이상 문이 안 보이면 들어갈 길이 없다.
+        /// 조용한 건물까지 깜빡이면 눈이 어지러워, 불이 났거나 사람이 남은 건물만 켠다.
+        /// </summary>
+        private void RefreshDoorMarks(Building building, float time, bool anyoneWaiting)
+        {
+            bool wanted = anyoneWaiting || building.BurningCells(_grid) > 0;
+            List<SpriteRenderer> marks = _doorMarks[building.Id];
+
+            if (!wanted)
+            {
+                for (int i = 0; i < marks.Count; i++) marks[i].enabled = false;
+                return;
+            }
+
+            float pulse = Mathf.Abs(Mathf.Sin(time * 3f));
+            var tint = new Color(1f, 0.95f, 0.5f, 0.25f + (0.25f * pulse));
+            for (int i = 0; i < marks.Count; i++)
+            {
+                marks[i].color = tint;
+                marks[i].enabled = true;
+            }
+        }
+
+        private void EnsureHelpSign(int buildingId)
+        {
+            if (_helpPanel[buildingId] != null) return;
+
+            var panel = new GameObject("HelpPanel").AddComponent<SpriteRenderer>();
+            panel.transform.SetParent(_root, false);
+            panel.sprite = Art.Get("UI/panel_grey");
+            panel.sortingOrder = OrderRoofMark + 3;
+            _helpPanel[buildingId] = panel;
+
+            // 꼬리는 흰 사각형을 45도 돌려 만든다. 말풍선 전용 그림이 따로 없다.
+            var tail = new GameObject("HelpTail").AddComponent<SpriteRenderer>();
+            tail.transform.SetParent(_root, false);
+            tail.sprite = Art.White;
+            tail.sortingOrder = OrderRoofMark + 3;
+            tail.transform.localScale = Vector3.one * 0.55f;
+            tail.transform.rotation = Quaternion.Euler(0f, 0f, 45f);
+            _helpTail[buildingId] = tail;
+
+            var go = new GameObject("HelpText");
+            go.transform.SetParent(_root, false);
+            var text = go.AddComponent<TextMesh>();
+            text.font = Art.Font;
+            text.text = "Help!";
+            text.fontSize = 64;
+            text.characterSize = 0.13f;
+            text.fontStyle = FontStyle.Bold;
+            text.anchor = TextAnchor.MiddleCenter;
+            text.alignment = TextAlignment.Center;
+            go.GetComponent<MeshRenderer>().sharedMaterial = Art.Font.material;
+            go.GetComponent<MeshRenderer>().sortingOrder = OrderRoofMark + 4;
+            _helpText[buildingId] = text;
+        }
+
+        private void HideHelpSign(int buildingId)
+        {
+            if (_helpPanel[buildingId] != null) _helpPanel[buildingId].enabled = false;
+            if (_helpTail[buildingId] != null) _helpTail[buildingId].enabled = false;
+            if (_helpText[buildingId] != null) _helpText[buildingId].gameObject.SetActive(false);
+        }
+
+        private void HideDoorMarks(int buildingId)
+        {
+            List<SpriteRenderer> marks = _doorMarks[buildingId];
+            for (int i = 0; i < marks.Count; i++) marks[i].enabled = false;
+        }
+
+        private List<SpriteRenderer> BuildDoorMarks(Building building)
+        {
+            var marks = new List<SpriteRenderer>(building.Entrances.Length);
+            foreach (GridPoint door in building.Entrances)
+            {
+                var mark = new GameObject("DoorMark").AddComponent<SpriteRenderer>();
+                mark.transform.SetParent(_root, false);
+                mark.sprite = Art.White;
+                mark.sortingOrder = OrderRoof + 1;
+                mark.transform.position = _view.CellCenter(door.X, door.Y);
+                mark.transform.localScale = Vector3.one;
+                mark.enabled = false;
+                marks.Add(mark);
+            }
+            return marks;
         }
 
         /// <summary>
