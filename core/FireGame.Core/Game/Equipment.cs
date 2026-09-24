@@ -58,6 +58,13 @@ namespace FireGame.Core.Game
         /// </summary>
         public readonly int EndSpread;
 
+        /// <summary>
+        /// 한 발에 드는 물. 0이면 물을 안 쓴다(CO2).
+        /// <b>레벨이 올라도 오르지 않는다</b> — 위력만 오르므로 같은 물로 더 많이 끄게 되고,
+        /// 그게 장비를 올리는 이유가 된다.
+        /// </summary>
+        public readonly float WaterCost;
+
         public EquipmentDef(
             int id,
             string name,
@@ -67,7 +74,8 @@ namespace FireGame.Core.Game
             ResourceKind resource,
             float cooldownSeconds,
             int maxCharges,
-            int endSpread = 0)
+            int endSpread = 0,
+            float waterCost = 0f)
         {
             Id = id;
             Name = name;
@@ -78,6 +86,7 @@ namespace FireGame.Core.Game
             CooldownSeconds = cooldownSeconds;
             MaxCharges = maxCharges;
             EndSpread = endSpread;
+            WaterCost = waterCost;
         }
 
         /// <summary>레벨 하나당 위력 증가율.</summary>
@@ -146,7 +155,7 @@ namespace FireGame.Core.Game
             int charges = MaxCharges == 0 ? 0 : (int)Math.Round(MaxCharges * (1f + (ChargesPerLevel * steps)));
             int spread = line && milestones >= 1 ? 1 : EndSpread;
 
-            return new EquipmentDef(Id, Name, agent, Pattern, range, Resource, cooldown, charges, spread);
+            return new EquipmentDef(Id, Name, agent, Pattern, range, Resource, cooldown, charges, spread, WaterCost);
         }
     }
 

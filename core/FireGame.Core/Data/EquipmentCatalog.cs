@@ -39,7 +39,9 @@ namespace FireGame.Core.Data
             range: 1,
             resource: ResourceKind.Cooldown,
             cooldownSeconds: 1.0f,
-            maxCharges: 0);
+            maxCharges: 0,
+            // 한 번에 확 끼얹는 만큼 많이 든다. 탱크 160으로 13번.
+            waterCost: 12f);
 
         public static readonly EquipmentDef Extinguisher = new EquipmentDef(
             id: EquipmentId.Extinguisher,
@@ -50,7 +52,10 @@ namespace FireGame.Core.Data
             range: 2,
             resource: ResourceKind.Charges,
             cooldownSeconds: 0.5f,
-            maxCharges: 12);
+            maxCharges: 12,
+            // CO2는 기체다. 물이 바닥나도 전기 화재는 끌 수 있어야
+            // "물 떨어져서 아무것도 못 한다"가 되지 않는다.
+            waterCost: 0f);
 
         public static readonly EquipmentDef Hose = new EquipmentDef(
             id: EquipmentId.Hose,
@@ -60,7 +65,9 @@ namespace FireGame.Core.Data
             range: 5,
             resource: ResourceKind.Cooldown,
             cooldownSeconds: 0.2f,
-            maxCharges: 0);
+            maxCharges: 0,
+            // 0.2초마다 나가므로 초당 20. 가득 찬 탱크로 8초 연속 방수다.
+            waterCost: 4f);
 
         public static readonly EquipmentDef FoamExtinguisher = new EquipmentDef(
             id: EquipmentId.FoamExtinguisher,
@@ -72,7 +79,10 @@ namespace FireGame.Core.Data
             cooldownSeconds: 0.5f,
             // 유류 풀은 스스로 꺼지지 않아 진압해야 할 셀 수가 많다.
             // 8회로는 풀 하나도 못 덮는다.
-            maxCharges: 30);
+            maxCharges: 30,
+            endSpread: 0,
+            // 충전 30회를 다 쓰기 전에 물이 바닥나지 않게 낮게 잡았다.
+            waterCost: 3f);
 
         public static readonly EquipmentDef[] All =
         {

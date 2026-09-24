@@ -46,6 +46,18 @@ namespace FireGame.Core.Game
         /// <summary>마지막으로 피해를 받은 뒤 경과한 시간.</summary>
         public float TimeSinceDamage = float.MaxValue;
 
+        /// <summary>
+        /// 등에 진 물. 물 계열 장비가 한 발마다 소모한다.
+        /// 소화전과 소방차 곁에서만 채운다.
+        /// </summary>
+        public float Water = GameConfig.WaterTankMax;
+
+        /// <summary>남은 물의 비율 0..1. HUD 게이지가 쓴다.</summary>
+        public float WaterRatio
+        {
+            get { return Water / GameConfig.WaterTankMax; }
+        }
+
         public int CellX
         {
             get { return (int)Math.Floor(X); }
@@ -93,7 +105,8 @@ namespace FireGame.Core.Game
 
             Move(dt, grid, inputX, inputY);
             ApplyFireDamage(dt, grid);
-            ApplyRegen(dt);
+            ApplySmoke(dt, grid);
+            ApplyRegen(dt, grid);
         }
 
         private void TickCooldowns(float dt)
@@ -196,12 +209,40 @@ namespace FireGame.Core.Game
             TimeSinceDamage = 0f;
         }
 
+        /// <summary>
+        /// 연기 흡입. 불길에 닿지 않아도 연기 속에 오래 있으면 쓰러진다.
+        /// 불은 피해 다닐 수 있지만 연기는 방을 통째로 채우므로,
+        /// 이게 있어야 "어디까지 들어갈까"가 실제 판단이 된다.
+        /// </summary>
+        private void ApplySmoke(float dt, FireGrid grid)
+        {
+            int cx = CellX;
+            int cy = CellY;
+            if (!grid.InBounds(cx, cy)) return;
+
+            float smoke = grid[cx, cy].Smoke;
+            if (smoke <= GameConfig.SmokeChokeThreshold) return;
+
+            // 임계 위에서부터 물린다. 농도에 그냥 비례시켰더니 마당에 떠도는
+            // 옅은 연무(0.05)까지 체력을 갉아, 밖에 서 있어도 회복이 안 됐다.
+            // 옅은 연기가 뺏는 것은 숨 돌릴 틈이고, 체력을 뺏는 것은 짙은 연기다.
+            float bite = (smoke - GameConfig.SmokeChokeThreshold) / (1f - GameConfig.SmokeChokeThreshold);
+
+            Damage(GameConfig.SmokeDamagePerSecond * bite * DamageMultiplier * dt);
+        }
+
         /// <summary>불에서 충분히 떨어져 숨을 돌리면 서서히 회복한다.</summary>
-        private void ApplyRegen(float dt)
+        private void ApplyRegen(float dt, FireGrid grid)
         {
             if (TimeSinceDamage < float.MaxValue) TimeSinceDamage += dt;
             if (TimeSinceDamage < GameConfig.RegenDelaySeconds) return;
             if (Hp >= GameConfig.PlayerMaxHp) return;
+
+            // 연기 속에서는 숨을 못 돌린다. 이게 없으면 물러났다 오는 것만으로
+            // 언제나 풀피가 되어 건물 안이 위험하지 않다.
+            int cx = CellX;
+            int cy = CellY;
+            if (grid.InBounds(cx, cy) && grid[cx, cy].Smoke > GameConfig.SmokeChokeThreshold) return;
 
             Hp += GameConfig.RegenPerSecond * dt;
             if (Hp > GameConfig.PlayerMaxHp) Hp = GameConfig.PlayerMaxHp;
@@ -219,6 +260,7 @@ namespace FireGame.Core.Game
             if (Cooldowns[slot] > 0f) return false;
 
             if (def.Resource == ResourceKind.Charges && Charges[slot] <= 0) return false;
+            if (def.WaterCost > 0f && Water < def.WaterCost) return false;
 
             return true;
         }
@@ -229,6 +271,9 @@ namespace FireGame.Core.Game
             Cooldowns[slot] = def.CooldownSeconds;
 
             if (def.Resource == ResourceKind.Charges) Charges[slot]--;
+
+            Water -= def.WaterCost;
+            if (Water < 0f) Water = 0f;
         }
     }
 }

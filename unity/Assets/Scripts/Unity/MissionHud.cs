@@ -19,6 +19,7 @@ namespace FireGame.UnityLayer
 
         private readonly Text _title;
         private readonly Image _hpFill;
+        private readonly Image _waterFill;
         private readonly Text _timer;
         private readonly Text _fires;
         private readonly Text _rescued;
@@ -68,6 +69,23 @@ namespace FireGame.UnityLayer
             UiKit.Stretch(_hpFill.rectTransform, 5f);
             _hpFill.type = Image.Type.Filled;
             _hpFill.fillMethod = Image.FillMethod.Horizontal;
+
+            // ---- 왼쪽 위 아래단: 물탱크 ----
+            // 체력 바로 밑에 붙인다. 둘 다 "지금 얼마나 버틸 수 있나"를 말하는 값이라
+            // 눈이 한 번에 훑을 수 있어야 한다.
+            Image waterBack = UiKit.Image(_root, "WaterBack", Art.Get("UI/panel_grey"), new Color(1f, 1f, 1f, 0.9f));
+            UiKit.Place(waterBack.rectTransform, new Vector2(0f, 1f), new Vector2(24f, -100f), new Vector2(460f, 60f));
+
+            Text waterLabel = UiKit.Label(waterBack.transform, "WaterLabel", "물", 28, UiKit.Ink, TextAnchor.MiddleLeft);
+            UiKit.Place(waterLabel.rectTransform, new Vector2(0f, 0.5f), new Vector2(22f, 2f), new Vector2(80f, 44f));
+
+            Image waterTrough = UiKit.Image(waterBack.transform, "WaterTrough", Art.Get("UI/panel_grey"), new Color(0.35f, 0.35f, 0.4f));
+            UiKit.Place(waterTrough.rectTransform, new Vector2(0f, 0.5f), new Vector2(104f, 2f), new Vector2(330f, 24f));
+
+            _waterFill = UiKit.Image(waterTrough.transform, "WaterFill", Art.White, new Color(0.35f, 0.65f, 0.95f));
+            UiKit.Stretch(_waterFill.rectTransform, 4f);
+            _waterFill.type = Image.Type.Filled;
+            _waterFill.fillMethod = Image.FillMethod.Horizontal;
 
             // ---- 오른쪽 위: 시간·남은 불·구조 ----
             Image infoBack = UiKit.Image(_root, "InfoBack", Art.Get("UI/panel_grey"), new Color(1f, 1f, 1f, 0.9f));
@@ -178,6 +196,14 @@ namespace FireGame.UnityLayer
             float hp = Mathf.Clamp01(runner.Player.Hp / GameConfig.PlayerMaxHp);
             _hpFill.fillAmount = hp;
             _hpFill.color = hp > 0.5f ? new Color(0.3f, 0.8f, 0.35f) : hp > 0.25f ? new Color(0.95f, 0.75f, 0.15f) : new Color(0.9f, 0.25f, 0.2f);
+
+            // 물은 급수점에서만 찬다. 바닥나기 전에 알아채야 하므로
+            // 4분의 1 밑에서는 색을 바꿔 경고한다.
+            float water = Mathf.Clamp01(runner.Player.WaterRatio);
+            _waterFill.fillAmount = water;
+            _waterFill.color = water > 0.25f
+                ? new Color(0.35f, 0.65f, 0.95f)
+                : new Color(0.95f, 0.6f, 0.2f);
 
             int seconds = Mathf.CeilToInt(runner.TimeLeft);
             _timer.text = (seconds / 60) + ":" + (seconds % 60).ToString("00");

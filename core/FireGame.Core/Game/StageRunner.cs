@@ -33,7 +33,10 @@ namespace FireGame.Core.Game
         public readonly FireSim Sim;
         public readonly PlayerState Player;
         public readonly List<Civilian> Civilians = new List<Civilian>();
-        /// <summary>소화전 위치. 지도 장식이다(호스는 어디서나 쏜다).</summary>
+        /// <summary>
+        /// 소화전 위치. 물탱크가 생기면서 <b>실제 급수점</b>이 됐다 —
+        /// 전에는 "호스는 어디서나 쏜다"라 지도 장식이었다.
+        /// </summary>
         public readonly List<GridPoint> Hydrants = new List<GridPoint>();
         public readonly List<GridPoint> Exits = new List<GridPoint>();
 
@@ -220,9 +223,46 @@ namespace FireGame.Core.Game
             DoorAtHand = FindDoorAtHand();
             if (input.Interact) TryInteract();
 
+            Refill(dt);
             AdvanceSimulation(dt);
             UpdateCivilians(input.Rescue);
             EvaluateOutcome();
+        }
+
+        /// <summary>
+        /// 급수. 소화전이나 소방차(출구) 곁에 서 있으면 탱크를 채운다.
+        ///
+        /// 출구도 급수점으로 치는 이유는 맵마다 소화전이 하나뿐이어서다.
+        /// 소화전 한 곳만 인정하면 판이 <b>맵 끝까지 왕복하기</b>가 된다.
+        /// 출구는 어차피 시민을 데려가야 하는 자리라, 가는 김에 채우는 것이 자연스럽다.
+        /// </summary>
+        private void Refill(float dt)
+        {
+            if (Player.Water >= GameConfig.WaterTankMax) return;
+            if (!NearWaterPoint(Player.X, Player.Y)) return;
+
+            Player.Water += GameConfig.RefillPerSecond * dt;
+            if (Player.Water > GameConfig.WaterTankMax) Player.Water = GameConfig.WaterTankMax;
+        }
+
+        /// <summary>급수를 받을 수 있는 자리인지. HUD와 봇이 같은 판정을 쓰도록 공개한다.</summary>
+        public bool NearWaterPoint(float x, float y)
+        {
+            return Near(Hydrants, x, y) || Near(Exits, x, y);
+        }
+
+        private static bool Near(List<GridPoint> points, float x, float y)
+        {
+            float reach = GameConfig.RefillRadius * GameConfig.RefillRadius;
+
+            for (int i = 0; i < points.Count; i++)
+            {
+                float dx = points[i].X + 0.5f - x;
+                float dy = points[i].Y + 0.5f - y;
+                if ((dx * dx) + (dy * dy) <= reach) return true;
+            }
+
+            return false;
         }
 
         /// <summary>

@@ -30,5 +30,32 @@ namespace FireGame.Core.Game
 
         /// <summary>시민을 업었을 때 이동 속도 배율.</summary>
         public const float CarrySpeedMultiplier = 0.6f;
+
+        /// <summary>
+        /// 등에 지고 나가는 물. 호스 기준 8초 연속 방수다.
+        ///
+        /// 이 값이 이 게임에서 <b>"무한히 쏘면 이긴다"를 끝내는 숫자</b>다.
+        /// 너무 작으면 급수점 왕복만 하게 되고, 너무 크면 없는 것과 같다.
+        /// </summary>
+        public const float WaterTankMax = 240f;
+
+        /// <summary>소화전·소방차 옆에서 초당 채우는 양. 가득 채우는 데 4초.</summary>
+        public const float RefillPerSecond = 40f;
+
+        /// <summary>급수를 받을 수 있는 거리(칸). 칸에 딱 올라서지 않아도 되게 넉넉히 잡았다.</summary>
+        public const float RefillRadius = 1.6f;
+
+        /// <summary>
+        /// 연기 농도 1.0인 칸에서 초당 받는 피해. 방화복이 줄인다.
+        /// 화염 인접(5/초)보다 조금 세다 — 불길은 피할 수 있어도 연기는 방을 다 채운다.
+        /// </summary>
+        public const float SmokeDamagePerSecond = 7f;
+
+        /// <summary>
+        /// 이 농도를 넘는 칸에서는 회복이 멈춘다.
+        /// 회복이 무제한이던 것이 "물러났다 오면 언제나 풀피"를 만들었다 —
+        /// 연기 속에서는 숨을 못 돌려야 건물 안이 실제로 위험해진다.
+        /// </summary>
+        public const float SmokeChokeThreshold = 0.3f;
     }
 }

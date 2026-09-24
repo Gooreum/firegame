@@ -33,6 +33,12 @@ namespace FireGame.Core.Tests
             _runner = runner;
             _distance = new int[runner.Grid.Count];
             _cameFrom = new int[runner.Grid.Count];
+
+            for (int slot = 0; slot < PlayerState.SlotCount; slot++)
+            {
+                EquipmentDef def = runner.SlotEquipment(slot);
+                if (def != null && def.WaterCost > 0f) _usesWater = true;
+            }
         }
 
         /// <summary>봇이 고른 슬롯 사용 횟수. 장비별 소모를 관찰할 때 쓴다.</summary>
@@ -45,6 +51,20 @@ namespace FireGame.Core.Tests
         private const float ResumeHp = 80f;
 
         private bool _retreating;
+
+        /// <summary>
+        /// 이 아래로 떨어지면 급수하러 간다.
+        /// 호스는 초당 20을 쓰므로 60이면 3초치다 — 바닥나고 나서 움직이면 늦는다.
+        /// </summary>
+        private const float LowWater = 60f;
+
+        /// <summary>이 비율까지 채우면 다시 불을 잡으러 간다.</summary>
+        private const float RefilledRatio = 0.9f;
+
+        private bool _refilling;
+
+        /// <summary>물을 쓰는 장비를 하나라도 들었는지. CO2만 들었으면 급수하러 갈 이유가 없다.</summary>
+        private readonly bool _usesWater;
 
         public StageOutcome Play(float dt = 0.05f, float maxSeconds = 300f)
         {
@@ -88,10 +108,94 @@ namespace FireGame.Core.Tests
 
             if (grid.CountBurning() > 0)
             {
+                // 물이 없으면 불을 봐도 소용없다. 사람이라면 급수부터 간다.
+                if (WantsWater())
+                {
+                    StageInput refill = MoveToward(NearestWaterPoint());
+
+                    // 이미 급수점에 닿았으면 가만히 서서 채운다.
+                    if (refill.MoveX == 0f && refill.MoveY == 0f) return default;
+                    return refill;
+                }
+
                 return FightFire();
             }
 
             return default;
+        }
+
+        /// <summary>
+        /// 지금 급수하러 가야 하는지. 한 번 가기로 했으면 거의 가득 찰 때까지 간다 —
+        /// 임계 언저리에서 오락가락하면 불과 소화전 사이를 왕복만 하게 된다.
+        /// </summary>
+        private bool WantsWater()
+        {
+            if (!_usesWater) return false;
+
+            float water = _runner.Player.Water;
+            if (water <= LowWater) _refilling = true;
+            if (water >= GameConfig.WaterTankMax * RefilledRatio) _refilling = false;
+
+            return _refilling;
+        }
+
+        /// <summary>
+        /// 걸어 닿는 가장 가까운 맑은 공기. 연기도 불도 없는 칸이다.
+        /// 없으면 null — 그때는 불에서 멀어지는 기존 방식으로 물러난다.
+        /// </summary>
+        private GridPoint? NearestClearAir()
+        {
+            FireGrid grid = _runner.Grid;
+            PlayerState player = _runner.Player;
+
+            BuildDistances(player.CellX, player.CellY);
+
+            GridPoint? best = null;
+            int bestDistance = int.MaxValue;
+
+            for (int y = 0; y < grid.Height; y++)
+            {
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    int index = grid.Index(x, y);
+                    if (_distance[index] < 0 || _distance[index] >= bestDistance) continue;
+
+                    // 절반 아래까지 내려가야 한다. 임계 바로 밑을 고르면
+                    // 조금만 번져도 다시 연기에 잠겨 왔다 갔다만 한다.
+                    if (grid[x, y].Smoke > GameConfig.SmokeChokeThreshold * 0.5f) continue;
+                    if (CountBurningNeighbors(x, y) > 0) continue;
+                    if (grid[x, y].State == CellState.Burning) continue;
+
+                    bestDistance = _distance[index];
+                    best = new GridPoint(x, y);
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>가장 가까운 급수점. 소화전과 출구(소방차)를 함께 본다.</summary>
+        private GridPoint NearestWaterPoint()
+        {
+            GridPoint best = default;
+            float bestDistance = float.MaxValue;
+
+            for (int i = 0; i < _runner.Hydrants.Count; i++) Consider(_runner.Hydrants[i], ref best, ref bestDistance);
+            for (int i = 0; i < _runner.Exits.Count; i++) Consider(_runner.Exits[i], ref best, ref bestDistance);
+
+            return best;
+        }
+
+        private void Consider(GridPoint point, ref GridPoint best, ref float bestDistance)
+        {
+            float dx = (point.X + 0.5f) - _runner.Player.X;
+            float dy = (point.Y + 0.5f) - _runner.Player.Y;
+            float distance = (dx * dx) + (dy * dy);
+
+            if (distance >= bestDistance) return;
+
+            bestDistance = distance;
+            best = point;
         }
 
         /// <summary>가장 가까운 불에서 멀어지는 방향으로 도망친다.</summary>
@@ -99,6 +203,15 @@ namespace FireGame.Core.Tests
         {
             FireGrid grid = _runner.Grid;
             PlayerState player = _runner.Player;
+
+            // 연기 속에서는 숨을 돌릴 수 없다. 불에서만 멀어지면 회복이 영영 시작되지 않아
+            // 반쯤 죽은 채로 그 자리에 굳는다. 사람이라면 밖으로 나가 숨을 고른다.
+            if (grid.InBounds(player.CellX, player.CellY)
+                && grid[player.CellX, player.CellY].Smoke > GameConfig.SmokeChokeThreshold)
+            {
+                GridPoint? air = NearestClearAir();
+                if (air != null) return MoveToward(air.Value);
+            }
 
             float awayX = 0f;
             float awayY = 0f;
