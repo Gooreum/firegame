@@ -86,6 +86,12 @@ namespace FireGame.UnityLayer
         private readonly bool[] _isWall;
 
         private readonly SpriteRenderer _player;
+
+        /// <summary>
+        /// 지붕 뒤로 들어간 소방관의 윤곽. 시선을 눕히면 건물 북쪽 한두 줄이 지붕에 가리는데,
+        /// 상가 아래 블록은 하필 스폰이 있는 줄 위에 있어 소방관이 통째로 사라진다.
+        /// </summary>
+        private readonly SpriteRenderer _playerGhost;
         private readonly List<SpriteRenderer> _civilians = new List<SpriteRenderer>();
 
         /// <summary>지금 든 장비가 맞힐 칸을 바닥에 깔아 보여 주는 판. 쓰는 만큼만 늘린다.</summary>
@@ -213,6 +219,8 @@ namespace FireGame.UnityLayer
 
             // 방화복 레벨마다 옷 색·헬멧이 다른 그림(tools/import-art.py가 만든다)
             _player = CreateRenderer("Player", Art.Get(SuitSprite(runner.Player.SuitLevel)), OrderPeople + 1);
+            _playerGhost = CreateRenderer("PlayerGhost", _player.sprite, BuildingOverlay.OrderGhost);
+            _playerGhost.enabled = false;
             string[] civilianSprites = { "TopDown/civilian_woman", "TopDown/civilian_old", "TopDown/civilian_man" };
             for (int i = 0; i < runner.Civilians.Count; i++)
             {
@@ -791,6 +799,8 @@ namespace FireGame.UnityLayer
             _player.transform.localScale = Vector3.one * 1.1f;
             _player.color = player.IsAlive ? Color.white : new Color(0.5f, 0.5f, 0.5f);
 
+            RefreshPlayerGhost(player);
+
             for (int i = 0; i < _civilians.Count; i++)
             {
                 Civilian civilian = _runner.Civilians[i];
@@ -816,6 +826,44 @@ namespace FireGame.UnityLayer
                     renderer.transform.localScale = Vector3.one * 1.05f;
                 }
             }
+        }
+
+        /// <summary>
+        /// 지붕에 가린 소방관을 지붕 위에 윤곽으로 한 번 더 그린다.
+        ///
+        /// 시선을 눕히면 지붕이 벽 높이만큼 위로 솟아 건물 북쪽 줄을 덮는다. 2.5D의 본질이라
+        /// 피할 수 없고, 상가는 소방관 스폰이 바로 그 줄에 있어 실제로 사라진다.
+        /// 지붕을 반투명하게 만들면 실내가 비쳐 "들어가야 안다"가 무너지므로, 대신 윤곽만 얹는다.
+        /// 건물에 들어갔을 때는 그 지붕이 이미 걷혀 있으니 끈다 — 안에서까지 유령이 따라다니면 안 된다.
+        /// </summary>
+        private void RefreshPlayerGhost(PlayerState player)
+        {
+            bool indoors = _buildings.At(player.CellX, player.CellY) != BuildingMap.None;
+            bool hidden = !indoors && RoofCovers(player.CellX, player.CellY);
+
+            _playerGhost.enabled = hidden;
+            if (!hidden) return;
+
+            _playerGhost.sprite = _player.sprite;
+            _playerGhost.transform.position = _player.transform.position;
+            _playerGhost.transform.rotation = _player.transform.rotation;
+            _playerGhost.transform.localScale = _player.transform.localScale;
+            _playerGhost.color = new Color(0.22f, 0.26f, 0.32f, 0.9f);
+        }
+
+        /// <summary>
+        /// 이 칸이 북쪽 건물의 지붕 밑에 들어가는지. 지붕이 <see cref="BuildingOverlay.WallRise"/>만큼
+        /// 솟은 만큼, 눌린 칸 기준 그 몇 줄 뒤까지가 가려진다.
+        /// </summary>
+        private bool RoofCovers(int x, int y)
+        {
+            int reach = Mathf.CeilToInt(BuildingOverlay.WallRise / Squash);
+            for (int back = 1; back <= reach; back++)
+            {
+                if (_buildings.At(x, y + back) != BuildingMap.None) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
