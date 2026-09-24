@@ -59,6 +59,15 @@ namespace FireGame.UnityLayer
         /// <summary>지금 든 장비가 맞힐 칸을 바닥에 깔아 보여 주는 판. 쓰는 만큼만 늘린다.</summary>
         private readonly List<SpriteRenderer> _aimCells = new List<SpriteRenderer>();
 
+        /// <summary>구조를 기다리는 시민 머리 위 표식. 후광 위에 글자를 얹는다.</summary>
+        private readonly List<SpriteRenderer> _civilianMarks = new List<SpriteRenderer>();
+        private readonly List<TextMesh> _civilianCalls = new List<TextMesh>();
+
+        /// <summary>업고 있을 때만 켜지는 출구 길잡이. 점 세 개가 출구 쪽으로 차례로 밝아진다.</summary>
+        private const int ExitDotCount = 3;
+        private readonly SpriteRenderer[] _exitDots = new SpriteRenderer[ExitDotCount];
+        private SpriteRenderer _exitPulse;
+
         private readonly Sprite[] _flameSprites;
 
         /// <summary>전기 불(C급)의 질감. 불꽃 대신 튀는 스파크를 얹어 한눈에 구분되게 한다.</summary>
@@ -173,6 +182,8 @@ namespace FireGame.UnityLayer
             for (int i = 0; i < runner.Civilians.Count; i++)
             {
                 _civilians.Add(CreateRenderer("Civilian" + i, Art.Get(civilianSprites[i % civilianSprites.Length]), OrderPeople));
+                _civilianMarks.Add(CreateRenderer("CivilianMark" + i, Art.Get("Effects/glow"), OrderAim + 1));
+                _civilianCalls.Add(CreateText("CivilianCall" + i, "!", Color.white, OrderAim + 2));
             }
 
             for (int i = 0; i < PlayerState.SlotCount; i++) _lastCooldowns[i] = runner.Player.Cooldowns[i];
@@ -410,6 +421,8 @@ namespace FireGame.UnityLayer
 
             RefreshAimPreview(time);
             RefreshPeople();
+            RefreshRescueSigns(time);
+            AnnounceRescues();
             DetectShots();
             DetectExtinguished();
             AdvanceParticles(dt);
@@ -570,8 +583,11 @@ namespace FireGame.UnityLayer
 
                 if (civilian.Carried)
                 {
-                    // 업은 사람은 소방관 등 뒤에 붙는다.
-                    renderer.transform.position = PlayerWorld - new Vector3(ox, oy, 0f).normalized * 0.35f;
+                    // 업은 사람은 소방관 어깨 위에서 걸음에 맞춰 흔들린다.
+                    float bob = Mathf.Sin(Time.time * 9f) * 0.06f;
+                    renderer.transform.position = PlayerWorld
+                                                  - (new Vector3(ox, oy, 0f).normalized * 0.28f)
+                                                  + new Vector3(0f, 0.22f + bob, 0f);
                     renderer.transform.rotation = _player.transform.rotation;
                     renderer.transform.localScale = Vector3.one * 0.9f;
                     renderer.sortingOrder = OrderPeople;
@@ -583,6 +599,147 @@ namespace FireGame.UnityLayer
                     renderer.transform.localScale = Vector3.one * 1.05f;
                 }
             }
+        }
+
+        /// <summary>
+        /// 구조와 관련된 표식들.
+        ///
+        /// 기다리는 시민 머리 위에 표식을 띄운다. 평소 노랑, 옆 칸에 불이 붙으면 빨갛게
+        /// 빠르게 깜빡여 "저 사람부터"를 알리고, 업을 수 있는 거리면 초록으로 커진다.
+        /// 업고 있을 때는 대신 가장 가까운 출구가 빛나고 방향 화살표가 뜬다 —
+        /// 사람을 업은 채 출구를 찾아 헤매는 건 긴장이 아니라 짜증이다.
+        /// </summary>
+        private void RefreshRescueSigns(float time)
+        {
+            bool carrying = _runner.Player.CarryingCivilian;
+
+            for (int i = 0; i < _civilianMarks.Count; i++)
+            {
+                Civilian civilian = _runner.Civilians[i];
+                SpriteRenderer mark = _civilianMarks[i];
+
+                TextMesh call = _civilianCalls[i];
+
+                if (!civilian.Pending || civilian.Carried)
+                {
+                    mark.enabled = false;
+                    call.gameObject.SetActive(false);
+                    continue;
+                }
+
+                bool ready = ReferenceEquals(_runner.RescueTarget, civilian);
+                bool danger = FireNearby((int)Mathf.Floor(civilian.X), (int)Mathf.Floor(civilian.Y));
+
+                Color color = ready ? new Color(0.3f, 1f, 0.45f)
+                    : danger ? new Color(1f, 0.25f, 0.2f)
+                    : new Color(1f, 0.85f, 0.2f);
+
+                float pulse = danger ? Mathf.Abs(Mathf.Sin(time * 10f)) : Mathf.Abs(Mathf.Sin(time * 3f));
+                Vector3 above = ToWorld(civilian.X, civilian.Y) + new Vector3(0f, 0.6f, 0f);
+
+                mark.color = new Color(color.r, color.g, color.b, 0.45f + (0.4f * pulse));
+                mark.transform.position = above;
+                mark.transform.localScale = Vector3.one * Art.FitWidth(mark.sprite, ready ? 1.15f : 0.9f);
+                mark.enabled = true;
+
+                // 후광만으로는 흐릿해서 글자를 얹는다. 지금 누르면 되는 시민만 "구조"라고 알린다.
+                call.text = ready ? "구조" : "!";
+                call.characterSize = ready ? 0.055f : 0.085f;
+                call.color = Color.Lerp(Color.white, color, 0.35f + (0.5f * pulse));
+                call.transform.position = above;
+                call.gameObject.SetActive(true);
+            }
+
+            RefreshExitGuide(carrying, time);
+        }
+
+        private void RefreshExitGuide(bool carrying, float time)
+        {
+            if (_exitPulse == null)
+            {
+                _exitPulse = CreateRenderer("ExitPulse", Art.Get("Effects/glow"), OrderAim);
+                for (int i = 0; i < ExitDotCount; i++)
+                {
+                    _exitDots[i] = CreateRenderer("ExitDot" + i, Art.Get("Effects/glow"), OrderPeople + 2);
+                }
+            }
+
+            if (!carrying || _runner.Exits.Count == 0)
+            {
+                _exitPulse.enabled = false;
+                for (int i = 0; i < ExitDotCount; i++) _exitDots[i].enabled = false;
+                return;
+            }
+
+            GridPoint exit = NearestExit();
+            Vector3 exitWorld = CellCenter(exit.X, exit.Y);
+
+            float breath = Mathf.Abs(Mathf.Sin(time * 4f));
+            _exitPulse.color = new Color(0.35f, 1f, 0.5f, 0.35f + (0.35f * breath));
+            _exitPulse.transform.position = exitWorld;
+            _exitPulse.transform.localScale = Vector3.one * Art.FitWidth(_exitPulse.sprite, 1.6f + (0.3f * breath));
+            _exitPulse.enabled = true;
+
+            // 출구는 대개 화면 밖이라 소방관 옆의 길잡이가 유일한 안내다.
+            // 화살표 그림이 없어 점 세 개를 출구 쪽으로 늘어놓고 차례로 밝힌다.
+            // 흐르는 방향 자체가 "이쪽"을 말해 주므로 그림 모양에 기대지 않아도 된다.
+            Vector3 toExit = exitWorld - PlayerWorld;
+            Vector3 direction = toExit.sqrMagnitude > 0.0001f ? toExit.normalized : Vector3.up;
+
+            for (int i = 0; i < ExitDotCount; i++)
+            {
+                SpriteRenderer dot = _exitDots[i];
+                float chase = Mathf.Abs(Mathf.Sin((time * 3.5f) - (i * 0.7f)));
+
+                dot.color = new Color(0.3f, 1f, 0.45f, 0.3f + (0.6f * chase));
+                dot.transform.position = PlayerWorld + (direction * (0.85f + (i * 0.5f)));
+                dot.transform.localScale = Vector3.one * Art.FitWidth(dot.sprite, 0.45f + (0.2f * chase));
+                dot.enabled = true;
+            }
+        }
+
+        private GridPoint NearestExit()
+        {
+            GridPoint best = _runner.Exits[0];
+            float bestDistance = float.MaxValue;
+
+            for (int i = 0; i < _runner.Exits.Count; i++)
+            {
+                GridPoint exit = _runner.Exits[i];
+                float dx = exit.X + 0.5f - _runner.Player.X;
+                float dy = exit.Y + 0.5f - _runner.Player.Y;
+                float distance = (dx * dx) + (dy * dy);
+                if (distance >= bestDistance) continue;
+
+                bestDistance = distance;
+                best = exit;
+            }
+
+            return best;
+        }
+
+        private bool FireNearby(int x, int y)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    if (!_grid.InBounds(nx, ny)) continue;
+                    if (_grid[nx, ny].State == CellState.Burning) return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>코어가 낸 한 프레임짜리 구조 신호를 팝업으로 옮긴다.</summary>
+        private void AnnounceRescues()
+        {
+            if (_runner.JustPickedUp != null) SpawnPopup("구조!", PlayerWorld, PopupGood);
+            if (_runner.JustRescued != null) SpawnPopup("구조 완료! +$" + Economy.RescueBonus, PlayerWorld, PopupGood);
+            if (_runner.JustLost != null) SpawnPopup("구조 실패…", ToWorld(_runner.JustLost.X, _runner.JustLost.Y), PopupBad);
         }
 
         /// <summary>
