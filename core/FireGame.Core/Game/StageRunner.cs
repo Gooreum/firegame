@@ -37,6 +37,12 @@ namespace FireGame.Core.Game
         public readonly List<GridPoint> Hydrants = new List<GridPoint>();
         public readonly List<GridPoint> Exits = new List<GridPoint>();
 
+        /// <summary>건물 구획. 실내·실외 판정과 연기 배출, 시야 차단에 쓴다.</summary>
+        public readonly BuildingMap Buildings;
+
+        /// <summary>지금 보이는 범위. 화면과 HUD가 이걸 보고 무엇을 그릴지 정한다.</summary>
+        public readonly VisionField Vision;
+
         public float TimeLeft;
         public StageOutcome Outcome = StageOutcome.InProgress;
 
@@ -94,6 +100,11 @@ namespace FireGame.Core.Game
                 Civilians.Add(new Civilian { X = point.X + 0.5f, Y = point.Y + 0.5f });
             }
 
+            // 건물 구획을 먼저 세운다. 연기가 어디로 빠지는지와
+            // 무엇이 가려지는지가 둘 다 여기서 갈린다.
+            Buildings = BuildingMap.From(Grid, map.PlayerSpawn);
+            Sim.Outdoor = OutdoorMask(Grid, Buildings);
+
             Player = new PlayerState();
             Player.Spawn(map.PlayerSpawn);
             Player.SuitLevel = loadout.SuitLevel;
@@ -102,6 +113,23 @@ namespace FireGame.Core.Game
             EquipLoadout(loadout.Equipment);
 
             TimeLeft = def.TimeLimitSeconds;
+
+            Vision = new VisionField(Grid.Width, Grid.Height);
+            Vision.Refresh(Grid, Buildings, Player.CellX, Player.CellY);
+        }
+
+        /// <summary>칸별 실외 여부. 연기는 실외에서 고이지 않고 빠져나간다.</summary>
+        private static bool[] OutdoorMask(FireGrid grid, BuildingMap buildings)
+        {
+            var mask = new bool[grid.Count];
+            for (int y = 0; y < grid.Height; y++)
+            {
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    mask[grid.Index(x, y)] = buildings.IsOutdoor(x, y);
+                }
+            }
+            return mask;
         }
 
         /// <summary>장비를 앞에서부터 슬롯에 채운다.</summary>
@@ -195,6 +223,7 @@ namespace FireGame.Core.Game
             {
                 _tickAccumulator -= SimConfig.TickDelta;
                 Sim.Tick();
+                Vision.Refresh(Grid, Buildings, Player.CellX, Player.CellY);
                 TicksElapsed++;
             }
         }
@@ -258,6 +287,8 @@ namespace FireGame.Core.Game
                 // 불이 덮친 시민은 더 이상 구조할 수 없다.
                 int cx = (int)Math.Floor(civilian.X);
                 int cy = (int)Math.Floor(civilian.Y);
+                if (Vision.Visible(cx, cy)) civilian.Spotted = true;
+
                 if (Grid.InBounds(cx, cy) && Grid[cx, cy].State == CellState.Burning)
                 {
                     civilian.Lost = true;

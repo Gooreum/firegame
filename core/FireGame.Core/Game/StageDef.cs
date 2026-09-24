@@ -90,6 +90,13 @@ namespace FireGame.Core.Game
         /// <summary>불에 휩싸여 구조하지 못한 상태.</summary>
         public bool Lost;
 
+        /// <summary>
+        /// 한 번이라도 눈에 들어왔는지. 보고 나면 계속 표시된다.
+        /// 화면은 이걸 보고 말풍선을 띄울지, 방향만 알려줄지 고른다 —
+        /// 아직 못 찾은 사람의 자리를 화면이 먼저 알려주면 찾을 이유가 없어진다.
+        /// </summary>
+        public bool Spotted;
+
         /// <summary>아직 맵 위에서 구조를 기다리는 중인지.</summary>
         public bool Pending
         {
