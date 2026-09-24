@@ -152,7 +152,9 @@ namespace FireGame.Core.Game
 
             if (!grid.InBounds(cellX, cellY)) return false;
 
-            return Materials.Of(grid[cellX, cellY].Material).Walkable;
+            // 닫힌 문은 지나갈 수 없다. 열고 들어가야 한다 —
+            // 그래야 "닫아 두고 간다"가 나중에 돌아올 길을 막는 대가를 치른다.
+            return Materials.Of(grid[cellX, cellY].Material).Walkable && !grid[cellX, cellY].Shut;
         }
 
         private void ApplyFireDamage(float dt, FireGrid grid)

@@ -54,6 +54,15 @@ namespace FireGame.Core.Grid
         /// </summary>
         public float Smoke;
 
+        /// <summary>
+        /// 문이 닫혀 있는지.
+        ///
+        /// <b>맵에서는 전부 열린 채로 시작한다.</b> 닫힌 채로 시작하면 지금까지의
+        /// 모든 경로가 막혀 여섯 현장이 전부 다른 판이 된다.
+        /// 닫는 것은 플레이어의 선택이고, 그게 이 게임의 두 번째 동사다.
+        /// </summary>
+        public bool Shut;
+
         public CellState State;
     }
 }

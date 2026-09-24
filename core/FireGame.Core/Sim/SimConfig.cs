@@ -97,5 +97,19 @@ namespace FireGame.Core.Sim
         /// 그 방에 두 번 다시 못 들어가는 잠긴 판이 된다.
         /// </summary>
         public const float SmokeDecay = 0.18f;
+
+        /// <summary>
+        /// 닫힌 문을 넘어가는 열의 비율.
+        /// 0으로 두면 문 한 장이 영구 방벽이 되어, 닫아 놓고 딴 데 가면 그만이다.
+        /// 0.22면 늦출 뿐 못 막는다 — 문은 시간을 버는 수단이지 해결책이 아니다.
+        /// </summary>
+        public const float ShutDoorHeat = 0.22f;
+
+        /// <summary>
+        /// 열린 문 옆에서 타는 불의 열 배수.
+        /// 문을 열면 연기가 빠지고 길이 트이는 대신 바람이 들어 불이 자란다.
+        /// <b>이 한 줄이 문을 딜레마로 만든다</b> — 없으면 "언제나 열어 두는 것이 이득"이다.
+        /// </summary>
+        public const float DraftBoost = 1.25f;
     }
 }

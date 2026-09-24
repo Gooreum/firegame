@@ -139,8 +139,9 @@ namespace FireGame.Core.Grid
                 // 목표에 닿았다. 그 칸이 벽이어도 보인다 — 앞을 막은 벽은 보여야 한다.
                 if (x == tx && y == ty) return true;
 
-                // 가는 길을 막는 것이 있으면 그 너머는 못 본다.
+                // 가는 길을 막는 것이 있으면 그 너머는 못 본다. 닫힌 문도 막는다.
                 if (!Materials.Of(grid[x, y].Material).Walkable) return false;
+                if (grid[x, y].Shut) return false;
             }
         }
 

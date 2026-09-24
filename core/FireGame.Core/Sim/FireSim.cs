@@ -136,6 +136,10 @@ namespace FireGame.Core.Sim
                     CellMaterial material = Materials.Of(cells[index].Material);
                     float output = material.HeatOutput * SimConfig.SpreadScale * dt;
 
+                    // 열린 문이 옆에 있으면 바람이 들어 불이 자란다.
+                    // 문을 열어 연기를 빼는 대가가 여기서 나온다.
+                    if (NextToOpenDoor(x, y)) output *= SimConfig.DraftBoost;
+
                     // 자기 자신도 데운다. 이웃에게 주는 열에는 영향이 없으므로
                     // 확산 타이밍은 그대로이고, 대신 연소 셀이 고유의 열량을 유지해
                     // 진압에 필요한 방수량이 불의 규모에 비례하게 된다.
@@ -147,7 +151,10 @@ namespace FireGame.Core.Sim
                         int ny = y + NeighborDy[n];
                         if (!_grid.InBounds(nx, ny)) continue;
 
-                        _heatDelta[_grid.Index(nx, ny)] += output * NeighborWeight[n] * WindFactor(n);
+                        int target = _grid.Index(nx, ny);
+                        float through = cells[target].Shut ? SimConfig.ShutDoorHeat : 1f;
+
+                        _heatDelta[target] += output * NeighborWeight[n] * WindFactor(n) * through;
                     }
 
                     // 열을 뿌린 뒤 연료를 소모한다. 소진되면 이번 틱까지만 태우고 소실된다.
@@ -159,6 +166,25 @@ namespace FireGame.Core.Sim
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// 직교로 맞닿은 칸에 열린 문이 있는지. 닫힌 문은 세지 않는다 —
+        /// 닫아야 바람이 끊긴다는 것이 문을 닫는 이유의 절반이다.
+        /// </summary>
+        private bool NextToOpenDoor(int x, int y)
+        {
+            for (int n = 0; n < 4; n++)
+            {
+                int nx = x + NeighborDx[n];
+                int ny = y + NeighborDy[n];
+                if (!_grid.InBounds(nx, ny)) continue;
+
+                ref Cell neighbor = ref _grid[nx, ny];
+                if (neighbor.Material == (byte)MaterialId.Door && !neighbor.Shut) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -326,12 +352,12 @@ namespace FireGame.Core.Sim
         }
 
         /// <summary>
-        /// 연기가 지나갈 수 있는 칸인지. 벽과 설비는 막는다.
-        /// 문을 닫아 잠그는 것은 다음 단계에서 이 한 줄에 붙는다.
+        /// 연기가 지나갈 수 있는 칸인지. 벽과 설비는 막고, 닫힌 문도 막는다.
+        /// 문 한 장이 방화 장벽이 되는 지점이 이 한 줄이다.
         /// </summary>
         private bool Passable(int index)
         {
-            return Materials.Of(_grid.Cells[index].Material).Walkable;
+            return Materials.Of(_grid.Cells[index].Material).Walkable && !_grid.Cells[index].Shut;
         }
     }
 }
