@@ -631,10 +631,11 @@ namespace FireGame.UnityLayer
                     break;
 
                 case RoofFixture.Skylight:      // 창고 — 톱니 채광창
+                    // 폭 0.8칸에 높이 62%로 뒀더니 흰 기둥 네 개가 지붕을 덮어 버렸다(캡처로 확인).
                     for (int i = 0; i < 4; i++)
                     {
-                        Block(building, 0.20f + (i * 0.20f), 0.5f, 0.8f, building.Height * 0.62f,
-                            new Color(0.88f, 0.94f, 0.99f));
+                        Block(building, 0.24f + (i * 0.18f), 0.5f, 0.45f, building.Height * 0.44f,
+                            new Color(0.78f, 0.85f, 0.92f));
                     }
 
                     break;
@@ -687,9 +688,11 @@ namespace FireGame.UnityLayer
 
                 SpriteRenderer board = Piece("Sign", Art.Get("UI/panel_grey"), OrderFixture, building.Id);
                 board.color = new Color(0.99f, 0.96f, 0.88f);
-                board.transform.position = _view.ToWorld(gate.x, gate.y) + (outward * 0.95f);
+                // 마주 보는 두 건물(공장 배전동과 공장동)은 문이 세 칸 간격이라
+                // 간판이 넓으면 "공장 공장"으로 겹친다(캡처로 확인). 좁게, 가깝게 붙인다.
+                board.transform.position = _view.ToWorld(gate.x, gate.y) + (outward * 0.72f);
                 board.transform.localScale = new Vector3(
-                    Art.FitWidth(board.sprite, 2.1f), Art.FitWidth(board.sprite, 1.0f), 1f);
+                    Art.FitWidth(board.sprite, 1.5f), Art.FitWidth(board.sprite, 0.8f), 1f);
 
                 var go = new GameObject("SignText");
                 go.transform.SetParent(_root, false);
@@ -697,7 +700,7 @@ namespace FireGame.UnityLayer
                 text.font = Art.Font;
                 text.text = theme.SignLabel;
                 text.fontSize = 64;
-                text.characterSize = 0.075f;
+                text.characterSize = 0.062f;
                 text.fontStyle = FontStyle.Bold;
                 text.anchor = TextAnchor.MiddleCenter;
                 text.alignment = TextAlignment.Center;

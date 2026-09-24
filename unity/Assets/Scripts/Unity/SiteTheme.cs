@@ -69,31 +69,38 @@ namespace FireGame.UnityLayer
         /// </summary>
         public readonly bool Upright;
 
-        private PropLook(string resource, PropStyle style, Color tint, float fill, bool upright)
+        /// <summary>
+        /// 덩어리 상자에 늘여 맞출지. 코드로 찍은 소품은 칸을 채우라고 만든 것이라 늘인다.
+        /// 켄니 그림은 제 비율이 있어 늘이면 찌그러지므로 비율을 지킨다.
+        /// </summary>
+        public readonly bool Stretch;
+
+        private PropLook(string resource, PropStyle style, Color tint, float fill, bool upright, bool stretch)
         {
             _resource = resource;
             _style = style;
             _tint = tint;
             Fill = fill;
             Upright = upright;
+            Stretch = stretch;
         }
 
         /// <summary>켄니 팩에서 가져온 그림.</summary>
         public static PropLook Art(string resource, float fill, bool upright)
         {
-            return new PropLook(resource, PropStyle.Pump, Color.white, fill, upright);
+            return new PropLook(resource, PropStyle.Pump, Color.white, fill, upright, false);
         }
 
         /// <summary>같은 그림을 색만 바꿔 쓴다(파란 드럼통 / 붉은 드럼통).</summary>
         public static PropLook Tinted(string resource, Color tint, float fill, bool upright)
         {
-            return new PropLook(resource, PropStyle.Pump, tint, fill, upright);
+            return new PropLook(resource, PropStyle.Pump, tint, fill, upright, false);
         }
 
-        /// <summary>켄니에 없어서 코드로 찍는 그림.</summary>
+        /// <summary>켄니에 없어서 코드로 찍는 그림. 칸을 채우라고 만든 것이라 늘여 맞춘다.</summary>
         public static PropLook Drawn(PropStyle style, float fill, bool upright)
         {
-            return new PropLook(null, style, Color.white, fill, upright);
+            return new PropLook(null, style, Color.white, fill, upright, true);
         }
 
         public Sprite Sprite
@@ -148,8 +155,8 @@ namespace FireGame.UnityLayer
                     GroundStyle.Lawn, BorderStyle.Hedge,
                     new PropKit(
                         PropLook.Art("Props/tree_small", 1.1f, false),
-                        PropLook.Art("Vehicles/firetruck", 0.95f, true),
-                        PropLook.Art("Props/tree_large", 1.1f, false)),
+                        PropLook.Art("Props/tree_large", 1.15f, false),
+                        PropLook.Art("Props/tree_large", 1.15f, false)),
                     "주택")
             },
 
@@ -174,7 +181,7 @@ namespace FireGame.UnityLayer
                     new PropKit(
                         PropLook.Art("Vehicles/cone", 0.8f, false),
                         PropLook.Drawn(PropStyle.Pump, 1f, true),
-                        PropLook.Art("Vehicles/firetruck", 0.95f, true)),
+                        PropLook.Drawn(PropStyle.Pump, 1f, true)),
                     "주유소")
             },
 
@@ -185,7 +192,7 @@ namespace FireGame.UnityLayer
                     GroundStyle.Yard, BorderStyle.Fence,
                     new PropKit(
                         PropLook.Drawn(PropStyle.Pallet, 0.95f, false),
-                        PropLook.Art("Vehicles/firetruck", 0.95f, true),
+                        PropLook.Drawn(PropStyle.Pallet, 0.95f, true),
                         PropLook.Drawn(PropStyle.Container, 1f, true)),
                     "물류")
             },
@@ -214,6 +221,15 @@ namespace FireGame.UnityLayer
                     "부두")
             },
         };
+
+        /// <summary>
+        /// 출동해서 내린 소방차. 스폰에 가장 가까운 덩어리는 어느 현장이든 이것으로 그린다.
+        /// 크기로 고르면 두 칸짜리 주유기 섬과 구별되지 않는다.
+        /// </summary>
+        public static PropLook FireTruck
+        {
+            get { return PropLook.Art("Vehicles/firetruck", 0.95f, true); }
+        }
 
         /// <summary>현장 테마. 모르는 현장은 주택으로 둔다 — 화면이 비는 것보다 낫다.</summary>
         public static SiteTheme Of(int stageId)

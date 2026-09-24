@@ -351,6 +351,11 @@ namespace FireGame.UnityLayer
                             top = Art.White;
                             tint = new Color(1f, 0.92f, 0.35f, 0.6f);
                             break;
+
+                        case MaterialId.Scenery:
+                            // 칸 하나로 그리지 않는다. 붙어 있는 칸을 덩어리로 묶어
+                            // 물건 하나를 얹는다 — BuildScenery()가 한다.
+                            break;
                     }
 
                     if (top != null)
@@ -363,12 +368,158 @@ namespace FireGame.UnityLayer
                     }
                 }
             }
+
+            BuildScenery();
         }
 
         /// <summary>
         /// 소방관 시작 위치에서 문을 지나지 않고 갈 수 있는 바닥 = 바깥.
         /// 바깥은 잔디·흙, 안쪽은 마루·타일로 깔아 건물 윤곽이 보이게 한다.
         /// </summary>
+
+        /// <summary>
+        /// 마당의 장식물을 물건으로 세운다.
+        ///
+        /// 맵 문자에는 <c>o</c> 한 종류뿐이다. 무엇으로 보이는가는 현장과
+        /// <b>붙어 있는 덩어리의 칸 수</b>가 정한다 — 맵 문자열의 <c>o</c>와 <c>oo</c>가
+        /// 눈에 보이는 그대로 다른 물건이 된다.
+        /// 1칸이면 나무·콘·계선주, 2~3칸이면 주유기 섬·차량, 4칸 이상이면 컨테이너·탱크.
+        /// </summary>
+        private void BuildScenery()
+        {
+            SiteTheme theme = SiteTheme.Of(_runner.Def.Id);
+            var taken = new bool[_grid.Count];
+            var clumps = new List<List<GridPoint>>();
+
+            for (int y = 0; y < _grid.Height; y++)
+            {
+                for (int x = 0; x < _grid.Width; x++)
+                {
+                    int i = _grid.Index(x, y);
+                    if (taken[i] || (MaterialId)_grid[x, y].Material != MaterialId.Scenery) continue;
+
+                    clumps.Add(SceneryClump(new GridPoint(x, y), taken));
+                }
+            }
+
+            // 스폰에 가장 가까운 덩어리는 어느 현장이든 소방차다. 출동해서 내린 자리가 된다.
+            // 칸 수로 고르면 두 칸짜리 주유기 섬과 구별되지 않는다.
+            GridPoint spawn = MapLoader.Parse(_runner.Def.Map).PlayerSpawn;
+            int nearest = -1;
+            float best = float.MaxValue;
+
+            for (int i = 0; i < clumps.Count; i++)
+            {
+                foreach (GridPoint c in clumps[i])
+                {
+                    float d = Mathf.Abs(c.X - spawn.X) + Mathf.Abs(c.Y - spawn.Y);
+                    if (d >= best) continue;
+                    best = d;
+                    nearest = i;
+                }
+            }
+
+            for (int i = 0; i < clumps.Count; i++)
+            {
+                PropLook look = i == nearest ? SiteTheme.FireTruck : theme.Props.For(clumps[i].Count);
+                PlaceProp(look, clumps[i]);
+            }
+        }
+
+        /// <summary>맞닿은 장식물 칸을 4방향으로 모은다.</summary>
+        private List<GridPoint> SceneryClump(GridPoint start, bool[] taken)
+        {
+            var clump = new List<GridPoint>();
+            var queue = new Queue<GridPoint>();
+            taken[_grid.Index(start.X, start.Y)] = true;
+            queue.Enqueue(start);
+
+            int[] dx = { 0, 0, -1, 1 };
+            int[] dy = { -1, 1, 0, 0 };
+
+            while (queue.Count > 0)
+            {
+                GridPoint p = queue.Dequeue();
+                clump.Add(p);
+
+                for (int k = 0; k < 4; k++)
+                {
+                    int nx = p.X + dx[k];
+                    int ny = p.Y + dy[k];
+                    if (!_grid.InBounds(nx, ny)) continue;
+
+                    int n = _grid.Index(nx, ny);
+                    if (taken[n] || (MaterialId)_grid[nx, ny].Material != MaterialId.Scenery) continue;
+
+                    taken[n] = true;
+                    queue.Enqueue(new GridPoint(nx, ny));
+                }
+            }
+
+            return clump;
+        }
+
+        /// <summary>덩어리가 차지한 자리에 물건 하나와 바닥 그림자를 놓는다.</summary>
+        private void PlaceProp(PropLook look, List<GridPoint> clump)
+        {
+            int minX = int.MaxValue;
+            int minY = int.MaxValue;
+            int maxX = int.MinValue;
+            int maxY = int.MinValue;
+
+            foreach (GridPoint c in clump)
+            {
+                if (c.X < minX) minX = c.X;
+                if (c.Y < minY) minY = c.Y;
+                if (c.X > maxX) maxX = c.X;
+                if (c.Y > maxY) maxY = c.Y;
+            }
+
+            float w = maxX - minX + 1;
+            float h = maxY - minY + 1;
+            var center = new Vector3((minX + maxX + 1) * 0.5f, _grid.Height - ((minY + maxY + 1) * 0.5f), 0f);
+
+            // 위아래가 있는 그림은 덩어리가 누운 방향에 맞춰 돌린다.
+            // 그냥 "세로로 긴 덩어리면 돌린다"로 뒀더니, 세로로 긴 차량 그림이
+            // 가로 두 칸짜리 자리에 선 채로 들어가 반 칸으로 쪼그라들었다(캡처로 확인).
+            Vector3 raw = look.Sprite.bounds.size;
+            bool tallSprite = raw.y > raw.x;
+            bool tallBox = h > w;
+            bool turn = look.Upright && tallSprite != tallBox;
+            float alongX = turn ? h : w;
+            float alongY = turn ? w : h;
+
+            Sprite sprite = look.Sprite;
+            Vector3 size = raw;
+            float fitX = size.x > 0f ? (alongX * look.Fill) / size.x : 1f;
+            float fitY = size.y > 0f ? (alongY * look.Fill) / size.y : 1f;
+
+            // 코드로 찍은 소품은 칸을 채우라고 만든 것이라 상자에 늘여 맞춘다.
+            // 켄니 그림은 제 비율(차량은 1:2)이 있어 늘이면 찌그러지므로 작은 쪽에 맞춘다.
+            if (!look.Stretch)
+            {
+                float fit = Mathf.Min(fitX, fitY);
+                fitX = fit;
+                fitY = fit;
+            }
+
+            // 그림자를 먼저 깐다. 물건이 땅에 닿아 보인다 — 처마 그림자와 같은 원리다.
+            // 네모난 판으로 깔았더니 둥근 소품(계선주·드럼통) 뒤로 네모가 드러나 맨홀처럼 보였다.
+            // 가장자리가 흐려지는 원판을 써서 어떤 모양에도 맞게 한다.
+            Sprite blob = Art.Get("Effects/glow");
+            SpriteRenderer shade = CreateRenderer("PropShadow", blob, OrderProp);
+            shade.color = new Color(0f, 0f, 0f, 0.22f);
+            shade.transform.position = center + new Vector3(0.12f, -0.12f, 0f);
+            shade.transform.localScale = new Vector3(
+                Art.FitWidth(blob, w * 1.15f), Art.FitWidth(blob, h * 1.15f), 1f);
+
+            SpriteRenderer prop = CreateRenderer("Prop", sprite, OrderWall);
+            prop.color = look.Tint;
+            prop.transform.position = center;
+            prop.transform.localScale = new Vector3(fitX, fitY, 1f);
+            prop.transform.rotation = Quaternion.Euler(0f, 0f, turn ? 90f : 0f);
+        }
+
         private bool IsWallAt(int x, int y)
         {
             if (!_grid.InBounds(x, y)) return false;
