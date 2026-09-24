@@ -29,6 +29,23 @@ namespace FireGame.UnityLayer
         private const int OrderAim = 23;     // 조준 표시는 불 위. 불 밑에 깔면 정작 불타는 칸에서 안 보인다
         private const int OrderSmoke = 30;
 
+        /// <summary>
+        /// 연기 장막. 불꽃 연출(20~30) 위에 깔아야 불이 연기 너머로 흐릿해 보인다.
+        /// 이건 <b>칸에 실제로 찬 연기 농도</b>고, OrderSmoke의 뭉게구름은 연소 칸의 연출이다.
+        /// </summary>
+        private const int OrderHaze = 32;
+
+        /// <summary>
+        /// 안개. 아직 못 본 건물 칸을 덮는다.
+        ///
+        /// <b>반드시 지붕(BuildingOverlay 36~45)보다 아래여야 한다.</b>
+        /// 위에 두면 밖에서 볼 때 건물이 통째로 검은 사각형이 된다 —
+        /// 지붕도, 앞벽도, 창문도 전부 안개에 묻힌다.
+        /// 밖에서 건물 속이 안 보이는 것은 이미 지붕이 하는 일이고,
+        /// 안개가 할 일은 <b>들어갔을 때</b> 아직 못 본 곳을 덮는 것뿐이다.
+        /// </summary>
+        private const int OrderFog = 34;
+
         /// <summary>팝업은 지붕(BuildingOverlay.OrderRoof = 40)보다 위여야 건물 위에서도 읽힌다.</summary>
         private const int OrderPopup = 60;
 
@@ -82,6 +99,8 @@ namespace FireGame.UnityLayer
         private readonly SpriteRenderer[] _flame;
         private readonly SpriteRenderer[] _tongue;
         private readonly SpriteRenderer[] _smoke;
+        private readonly SpriteRenderer[] _haze;
+        private readonly SpriteRenderer[] _fog;
         private readonly Color[] _topBaseColor;
         private readonly bool[] _isWall;
 
@@ -103,8 +122,18 @@ namespace FireGame.UnityLayer
 
         /// <summary>업고 있을 때만 켜지는 출구 길잡이. 점 세 개가 출구 쪽으로 차례로 밝아진다.</summary>
         private const int ExitDotCount = 3;
+
+        /// <summary>이 농도부터 연기를 그린다. 더 옅은 것까지 그리면 화면만 뿌예진다.</summary>
+        private const float HazeFloor = 0.12f;
         private readonly SpriteRenderer[] _exitDots = new SpriteRenderer[ExitDotCount];
         private SpriteRenderer _exitPulse;
+
+        /// <summary>
+        /// 아직 못 찾은 시민 쪽을 가리키는 점들. 출구 길잡이와 같은 방식이다.
+        /// <b>방향만 준다</b> — 거리를 주면 찾을 필요가 없어지고, 아예 안 주면
+        /// 40x22 맵을 벽마다 더듬어야 해서 탐색이 아니라 노동이 된다.
+        /// </summary>
+        private readonly SpriteRenderer[] _searchDots = new SpriteRenderer[ExitDotCount];
 
         private readonly Sprite[] _flameSprites;
 
@@ -192,6 +221,8 @@ namespace FireGame.UnityLayer
             _flame = new SpriteRenderer[count];
             _tongue = new SpriteRenderer[count];
             _smoke = new SpriteRenderer[count];
+            _haze = new SpriteRenderer[count];
+            _fog = new SpriteRenderer[count];
             _topBaseColor = new Color[count];
             _isWall = new bool[count];
 
@@ -768,6 +799,48 @@ namespace FireGame.UnityLayer
                 if (_glow[i] != null) _glow[i].enabled = false;
                 if (_smoke[i] != null) _smoke[i].enabled = false;
             }
+
+            RefreshHaze(i, x, y, cell.Smoke);
+            RefreshFog(i, x, y);
+        }
+
+        /// <summary>
+        /// 칸에 찬 연기를 회색 장막으로 덮는다.
+        /// 아주 옅은 연기까지 그리면 화면 전체가 뿌옇게 죽으므로 문턱을 둔다 —
+        /// <b>가려지기 시작하는 농도부터</b> 보여야 "저기는 못 들어가겠다"가 읽힌다.
+        /// </summary>
+        private void RefreshHaze(int i, int x, int y, float smoke)
+        {
+            if (smoke < HazeFloor)
+            {
+                if (_haze[i] != null) _haze[i].enabled = false;
+                return;
+            }
+
+            SpriteRenderer haze = Ensure(_haze, i, x, y, OrderHaze);
+            float depth = Mathf.InverseLerp(HazeFloor, 1f, smoke);
+            haze.color = new Color(0.36f, 0.37f, 0.40f, 0.20f + (0.62f * depth));
+            haze.enabled = true;
+        }
+
+        /// <summary>
+        /// 아직 못 본 건물 칸을 덮는다. 한 번 본 칸은 옅게 남겨
+        /// "아까 봤을 때는 이랬다"를 보여준다 — 같은 방을 매번 다시 더듬게 하지 않는다.
+        /// 건물 밖은 덮지 않는다. 마당까지 가리면 탐색이 아니라 더듬기가 된다.
+        /// </summary>
+        private void RefreshFog(int i, int x, int y)
+        {
+            if (_buildings.At(x, y) == BuildingMap.None || _runner.Vision.Visible(x, y))
+            {
+                if (_fog[i] != null) _fog[i].enabled = false;
+                return;
+            }
+
+            SpriteRenderer fog = Ensure(_fog, i, x, y, OrderFog);
+            fog.color = _runner.Vision.Known(x, y)
+                ? new Color(0.05f, 0.06f, 0.09f, 0.58f)
+                : new Color(0.04f, 0.05f, 0.07f, 1f);
+            fog.enabled = true;
         }
 
         private SpriteRenderer Ensure(SpriteRenderer[] layer, int i, int x, int y, int order)
@@ -885,7 +958,9 @@ namespace FireGame.UnityLayer
 
                 TextMesh call = _civilianCalls[i];
 
-                if (!civilian.Pending || civilian.Carried)
+                // 아직 못 찾은 사람의 자리를 화면이 먼저 알려주면 찾을 이유가 없어진다.
+                // 대신 아래 RefreshSearchGuide가 방향만 가리킨다.
+                if (!civilian.Pending || civilian.Carried || !civilian.Spotted)
                 {
                     mark.enabled = false;
                     call.gameObject.SetActive(false);
@@ -916,6 +991,71 @@ namespace FireGame.UnityLayer
             }
 
             RefreshExitGuide(carrying, time);
+            RefreshSearchGuide(carrying, time);
+        }
+
+        /// <summary>
+        /// 아직 못 찾은 시민 쪽으로 점을 흘려보낸다.
+        ///
+        /// 시야를 가리고 나니 항구는 시작 시점에 건물 속이 한 칸도 안 보인다.
+        /// 아무 실마리 없이 40x22를 벽마다 더듬게 하면 탐색이 아니라 노동이다.
+        /// 그래서 <b>방향만</b> 준다 — 거리도 자리도 주지 않으므로 들어가 봐야 안다.
+        /// 사람을 업고 있을 때는 끈다. 그때 할 일은 찾기가 아니라 나가기다.
+        /// </summary>
+        private void RefreshSearchGuide(bool carrying, float time)
+        {
+            if (_searchDots[0] == null)
+            {
+                for (int i = 0; i < ExitDotCount; i++)
+                {
+                    _searchDots[i] = CreateRenderer("SearchDot" + i, Art.Get("Effects/glow"), OrderPeople + 2);
+                }
+            }
+
+            Civilian target = carrying ? null : NearestUnspotted();
+            if (target == null)
+            {
+                for (int i = 0; i < ExitDotCount; i++) _searchDots[i].enabled = false;
+                return;
+            }
+
+            Vector3 toTarget = ToWorld(target.X, target.Y) - PlayerWorld;
+            Vector3 direction = toTarget.sqrMagnitude > 0.0001f ? toTarget.normalized : Vector3.up;
+
+            for (int i = 0; i < ExitDotCount; i++)
+            {
+                SpriteRenderer dot = _searchDots[i];
+                float chase = Mathf.Abs(Mathf.Sin((time * 2.2f) - (i * 0.7f)));
+
+                // 출구 길잡이는 초록이다. 수색은 노랑으로 갈라 둘을 헷갈리지 않게 한다.
+                dot.color = new Color(1f, 0.82f, 0.25f, 0.18f + (0.42f * chase));
+                dot.transform.position = PlayerWorld + (direction * (0.85f + (i * 0.5f)));
+                dot.transform.localScale = Vector3.one * Art.FitWidth(dot.sprite, 0.34f + (0.16f * chase));
+                dot.enabled = true;
+            }
+        }
+
+        /// <summary>아직 못 찾은 시민 중 가장 가까운 한 명. 없으면 null.</summary>
+        private Civilian NearestUnspotted()
+        {
+            Civilian best = null;
+            float bestDistance = float.MaxValue;
+
+            for (int i = 0; i < _runner.Civilians.Count; i++)
+            {
+                Civilian civilian = _runner.Civilians[i];
+                if (!civilian.Pending || civilian.Spotted) continue;
+
+                float dx = civilian.X - _runner.Player.X;
+                float dy = civilian.Y - _runner.Player.Y;
+                float distance = (dx * dx) + (dy * dy);
+                if (distance >= bestDistance) continue;
+
+                bestDistance = distance;
+                best = civilian;
+            }
+
+            return best;
         }
 
         private void RefreshExitGuide(bool carrying, float time)
