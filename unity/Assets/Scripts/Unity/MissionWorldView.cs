@@ -736,14 +736,16 @@ namespace FireGame.UnityLayer
                 tongue.color = Color.Lerp(palette.TongueDim, palette.TongueHot, intensity * 0.7f);
                 float height = (1.3f + (0.7f * intensity)) * variety * (1f + flicker);
                 tongue.transform.localScale = Vector3.one * (height / Mathf.Max(_tongueSprite.bounds.size.y, 0.01f));
-                tongue.transform.position = CellCenter(x, y) + new Vector3(jitterX + (Mathf.Sin((time * 5f) + seed) * 0.06f), 0.2f + jitterY, 0f);
+                tongue.transform.position = StandOn(CellCenter(x, y))
+                    + new Vector3(jitterX + (Mathf.Sin((time * 5f) + seed) * 0.06f), 0.2f + jitterY, 0f);
                 tongue.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Sin((time * 6f) + seed) * 10f);
                 tongue.enabled = true;
 
                 SpriteRenderer smoke = Ensure(_smoke, i, x, y, OrderSmoke);
                 smoke.sprite = _smokeSprites[Mathf.Abs(seed) % _smokeSprites.Length];
                 float drift = Mathf.Repeat((time * 0.6f) + ((seed & 255) / 255f), 1f);
-                smoke.transform.position = CellCenter(x, y) + new Vector3(0.2f * Mathf.Sin(time + seed), 0.5f + drift, 0f);
+                smoke.transform.position = StandOn(CellCenter(x, y))
+                    + new Vector3(0.2f * Mathf.Sin(time + seed), 0.5f + drift, 0f);
                 smoke.transform.localScale = Vector3.one * Art.FitWidth(smoke.sprite, 1.0f + drift);
                 // 유류 화재는 검은 연기가 특징이다. 멀리서도 "저건 기름"을 알 수 있다.
                 Color smokeTint = palette.Smoke;
@@ -780,7 +782,7 @@ namespace FireGame.UnityLayer
         private void RefreshPeople()
         {
             PlayerState player = _runner.Player;
-            _player.transform.position = PlayerWorld;
+            _player.transform.position = StandOn(PlayerWorld);
 
             // 캐릭터 그림은 오른쪽을 본다. 조준 방향으로 돌린다.
             float ox = Aiming.OffsetX(player.Aim);
@@ -800,7 +802,7 @@ namespace FireGame.UnityLayer
                 {
                     // 업은 사람은 소방관 어깨 위에서 걸음에 맞춰 흔들린다.
                     float bob = Mathf.Sin(Time.time * 9f) * 0.06f;
-                    renderer.transform.position = PlayerWorld
+                    renderer.transform.position = StandOn(PlayerWorld)
                                                   - (new Vector3(ox, oy, 0f).normalized * 0.28f)
                                                   + new Vector3(0f, 0.22f + bob, 0f);
                     renderer.transform.rotation = _player.transform.rotation;
@@ -809,7 +811,7 @@ namespace FireGame.UnityLayer
                 }
                 else
                 {
-                    renderer.transform.position = ToWorld(civilian.X, civilian.Y);
+                    renderer.transform.position = StandOn(ToWorld(civilian.X, civilian.Y));
                     renderer.transform.rotation = Quaternion.Euler(0f, 0f, -90f);
                     renderer.transform.localScale = Vector3.one * 1.05f;
                 }
