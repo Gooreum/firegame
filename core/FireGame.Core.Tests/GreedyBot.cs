@@ -17,6 +17,9 @@ namespace FireGame.Core.Tests
     /// </summary>
     internal sealed class GreedyBot
     {
+        /// <summary>구조 버튼을 누를지. false면 "버튼 없이는 못 구한다"를 확인하는 데 쓴다.</summary>
+        public bool PressRescue = true;
+
         private readonly StageRunner _runner;
         private readonly int[] _distance;
         private readonly int[] _cameFrom;
@@ -76,7 +79,7 @@ namespace FireGame.Core.Tests
                     : MoveToward(NearestCivilian());
 
                 // 시민은 저절로 업히지 않는다. 손이 닿으면 버튼을 누른다.
-                rescue.Rescue = _runner.RescueTarget != null;
+                rescue.Rescue = PressRescue && _runner.RescueTarget != null;
 
                 // 길이 불로 막혀 갈 수 없으면 가만히 서 있지 말고 불부터 끈다.
                 // 그래야 길이 열린다.
