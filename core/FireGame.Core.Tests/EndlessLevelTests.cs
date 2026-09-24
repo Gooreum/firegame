@@ -33,7 +33,7 @@ namespace FireGame.Core.Tests
             foreach (UpgradeTrack track in UpgradeCatalog.All)
             {
                 int previous = 0;
-                for (int level = 6; level <= track.MaxLevel; level++)
+                for (int level = 6; level <= 200; level++)
                 {
                     int cost = track.CostToReach(level);
                     Assert.True(cost > previous || cost == UpgradeTrack.MaxCost, track.Name + " Lv" + level + " 값이 오르지 않았다");
@@ -46,16 +46,28 @@ namespace FireGame.Core.Tests
 
         // --- TC-3 ---
         [Fact]
-        public void MaxLevels_AreEndlessForEquipment_AndTenForSuitAndBoots()
+        public void Levels_HaveNoCeiling_ForEveryTrack()
         {
-            SaveData save = SaveData.NewGame();
-            save.SetLevel(GearId.Suit, 10);
-            save.Money = 1000000;
-            Assert.Equal(-1, Shop.NextCost(save, GearId.Suit));
-            Assert.Equal(PurchaseResult.MaxLevel, Shop.Upgrade(save, GearId.Suit));
+            // 여섯 트랙 전부 Lv200까지 계속 살 수 있어야 한다. 돈 쓸 곳이 끝나면 벌 이유도 끝난다.
+            foreach (UpgradeTrack track in UpgradeCatalog.All)
+            {
+                SaveData save = SaveData.NewGame();
 
-            save.SetLevel(EquipmentId.Hose, 500);
-            Assert.Equal(UpgradeCatalog.EndlessLevel, save.LevelOf(EquipmentId.Hose));
+                for (int level = save.LevelOf(track.Id); level < 200; level++)
+                {
+                    // 후반 값은 가격 상한($99,999,950)에 붙으므로 지갑을 매번 채워 준다.
+                    save.Money = int.MaxValue;
+                    Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, track.Id));
+                }
+
+                Assert.Equal(200, save.LevelOf(track.Id));
+                Assert.True(Shop.NextCost(save, track.Id) > 0, track.Name + " Lv201을 살 수 없다");
+            }
+
+            // 상한이 없으니 SetLevel도 자르지 않는다.
+            SaveData raw = SaveData.NewGame();
+            raw.SetLevel(EquipmentId.Hose, 500);
+            Assert.Equal(500, raw.LevelOf(EquipmentId.Hose));
         }
 
         // --- TC-4 ---

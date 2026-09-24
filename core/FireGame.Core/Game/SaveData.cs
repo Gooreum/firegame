@@ -44,14 +44,13 @@ namespace FireGame.Core.Game
             return track != null ? track.StartLevel : 0;
         }
 
-        /// <summary>레벨을 정한다. 0..최대 레벨로 자르고, 모르는 항목은 무시한다.</summary>
+        /// <summary>레벨을 정한다. 상한은 없고 음수만 0으로 자른다. 모르는 항목은 무시한다.</summary>
         public void SetLevel(int trackId, int level)
         {
             UpgradeTrack track = UpgradeCatalog.ById(trackId);
             if (track == null) return;
 
             if (level < 0) level = 0;
-            if (level > track.MaxLevel) level = track.MaxLevel;
             _levels[trackId] = level;
         }
 
@@ -287,7 +286,10 @@ namespace FireGame.Core.Game
     {
         Success = 0,
 
-        /// <summary>이미 최대 레벨이다.</summary>
+        /// <summary>
+        /// 이미 최대 레벨이다. 지금은 나올 수 없다 — 어떤 항목에도 최대 레벨이 없다.
+        /// 값은 남겨 둔다. 세이브가 아니라 실행 중에만 쓰이지만 호출부가 아직 분기하고 있다.
+        /// </summary>
         MaxLevel = 1,
 
         NotEnoughMoney = 2,

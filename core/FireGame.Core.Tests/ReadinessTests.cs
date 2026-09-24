@@ -68,8 +68,13 @@ namespace FireGame.Core.Tests
             save.Money = 150;
             Assert.Equal(2, Readiness.AffordableUpgrades(save));
 
-            foreach (UpgradeTrack track in UpgradeCatalog.All) save.SetLevel(track.Id, track.MaxLevel);
+            // 상한이 없으니 아무리 올려도 살 게 남는다. 돈이 있으면 여섯 칸 모두 살 수 있다.
+            foreach (UpgradeTrack track in UpgradeCatalog.All) save.SetLevel(track.Id, 10);
             save.Money = 1000000;
+            Assert.Equal(UpgradeCatalog.All.Length, Readiness.AffordableUpgrades(save));
+
+            // 막히는 건 돈이 없을 때뿐이다.
+            save.Money = 0;
             Assert.Equal(0, Readiness.AffordableUpgrades(save));
         }
 

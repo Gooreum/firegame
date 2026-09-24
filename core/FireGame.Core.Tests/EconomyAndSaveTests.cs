@@ -137,19 +137,26 @@ namespace FireGame.Core.Tests
 
         // --- TC-10 ---
         [Fact]
-        public void UpgradingPastTheMaxLevel_DoesNotChargeAgain()
+        public void UpgradingNeverHitsACeiling_ButAlwaysCosts()
         {
             SaveData save = SaveData.NewGame();
             save.Money = 99999;
 
-            // 장비는 사실상 무제한이라, 끝이 있는 방화복(Lv10)으로 본다.
-            for (int i = 0; i < UpgradeCatalog.Suit.MaxLevel; i++) Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, GearId.Suit));
+            // 예전엔 방화복이 Lv10에서 멈췄다. 이제 멈추는 곳이 없다.
+            for (int i = 0; i < 10; i++) Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, GearId.Suit));
             Assert.Equal(10, save.LevelOf(GearId.Suit));
-            int money = save.Money;
 
-            Assert.Equal(PurchaseResult.MaxLevel, Shop.Upgrade(save, GearId.Suit));
-            Assert.Equal(money, save.Money);
-            Assert.Equal(-1, Shop.NextCost(save, GearId.Suit));
+            int next = Shop.NextCost(save, GearId.Suit);
+            Assert.True(next > 0, "Lv11을 살 수 없다");
+
+            int money = save.Money;
+            Assert.Equal(PurchaseResult.Success, Shop.Upgrade(save, GearId.Suit));
+            Assert.Equal(11, save.LevelOf(GearId.Suit));
+            Assert.Equal(money - next, save.Money);
+
+            // 돈이 모자랄 때만 막힌다.
+            save.Money = 0;
+            Assert.Equal(PurchaseResult.NotEnoughMoney, Shop.Upgrade(save, GearId.Suit));
         }
 
         // --- TC-11 ---

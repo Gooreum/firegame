@@ -103,7 +103,7 @@ namespace FireGame.Core.Tests
                 {
                     UpgradeTrack track = UpgradeCatalog.ById(requirement.TrackId);
                     Assert.NotNull(track);
-                    Assert.InRange(requirement.Level, 1, track.MaxLevel);
+                    Assert.True(requirement.Level >= 1, track.Name + " 필요 레벨이 1보다 작다");
                 }
             }
         }

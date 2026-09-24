@@ -31,10 +31,6 @@ namespace FireGame.Core.Tests
             Assert.Equal(200, UpgradeCatalog.Suit.CostToReach(1));
             Assert.Equal(150, UpgradeCatalog.Boots.CostToReach(1));
 
-            Assert.Equal(UpgradeCatalog.EndlessLevel, UpgradeCatalog.Bucket.MaxLevel);
-            Assert.Equal(10, UpgradeCatalog.Suit.MaxLevel);
-            Assert.Equal(10, UpgradeCatalog.Boots.MaxLevel);
-
             Assert.Equal(1, UpgradeCatalog.Bucket.StartLevel);
             Assert.Equal(0, UpgradeCatalog.Hose.StartLevel);
         }
@@ -43,11 +39,12 @@ namespace FireGame.Core.Tests
         [Fact]
         public void CostToReach_IsMinusOne_ForLevelsYouCannotBuy()
         {
+            // 이제 -1은 "시작 레벨 이하"뿐이다. 위로는 끝이 없다.
             Assert.Equal(-1, UpgradeCatalog.Hose.CostToReach(0));
-            Assert.Equal(-1, UpgradeCatalog.Hose.CostToReach(UpgradeCatalog.EndlessLevel + 1));
-            Assert.Equal(-1, UpgradeCatalog.Suit.CostToReach(11));
             Assert.Equal(-1, UpgradeCatalog.Bucket.CostToReach(1));   // 처음부터 가진 레벨
             Assert.Equal(-1, UpgradeCatalog.Suit.CostToReach(-3));
+            Assert.True(UpgradeCatalog.Hose.CostToReach(500) > 0);
+            Assert.True(UpgradeCatalog.Suit.CostToReach(11) > 0);
         }
 
         // --- TC-4 ---
@@ -110,13 +107,19 @@ namespace FireGame.Core.Tests
 
         // --- TC-10 ---
         [Fact]
-        public void GearStats_ClampOutOfRangeLevels()
+        public void GearStats_ClampNegativeLevels_ButNotHighOnes()
         {
+            // 음수만 자른다. 위로는 상한이 없고, 대신 효과가 수렴한다.
             Assert.Equal(1f, GearStats.DamageMultiplier(-1), 3);
-            Assert.Equal(GearStats.DamageMultiplier(10), GearStats.DamageMultiplier(99), 3);
             Assert.Equal(1f, GearStats.SpeedMultiplier(-5), 3);
-            Assert.Equal(2.0f, GearStats.SpeedMultiplier(99), 3);
-            Assert.Equal("방열복 +6", GearStats.SuitName(99));
+
+            Assert.True(GearStats.DamageMultiplier(99) < GearStats.DamageMultiplier(10));
+            Assert.Equal(GearStats.MinSuitDamage, GearStats.DamageMultiplier(99), 3);
+            Assert.True(GearStats.SpeedMultiplier(99) > GearStats.SpeedMultiplier(10));
+
+            Assert.Equal("방열복 +95", GearStats.SuitName(99));
+
+            // 옷 그림은 다섯 장뿐이라 그림 번호만 마지막으로 자른다.
             Assert.Equal(4, GearStats.SuitLook(99));
         }
     }

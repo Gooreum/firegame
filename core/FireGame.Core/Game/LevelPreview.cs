@@ -141,8 +141,9 @@ namespace FireGame.Core.Game
             if (track == null) throw new ArgumentNullException(nameof(track));
 
             int level = save.LevelOf(track.Id);
-            bool maxed = level >= track.MaxLevel;
-            int next = maxed ? level : level + 1;
+            // 최대 레벨이 없으므로 늘 다음 레벨이 있다.
+            const bool maxed = false;
+            int next = level + 1;
             var lines = new List<string>();
 
             switch (track.Kind)
@@ -194,8 +195,6 @@ namespace FireGame.Core.Game
 
             EquipmentDef def = EquipmentCatalog.ById(track.Id);
             int target = (EquipmentDef.Milestones(level) + 1) * EquipmentDef.MilestoneEvery;
-            if (target > track.MaxLevel) return null;
-
             string text = MilestoneText(def, target);
             return text == null ? null : "Lv" + target + " · " + text;
         }

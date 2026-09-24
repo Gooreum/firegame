@@ -77,15 +77,17 @@ namespace FireGame.Core.Tests
 
         // --- TC-5 ---
         [Fact]
-        public void LockedAndMaxedCards_ShowUnlockHintOrCurrentValues()
+        public void LockedCardShowsTheUnlockHint_AndHighLevelsStillShowAnIncrease()
         {
             SaveData save = SaveData.NewGame();
             List<string> locked = LevelPreview.NextLevelLines(save, UpgradeCatalog.Hose);
             Assert.Equal("해금하면 현장에 들고 간다", locked[0]);
 
-            save.SetLevel(GearId.Suit, UpgradeCatalog.Suit.MaxLevel);
-            List<string> maxed = LevelPreview.NextLevelLines(save, UpgradeCatalog.Suit);
-            Assert.DoesNotContain("→", maxed[1]);
+            // 예전엔 방화복 Lv10이 "최대"라 값이 하나만 나왔다. 이제는 늘 다음 레벨이 있다.
+            save.SetLevel(GearId.Suit, 10);
+            List<string> high = LevelPreview.NextLevelLines(save, UpgradeCatalog.Suit);
+            Assert.Contains("→", high[1]);
+
             Assert.Null(LevelPreview.NextMilestone(UpgradeCatalog.Suit, 3));
             Assert.Null(LevelPreview.NextMilestone(UpgradeCatalog.Hose, 10));
         }

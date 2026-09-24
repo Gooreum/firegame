@@ -98,6 +98,13 @@ namespace FireGame.Core.Game
         /// <summary>호스 사거리 상한. 화면 너비(40칸)를 넘겨 쏘면 조준이 의미가 없어진다.</summary>
         public const int MaxLineRange = 12;
 
+        /// <summary>
+        /// 부채꼴 사거리 상한(앞 18칸). 레벨 상한이 아니라 조준 상한이다.
+        /// 한 발이 방 하나를 덮고 나면 어디를 겨누든 같아져서 조준이 사라진다.
+        /// 여기 닿은 뒤에도 위력과 사용 횟수는 천장 없이 계속 오른다.
+        /// </summary>
+        public const int MaxConeRange = 6;
+
         /// <summary>양동이 연사 하한(초).</summary>
         public const float MinCooldownSeconds = 0.4f;
 
@@ -126,7 +133,9 @@ namespace FireGame.Core.Game
             int milestones = Milestones(level);
             bool line = Pattern == AimPattern.Line;
 
-            int range = line ? Math.Min(Range + steps, MaxLineRange) : Range + milestones;
+            int range = line
+                ? Math.Min(Range + steps, MaxLineRange)
+                : Math.Min(Range + milestones, MaxConeRange);
 
             // 호스는 이미 0.2초마다 나가므로 사거리로 키우고, 쿨다운 장비만 연사를 빠르게 한다.
             float cooldown;
