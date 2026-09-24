@@ -17,22 +17,24 @@ namespace FireGame.UnityLayer
         /// <summary>지붕. 불꽃·연기보다 위라서 밖에서는 실내가 보이지 않는다.</summary>
         public const int OrderRoof = 40;
 
-        /// <summary>덩어리 가장자리를 이만큼 어둡게 한다. 납작한 색판이 아니라 한 채로 읽힌다.</summary>
-        private const float RimShade = 0.72f;
+        /// <summary>처마 쪽 밝기. 이만큼 떨어뜨렸다가 용마루까지 밝혀 올린다.</summary>
+        private const float EaveShade = 0.58f;
 
         /// <summary>
-        /// 현장 id별 지붕 색. 현장마다 달라야 "저 건물"이 아니라 "저 상가"로 읽힌다.
-        /// 없는 id는 주택(0)을 쓴다.
+        /// 지붕면 밝기. 처마에서 여기까지 올라온다.
+        /// <b>1을 넘기면 안 된다</b> — 재질 결의 밝은 줄이 이미 1.0이라 곱하는 순간 흰색으로 잘려
+        /// 지붕 한가운데가 하얗게 뜬다(캡처로 확인).
         /// </summary>
-        private static readonly Dictionary<int, Color> RoofColors = new Dictionary<int, Color>
-        {
-            { 0, new Color(0.82f, 0.34f, 0.28f) },   // 주택: 붉은 기와
-            { 1, new Color(0.32f, 0.54f, 0.82f) },   // 상가: 파란 차양
-            { 2, new Color(0.30f, 0.62f, 0.66f) },   // 주유소: 청록 캐노피 (흙 마당과 같은 계열이면 묻힌다)
-            { 3, new Color(0.56f, 0.62f, 0.70f) },   // 창고: 회청 함석
-            { 4, new Color(0.34f, 0.46f, 0.62f) },   // 공장: 청회 슬레이트 (벽돌 마당과 갈려야 한다)
-            { 5, new Color(0.70f, 0.42f, 0.30f) },   // 항구: 적갈 널판
-        };
+        private const float RoofFace = 0.92f;
+
+        /// <summary>
+        /// 이만큼 안쪽부터는 더 밝아지지 않는다.
+        /// 4단계로 뒀더니 34x12짜리 주택 지붕에 동심원 띠가 네 겹 생겨 과녁처럼 보였다(캡처로 확인).
+        /// </summary>
+        private const int RidgeDepth = 3;
+
+        /// <summary>용마루 한 줄만 기준 색 그대로. 지붕이 어느 쪽으로 흐르는지를 이 선 하나가 말한다.</summary>
+        private const float RidgeLine = 1f;
 
         /// <summary>지붕 위 표시. 지붕보다 위에 그려야 보인다.</summary>
         private const int OrderRoofMark = OrderRoof + 2;
@@ -422,8 +424,9 @@ namespace FireGame.UnityLayer
         /// </summary>
         private List<SpriteRenderer> BuildRoof(Building building)
         {
-            Color color;
-            if (!RoofColors.TryGetValue(_runner.Def.Id, out color)) color = RoofColors[0];
+            SiteTheme theme = SiteTheme.Of(_runner.Def.Id);
+            Color color = theme.RoofColor;
+            Sprite material = Art.RoofTexture(theme.Roof);
 
             var entrances = new HashSet<int>();
             foreach (GridPoint door in building.Entrances) entrances.Add(_grid.Index(door.X, door.Y));
@@ -431,31 +434,98 @@ namespace FireGame.UnityLayer
             var member = new HashSet<int>();
             foreach (GridPoint cell in building.Cells) member.Add(_grid.Index(cell.X, cell.Y));
 
+            // 칸마다 "가장자리에서 몇 칸 안쪽인가". 위에서 본 지붕이 입체로 읽히는 이유는
+            // 처마 쪽 면이 어둡고 용마루가 밝기 때문이다. 생성 때 한 번만 재므로 프레임 비용이 없다.
+            Dictionary<int, int> depth = RoofDepth(building, member);
+
+            // 용마루는 긴 쪽을 따라 한 줄로 흐른다. 짝수 폭이면 가운데 두 줄이 용마루다.
+            bool alongX = building.Width >= building.Height;
+            int ridgeA = alongX ? (building.MinY + building.MaxY) / 2 : (building.MinX + building.MaxX) / 2;
+            int ridgeB = alongX ? (building.MinY + building.MaxY + 1) / 2 : (building.MinX + building.MaxX + 1) / 2;
+
             var tiles = new List<SpriteRenderer>(building.Cells.Length);
 
             foreach (GridPoint cell in building.Cells)
             {
-                if (entrances.Contains(_grid.Index(cell.X, cell.Y))) continue;
+                int index = _grid.Index(cell.X, cell.Y);
+                if (entrances.Contains(index)) continue;
 
-                // 지붕은 벽돌 그림 대신 단색판으로 깐다. 켄니 벽돌은 그 자체가 짙은 회색이라
-                // 색을 곱하면 현장마다 다른 지붕색이 전부 회색으로 죽는다(캡처로 확인).
-                // 바닥 타일처럼 몇 칸을 섞어 결을 주려 했더니 평평한 색 위에서는
-                // 대각선 얼룩으로 보였다. 카툰 그림이니 단색에 테두리만 둔다.
+                int along = alongX ? cell.Y : cell.X;
+                bool onRidge = (along == ridgeA || along == ridgeB) && depth[index] >= 2;
+
                 var tile = new GameObject("Roof").AddComponent<SpriteRenderer>();
                 tile.transform.SetParent(_root, false);
-                tile.sprite = Art.White;
+                tile.sprite = material;
                 tile.sortingOrder = OrderRoof;
                 tile.transform.position = _view.CellCenter(cell.X, cell.Y);
                 tile.transform.localScale = Vector3.one;
-                tile.color = OnRim(member, cell) ? Shade(color, RimShade) : color;
+                tile.color = Slope(color, depth[index], onRidge);
                 tiles.Add(tile);
 
-                int index = _grid.Index(cell.X, cell.Y);
                 _roofByCell[index] = tile;
                 _roofBaseColor[index] = tile.color;
             }
 
             return tiles;
+        }
+
+        /// <summary>
+        /// 처마(깊이 1)에서 용마루(깊이 <see cref="RidgeDepth"/> 이상)까지의 밝기.
+        /// 알파는 건드리지 않는다 — 곱해 버리면 지붕이 반투명해져 밑의 벽이 비친다.
+        /// </summary>
+        private static Color Slope(Color color, int depth, bool onRidge)
+        {
+            float t = Mathf.Clamp01((depth - 1f) / (RidgeDepth - 1f));
+            float k = onRidge ? RidgeLine : Mathf.Lerp(EaveShade, RoofFace, t);
+            return new Color(color.r * k, color.g * k, color.b * k, color.a);
+        }
+
+        /// <summary>
+        /// 지붕 칸마다 가장자리에서의 거리. 지붕 바깥과 맞닿은 칸이 1이고 안쪽으로 갈수록 는다.
+        /// 지붕 아닌 칸에서 동시에 퍼져 나가는 BFS라 어떤 모양이든 한 번에 잰다.
+        /// </summary>
+        private Dictionary<int, int> RoofDepth(Building building, HashSet<int> member)
+        {
+            var depth = new Dictionary<int, int>(building.Cells.Length);
+            var queue = new Queue<GridPoint>();
+
+            foreach (GridPoint cell in building.Cells)
+            {
+                if (!OnRim(member, cell)) continue;
+                depth[_grid.Index(cell.X, cell.Y)] = 1;
+                queue.Enqueue(cell);
+            }
+
+            int[] dx = { 0, 0, -1, 1 };
+            int[] dy = { -1, 1, 0, 0 };
+
+            while (queue.Count > 0)
+            {
+                GridPoint p = queue.Dequeue();
+                int here = depth[_grid.Index(p.X, p.Y)];
+
+                for (int k = 0; k < 4; k++)
+                {
+                    int nx = p.X + dx[k];
+                    int ny = p.Y + dy[k];
+                    if (!_grid.InBounds(nx, ny)) continue;
+
+                    int n = _grid.Index(nx, ny);
+                    if (!member.Contains(n) || depth.ContainsKey(n)) continue;
+
+                    depth[n] = here + 1;
+                    queue.Enqueue(new GridPoint(nx, ny));
+                }
+            }
+
+            // 가장자리가 없는 건물은 없지만, 혹시 비면 처마 색 하나로 균일하게 칠한다.
+            foreach (GridPoint cell in building.Cells)
+            {
+                int i = _grid.Index(cell.X, cell.Y);
+                if (!depth.ContainsKey(i)) depth[i] = 1;
+            }
+
+            return depth;
         }
 
         /// <summary>
