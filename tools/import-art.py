@@ -89,6 +89,15 @@ SELECTION = {
     # ---- 차량 (Racing Pack) ----
     ("Vehicles", "firetruck"): "racing-pack/PNG/Cars/car_red_1.png",
     ("Vehicles", "cone"): "racing-pack/PNG/Objects/cone_straight.png",
+    ("Vehicles", "car_blue"): "racing-pack/PNG/Cars/car_blue_1.png",
+    ("Vehicles", "car_black"): "racing-pack/PNG/Cars/car_black_1.png",
+    # ---- 현장 소품 (Racing Pack Objects — 파일명이 명확해 골라 쓸 수 있는 유일한 팩) ----
+    ("Props", "tree_large"): "racing-pack/PNG/Objects/tree_large.png",
+    ("Props", "tree_small"): "racing-pack/PNG/Objects/tree_small.png",
+    ("Props", "barrel_red"): "racing-pack/PNG/Objects/barrel_red.png",
+    ("Props", "barrel_blue"): "racing-pack/PNG/Objects/barrel_blue.png",
+    ("Props", "tires"): "racing-pack/PNG/Objects/tires_white.png",
+    ("Props", "barrier"): "racing-pack/PNG/Objects/barrier_white.png",
     # ---- UI (UI Pack) ----
     ("UI", "button_blue"): f"{UI}/Blue/Default/button_rectangle_depth_flat.png",
     ("UI", "button_blue_round"): f"{UI}/Blue/Default/button_round_depth_flat.png",

@@ -734,10 +734,10 @@ namespace FireGame.EditorTools
             var cameraObject = new GameObject("Camera");
             var camera = cameraObject.AddComponent<Camera>();
             camera.orthographic = true;
-            camera.orthographicSize = 9f;
+            camera.orthographicSize = 16f;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.10f, 0.10f, 0.12f);
-            camera.transform.position = new Vector3(15f, 0f, -10f);
+            camera.transform.position = new Vector3(16f, -6f, -10f);
 
             var roofColors = new[]
             {
@@ -769,6 +769,39 @@ namespace FireGame.EditorTools
             {
                 Swatch(Art.BorderTexture((BorderStyle)i), Color.white, i * 5f, -7f, 4f);
                 Caption(((BorderStyle)i).ToString(), (i * 5f) + 2f, -4.6f);
+            }
+
+            // 5줄: 코드로 찍는 소품 5종. 투명 배경이 보이게 회색 판을 깔아 준다.
+            for (int i = 0; i < 5; i++)
+            {
+                var pad = new GameObject("Pad").AddComponent<SpriteRenderer>();
+                pad.sprite = Art.White;
+                pad.color = new Color(0.45f, 0.45f, 0.48f);
+                pad.transform.position = new Vector3((i * 5f) + 2f, -11f, 0f);
+                pad.transform.localScale = Vector3.one * 4f;
+
+                Swatch(Art.PropTexture((PropStyle)i), Color.white, i * 5f, -13f, 4f);
+                Caption(((PropStyle)i).ToString(), (i * 5f) + 2f, -8.6f);
+            }
+
+            // 6줄: 켄니에서 새로 가져온 소품 8장. 자홍색 네모가 보이면 임포트가 실패한 것이다.
+            string[] imported =
+            {
+                "Props/tree_large", "Props/tree_small", "Props/barrel_red", "Props/barrel_blue",
+                "Props/tires", "Props/barrier", "Vehicles/car_blue", "Vehicles/car_black",
+            };
+
+            for (int i = 0; i < imported.Length; i++)
+            {
+                Sprite sprite = Require<Sprite>("Art/" + imported[i]);
+                var pad = new GameObject("Pad").AddComponent<SpriteRenderer>();
+                pad.sprite = Art.White;
+                pad.color = new Color(0.45f, 0.45f, 0.48f);
+                pad.transform.position = new Vector3((i * 4f) + 2f, -20f, 0f);
+                pad.transform.localScale = Vector3.one * 3.6f;
+
+                Swatch(sprite, Color.white, (i * 4f) + 0.2f, -21.8f, 3.6f);
+                Caption(imported[i].Substring(imported[i].IndexOf('/') + 1), (i * 4f) + 2f, -17.6f);
             }
 
             return camera;

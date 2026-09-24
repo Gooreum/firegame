@@ -49,6 +49,28 @@ namespace FireGame.UnityLayer
         Dock = 5,
     }
 
+    /// <summary>
+    /// 켄니 팩에 없어서 코드로 찍는 현장 소품.
+    /// 나무·드럼통·타이어·차단봉·차량은 Racing Pack에 있으니 여기 넣지 않는다.
+    /// </summary>
+    public enum PropStyle
+    {
+        /// <summary>주유기 섬 — 낮은 단 위에 기계 두 대. 주유소.</summary>
+        Pump = 0,
+
+        /// <summary>해상 컨테이너 — 세로 골이 진 상자. 창고·항구.</summary>
+        Container = 1,
+
+        /// <summary>팔레트 더미 — 각재를 엇갈려 쌓았다. 창고.</summary>
+        Pallet = 2,
+
+        /// <summary>화단 — 벽돌 턱 안의 관목. 상가.</summary>
+        Planter = 3,
+
+        /// <summary>계선주 — 밧줄을 감는 쇠기둥. 항구.</summary>
+        Bollard = 4,
+    }
+
     /// <summary>맵 가장자리. 격자 맨 바깥 한 줄이라 게임에 영향이 없다.</summary>
     public enum BorderStyle
     {
@@ -265,6 +287,12 @@ namespace FireGame.UnityLayer
         public static Sprite BorderTexture(BorderStyle style)
         {
             return Make(('B' << 16) | (int)style, (x, y) => Border(style, x, y));
+        }
+
+        /// <summary>켄니 팩에 없는 현장 소품 한 장. 투명 배경이라 마당 위에 얹힌다.</summary>
+        public static Sprite PropTexture(PropStyle style)
+        {
+            return Make(('P' << 16) | (int)style, (x, y) => Prop(style, x, y));
         }
 
         private static Sprite Make(int key, System.Func<int, int, Color32> paint)
@@ -492,5 +520,74 @@ namespace FireGame.UnityLayer
                 }
             }
         }
+
+        private static readonly Color32 Clear = new Color32(0, 0, 0, 0);
+
+        /// <summary>
+        /// 소품은 칸을 꽉 채우지 않는다. 가장자리를 비워야 마당 위에 놓인 물건으로 보이고,
+        /// 두 칸짜리 덩어리에 늘여 붙여도 옆 칸과 이어 붙지 않는다.
+        /// </summary>
+        private static Color32 Prop(PropStyle style, int x, int y)
+        {
+            switch (style)
+            {
+                case PropStyle.Pump:
+                {
+                    // 낮은 콘크리트 단(가로로 넓다) 위에 주유기 두 대.
+                    if (y < 8 || y > 55 || x < 3 || x > 60) return Clear;
+                    if (y < 14 || y > 49) return Rgb(0.72f, 0.70f, 0.66f);        // 단
+                    if (x < 8 || x > 55) return Rgb(0.72f, 0.70f, 0.66f);
+
+                    bool body = (x > 12 && x < 28) || (x > 35 && x < 51);
+                    if (!body) return Rgb(0.80f, 0.78f, 0.74f);
+                    if (y > 18 && y < 30) return Rgb(0.16f, 0.17f, 0.20f);        // 표시창
+                    return Rgb(0.88f, 0.24f, 0.20f);                              // 붉은 기계
+                }
+
+                case PropStyle.Container:
+                {
+                    if (x < 2 || x > 61 || y < 4 || y > 59) return Clear;
+                    // 가장자리 프레임
+                    if (x < 6 || x > 57 || y < 8 || y > 55) return Rgb(0.20f, 0.30f, 0.38f);
+                    // 세로 골
+                    return (x % 6) < 2 ? Rgb(0.22f, 0.42f, 0.52f) : Rgb(0.30f, 0.56f, 0.68f);
+                }
+
+                case PropStyle.Pallet:
+                {
+                    if (x < 4 || x > 59 || y < 6 || y > 57) return Clear;
+                    // 8px 각재를 가로로 쌓고 사이를 비운다.
+                    int slat = (y - 6) % 11;
+                    if (slat > 7) return Rgb(0.34f, 0.26f, 0.18f);                // 틈
+                    float n = Noise(x / 5, y / 11, 2) * 0.08f;
+                    return Rgb(0.70f + n, 0.55f + n, 0.33f + n);
+                }
+
+                case PropStyle.Planter:
+                {
+                    // 둥근 화분. 모서리를 잘라 원에 가깝게 만든다.
+                    int dx = x - 32;
+                    int dy = y - 32;
+                    int r2 = (dx * dx) + (dy * dy);
+                    if (r2 > 27 * 27) return Clear;
+                    if (r2 > 21 * 21) return Rgb(0.62f, 0.40f, 0.31f);            // 벽돌 턱
+                    float n = Noise(x / 2, y / 2, 8);
+                    return Rgb(0.18f + (n * 0.12f), 0.44f + (n * 0.16f), 0.22f + (n * 0.10f));
+                }
+
+                default:
+                {
+                    // 계선주 — 짧고 굵은 쇠기둥에 밧줄 자국.
+                    int dx = x - 32;
+                    int dy = y - 34;
+                    int r2 = (dx * dx) + (dy * dy);
+                    if (r2 > 17 * 17) return Clear;
+                    if (r2 > 13 * 13) return Rgb(0.18f, 0.20f, 0.22f);
+                    if (y > 26 && y < 32) return Rgb(0.52f, 0.46f, 0.36f);        // 감긴 밧줄
+                    return Rgb(0.34f, 0.36f, 0.39f);
+                }
+            }
+        }
+
     }
 }
