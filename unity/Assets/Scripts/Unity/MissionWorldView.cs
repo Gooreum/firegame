@@ -56,6 +56,9 @@ namespace FireGame.UnityLayer
         private readonly List<SpriteRenderer> _civilians = new List<SpriteRenderer>();
 
         private readonly Sprite[] _flameSprites;
+
+        /// <summary>전기 불(C급)의 질감. 불꽃 대신 튀는 스파크를 얹어 한눈에 구분되게 한다.</summary>
+        private readonly Sprite[] _sparkSprites;
         private readonly Sprite _tongueSprite;
         private readonly Sprite[] _smokeSprites;
         private readonly Sprite[] _scorchSprites;
@@ -144,6 +147,7 @@ namespace FireGame.UnityLayer
             // flame_01~04는 희미한 연기 같은 모양이라 불로 읽히지 않는다.
             // 불의 몸통은 fire_01/02(밝게 타오르는 덩어리), 위로 솟는 불길은 flame_05로 만든다.
             _flameSprites = new[] { Art.Get("Effects/fire_01"), Art.Get("Effects/fire_02") };
+            _sparkSprites = LoadSeries("Effects/spark_0", 1, 4);
             _tongueSprite = Art.Get("Effects/flame_05");
             _smokeSprites = LoadSeries("Effects/smoke_0", 1, 5);
             _scorchSprites = LoadSeries("Effects/scorch_0", 1, 3);
@@ -457,9 +461,15 @@ namespace FireGame.UnityLayer
                 float flicker = Mathf.Sin((time * 9f) + (seed % 100)) * 0.12f;
                 float intensity = Mathf.Clamp01(cell.Heat / 2f);
 
+                // 불은 등급 색으로 탄다. 전에는 무엇이 타든 같은 주황이라
+                // 화면만 보고는 어떤 소화기를 들어야 하는지 알 길이 없었다.
+                FireClass fireClass = Materials.Of(cell.Material).Class;
+                FirePalette palette = FireLook.Palette(fireClass);
+                Color hue = palette.Mark;
+
                 SpriteRenderer glow = Ensure(_glow, i, x, y, OrderGlow);
                 glow.sprite = Art.Get("Effects/glow");
-                glow.color = new Color(1f, 0.45f, 0.1f, 0.3f + (0.25f * intensity));
+                glow.color = new Color(hue.r, hue.g * 0.8f, hue.b * 0.8f, 0.3f + (0.25f * intensity));
                 glow.transform.localScale = Vector3.one * Art.FitWidth(glow.sprite, 1.8f + flicker);
                 glow.enabled = true;
 
@@ -467,7 +477,7 @@ namespace FireGame.UnityLayer
                 // 팩의 불덩어리 그림(fire_01/02)은 평균 불투명도가 47/255로 너무 옅어 몸통으로는 안 보인다.
                 SpriteRenderer body = Ensure(_body, i, x, y, OrderFire);
                 body.sprite = Art.Get("Effects/water_drop");
-                body.color = Color.Lerp(new Color(0.95f, 0.28f, 0.05f, 0.75f), new Color(1f, 0.5f, 0.08f, 0.85f), intensity);
+                body.color = Color.Lerp(palette.BodyDim, palette.BodyHot, intensity);
                 // 불꽃 크기가 열을 따라간다. 맞을 때마다 줄어드는 게 보여서 "몇 발이면 꺼지는지"가 눈에 들어온다.
                 float size = 0.85f + (0.5f * intensity);   // 평소(열 ~0.6) 1.0배, 막 맞으면 0.85배, 한창이면 1.35배
                 body.transform.localScale = Vector3.one * Art.FitWidth(body.sprite, (1.7f + (flicker * 0.4f)) * size);
@@ -475,8 +485,10 @@ namespace FireGame.UnityLayer
 
                 // 질감: 옅은 불덩어리를 노랗게 얹고 천천히 돌린다.
                 SpriteRenderer flame = Ensure(_flame, i, x, y, OrderFire + 1);
-                flame.sprite = _flameSprites[Mathf.Abs(seed) % _flameSprites.Length];
-                flame.color = new Color(1f, 0.85f, 0.3f, 1f);
+                flame.sprite = fireClass == FireClass.C
+                    ? _sparkSprites[Mathf.Abs(seed) % _sparkSprites.Length]
+                    : _flameSprites[Mathf.Abs(seed) % _flameSprites.Length];
+                flame.color = palette.Texture;
                 flame.transform.localScale = Vector3.one * Art.FitWidth(flame.sprite, 1.3f * size);
                 flame.transform.rotation = Quaternion.Euler(0f, 0f, (time * 40f) + (seed % 360));
                 flame.enabled = true;
@@ -489,7 +501,7 @@ namespace FireGame.UnityLayer
 
                 SpriteRenderer tongue = Ensure(_tongue, i, x, y, OrderFire + 2);
                 tongue.sprite = _tongueSprite;
-                tongue.color = Color.Lerp(new Color(1f, 0.45f, 0.08f), new Color(1f, 0.8f, 0.3f), intensity * 0.7f);
+                tongue.color = Color.Lerp(palette.TongueDim, palette.TongueHot, intensity * 0.7f);
                 float height = (1.3f + (0.7f * intensity)) * variety * (1f + flicker);
                 tongue.transform.localScale = Vector3.one * (height / Mathf.Max(_tongueSprite.bounds.size.y, 0.01f));
                 tongue.transform.position = CellCenter(x, y) + new Vector3(jitterX + (Mathf.Sin((time * 5f) + seed) * 0.06f), 0.2f + jitterY, 0f);
@@ -501,7 +513,9 @@ namespace FireGame.UnityLayer
                 float drift = Mathf.Repeat((time * 0.6f) + ((seed & 255) / 255f), 1f);
                 smoke.transform.position = CellCenter(x, y) + new Vector3(0.2f * Mathf.Sin(time + seed), 0.5f + drift, 0f);
                 smoke.transform.localScale = Vector3.one * Art.FitWidth(smoke.sprite, 1.0f + drift);
-                smoke.color = new Color(0.25f, 0.25f, 0.27f, 0.4f * (1f - drift));
+                // 유류 화재는 검은 연기가 특징이다. 멀리서도 "저건 기름"을 알 수 있다.
+                Color smokeTint = palette.Smoke;
+                smoke.color = new Color(smokeTint.r, smokeTint.g, smokeTint.b, smokeTint.a * (1f - drift));
                 smoke.enabled = true;
             }
             else

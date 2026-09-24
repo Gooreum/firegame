@@ -7,7 +7,7 @@ using UnityEngine.InputSystem;
 namespace FireGame.UnityLayer
 {
     /// <summary>
-    /// 에디터·데스크톱용 키보드 입력. 방향키/WASD 이동, Space 발사, 1·2·3 장비.
+    /// 에디터·데스크톱용 키보드 입력. 방향키/WASD 이동, Space 발사, E 구조, 1·2·3·4 장비.
     ///
     /// 새 Input System과 구형 Input Manager를 전처리기로 모두 지원한다.
     /// 프로젝트 설정에 따라 한쪽 API는 예외를 던지기 때문이다.
@@ -19,6 +19,7 @@ namespace FireGame.UnityLayer
             float x = 0f;
             float y = 0f;
             bool fire = false;
+            bool rescue = false;
             int slot = -1;
 
 #if ENABLE_INPUT_SYSTEM
@@ -30,6 +31,7 @@ namespace FireGame.UnityLayer
             if (keyboard.upArrowKey.isPressed || keyboard.wKey.isPressed) y -= 1f;
             if (keyboard.downArrowKey.isPressed || keyboard.sKey.isPressed) y += 1f;
             fire = keyboard.spaceKey.isPressed;
+            rescue = keyboard.eKey.isPressed;
             if (keyboard.digit1Key.wasPressedThisFrame) slot = 0;
             if (keyboard.digit2Key.wasPressedThisFrame) slot = 1;
             if (keyboard.digit3Key.wasPressedThisFrame) slot = 2;
@@ -40,6 +42,7 @@ namespace FireGame.UnityLayer
             if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W)) y -= 1f;
             if (Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S)) y += 1f;
             fire = Input.GetKey(KeyCode.Space);
+            rescue = Input.GetKey(KeyCode.E);
             if (Input.GetKeyDown(KeyCode.Alpha1)) slot = 0;
             if (Input.GetKeyDown(KeyCode.Alpha2)) slot = 1;
             if (Input.GetKeyDown(KeyCode.Alpha3)) slot = 2;
@@ -47,7 +50,7 @@ namespace FireGame.UnityLayer
 #endif
 
             // 격자는 아래로 갈수록 y가 커진다. 위쪽 키가 -y다.
-            flow.SetKeyboard(x, y, fire, slot);
+            flow.SetKeyboard(x, y, fire, rescue, slot);
         }
     }
 }

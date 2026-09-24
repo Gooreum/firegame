@@ -331,7 +331,11 @@ namespace FireGame.EditorTools
             Civilian civilian = runner.Civilians[0];
             runner.Player.X = civilian.X;
             runner.Player.Y = civilian.Y;
+
+            // 시민은 이제 저절로 업히지 않는다. 구조 버튼을 눌러야 한다.
+            flow.SetRescue(true);
             flow.Update(0.02f);
+            flow.SetRescue(false);
 
             FireGame.Core.Grid.GridPoint exit = runner.Exits[0];
             runner.Player.X = exit.X + 0.5f;
@@ -549,7 +553,8 @@ namespace FireGame.EditorTools
             camera.backgroundColor = new Color(0.18f, 0.62f, 0.35f);
             camera.transform.position = new Vector3(0f, 0f, -10f);
 
-            for (int level = 0; level <= UpgradeCatalog.Suit.MaxLevel; level++)
+            // 옷 그림은 다섯 장뿐이다(Lv4 방열복이 마지막). 레벨엔 끝이 없지만 보여줄 그림은 여기까지다.
+            for (int level = 0; level <= 4; level++)
             {
                 var suit = new GameObject("Suit" + level).AddComponent<SpriteRenderer>();
                 suit.sprite = Require<Sprite>("Art/" + MissionWorldView.SuitSprite(level));

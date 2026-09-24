@@ -163,12 +163,10 @@ namespace FireGame.UnityLayer
             }
         }
 
-        /// <summary>"Lv.7". 끝이 있는 방화복·소방화는 "Lv.3 / 10". 장비는 끝이 없어 칸을 그리지 않는다.</summary>
+        /// <summary>"Lv.7". 어떤 항목에도 끝이 없어 "/ 최대"를 적지 않는다.</summary>
         private static void BuildLevelRow(Transform card, UpgradeTrack track, int level)
         {
-            string text = level == 0 ? "잠김"
-                : track.Kind == UpgradeKind.Equipment ? "Lv." + level
-                : "Lv." + level + " / " + track.MaxLevel;
+            string text = level == 0 ? "잠김" : "Lv." + level;
             Text label = UiKit.OutlinedLabel(card, "Level", text, 30, level == 0 ? Color.white : EffectColor, TextAnchor.MiddleCenter);
             UiKit.Place(label.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -70f), new Vector2(CardWidth - 20f, 40f));
             label.rectTransform.pivot = new Vector2(0.5f, 1f);
