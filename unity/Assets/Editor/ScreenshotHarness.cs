@@ -57,6 +57,8 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("43_map_need_gear", MapNeedGear),
                 new KeyValuePair<string, Func<Camera>>("44_spray_level10", SprayLevel10),
                 new KeyValuePair<string, Func<Camera>>("45_result_record", ResultRecord),
+                new KeyValuePair<string, Func<Camera>>("46_aim_good", AimGood),
+                new KeyValuePair<string, Func<Camera>>("47_aim_backfire", AimBackfire),
                 new KeyValuePair<string, Func<Camera>>("40_warehouse_fire", WarehouseFire),
                 new KeyValuePair<string, Func<Camera>>("41_factory_mixed", FactoryMixed),
                 new KeyValuePair<string, Func<Camera>>("42_harbor_finale", HarborFinale),
@@ -200,6 +202,49 @@ namespace FireGame.EditorTools
             StageRunner runner = Runner(StageCatalog.Shopping, EquipmentId.Bucket, EquipmentId.Extinguisher);
             Advance(runner, 4f);
             return Show(runner, 4f, new Vector2(10, 7));
+        }
+
+        /// <summary>폼 소화기로 기름 불을 겨눈다 — 조준 칸이 초록(잘 듣는다).</summary>
+        private static Camera AimGood()
+        {
+            return AimAtOil(EquipmentId.FoamExtinguisher);
+        }
+
+        /// <summary>양동이(물)로 같은 기름 불을 겨눈다 — 조준 칸이 빨강(역효과).</summary>
+        private static Camera AimBackfire()
+        {
+            return AimAtOil(EquipmentId.Bucket);
+        }
+
+        /// <summary>주유소 기름 불 바로 서쪽에 서서 동쪽을 겨눈 장면.</summary>
+        private static Camera AimAtOil(int equipmentId)
+        {
+            StageRunner runner = Runner(StageCatalog.GasStation, equipmentId);
+            Advance(runner, 3f);
+
+            // 부채꼴 세 칸이 모두 타는 기름이 되도록, 위아래도 기름인 자리를 고른다.
+            for (int y = 1; y < runner.Grid.Height - 1; y++)
+            {
+                for (int x = 1; x < runner.Grid.Width; x++)
+                {
+                    if (!BurningOil(runner, x, y) || !BurningOil(runner, x, y - 1) || !BurningOil(runner, x, y + 1)) continue;
+                    if (!FireGame.Core.Grid.Materials.Of(runner.Grid[x - 1, y].Material).Walkable) continue;
+
+                    runner.Player.X = x - 1 + 0.5f;
+                    runner.Player.Y = y + 0.5f;
+                    runner.Update(0.016f, new StageInput { MoveX = 1f, Slot = 0 });
+                    return Show(runner, 0f, new Vector2(x, y));
+                }
+            }
+
+            throw new InvalidOperationException("주유소에서 타는 기름 칸을 찾지 못했다");
+        }
+
+        private static bool BurningOil(StageRunner runner, int x, int y)
+        {
+            FireGame.Core.Grid.Cell cell = runner.Grid[x, y];
+            return cell.State == FireGame.Core.Grid.CellState.Burning
+                   && FireGame.Core.Grid.Materials.Of(cell.Material).Class == FireGame.Core.Grid.FireClass.B;
         }
 
         private static Camera GasStationOil()

@@ -21,11 +21,12 @@ namespace FireGame.UnityLayer
         private const int OrderFloor = 0;
         private const int OrderProp = 1;
         private const int OrderWall = 2;
-        private const int OrderOverlay = 3;
-        private const int OrderGlow = 4;
+        private const int OrderOverlay = 4;
+        private const int OrderGlow = 5;
         private const int OrderPeople = 10;
         private const int OrderSpray = 25;   // 물은 불꽃 위에 보여야 "불에 뿌린다"로 읽힌다
         private const int OrderFire = 20;
+        private const int OrderAim = 23;     // 조준 표시는 불 위. 불 밑에 깔면 정작 불타는 칸에서 안 보인다
         private const int OrderSmoke = 30;
 
         // 방수 연출 수명(초)
@@ -54,6 +55,9 @@ namespace FireGame.UnityLayer
 
         private readonly SpriteRenderer _player;
         private readonly List<SpriteRenderer> _civilians = new List<SpriteRenderer>();
+
+        /// <summary>지금 든 장비가 맞힐 칸을 바닥에 깔아 보여 주는 판. 쓰는 만큼만 늘린다.</summary>
+        private readonly List<SpriteRenderer> _aimCells = new List<SpriteRenderer>();
 
         private readonly Sprite[] _flameSprites;
 
@@ -404,6 +408,7 @@ namespace FireGame.UnityLayer
                 }
             }
 
+            RefreshAimPreview(time);
             RefreshPeople();
             DetectShots();
             DetectExtinguished();
@@ -581,6 +586,69 @@ namespace FireGame.UnityLayer
         }
 
         /// <summary>
+        /// 지금 든 장비가 맞힐 칸을 바닥에 깔아 보여 준다.
+        ///
+        /// 타는 칸은 상성 판정 색으로 칠한다 — 버튼을 누르기 전에 "이게 듣나"를 알 수 있어야
+        /// 장비를 바꿔 드는 판단이 생긴다. 안 타는 칸은 아주 옅게만 칠해 모양만 알린다.
+        /// 역효과(물→기름·전기) 칸은 빨갛게 깜빡여 실수를 막는다.
+        /// </summary>
+        private void RefreshAimPreview(float time)
+        {
+            PlayerState player = _runner.Player;
+            EquipmentDef def = _runner.SlotEquipment(player.ActiveSlot);
+
+            if (def == null || _runner.IsOver || !player.IsAlive)
+            {
+                HideAimCells(0);
+                return;
+            }
+
+            Aiming.Resolve(_grid, player.CellX, player.CellY, player.Aim, def.Pattern, def.Range, _hitBuffer, def.EndSpread);
+
+            // 역효과 칸은 흰빛과 자홍을 오가며 깜빡인다. 불꽃 위에 얹혀도 확실히 눈에 띈다.
+            float pulse = Mathf.Abs(Mathf.Sin(time * 8f));
+
+            for (int i = 0; i < _hitBuffer.Count; i++)
+            {
+                GridPoint at = _hitBuffer[i];
+                AgentVerdict verdict = AgentAdvice.ForCell(_grid, at.X, at.Y, def.Agent.Type);
+                bool burning = _grid[at.X, at.Y].State == CellState.Burning;
+
+                SpriteRenderer cell = EnsureAimCell(i);
+                Color tint = FireLook.Verdict(verdict);
+                if (verdict == AgentVerdict.Backfire && burning) tint = Color.Lerp(Color.white, tint, pulse);
+
+                // 불 위에 얹히므로 진하면 불꽃을 가린다. 타는 칸만 또렷하게 한다.
+                float alpha = !burning ? 0.14f
+                    : verdict == AgentVerdict.Backfire ? 0.5f + (0.3f * pulse)
+                    : 0.42f;
+
+                cell.color = new Color(tint.r, tint.g, tint.b, alpha);
+                cell.transform.position = CellCenter(at.X, at.Y);
+                cell.enabled = true;
+            }
+
+            HideAimCells(_hitBuffer.Count);
+        }
+
+        private SpriteRenderer EnsureAimCell(int index)
+        {
+            while (_aimCells.Count <= index)
+            {
+                SpriteRenderer created = CreateRenderer("AimCell", Art.White, OrderAim);
+                created.transform.localScale = Vector3.one;
+                _aimCells.Add(created);
+            }
+
+            return _aimCells[index];
+        }
+
+        private void HideAimCells(int from)
+        {
+            for (int i = from; i < _aimCells.Count; i++) _aimCells[i].enabled = false;
+        }
+
+        /// <summary>
         /// 쿨다운이 새로 걸린 슬롯이 있으면 방금 쏜 것이다. 코어는 연출을 모르므로
         /// 화면 쪽에서 상태 변화를 보고 물줄기를 만든다.
         /// </summary>
@@ -603,10 +671,19 @@ namespace FireGame.UnityLayer
                 Aiming.Resolve(_grid, player.CellX, player.CellY, player.Aim, def.Pattern, def.Range, _hitBuffer, def.EndSpread);
                 SpawnShot(def.Agent.Type, PlayerWorld, _hitBuffer, Mathf.Min(LevelSteps(def), MaxSprayBoost));
 
-                if (newShot && _runner.LastShotExtinguished >= 2 && _hitBuffer.Count > 0)
+                if (newShot && _hitBuffer.Count > 0)
                 {
-                    SpawnPopup(_runner.LastShotExtinguished + "칸 진압!", Centroid(_hitBuffer));
-                    newShot = false;
+                    // 역효과를 먼저 알린다. 물을 기름에 뿌리면 전에는 조용히 번지기만 했다.
+                    if (_runner.LastShotBackfired > 0)
+                    {
+                        SpawnPopup("역효과! 불이 번진다", Centroid(_hitBuffer), PopupBad);
+                        newShot = false;
+                    }
+                    else if (_runner.LastShotExtinguished >= 2)
+                    {
+                        SpawnPopup(_runner.LastShotExtinguished + "칸 진압!", Centroid(_hitBuffer));
+                        newShot = false;
+                    }
                 }
             }
         }
@@ -685,12 +762,22 @@ namespace FireGame.UnityLayer
             return sum / cells.Count;
         }
 
+        /// <summary>좋은 소식은 노랑, 나쁜 소식은 빨강, 구조는 초록.</summary>
+        private static readonly Color PopupDefault = new Color(1f, 0.92f, 0.3f);
+        private static readonly Color PopupBad = new Color(1f, 0.35f, 0.3f);
+        private static readonly Color PopupGood = new Color(0.45f, 1f, 0.55f);
+
         private void SpawnPopup(string text, Vector3 at)
+        {
+            SpawnPopup(text, at, PopupDefault);
+        }
+
+        private void SpawnPopup(string text, Vector3 at, Color color)
         {
             var popup = new Popup
             {
                 Shadow = CreateText("PopupShadow", text, new Color(0f, 0f, 0f, 0.8f), OrderSmoke + 4),
-                Text = CreateText("Popup", text, new Color(1f, 0.92f, 0.3f), OrderSmoke + 5),
+                Text = CreateText("Popup", text, color, OrderSmoke + 5),
                 From = at + new Vector3(0f, 0.6f, 0f),
             };
             _popups.Add(popup);

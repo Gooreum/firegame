@@ -1,5 +1,6 @@
 using FireGame.Core.Data;
 using FireGame.Core.Game;
+using FireGame.Core.Grid;
 using FireGame.Core.Sim;
 using UnityEngine;
 using UnityEngine.UI;
@@ -24,6 +25,9 @@ namespace FireGame.UnityLayer
 
         private readonly Image[] _slotImages = new Image[PlayerState.SlotCount];
         private readonly Text[] _slotLabels = new Text[PlayerState.SlotCount];
+
+        /// <summary>장비가 잡는 화재 등급 색 띠. 현장 불꽃과 같은 색이라 눈으로 맞출 수 있다.</summary>
+        private readonly Image[] _slotStripes = new Image[PlayerState.SlotCount];
 
         public readonly VirtualJoystick Joystick;
         public readonly HoldButton FireButton;
@@ -108,10 +112,19 @@ namespace FireGame.UnityLayer
                 UiKit.Place((RectTransform)button.transform, new Vector2(1f, 0f), new Vector2(-320f - (fromRight * 226f), 70f), new Vector2(214f, 118f));
 
                 _slotImages[slot] = (Image)button.targetGraphic;
-                _slotLabels[slot] = UiKit.OutlinedLabel(button.transform, "Label", string.Empty, 28, Color.white, TextAnchor.MiddleCenter);
+
+                // 버튼 위쪽 띠. 이 장비가 잡는 불의 색이다.
+                _slotStripes[slot] = UiKit.Image(button.transform, "Stripe", Art.White, Color.clear);
+                UiKit.Place(_slotStripes[slot].rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(178f, 12f));
+                _slotStripes[slot].rectTransform.pivot = new Vector2(0.5f, 1f);
+                _slotStripes[slot].raycastTarget = false;
+
+                _slotLabels[slot] = UiKit.OutlinedLabel(button.transform, "Label", string.Empty, 26, Color.white, TextAnchor.MiddleCenter);
                 UiKit.Stretch(_slotLabels[slot].rectTransform);
-                _slotLabels[slot].rectTransform.offsetMin = new Vector2(6f, 10f);
-                _slotLabels[slot].lineSpacing = 0.9f;
+                _slotLabels[slot].rectTransform.offsetMin = new Vector2(6f, 6f);
+                _slotLabels[slot].rectTransform.offsetMax = new Vector2(-6f, -16f);
+                _slotLabels[slot].lineSpacing = 0.85f;
+                _slotLabels[slot].raycastTarget = false;
             }
 
             Refresh();
@@ -160,6 +173,7 @@ namespace FireGame.UnityLayer
                 image.color = new Color(1f, 1f, 1f, 0.45f);
                 label.text = "비어 있음";
                 label.color = new Color(1f, 1f, 1f, 0.6f);
+                _slotStripes[slot].color = Color.clear;
                 return;
             }
 
@@ -171,7 +185,14 @@ namespace FireGame.UnityLayer
             bool empty = def.Resource == ResourceKind.Charges && player.Charges[slot] <= 0;
             string ammo = def.Resource == ResourceKind.Charges ? player.Charges[slot] + "회" : "무제한";
             int level = _flow.Save.LevelOf(def.Id);
-            label.text = def.Name + "\n<size=22>Lv." + level + " · " + (empty ? "다 씀" : ammo) + "</size>";
+
+            // 이 장비가 잡는 불을 글자와 띠 색으로 같이 알린다. 띠 색은 현장 불꽃 색과 같다.
+            FireClass target = AgentAdvice.BestClassFor(def.Agent.Type);
+            _slotStripes[slot].color = FireLook.Of(target);
+
+            label.text = def.Name
+                         + "\n<size=21>Lv." + level + " · " + (empty ? "다 씀" : ammo) + "</size>"
+                         + "\n<size=21>" + AgentAdvice.ClassName(target) + " 불</size>";
 
             // 다 쓴 장비는 회색으로 바꿔, 눌러도 안 나가는 이유를 보여 준다.
             if (empty)

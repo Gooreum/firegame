@@ -102,7 +102,8 @@ namespace FireGame.UnityLayer
             {
                 case AgentVerdict.Good: return new Color(0.25f, 1f, 0.45f);
                 case AgentVerdict.Weak: return new Color(1f, 0.9f, 0.3f);
-                case AgentVerdict.Backfire: return new Color(1f, 0.15f, 0.15f);
+                // 빨강을 쓰면 기름 불(진홍) 위에서 묻힌다. 어떤 불도 쓰지 않는 자홍을 쓴다.
+                case AgentVerdict.Backfire: return new Color(1f, 0.1f, 0.9f);
                 default: return new Color(0.7f, 0.7f, 0.72f);
             }
         }
