@@ -32,6 +32,15 @@ namespace FireGame.Core.Grid
         Hydrant = 5,
         Door = 6,
         Exit = 7,
+
+        /// <summary>
+        /// 현장에 놓인 설비와 수목. 주유기 섬, 컨테이너, 드럼통, 나무, 화단, 소방차.
+        ///
+        /// 발화점이 무한대라 <see cref="FireGrid.IntactRatio"/>가 세는 가연 칸에 들어가지 않는다.
+        /// 덕분에 마당을 아무리 채워도 별 기준과 건물 소실 판정이 그대로다 — 막는 것은 통행뿐이다.
+        /// 무엇으로 보이는가(나무냐 컨테이너냐)는 현장마다 화면이 정한다.
+        /// </summary>
+        Scenery = 8,
     }
 
     /// <summary>재질 한 종류의 물성. 값이 바뀌지 않으므로 readonly struct.</summary>
@@ -104,6 +113,8 @@ namespace FireGame.Core.Grid
             new CellMaterial("Hydrant",  Inf,   0f,     0f,   FireClass.None, false),
             new CellMaterial("Door",     0.40f, 0.20f,  0.8f, FireClass.A,    true),
             new CellMaterial("Exit",     Inf,   0f,     0f,   FireClass.None, true),
+            // 마당의 설비와 수목. 불이 붙지 않으므로 소실률 분모에 들어가지 않는다.
+            new CellMaterial("Scenery",  Inf,   0f,     0f,   FireClass.None, false),
         };
 
         public static CellMaterial Of(byte materialId)
@@ -140,6 +151,7 @@ namespace FireGame.Core.Grid
                 case 'H': materialId = MaterialId.Hydrant; return true;
                 case 'D': materialId = MaterialId.Door; return true;
                 case 'X': materialId = MaterialId.Exit; return true;
+                case 'o': materialId = MaterialId.Scenery; return true;
 
                 // 아래 세 문자는 재질이 아니라 배치 마커다.
                 // 바닥으로 깔고 좌표만 따로 수집한다.

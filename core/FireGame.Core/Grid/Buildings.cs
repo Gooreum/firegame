@@ -215,7 +215,11 @@ namespace FireGame.Core.Grid
 
                     var material = (MaterialId)grid.Cells[n].Material;
                     if (material == MaterialId.Door) continue;
-                    if (!Materials.Of(material).Walkable) continue;
+
+                    // 장식물은 마당에 놓인 물건이지 건물이 아니다. 못 지나가도 실외로 치고 계속 퍼진다.
+                    // 여기서 멈추면 건물 벽에 붙여 심은 나무가 그 건물 덩어리에 흡수되어
+                    // 지붕이 나무 위에까지 덮인다 — 마당의 급수전이 건물로 잡혔던 것과 같은 함정이다.
+                    if (material != MaterialId.Scenery && !Materials.Of(material).Walkable) continue;
 
                     outdoor[n] = true;
                     queue.Enqueue(new GridPoint(nx, ny));
