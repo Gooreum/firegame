@@ -72,6 +72,31 @@ namespace FireGame.UnityLayer
     }
 
     /// <summary>맵 가장자리. 격자 맨 바깥 한 줄이라 게임에 영향이 없다.</summary>
+    /// <summary>
+    /// 앞벽 재질. 시선을 눕혀 건물 앞면이 보이게 됐으니, 같은 상자라도
+    /// 회벽이면 집이고 통유리면 점포다. 무엇이 서 있는지를 이 결 하나가 말한다.
+    /// </summary>
+    public enum FacadeStyle
+    {
+        /// <summary>회벽 — 주택.</summary>
+        Plaster = 0,
+
+        /// <summary>통유리와 멀리언 — 상가.</summary>
+        Glass = 1,
+
+        /// <summary>흰 타일 — 주유소 점포.</summary>
+        Tile = 2,
+
+        /// <summary>함석 골벽 — 창고.</summary>
+        Ribbed = 3,
+
+        /// <summary>콘크리트 패널 — 공장.</summary>
+        Precast = 4,
+
+        /// <summary>세로 널판 — 항구 창고.</summary>
+        Board = 5,
+    }
+
     public enum BorderStyle
     {
         /// <summary>생울타리 — 주택가.</summary>
@@ -320,6 +345,12 @@ namespace FireGame.UnityLayer
             }
         }
 
+        /// <summary>앞벽 한 장. 지붕이 올라가면서 드러난 건물 앞면을 이 결로 칠한다.</summary>
+        public static Sprite FacadeTexture(FacadeStyle style)
+        {
+            return Make(('F' << 16) | (int)style, (x, y) => Facade(style, x, y));
+        }
+
         /// <summary>맵 가장자리 한 장.</summary>
         public static Sprite BorderTexture(BorderStyle style)
         {
@@ -504,6 +535,49 @@ namespace FireGame.UnityLayer
                     if (variant == 1 && (x % 64) > 56) return Rgb(0.42f, 0.40f, 0.38f);
                     return Rgb(0.55f + n, 0.44f + n, 0.33f + n);
                 }
+            }
+        }
+
+        /// <summary>
+        /// 앞벽 결 한 픽셀. 지붕과 같은 규칙이다 — 회백색 바탕에 어두운 줄만 넣어야
+        /// 현장 벽 색을 곱했을 때 색이 산다.
+        ///
+        /// 여기에 더해 <b>위가 밝고 아래가 어두워야</b> 한다. 벽은 서 있는 면이라
+        /// 빛이 위에서 내려오는데, 균일하게 칠하면 서 있는 느낌 없이 띠 한 장으로만 보인다.
+        /// </summary>
+        private static Color32 Facade(FacadeStyle style, int x, int y)
+        {
+            // GenSize 좌표에서 y = GenSize-1이 위다. 아래로 갈수록 어둡게 깐다.
+            float lean = 0.84f + ((y / (float)(GenSize - 1)) * 0.16f);
+
+            switch (style)
+            {
+                // 회벽: 고르게 칠하되 드문드문 얼룩을 둔다. 완전히 매끈하면 종이처럼 보인다.
+                case FacadeStyle.Plaster:
+                    return Grey(lean * (Noise(x, y, 17) > 0.86f ? 0.94f : 1f));
+
+                // 통유리: 21px마다 세로 멀리언 한 줄.
+                case FacadeStyle.Glass:
+                    return Grey(x % 21 < 2 ? 0.62f : lean);
+
+                // 흰 타일: 16px 격자 줄눈.
+                case FacadeStyle.Tile:
+                    return Grey(x % 16 < 1 || y % 16 < 1 ? 0.78f : lean);
+
+                // 함석 골벽: 8px 주기로 골과 마루. 벽 쪽은 지붕보다 골을 깊게 준다.
+                case FacadeStyle.Ribbed:
+                {
+                    int c = x % 8;
+                    return Grey(lean * (c == 0 ? 0.64f : c == 4 ? 1f : 0.90f));
+                }
+
+                // 콘크리트 패널: 32x24 패널 이음매.
+                case FacadeStyle.Precast:
+                    return Grey(x % 32 < 2 || y % 24 < 2 ? 0.70f : lean);
+
+                // 세로 널판: 12px마다 판 사이 틈.
+                default:
+                    return Grey(x % 12 < 1 ? 0.66f : lean);
             }
         }
 

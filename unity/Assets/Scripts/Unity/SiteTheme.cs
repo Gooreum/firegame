@@ -130,12 +130,23 @@ namespace FireGame.UnityLayer
         public readonly BorderStyle Border;
         public readonly PropKit Props;
 
+        /// <summary>
+        /// 앞벽 재질과 바탕색. 시선을 눕혀 건물 앞면이 보이게 되면서 새로 필요해졌다 —
+        /// 지붕만 현장별이면 벽은 어느 현장이나 같은 회색이 된다.
+        /// </summary>
+        public readonly FacadeStyle Facade;
+        public readonly Color WallColor;
+
+        /// <summary>창틀·문틀. 벽보다 진해야 창이 창으로 보인다.</summary>
+        public readonly Color TrimColor;
+
         /// <summary>입구 간판 글자. 지붕이 덮인 밖에서 "여기로 들어간다"를 말한다.</summary>
         public readonly string SignLabel;
 
         private SiteTheme(
             RoofStyle roof, Color roofColor, RoofFixture fixture,
-            GroundStyle ground, BorderStyle border, PropKit props, string signLabel)
+            GroundStyle ground, BorderStyle border, PropKit props, string signLabel,
+            FacadeStyle facade, Color wallColor, Color trimColor)
         {
             Roof = roof;
             RoofColor = roofColor;
@@ -144,6 +155,9 @@ namespace FireGame.UnityLayer
             Border = border;
             Props = props;
             SignLabel = signLabel;
+            Facade = facade;
+            WallColor = wallColor;
+            TrimColor = trimColor;
         }
 
         private static readonly Dictionary<int, SiteTheme> Table = new Dictionary<int, SiteTheme>
@@ -157,7 +171,8 @@ namespace FireGame.UnityLayer
                         PropLook.Art("Props/tree_small", 1.1f, false),
                         PropLook.Art("Props/tree_large", 1.15f, false),
                         PropLook.Art("Props/tree_large", 1.15f, false)),
-                    "주택")
+                    "주택",
+                    FacadeStyle.Plaster, new Color(0.94f, 0.89f, 0.79f), new Color(0.52f, 0.33f, 0.24f))
             },
 
             // 1 상가 — 파란 차양에 옥상 실외기. 앞에 화단과 주차 차량.
@@ -169,7 +184,8 @@ namespace FireGame.UnityLayer
                         PropLook.Drawn(PropStyle.Planter, 1f, false),
                         PropLook.Art("Vehicles/car_blue", 0.9f, true),
                         PropLook.Art("Vehicles/car_black", 0.9f, true)),
-                    "상가")
+                    "상가",
+                    FacadeStyle.Glass, new Color(0.86f, 0.90f, 0.94f), new Color(0.34f, 0.38f, 0.44f))
             },
 
             // 2 주유소 — 흰 캐노피에 기둥. 마당에 주유기 섬과 유조차.
@@ -182,7 +198,8 @@ namespace FireGame.UnityLayer
                         PropLook.Art("Vehicles/cone", 0.8f, false),
                         PropLook.Drawn(PropStyle.Pump, 1f, true),
                         PropLook.Drawn(PropStyle.Pump, 1f, true)),
-                    "주유소")
+                    "주유소",
+                    FacadeStyle.Tile, new Color(0.96f, 0.96f, 0.95f), new Color(0.84f, 0.26f, 0.22f))
             },
 
             // 3 물류창고 — 회청 함석에 채광창. 야적장에 컨테이너와 팔레트.
@@ -194,7 +211,8 @@ namespace FireGame.UnityLayer
                         PropLook.Drawn(PropStyle.Pallet, 0.95f, false),
                         PropLook.Drawn(PropStyle.Pallet, 0.95f, true),
                         PropLook.Drawn(PropStyle.Container, 1f, true)),
-                    "물류")
+                    "물류",
+                    FacadeStyle.Ribbed, new Color(0.70f, 0.74f, 0.79f), new Color(0.36f, 0.41f, 0.47f))
             },
 
             // 4 공장 — 청회 슬레이트에 굴뚝과 덕트. 마당에 드럼통과 배관.
@@ -206,7 +224,8 @@ namespace FireGame.UnityLayer
                         PropLook.Art("Props/barrel_red", 0.95f, false),
                         PropLook.Art("Props/barrier", 0.95f, true),
                         PropLook.Tinted("Props/barrel_blue", Color.white, 0.95f, false)),
-                    "공장")
+                    "공장",
+                    FacadeStyle.Precast, new Color(0.72f, 0.72f, 0.70f), new Color(0.40f, 0.44f, 0.50f))
             },
 
             // 5 항구 — 적갈 널판에 환기구. 부두에 컨테이너 스택과 계선주.
@@ -218,7 +237,8 @@ namespace FireGame.UnityLayer
                         PropLook.Drawn(PropStyle.Bollard, 0.9f, false),
                         PropLook.Art("Props/tires", 0.9f, false),
                         PropLook.Drawn(PropStyle.Container, 1f, true)),
-                    "부두")
+                    "부두",
+                    FacadeStyle.Board, new Color(0.74f, 0.56f, 0.42f), new Color(0.40f, 0.26f, 0.18f))
             },
         };
 

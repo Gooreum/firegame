@@ -734,10 +734,10 @@ namespace FireGame.EditorTools
             var cameraObject = new GameObject("Camera");
             var camera = cameraObject.AddComponent<Camera>();
             camera.orthographic = true;
-            camera.orthographicSize = 16f;
+            camera.orthographicSize = 20f;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.10f, 0.10f, 0.12f);
-            camera.transform.position = new Vector3(16f, -6f, -10f);
+            camera.transform.position = new Vector3(16f, -4.5f, -10f);
 
             var roofColors = new[]
             {
@@ -745,6 +745,20 @@ namespace FireGame.EditorTools
                 new Color(0.93f, 0.95f, 0.96f), new Color(0.56f, 0.62f, 0.70f),
                 new Color(0.34f, 0.46f, 0.62f), new Color(0.70f, 0.42f, 0.30f),
             };
+
+            var wallColors = new[]
+            {
+                new Color(0.94f, 0.89f, 0.79f), new Color(0.86f, 0.90f, 0.94f),
+                new Color(0.96f, 0.96f, 0.95f), new Color(0.70f, 0.74f, 0.79f),
+                new Color(0.72f, 0.72f, 0.70f), new Color(0.74f, 0.56f, 0.42f),
+            };
+
+            // 0줄: 앞벽 6종(현장 벽 색을 곱한 상태). 위가 밝고 아래가 어두운 기울기가 보여야 한다.
+            for (int i = 0; i < 6; i++)
+            {
+                Swatch(Art.FacadeTexture((FacadeStyle)i), wallColors[i], i * 5f, 11.5f, 4f);
+                Caption(((FacadeStyle)i).ToString(), (i * 5f) + 2f, 13.9f);
+            }
 
             // 1줄: 지붕 6종(현장 색을 곱한 상태)
             for (int i = 0; i < 6; i++)
