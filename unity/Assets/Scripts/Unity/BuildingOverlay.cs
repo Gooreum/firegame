@@ -20,12 +20,14 @@ namespace FireGame.UnityLayer
         /// <summary>
         /// 벽이 화면에서 위로 서는 길이(칸). 지붕은 이만큼 위로 올라가고 그 아래가 앞벽이 된다.
         ///
-        /// 크게 잡을수록 건물이 웅장해지지만 <b>건물 뒤 격자 줄을 그만큼 더 가린다</b> —
-        /// 상가 아래 블록은 하필 소방관 스폰이 있는 줄(10행) 바로 위에 있어서,
-        /// 1.1칸이면 11행 한 줄만 먹고 스폰은 건드리지 않는다.
+        /// 크게 잡을수록 건물이 웅장해지지만 <b>건물 뒤 격자 줄을 그만큼 더 가린다</b>.
+        /// 한도를 정하는 것은 상가다 — 아래 블록이 12행에서 시작하고 소방관 스폰이 10행이라,
+        /// 가리는 줄 수(WallRise / Squash)가 두 줄을 넘으면 스폰이 지붕 밑으로 들어간다.
+        /// 1.5칸이면 1.9줄이라 11행까지만 먹는다. 1.1칸으로 뒀더니 12칸 깊이 건물에서
+        /// 벽이 지붕의 10분의 1도 안 돼 띠 한 장으로만 보였다(캡처로 확인).
         /// 카메라 여백도 이 값을 보고 잡으므로 여기 하나만 고치면 화면 전체가 따라온다.
         /// </summary>
-        public const float WallRise = 1.1f;
+        public const float WallRise = 1.5f;
 
         /// <summary>처마 쪽 밝기. 이만큼 떨어뜨렸다가 용마루까지 밝혀 올린다.</summary>
         private const float EaveShade = 0.58f;
@@ -46,14 +48,41 @@ namespace FireGame.UnityLayer
         /// <summary>용마루 한 줄만 기준 색 그대로. 지붕이 어느 쪽으로 흐르는지를 이 선 하나가 말한다.</summary>
         private const float RidgeLine = 1f;
 
-        /// <summary>처마 그림자. 지붕 바로 밑이라 건물이 땅 위에 놓인 것으로 보인다.</summary>
-        private const int OrderEaves = OrderRoof - 1;
+        /// <summary>지붕이 벽 밖으로 내미는 길이(칸).</summary>
+        private const float Overhang = 0.26f;
 
-        /// <summary>지붕 위에 얹는 부속물. 지붕과 표시 사이.</summary>
-        private const int OrderFixture = OrderRoof + 1;
+        // 한 채가 아래에서 위로 쌓이는 순서 그대로 매긴다.
+        // 벽이 지붕보다 아래여야 지붕이 벽 위 끝을 덮어 처마가 벽에 그늘을 떨군다.
 
-        /// <summary>지붕 위 표시. 지붕보다 위에 그려야 보인다.</summary>
-        private const int OrderRoofMark = OrderRoof + 2;
+        /// <summary>건물이 땅에 떨구는 그림자.</summary>
+        private const int OrderGroundShadow = 36;
+
+        /// <summary>앞벽면.</summary>
+        private const int OrderWallFace = 37;
+
+        /// <summary>창문·현관·굽도리. 벽면 위에 붙는다.</summary>
+        private const int OrderWallTrim = 38;
+
+        /// <summary>처마 밑면. 지붕보다 한 겹 아래라 지붕 둘레에 어두운 테가 생긴다.</summary>
+        private const int OrderEaves = 39;
+
+        /// <summary>용마루·추녀마루·칸막이 이음매.</summary>
+        private const int OrderRoofLine = 41;
+
+        /// <summary>부속물이 지붕에 떨구는 그림자.</summary>
+        private const int OrderFixtureShade = 42;
+
+        /// <summary>지붕 위에 얹는 부속물.</summary>
+        private const int OrderFixture = 43;
+
+        /// <summary>지붕 위 표시. 무엇보다 위에 그려야 보인다.</summary>
+        private const int OrderRoofMark = 45;
+
+        /// <summary>지붕 뒤에 선 소방관 실루엣.</summary>
+        public const int OrderGhost = 48;
+
+        /// <summary>창유리 색. 어느 현장이나 같다 — 유리는 하늘을 비춘다.</summary>
+        private static readonly Color Glass = new Color(0.62f, 0.75f, 0.84f);
 
         /// <summary>한 건물에 세우는 불꽃 수. 더 많이 세우면 지붕이 불꽃으로 뒤덮인다.</summary>
         private const int MaxFireSigns = 3;
@@ -488,8 +517,10 @@ namespace FireGame.UnityLayer
                 tile.transform.SetParent(_root, false);
                 tile.sprite = material;
                 tile.sortingOrder = OrderRoof;
-                tile.transform.position = _view.CellCenter(cell.X, cell.Y);
-                tile.transform.localScale = Vector3.one;
+                // 지붕도 땅과 나란한 면이라 세로로 눌리고, 벽 높이만큼 위로 올라간다.
+                // 올라가며 비워 둔 아래 자리를 BuildWall()이 앞벽으로 채운다.
+                tile.transform.position = _view.CellCenter(cell.X, cell.Y) + new Vector3(0f, WallRise, 0f);
+                tile.transform.localScale = new Vector3(1f, MissionWorldView.Squash, 1f);
                 tile.color = Slope(color, depth[index], onRidge);
                 tiles.Add(tile);
 
@@ -579,35 +610,151 @@ namespace FireGame.UnityLayer
         /// </summary>
         private void BuildDressing(Building building)
         {
-            var member = new HashSet<int>();
-            foreach (GridPoint cell in building.Cells) member.Add(_grid.Index(cell.X, cell.Y));
-
             SiteTheme theme = SiteTheme.Of(_runner.Def.Id);
 
-            BuildEaveShadow(building, member);
+            // 아래에서 위로 쌓는 순서 그대로 부른다.
+            BuildGroundShadow(building);
+            BuildWall(building, theme);
+            BuildOverhang(building, theme);
             BuildFixtures(building, theme);
             BuildSigns(building, theme);
         }
 
         /// <summary>
-        /// 남·동쪽으로 삐져나온 지붕 칸 밑에 반투명 검정을 깐다.
-        /// 이 한 가지가 납작한 색판을 "땅 위에 놓인 덩어리"로 바꾼다.
-        /// 북·서는 빛이 오는 쪽이라 그림자가 없다.
+        /// 칸막이 하나가 맡는 폭(칸). 36칸짜리 주택가 한 덩어리는 집이 아니라 격납고다.
+        /// 맵은 한 글자도 안 고치고, 앞면을 이 폭으로 나눠 여러 채로 읽히게 한다.
         /// </summary>
-        private void BuildEaveShadow(Building building, HashSet<int> member)
-        {
-            foreach (GridPoint cell in building.Cells)
-            {
-                bool south = !Inside(member, cell.X, cell.Y + 1);
-                bool east = !Inside(member, cell.X + 1, cell.Y);
-                if (!south && !east) continue;
+        private const int BayCells = 7;
 
-                SpriteRenderer shadow = Piece("Eaves", Art.White, OrderEaves, building.Id);
-                shadow.color = new Color(0f, 0f, 0f, 0.20f);
-                shadow.transform.position = _view.CellCenter(cell.X, cell.Y)
-                    + new Vector3(0.24f, -0.24f * MissionWorldView.Squash, 0f);
-                shadow.transform.localScale = new Vector3(1f, MissionWorldView.Squash, 1f);
+        /// <summary>건물을 세로로 나눈 구간들. 각 원소가 (왼쪽 x, 오른쪽 x).</summary>
+        private static List<Vector2> Bays(Building building)
+        {
+            int count = Mathf.Max(1, Mathf.RoundToInt(building.Width / (float)BayCells));
+            float step = building.Width / (float)count;
+
+            var bays = new List<Vector2>(count);
+            for (int i = 0; i < count; i++)
+            {
+                bays.Add(new Vector2(building.MinX + (i * step), building.MinX + ((i + 1) * step)));
             }
+
+            return bays;
+        }
+
+        /// <summary>
+        /// 건물이 통째로 땅에 떨구는 그림자. 칸마다 찍던 것을 한 장으로 바꿨다 —
+        /// 시선을 눕힌 뒤로는 건물이 한 덩어리로 서 있어서, 칸 단위 그림자는 격자만 드러냈다.
+        /// </summary>
+        private void BuildGroundShadow(Building building)
+        {
+            float left = building.MinX;
+            float right = building.MaxX + 1f;
+            float top = (_grid.Height - building.MinY) * MissionWorldView.Squash;
+            float bottom = (_grid.Height - building.MaxY - 1f) * MissionWorldView.Squash;
+
+            SpriteRenderer cast = Piece("BuildingShadow", Art.White, OrderGroundShadow, building.Id);
+            cast.color = new Color(0f, 0f, 0f, 0.26f);
+            cast.transform.position = new Vector3(((left + right) * 0.5f) + 0.30f, (top + bottom) * 0.5f, 0f);
+            cast.transform.localScale = new Vector3(right - left, top - bottom, 1f);
+        }
+
+        /// <summary>
+        /// 건물 남쪽 벽면. 시선을 눕혔으니 이제 <b>실제로 보이는 면</b>이다.
+        ///
+        /// 지금까지 건물은 footprint의 100%가 지붕이었다 — 위에서 덮은 뚜껑이지 건물이 아니다.
+        /// 지붕이 <see cref="WallRise"/>만큼 올라가며 비워 둔 자리를 이 벽이 채운다.
+        /// 창문과 현관이 붙어야 비로소 "들어갈 수 있는 곳"으로 읽힌다.
+        /// </summary>
+        private void BuildWall(Building building, SiteTheme theme)
+        {
+            float left = building.MinX;
+            float right = building.MaxX + 1f;
+            float width = right - left;
+            float midX = (left + right) * 0.5f;
+            float foot = (_grid.Height - building.MaxY - 1f) * MissionWorldView.Squash;
+
+            SpriteRenderer wall = Piece("Wall", Art.FacadeTexture(theme.Facade), OrderWallFace, building.Id);
+            wall.color = theme.WallColor;
+            wall.transform.position = new Vector3(midX, foot + (WallRise * 0.5f), 0f);
+            wall.transform.localScale = new Vector3(width, WallRise, 1f);
+
+            // 굽도리 — 벽이 땅에 닿는 선. 없으면 벽이 바닥에 스며든다.
+            Plate("Plinth", midX, foot + 0.07f, width, 0.14f, Shade(theme.WallColor, 0.50f), building.Id);
+
+            // 처마 그늘 — 지붕이 내민 만큼 벽 윗부분이 그늘진다.
+            // 이 한 줄이 지붕을 벽 "위에" 얹는다. 빼면 둘이 같은 평면으로 붙어 버린다.
+            Plate("EaveShade", midX, foot + WallRise - 0.10f, width, 0.20f,
+                new Color(0f, 0f, 0f, 0.34f), building.Id);
+
+            foreach (Vector2 bay in Bays(building)) BuildBayFront(building, theme, bay.x, bay.y, foot);
+        }
+
+        /// <summary>베이 하나의 앞면. 남쪽 벽에 문이 있으면 현관, 없으면 창문 두 짝.</summary>
+        private void BuildBayFront(Building building, SiteTheme theme, float x0, float x1, float foot)
+        {
+            int door = SouthDoor(building, x0, x1);
+            if (door >= 0)
+            {
+                float dx = door + 0.5f;
+                Plate("DoorFrame", dx, foot + (WallRise * 0.42f), 0.86f, WallRise * 0.80f,
+                    theme.TrimColor, building.Id);
+                Plate("Door", dx, foot + (WallRise * 0.40f), 0.62f, WallRise * 0.68f,
+                    Shade(theme.TrimColor, 0.70f), building.Id);
+                Plate("Knob", dx + 0.19f, foot + (WallRise * 0.38f), 0.09f, 0.09f,
+                    new Color(0.95f, 0.85f, 0.45f), building.Id);
+                return;
+            }
+
+            float mid = (x0 + x1) * 0.5f;
+            float pane = Mathf.Min(0.85f, (x1 - x0) * 0.26f);
+            float sill = foot + (WallRise * 0.56f);
+
+            for (int k = -1; k <= 1; k += 2)
+            {
+                float wx = mid + (k * pane * 1.15f);
+                Plate("WinFrame", wx, sill, pane + 0.16f, WallRise * 0.58f, theme.TrimColor, building.Id);
+                Plate("Win", wx, sill, pane, WallRise * 0.44f, Glass, building.Id);
+                Plate("WinBar", wx, sill, pane, 0.06f, theme.TrimColor, building.Id);
+            }
+        }
+
+        /// <summary>이 베이 안에 있는 남쪽 입구의 x. 없으면 -1.</summary>
+        private int SouthDoor(Building building, float x0, float x1)
+        {
+            foreach (GridPoint door in building.Entrances)
+            {
+                if (door.Y != building.MaxY) continue;
+                if (door.X < x0 || door.X + 1f > x1) continue;
+                return door.X;
+            }
+
+            return -1;
+        }
+
+        /// <summary>가운데가 (cx,cy)이고 w x h 칸인 색판. 벽에 붙는 것이라 누르지 않는다.</summary>
+        private void Plate(string name, float cx, float cy, float w, float h, Color color, int buildingId)
+        {
+            SpriteRenderer piece = Piece(name, Art.White, OrderWallTrim, buildingId);
+            piece.color = color;
+            piece.transform.position = new Vector3(cx, cy, 0f);
+            piece.transform.localScale = new Vector3(w, h, 1f);
+        }
+
+        /// <summary>
+        /// footprint보다 <see cref="Overhang"/>칸 큰 지붕 밑면. 지붕 둘레에 어두운 테가 생겨
+        /// 지붕이 건물보다 커 보인다. 처마가 없으면 지붕은 딱 맞는 뚜껑이 된다.
+        /// </summary>
+        private void BuildOverhang(Building building, SiteTheme theme)
+        {
+            float left = building.MinX - Overhang;
+            float right = building.MaxX + 1f + Overhang;
+            float top = ((_grid.Height - building.MinY) * MissionWorldView.Squash) + Overhang + WallRise;
+            float bottom = ((_grid.Height - building.MaxY - 1f) * MissionWorldView.Squash) + WallRise - 0.22f;
+
+            SpriteRenderer eave = Piece("Overhang", Art.RoofTexture(theme.Roof), OrderEaves, building.Id);
+            eave.color = Shade(theme.RoofColor, EaveShade * 0.80f);
+            eave.transform.position = new Vector3((left + right) * 0.5f, (top + bottom) * 0.5f, 0f);
+            eave.transform.localScale = new Vector3(right - left, top - bottom, 1f);
         }
 
         /// <summary>
@@ -705,7 +852,10 @@ namespace FireGame.UnityLayer
                 board.color = new Color(0.99f, 0.96f, 0.88f);
                 // 마주 보는 두 건물(공장 배전동과 공장동)은 문이 세 칸 간격이라
                 // 간판이 넓으면 "공장 공장"으로 겹친다(캡처로 확인). 좁게, 가깝게 붙인다.
-                board.transform.position = _view.ToWorld(gate.x, gate.y) + (outward * 0.72f);
+                // 간판은 지붕 밑 벽에 걸리므로 눌린 마당 좌표 그대로 두되,
+                // 바깥으로 내미는 거리도 세로는 눌린 비율을 따른다.
+                Vector3 lean = new Vector3(outward.x, outward.y * MissionWorldView.Squash, 0f);
+                board.transform.position = _view.ToWorld(gate.x, gate.y) + (lean * 0.72f);
                 board.transform.localScale = new Vector3(
                     Art.FitWidth(board.sprite, 1.5f), Art.FitWidth(board.sprite, 0.8f), 1f);
 
