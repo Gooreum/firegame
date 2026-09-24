@@ -45,6 +45,15 @@ namespace FireGame.Core.Grid
         /// </summary>
         public float Inert;
 
+        /// <summary>
+        /// 연기 농도 0..1.
+        ///
+        /// 열과 달리 <b>통행 가능한 칸으로만</b> 퍼진다 — 벽이 막고 문이 조인다.
+        /// 그래서 "문을 닫으면 방이 지켜진다"가 성립한다.
+        /// 시야를 가리고, 숨을 막고, 시민을 쇠약하게 한다.
+        /// </summary>
+        public float Smoke;
+
         public CellState State;
     }
 }

@@ -63,6 +63,19 @@ namespace FireGame.Core.Sim
         /// </summary>
         private readonly float[] _heatDelta;
 
+        /// <summary>
+        /// 연기 증가분. <see cref="_heatDelta"/>와 같은 이유로 따로 모은다 —
+        /// 격자에 곧바로 더하면 방금 흘러든 연기가 같은 틱에 또 흘러
+        /// 확산이 순회 순서에 의존하게 되고 결정론이 깨진다.
+        /// </summary>
+        private readonly float[] _smokeDelta;
+
+        /// <summary>
+        /// 칸별 실외 여부. 실외는 연기가 고이지 않고 빠져나간다.
+        /// null이면 전부 실외로 본다 — 건물 개념이 없는 격자 단위 테스트를 위한 것이다.
+        /// </summary>
+        public bool[] Outdoor;
+
         public Wind Wind;
 
         /// <summary>
@@ -77,6 +90,7 @@ namespace FireGame.Core.Sim
 
             _grid = grid;
             _heatDelta = new float[grid.Count];
+            _smokeDelta = new float[grid.Count];
             Wind = Wind.None;
         }
 
@@ -104,6 +118,7 @@ namespace FireGame.Core.Sim
             EmitHeatAndConsumeFuel(dt);
             ApplyHeatAndDecay(dt);
             Ignite();
+            SpreadSmoke(dt);
         }
 
         /// <summary>1단계: 연소 셀이 이웃에 열을 뿌리고 자기 연료를 태운다.</summary>
@@ -206,6 +221,117 @@ namespace FireGame.Core.Sim
                     cells[i].State = CellState.Burning;
                 }
             }
+        }
+
+        /// <summary>
+        /// 4단계: 연기. 열과 달리 <b>통행 가능한 칸끼리만</b> 오간다 —
+        /// 연기는 벽을 뚫지 않는다. 이 한 줄이 "문을 닫으면 방이 지켜진다"를 성립시킨다.
+        ///
+        /// 대각선으로는 번지지 않는다. 벽 모서리가 맞닿은 두 방 사이로 연기가 새면
+        /// 플레이어가 막을 방법이 없는 경로가 생긴다.
+        /// </summary>
+        private void SpreadSmoke(float dt)
+        {
+            Array.Clear(_smokeDelta, 0, _smokeDelta.Length);
+
+            Cell[] cells = _grid.Cells;
+
+            for (int y = 0; y < _grid.Height; y++)
+            {
+                for (int x = 0; x < _grid.Width; x++)
+                {
+                    int index = _grid.Index(x, y);
+
+                    if (cells[index].State == CellState.Burning)
+                    {
+                        EmitSmoke(x, y, index, SimConfig.SmokeOutput * dt);
+                    }
+
+                    if (!Passable(index)) continue;
+
+                    float here = cells[index].Smoke;
+                    if (here <= 0f) continue;
+
+                    // 직교 이웃만. NeighborDx/Dy의 앞 네 자리가 직교다.
+                    for (int n = 0; n < 4; n++)
+                    {
+                        int nx = x + NeighborDx[n];
+                        int ny = y + NeighborDy[n];
+                        if (!_grid.InBounds(nx, ny)) continue;
+
+                        int neighbor = _grid.Index(nx, ny);
+                        if (!Passable(neighbor)) continue;
+
+                        // 농도가 높은 쪽에서 낮은 쪽으로만 보낸다. 반대 방향은
+                        // 그 이웃을 순회할 때 제 손으로 보내므로 여기서 또 하면 두 배가 된다.
+                        float flow = (here - cells[neighbor].Smoke) * SimConfig.SmokeSpread * dt * 0.25f;
+                        if (flow <= 0f) continue;
+
+                        _smokeDelta[index] -= flow;
+                        _smokeDelta[neighbor] += flow;
+                    }
+                }
+            }
+
+            for (int i = 0; i < cells.Length; i++)
+            {
+                float decay = Outdoor == null || Outdoor[i] ? SimConfig.SmokeVent : SimConfig.SmokeDecay;
+
+                float value = (cells[i].Smoke + _smokeDelta[i]) * (1f - (decay * dt));
+                if (value < 0f) value = 0f;
+                else if (value > 1f) value = 1f;
+
+                cells[i].Smoke = value;
+            }
+        }
+
+        /// <summary>
+        /// 연소 칸이 뿜은 연기를 어디에 놓을지 정한다.
+        ///
+        /// 이 게임에서 타는 것은 대부분 <b>벽</b>(목재 선반·칸막이)이고 벽은 통행 불가다.
+        /// 연기를 타는 칸 제자리에 쌓으면 갇혀서 방으로 한 톨도 안 나온다 —
+        /// 불타는 창고 한가운데가 맑은 채로 남는다.
+        /// 그래서 서 있을 수 없는 칸에서 난 연기는 <b>맞닿은 통행 가능한 칸으로 흘려보낸다</b>.
+        /// 나갈 곳이 아예 없으면(벽 속에 박힌 칸) 버린다 — 아무도 그 안에 못 들어간다.
+        /// </summary>
+        private void EmitSmoke(int x, int y, int index, float amount)
+        {
+            if (Passable(index))
+            {
+                _smokeDelta[index] += amount;
+                return;
+            }
+
+            int outlets = 0;
+            for (int n = 0; n < 4; n++)
+            {
+                int nx = x + NeighborDx[n];
+                int ny = y + NeighborDy[n];
+                if (!_grid.InBounds(nx, ny)) continue;
+                if (Passable(_grid.Index(nx, ny))) outlets++;
+            }
+
+            if (outlets == 0) return;
+
+            float share = amount / outlets;
+            for (int n = 0; n < 4; n++)
+            {
+                int nx = x + NeighborDx[n];
+                int ny = y + NeighborDy[n];
+                if (!_grid.InBounds(nx, ny)) continue;
+
+                int neighbor = _grid.Index(nx, ny);
+                if (Passable(neighbor)) _smokeDelta[neighbor] += share;
+            }
+        }
+
+        /// <summary>
+        /// 연기가 지나갈 수 있는 칸인지. 벽과 설비는 막는다.
+        /// 문을 닫아 잠그는 것은 다음 단계에서 이 한 줄에 붙는다.
+        /// </summary>
+        private bool Passable(int index)
+        {
+            return Materials.Of(_grid.Cells[index].Material).Walkable;
         }
     }
 }
