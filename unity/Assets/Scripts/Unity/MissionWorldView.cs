@@ -35,6 +35,26 @@ namespace FireGame.UnityLayer
         /// <summary>"불이 코앞"으로 보는 거리(칸). <see cref="FireNearby"/> 주석 참고.</summary>
         private const int FireWarnRadius = 2;
 
+        /// <summary>
+        /// 시선 기울기. 정수리에서 수직으로 내려다보던 것을 이만큼 눕혀 건물 앞면이 보이게 한다.
+        ///
+        /// 카메라 오브젝트는 돌리지 않는다. 정사영 카메라를 x축으로 θ만큼 기울인 그림은
+        /// <b>땅을 cosθ만큼 누르고 높이를 sinθ만큼 위로 세운 그림과 수학적으로 같다</b>.
+        /// 이 방식이면 (a) 스프라이트가 저절로 화면을 마주 봐 빌보딩이 필요 없고,
+        /// (b) 조준·이동이 쓰는 격자 좌표계가 한 줄도 안 바뀐다.
+        /// 45도를 넘기면 땅이 너무 눌려 격자가 안 읽히고, 30도 밑이면 벽이 안 보인다.
+        /// </summary>
+        private const float TiltDegrees = 38f;
+
+        /// <summary>격자 한 칸의 화면 세로 길이. 땅에 깔리는 것은 전부 이만큼 눌린다.</summary>
+        public static readonly float Squash = Mathf.Cos(TiltDegrees * Mathf.Deg2Rad);
+
+        /// <summary>높이 한 칸이 화면에서 위로 서는 길이.</summary>
+        public static readonly float Rise = Mathf.Sin(TiltDegrees * Mathf.Deg2Rad);
+
+        /// <summary>서 있는 것의 밑동을 눌린 칸 아래 모서리에 맞추는 보정.</summary>
+        public static readonly float StandLift = (1f - Squash) * 0.5f;
+
         // 방수 연출 수명(초)
         private const float StreakLifetime = 0.22f;
         private const float DropLifetime = 0.45f;
@@ -219,16 +239,45 @@ namespace FireGame.UnityLayer
             get { return _grid.Height; }
         }
 
-        /// <summary>격자 칸의 중심 월드 좌표.</summary>
+        /// <summary>
+        /// 격자 칸의 중심 월드 좌표. 세로만 <see cref="Squash"/>만큼 눌린다 —
+        /// 가로는 그대로라 격자 x가 곧 화면 x다.
+        /// </summary>
         public Vector3 CellCenter(int x, int y)
         {
-            return new Vector3(x + 0.5f, _grid.Height - y - 0.5f, 0f);
+            return new Vector3(x + 0.5f, (_grid.Height - y - 0.5f) * Squash, 0f);
         }
 
         /// <summary>셀 단위 실수 좌표(StageRunner 좌표)를 월드 좌표로.</summary>
         public Vector3 ToWorld(float x, float y)
         {
-            return new Vector3(x, _grid.Height - y, 0f);
+            return new Vector3(x, (_grid.Height - y) * Squash, 0f);
+        }
+
+        /// <summary>지면 좌표에서 <paramref name="height"/>칸만큼 높은 자리.</summary>
+        public static Vector3 Lift(Vector3 ground, float height)
+        {
+            return new Vector3(ground.x, ground.y + (height * Rise), ground.z);
+        }
+
+        /// <summary>
+        /// 땅에 깔리는 것. 세로를 <see cref="Squash"/>만큼 눌러야 칸과 칸이 딱 맞물린다.
+        /// 누르지 않으면 타일이 서로 겹쳐 격자가 두 겹으로 보인다.
+        /// 바닥·벽 윗면·기름·문·출구·급수전·마당 소품·조준 표시가 여기 든다.
+        /// </summary>
+        public static void LayFlat(Transform target)
+        {
+            Vector3 scale = target.localScale;
+            target.localScale = new Vector3(scale.x, scale.y * Squash, scale.z);
+        }
+
+        /// <summary>
+        /// 서 있는 것. 세로를 누르지 않고 눌린 칸의 아래 모서리에 밑동만 맞춘다.
+        /// 불꽃·연기·소방관·시민은 위로 서 있어야지 바닥에 누우면 안 된다.
+        /// </summary>
+        public static Vector3 StandOn(Vector3 ground)
+        {
+            return new Vector3(ground.x, ground.y + StandLift, ground.z);
         }
 
         public Vector3 PlayerWorld
@@ -313,6 +362,7 @@ namespace FireGame.UnityLayer
 
                     _floor[i] = CreateRenderer("Floor", floor, OrderFloor);
                     _floor[i].transform.position = CellCenter(x, y);
+                    LayFlat(_floor[i].transform);
 
                     Sprite top = null;
                     int order = OrderProp;
@@ -377,6 +427,7 @@ namespace FireGame.UnityLayer
                         _top[i] = CreateRenderer("Top", top, order);
                         _top[i].transform.position = CellCenter(x, y);
                         _top[i].transform.rotation = Quaternion.Euler(0f, 0f, rotation);
+                        LayFlat(_top[i].transform);
                         _top[i].color = tint;
                         _topBaseColor[i] = tint;
                     }
@@ -491,7 +542,10 @@ namespace FireGame.UnityLayer
 
             float w = maxX - minX + 1;
             float h = maxY - minY + 1;
-            var center = new Vector3((minX + maxX + 1) * 0.5f, _grid.Height - ((minY + maxY + 1) * 0.5f), 0f);
+            var center = new Vector3(
+                (minX + maxX + 1) * 0.5f,
+                (_grid.Height - ((minY + maxY + 1) * 0.5f)) * Squash,
+                0f);
 
             // 위아래가 있는 그림은 덩어리가 누운 방향에 맞춰 돌린다.
             // 그냥 "세로로 긴 덩어리면 돌린다"로 뒀더니, 세로로 긴 차량 그림이
@@ -523,14 +577,19 @@ namespace FireGame.UnityLayer
             Sprite blob = Art.Get("Effects/glow");
             SpriteRenderer shade = CreateRenderer("PropShadow", blob, OrderProp);
             shade.color = new Color(0f, 0f, 0f, 0.22f);
-            shade.transform.position = center + new Vector3(0.12f, -0.12f, 0f);
+            shade.transform.position = center + new Vector3(0.12f, -0.12f * Squash, 0f);
             shade.transform.localScale = new Vector3(
-                Art.FitWidth(blob, w * 1.15f), Art.FitWidth(blob, h * 1.15f), 1f);
+                Art.FitWidth(blob, w * 1.15f), Art.FitWidth(blob, h * 1.15f) * Squash, 1f);
 
+            // 켄니 소품은 전부 정수리 시점으로 그린 그림이라 땅에 눕는다.
+            // 90도 돌린 소품은 화면 세로가 그림의 가로 축이므로 누르는 축도 따라 바뀐다 —
+            // 그냥 localScale.y를 누르면 돌아간 소품이 가로로 납작해진다.
             SpriteRenderer prop = CreateRenderer("Prop", sprite, OrderWall);
             prop.color = look.Tint;
             prop.transform.position = center;
-            prop.transform.localScale = new Vector3(fitX, fitY, 1f);
+            prop.transform.localScale = turn
+                ? new Vector3(fitX * Squash, fitY, 1f)
+                : new Vector3(fitX, fitY * Squash, 1f);
             prop.transform.rotation = Quaternion.Euler(0f, 0f, turn ? 90f : 0f);
         }
 
@@ -707,6 +766,7 @@ namespace FireGame.UnityLayer
             {
                 layer[i] = CreateRenderer("Fx", Art.White, order);
                 layer[i].transform.position = CellCenter(x, y);
+                LayFlat(layer[i].transform);
             }
             return layer[i];
         }
@@ -960,7 +1020,7 @@ namespace FireGame.UnityLayer
             while (_aimCells.Count <= index)
             {
                 SpriteRenderer created = CreateRenderer("AimCell", Art.White, OrderAim);
-                created.transform.localScale = Vector3.one;
+                created.transform.localScale = new Vector3(1f, Squash, 1f);
                 _aimCells.Add(created);
             }
 
@@ -1327,15 +1387,18 @@ namespace FireGame.UnityLayer
                 minX = 0f;
                 minY = 0f;
                 maxX = _grid.Width;
-                maxY = _grid.Height;
+
+                // 땅이 눌린 만큼 담을 사각형도 눌린다. 안 고치면 위아래로 빈 띠가 생긴다.
+                // 건물 지붕이 벽 높이만큼 위로 솟으므로 그만큼 여유를 더 준다.
+                maxY = (_grid.Height * Squash) + BuildingOverlay.WallRise;
             }
             else
             {
                 // 격자는 위가 0행이고 월드는 위가 +y라 세로를 뒤집는다.
                 minX = inside.MinX - IndoorMargin;
                 maxX = inside.MaxX + 1f + IndoorMargin;
-                minY = _grid.Height - (inside.MaxY + 1) - IndoorMargin;
-                maxY = _grid.Height - inside.MinY + IndoorMargin;
+                minY = ((_grid.Height - (inside.MaxY + 1)) * Squash) - IndoorMargin;
+                maxY = ((_grid.Height - inside.MinY) * Squash) + IndoorMargin;
             }
 
             float target = Mathf.Clamp(

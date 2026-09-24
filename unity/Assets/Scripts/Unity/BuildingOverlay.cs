@@ -17,6 +17,16 @@ namespace FireGame.UnityLayer
         /// <summary>지붕. 불꽃·연기보다 위라서 밖에서는 실내가 보이지 않는다.</summary>
         public const int OrderRoof = 40;
 
+        /// <summary>
+        /// 벽이 화면에서 위로 서는 길이(칸). 지붕은 이만큼 위로 올라가고 그 아래가 앞벽이 된다.
+        ///
+        /// 크게 잡을수록 건물이 웅장해지지만 <b>건물 뒤 격자 줄을 그만큼 더 가린다</b> —
+        /// 상가 아래 블록은 하필 소방관 스폰이 있는 줄(10행) 바로 위에 있어서,
+        /// 1.1칸이면 11행 한 줄만 먹고 스폰은 건드리지 않는다.
+        /// 카메라 여백도 이 값을 보고 잡으므로 여기 하나만 고치면 화면 전체가 따라온다.
+        /// </summary>
+        public const float WallRise = 1.1f;
+
         /// <summary>처마 쪽 밝기. 이만큼 떨어뜨렸다가 용마루까지 밝혀 올린다.</summary>
         private const float EaveShade = 0.58f;
 
@@ -594,8 +604,9 @@ namespace FireGame.UnityLayer
 
                 SpriteRenderer shadow = Piece("Eaves", Art.White, OrderEaves, building.Id);
                 shadow.color = new Color(0f, 0f, 0f, 0.20f);
-                shadow.transform.position = _view.CellCenter(cell.X, cell.Y) + new Vector3(0.24f, -0.24f, 0f);
-                shadow.transform.localScale = Vector3.one;
+                shadow.transform.position = _view.CellCenter(cell.X, cell.Y)
+                    + new Vector3(0.24f, -0.24f * MissionWorldView.Squash, 0f);
+                shadow.transform.localScale = new Vector3(1f, MissionWorldView.Squash, 1f);
             }
         }
 
@@ -667,12 +678,16 @@ namespace FireGame.UnityLayer
         private void Block(Building building, float u, float v, float w, float h, Color color)
         {
             float x = building.MinX + (u * building.Width);
-            float y = _grid.Height - building.MinY - (v * building.Height);
+
+            // 부속물은 지붕면 위에 놓인다. 지붕이 눌리고 올라간 만큼 똑같이 따라가야
+            // 굴뚝이 건물 밖으로 튀어나가지 않는다.
+            float y = ((_grid.Height - building.MinY - (v * building.Height)) * MissionWorldView.Squash)
+                + WallRise;
 
             SpriteRenderer piece = Piece("Fixture", Art.White, OrderFixture, building.Id);
             piece.color = color;
             piece.transform.position = new Vector3(x, y, 0f);
-            piece.transform.localScale = new Vector3(w, h, 1f);
+            piece.transform.localScale = new Vector3(w, h * MissionWorldView.Squash, 1f);
         }
 
         /// <summary>
