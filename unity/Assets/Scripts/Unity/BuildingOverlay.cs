@@ -29,8 +29,12 @@ namespace FireGame.UnityLayer
         /// </summary>
         public const float WallRise = 1.5f;
 
-        /// <summary>처마 쪽 밝기. 이만큼 떨어뜨렸다가 용마루까지 밝혀 올린다.</summary>
-        private const float EaveShade = 0.58f;
+        /// <summary>
+        /// 처마 쪽 밝기. 이만큼 떨어뜨렸다가 용마루까지 밝혀 올린다.
+        /// 0.58로 뒀더니 얕은 건물(창고 별동은 5칸)은 대부분의 칸이 처마라서
+        /// 지붕 전체가 그을린 것처럼 어두웠다(캡처로 확인). 경사는 남기되 바닥을 올린다.
+        /// </summary>
+        private const float EaveShade = 0.72f;
 
         /// <summary>
         /// 지붕면 밝기. 처마에서 여기까지 올라온다.
@@ -498,6 +502,12 @@ namespace FireGame.UnityLayer
             // 처마 쪽 면이 어둡고 용마루가 밝기 때문이다. 생성 때 한 번만 재므로 프레임 비용이 없다.
             Dictionary<int, int> depth = RoofDepth(building, member);
 
+            // 밝기를 재는 자를 건물 제 깊이에 맞춘다. 고정값으로 두면 얕은 건물
+            // (5칸짜리 창고 별동)은 안쪽 칸도 용마루 밝기에 못 닿아 통째로 그을린 것처럼 보인다.
+            int span = 1;
+            foreach (KeyValuePair<int, int> at in depth) span = Mathf.Max(span, at.Value);
+            span = Mathf.Max(2, Mathf.Min(RidgeDepth, span));
+
             // 용마루는 긴 쪽을 따라 한 줄로 흐른다. 짝수 폭이면 가운데 두 줄이 용마루다.
             bool alongX = building.Width >= building.Height;
             int ridgeA = alongX ? (building.MinY + building.MaxY) / 2 : (building.MinX + building.MaxX) / 2;
@@ -521,7 +531,7 @@ namespace FireGame.UnityLayer
                 // 올라가며 비워 둔 아래 자리를 BuildWall()이 앞벽으로 채운다.
                 tile.transform.position = _view.CellCenter(cell.X, cell.Y) + new Vector3(0f, WallRise, 0f);
                 tile.transform.localScale = new Vector3(1f, MissionWorldView.Squash, 1f);
-                tile.color = Slope(color, depth[index], onRidge);
+                tile.color = Slope(color, depth[index], onRidge, span, BayTint(BayOf(building, cell.X)));
                 tiles.Add(tile);
 
                 _roofByCell[index] = tile;
@@ -535,11 +545,32 @@ namespace FireGame.UnityLayer
         /// 처마(깊이 1)에서 용마루(깊이 <see cref="RidgeDepth"/> 이상)까지의 밝기.
         /// 알파는 건드리지 않는다 — 곱해 버리면 지붕이 반투명해져 밑의 벽이 비친다.
         /// </summary>
-        private static Color Slope(Color color, int depth, bool onRidge)
+        private static Color Slope(Color color, int depth, bool onRidge, int span, float bayTint)
         {
-            float t = Mathf.Clamp01((depth - 1f) / (RidgeDepth - 1f));
+            float t = Mathf.Clamp01((depth - 1f) / (span - 1f));
             float k = onRidge ? RidgeLine : Mathf.Lerp(EaveShade, RoofFace, t);
+
+            // 베이 편차를 곱하되 1로 자른다. 재질 결의 밝은 줄이 이미 1.0이라
+            // 1을 넘기면 흰색으로 잘려 지붕 한가운데가 하얗게 뜬다(캡처로 확인).
+            k = Mathf.Min(1f, k * bayTint);
             return new Color(color.r * k, color.g * k, color.b * k, color.a);
+        }
+
+        /// <summary>
+        /// 베이별 지붕 밝기 편차. 이웃한 집끼리 색이 똑같으면 아무리 이음매를 그어도 한 채로 보인다.
+        /// ±4.6%면 "다른 집"으로는 읽히되 얼룩덜룩하지는 않다.
+        /// </summary>
+        private static float BayTint(int bay)
+        {
+            return 1f + ((((bay * 37) % 5) - 2) * 0.023f);
+        }
+
+        /// <summary>이 칸이 몇 번째 베이인지.</summary>
+        private static int BayOf(Building building, int x)
+        {
+            int count = Mathf.Max(1, Mathf.RoundToInt(building.Width / (float)BayCells));
+            float step = building.Width / (float)count;
+            return Mathf.Clamp(Mathf.FloorToInt((x - building.MinX) / step), 0, count - 1);
         }
 
         /// <summary>
@@ -616,6 +647,7 @@ namespace FireGame.UnityLayer
             BuildGroundShadow(building);
             BuildWall(building, theme);
             BuildOverhang(building, theme);
+            BuildRoofLines(building, theme);
             BuildFixtures(building, theme);
             BuildSigns(building, theme);
         }
@@ -758,6 +790,55 @@ namespace FireGame.UnityLayer
         }
 
         /// <summary>
+        /// 지붕 위에 실제 선을 긋는다.
+        ///
+        /// 색 계단 세 단만으로는 경사가 어디서 꺾이는지 보이지 않아 동심원 띠로만 읽혔다(캡처로 확인).
+        /// 용마루 한 줄이 지붕이 어느 쪽으로 흐르는지 말하고, 네 귀퉁이 추녀마루가 모서리를 접고,
+        /// 칸막이 이음매가 한 덩어리를 여러 채로 가른다.
+        /// </summary>
+        private void BuildRoofLines(Building building, SiteTheme theme)
+        {
+            float left = building.MinX;
+            float right = building.MaxX + 1f;
+            float top = ((_grid.Height - building.MinY) * MissionWorldView.Squash) + WallRise;
+            float eave = ((_grid.Height - building.MaxY - 1f) * MissionWorldView.Squash) + WallRise;
+            float midY = (top + eave) * 0.5f;
+            float inset = Mathf.Min(1.2f, building.Width * 0.12f);
+
+            Color ridge = theme.RoofColor;                       // 가장 밝은 선 — 기준 색 그대로
+            Color seam = Shade(theme.RoofColor, 0.42f);
+
+            Line("Ridge", left + inset, midY, right - inset, midY, 0.13f, ridge, building.Id);
+
+            // 칸막이 이음매 — 집과 집 사이. 첫 경계와 끝 경계는 건물 모서리라 건너뛴다.
+            List<Vector2> bays = Bays(building);
+            for (int i = 1; i < bays.Count; i++)
+            {
+                Line("Seam", bays[i].x, eave, bays[i].x, top, 0.10f, seam, building.Id);
+            }
+
+            Line("Hip", left, eave, left + inset, midY, 0.11f, seam, building.Id);
+            Line("Hip", left, top, left + inset, midY, 0.11f, seam, building.Id);
+            Line("Hip", right, eave, right - inset, midY, 0.11f, seam, building.Id);
+            Line("Hip", right, top, right - inset, midY, 0.11f, seam, building.Id);
+        }
+
+        /// <summary>두 점을 잇는 띠 하나. 기울기는 회전으로 준다.</summary>
+        private void Line(string name, float ax, float ay, float bx, float by, float thick, Color color, int id)
+        {
+            var a = new Vector3(ax, ay, 0f);
+            var b = new Vector3(bx, by, 0f);
+            Vector3 d = b - a;
+            if (d.sqrMagnitude < 0.0001f) return;
+
+            SpriteRenderer bar = Piece(name, Art.White, OrderRoofLine, id);
+            bar.color = color;
+            bar.transform.position = (a + b) * 0.5f;
+            bar.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+            bar.transform.localScale = new Vector3(d.magnitude, thick, 1f);
+        }
+
+        /// <summary>
         /// 현장별 지붕 부속물. 굴뚝 하나로 상자가 집이 되고, 덕트 하나로 공장이 된다.
         /// 경계 상자 안의 비율 좌표라 건물 크기가 달라도 같은 자리에 앉는다.
         /// </summary>
@@ -830,6 +911,12 @@ namespace FireGame.UnityLayer
             // 굴뚝이 건물 밖으로 튀어나가지 않는다.
             float y = ((_grid.Height - building.MinY - (v * building.Height)) * MissionWorldView.Squash)
                 + WallRise;
+
+            // 그림자를 먼저 깔아야 굴뚝이 지붕 "위에" 선 것으로 보인다.
+            SpriteRenderer shade = Piece("FixtureShade", Art.White, OrderFixtureShade, building.Id);
+            shade.color = new Color(0f, 0f, 0f, 0.24f);
+            shade.transform.position = new Vector3(x + 0.15f, y - (0.15f * MissionWorldView.Squash), 0f);
+            shade.transform.localScale = new Vector3(w, h * MissionWorldView.Squash, 1f);
 
             SpriteRenderer piece = Piece("Fixture", Art.White, OrderFixture, building.Id);
             piece.color = color;
