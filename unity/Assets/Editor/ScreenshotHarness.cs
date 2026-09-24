@@ -59,6 +59,8 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("45_result_record", ResultRecord),
                 new KeyValuePair<string, Func<Camera>>("46_aim_good", AimGood),
                 new KeyValuePair<string, Func<Camera>>("47_aim_backfire", AimBackfire),
+                new KeyValuePair<string, Func<Camera>>("48_rescue_ready", RescueReady),
+                new KeyValuePair<string, Func<Camera>>("49_rescue_carry", RescueCarry),
                 new KeyValuePair<string, Func<Camera>>("40_warehouse_fire", WarehouseFire),
                 new KeyValuePair<string, Func<Camera>>("41_factory_mixed", FactoryMixed),
                 new KeyValuePair<string, Func<Camera>>("42_harbor_finale", HarborFinale),
@@ -469,6 +471,62 @@ namespace FireGame.EditorTools
             Canvas canvas = UiKit.CreateCanvas(root, camera, "Canvas", 0);
             var hud = new MissionHud(canvas, flow);
             hud.Joystick.SetKnob(new Vector2(0.8f, 0.2f));
+            hud.Refresh();
+            return camera;
+        }
+
+        /// <summary>시민 옆에 선 순간 — 표식이 초록이고 HUD 구조 버튼이 켜진다.</summary>
+        private static Camera RescueReady()
+        {
+            return RescueScene(false);
+        }
+
+        /// <summary>시민을 업고 출구로 가는 중 — 어깨 위 시민과 출구 안내.</summary>
+        private static Camera RescueCarry()
+        {
+            return RescueScene(true);
+        }
+
+        private static Camera RescueScene(bool carry)
+        {
+            SaveData save = SaveData.NewGame();
+            save.SetLevel(EquipmentId.Bucket, 3);
+            save.SetLevel(EquipmentId.Extinguisher, 2);
+            save.SetLevel(GearId.Suit, 2);
+
+            var flow = new GameFlow(save);
+            flow.SelectMission(0);
+            flow.BeginMission();
+            for (int i = 0; i < 20; i++) flow.Update(0.1f);
+
+            StageRunner runner = flow.Runner;
+            Civilian civilian = runner.Civilians[0];
+            runner.Player.X = civilian.X - 0.5f;
+            runner.Player.Y = civilian.Y;
+
+            flow.SetRescue(carry);
+            flow.Update(0.02f);
+            flow.SetRescue(false);
+
+            if (carry)
+            {
+                // 업은 채 몇 걸음 걸어 나온 모습.
+                for (int i = 0; i < 12; i++)
+                {
+                    flow.SetMove(-1f, 0f);
+                    flow.Update(0.05f);
+                }
+                flow.SetMove(0f, 0f);
+            }
+
+            Camera camera = WorldCamera();
+            var root = new GameObject("Root").transform;
+            var view = new MissionWorldView(root, runner);
+            view.Refresh(flow.Elapsed, 0f);
+            view.FrameCamera(camera, view.PlayerWorld);
+
+            Canvas canvas = UiKit.CreateCanvas(root, camera, "Canvas", 0);
+            var hud = new MissionHud(canvas, flow);
             hud.Refresh();
             return camera;
         }

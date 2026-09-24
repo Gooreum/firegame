@@ -29,8 +29,12 @@ namespace FireGame.UnityLayer
         /// <summary>장비가 잡는 화재 등급 색 띠. 현장 불꽃과 같은 색이라 눈으로 맞출 수 있다.</summary>
         private readonly Image[] _slotStripes = new Image[PlayerState.SlotCount];
 
+        private readonly Image _rescueBack;
+        private readonly Text _rescueLabel;
+
         public readonly VirtualJoystick Joystick;
         public readonly HoldButton FireButton;
+        public readonly HoldButton RescueButton;
 
         public MissionHud(Canvas canvas, GameFlow flow)
         {
@@ -101,6 +105,18 @@ namespace FireGame.UnityLayer
             FireButton = fire.gameObject.AddComponent<HoldButton>();
             FireButton.OnHold = held => _flow.SetFire(held);
 
+            // ---- 발사 버튼 위: 구조 ----
+            // 시민 옆에 섰을 때만 켜진다. 업고 있으면 "출구로!"로 바뀌어 다음에 할 일을 알린다.
+            _rescueBack = UiKit.Image(_root, "RescueButton", Art.Get("UI/button_green"), Color.white);
+            UiKit.Place(_rescueBack.rectTransform, new Vector2(1f, 0f), new Vector2(-70f, 330f), new Vector2(220f, 112f));
+            _rescueBack.raycastTarget = true;
+            _rescueLabel = UiKit.OutlinedLabel(_rescueBack.transform, "Label", "구조", 38, Color.white, TextAnchor.MiddleCenter);
+            UiKit.Stretch(_rescueLabel.rectTransform);
+            _rescueLabel.rectTransform.offsetMin = new Vector2(0f, 8f);
+
+            RescueButton = _rescueBack.gameObject.AddComponent<HoldButton>();
+            RescueButton.OnHold = held => _flow.SetRescue(held);
+
             // ---- 발사 버튼 왼쪽: 장비 ----
             for (int slot = 0; slot < PlayerState.SlotCount; slot++)
             {
@@ -152,12 +168,39 @@ namespace FireGame.UnityLayer
             _timer.color = seconds <= 15 ? new Color(0.9f, 0.2f, 0.15f) : UiKit.Ink;
 
             _fires.text = "남은 불 " + runner.Grid.CountBurning();
+
+            // 아직 기다리는 사람이 있으면 빨갛게. 한 줄짜리 띠라 글자를 더 넣는 대신 색으로 알린다.
+            int waiting = runner.PendingCivilianCount;
             _rescued.text = "구조 " + runner.RescuedCount + "/" + runner.Civilians.Count;
+            _rescued.color = waiting > 0 ? new Color(0.82f, 0.23f, 0.16f) : new Color(0.15f, 0.55f, 0.25f);
+
+            RefreshRescueButton(runner);
 
             for (int slot = 0; slot < PlayerState.SlotCount; slot++)
             {
                 RefreshSlot(runner, slot);
             }
+        }
+
+        /// <summary>
+        /// 구조 버튼의 세 상태. 시민을 업고 있으면 "출구로!", 손이 닿으면 밝은 "구조!",
+        /// 그 밖에는 흐리게 남겨 둔다 — 버튼이 늘 밝으면 언제 눌러야 하는지 알 수 없다.
+        /// </summary>
+        private void RefreshRescueButton(StageRunner runner)
+        {
+            if (runner.Player.CarryingCivilian)
+            {
+                _rescueBack.sprite = Art.Get("UI/button_yellow");
+                _rescueBack.color = Color.white;
+                _rescueLabel.text = "출구로!";
+                return;
+            }
+
+            bool ready = runner.RescueTarget != null;
+            _rescueBack.sprite = Art.Get(ready ? "UI/button_green" : "UI/button_grey");
+            _rescueBack.color = ready ? Color.white : new Color(1f, 1f, 1f, 0.35f);
+            _rescueLabel.text = ready ? "구조!" : "구조";
+            _rescueLabel.color = ready ? Color.white : new Color(1f, 1f, 1f, 0.5f);
         }
 
         private void RefreshSlot(StageRunner runner, int slot)
