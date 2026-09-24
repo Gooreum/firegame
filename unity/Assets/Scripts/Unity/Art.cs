@@ -3,6 +3,71 @@ using UnityEngine;
 
 namespace FireGame.UnityLayer
 {
+    /// <summary>
+    /// 지붕 재질. 결이 다르면 같은 색이라도 다른 건물로 읽힌다.
+    /// </summary>
+    public enum RoofStyle
+    {
+        /// <summary>기와 — 가로 단이 한 단씩 엇갈린다. 주택.</summary>
+        Tile = 0,
+
+        /// <summary>차양 — 굵은 세로 줄무늬. 상가.</summary>
+        Awning = 1,
+
+        /// <summary>캐노피 — 큰 패널 이음매만 있는 평지붕. 주유소.</summary>
+        Canopy = 2,
+
+        /// <summary>함석 — 세로 골이 촘촘하다. 창고.</summary>
+        Metal = 3,
+
+        /// <summary>슬레이트 — 리벳 박힌 금속 패널. 공장.</summary>
+        Panel = 4,
+
+        /// <summary>널판 — 가로 판자에 나뭇결. 항구.</summary>
+        Plank = 5,
+    }
+
+    /// <summary>실외 바닥. 현장이 어디인지를 가장 넓은 면적으로 말한다.</summary>
+    public enum GroundStyle
+    {
+        /// <summary>잔디 — 주택가 마당.</summary>
+        Lawn = 0,
+
+        /// <summary>보도블록 — 상가 앞 광장.</summary>
+        Paving = 1,
+
+        /// <summary>아스팔트 + 차선 도색 — 주유소.</summary>
+        Asphalt = 2,
+
+        /// <summary>야적장 — 이음매와 하역 표시가 있는 콘크리트. 창고.</summary>
+        Yard = 3,
+
+        /// <summary>공장 콘크리트 — 금 가고 위험 줄무늬가 있다.</summary>
+        Concrete = 4,
+
+        /// <summary>부두 널판 — 이음매 사이로 물이 비친다. 항구.</summary>
+        Dock = 5,
+    }
+
+    /// <summary>맵 가장자리. 격자 맨 바깥 한 줄이라 게임에 영향이 없다.</summary>
+    public enum BorderStyle
+    {
+        /// <summary>생울타리 — 주택가.</summary>
+        Hedge = 0,
+
+        /// <summary>화단 담 — 상가.</summary>
+        Planter = 1,
+
+        /// <summary>가드레일 — 주유소.</summary>
+        Guardrail = 2,
+
+        /// <summary>철망 — 창고·공장.</summary>
+        Fence = 3,
+
+        /// <summary>방파제 — 항구. 이것 하나로 맵을 안 고치고 물가가 생긴다.</summary>
+        Seawall = 4,
+    }
+
     /// <summary>벽 테두리 색 계열.</summary>
     public enum WallStyle
     {
@@ -27,6 +92,7 @@ namespace FireGame.UnityLayer
 
         private static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
         private static readonly Dictionary<int, Sprite> Walls = new Dictionary<int, Sprite>();
+        private static readonly Dictionary<int, Sprite> Generated = new Dictionary<int, Sprite>();
         private static Sprite _white;
         private static Sprite _missing;
         private static Font _font;
@@ -169,6 +235,262 @@ namespace FireGame.UnityLayer
             KeepAlive(texture, sprite);
             Walls[key] = sprite;
             return sprite;
+        }
+
+        // ------------------------------------------------------------------
+        // 지붕·바닥·테두리 — 코드로 찍는다
+        //
+        // 켄니 팩에는 건물 외형 그림이 없다. 짙은 brick_a에 현장 색을 곱했더니
+        // 여섯 현장 지붕이 전부 회색으로 죽었다(캡처로 확인). 그래서 Wall()과 같은 방식으로
+        // 결을 직접 그린다. 밝기 1에 가까운 회백색 바탕에 어두운 줄만 넣어야
+        // 색을 곱했을 때 현장 색이 살아남는다.
+        // ------------------------------------------------------------------
+
+        private const int GenSize = 64;
+
+        /// <summary>지붕 재질 한 장. 색은 입히는 쪽에서 곱한다.</summary>
+        public static Sprite RoofTexture(RoofStyle style)
+        {
+            return Make(('R' << 16) | (int)style, (x, y) => Roof(style, x, y));
+        }
+
+        /// <summary>실외 바닥 한 장. <paramref name="variant"/> 0~3을 섞어 깔아 넓은 마당을 덜 심심하게 한다.</summary>
+        public static Sprite GroundTexture(GroundStyle style, int variant)
+        {
+            int v = ((variant % 4) + 4) % 4;
+            return Make(('G' << 16) | ((int)style << 4) | v, (x, y) => Ground(style, v, x, y));
+        }
+
+        /// <summary>맵 가장자리 한 장.</summary>
+        public static Sprite BorderTexture(BorderStyle style)
+        {
+            return Make(('B' << 16) | (int)style, (x, y) => Border(style, x, y));
+        }
+
+        private static Sprite Make(int key, System.Func<int, int, Color32> paint)
+        {
+            if (Generated.TryGetValue(key, out Sprite cached) && cached != null) return cached;
+
+            var pixels = new Color32[GenSize * GenSize];
+            for (int y = 0; y < GenSize; y++)
+            {
+                for (int x = 0; x < GenSize; x++) pixels[(y * GenSize) + x] = paint(x, y);
+            }
+
+            var texture = new Texture2D(GenSize, GenSize, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            texture.SetPixels32(pixels);
+            texture.Apply(false);
+
+            Sprite sprite = Sprite.Create(
+                texture, new Rect(0, 0, GenSize, GenSize), new Vector2(0.5f, 0.5f), PixelsPerUnit);
+            KeepAlive(texture, sprite);
+            Generated[key] = sprite;
+            return sprite;
+        }
+
+        /// <summary>회색 한 단계. 1이 흰색이다.</summary>
+        private static Color32 Grey(float level)
+        {
+            byte v = (byte)Mathf.Clamp(Mathf.RoundToInt(level * 255f), 0, 255);
+            return new Color32(v, v, v, 255);
+        }
+
+        private static Color32 Rgb(float r, float g, float b)
+        {
+            return new Color32(
+                (byte)Mathf.Clamp(Mathf.RoundToInt(r * 255f), 0, 255),
+                (byte)Mathf.Clamp(Mathf.RoundToInt(g * 255f), 0, 255),
+                (byte)Mathf.Clamp(Mathf.RoundToInt(b * 255f), 0, 255),
+                255);
+        }
+
+        /// <summary>같은 자리는 늘 같은 값. 얼룩을 흩뿌리는 데 쓴다.</summary>
+        private static float Noise(int x, int y, int salt)
+        {
+            int h = ((x * 73856093) ^ (y * 19349663) ^ (salt * 83492791)) & 0x7fffffff;
+            return (h % 1000) / 1000f;
+        }
+
+        private static Color32 Roof(RoofStyle style, int x, int y)
+        {
+            switch (style)
+            {
+                case RoofStyle.Tile:
+                {
+                    // 16px 가로 단. 한 단씩 엇갈려 기와처럼 보이게 한다.
+                    int course = y / 16;
+                    int shift = (course % 2) * 8;
+                    if (y % 16 < 2) return Grey(0.64f);                 // 단이 겹치는 그늘
+                    if (((x + shift) % 16) < 2) return Grey(0.79f);      // 기와 사이 골
+                    return Grey(y % 16 < 5 ? 1f : 0.95f);               // 단 위쪽이 살짝 밝다
+                }
+
+                case RoofStyle.Awning:
+                {
+                    // 굵은 세로 줄무늬. 상가 차양은 이것만으로 알아본다.
+                    return Grey((x / 16) % 2 == 0 ? 1f : 0.74f);
+                }
+
+                case RoofStyle.Canopy:
+                {
+                    // 거의 평평한 금속판. 큰 이음매만.
+                    if (x % 32 < 2 || y % 32 < 2) return Grey(0.78f);
+                    return Grey(0.97f);
+                }
+
+                case RoofStyle.Metal:
+                {
+                    // 8px 세로 골. 골 바닥이 어둡고 마루가 밝다.
+                    int c = x % 8;
+                    if (c == 0) return Grey(0.58f);
+                    if (c == 4) return Grey(1f);
+                    return Grey(c < 4 ? 0.82f : 0.90f);
+                }
+
+                case RoofStyle.Panel:
+                {
+                    // 32x16 패널 + 리벳.
+                    if (x % 32 < 2 || y % 16 < 2) return Grey(0.68f);
+                    int rx = x % 32;
+                    int ry = y % 16;
+                    if ((rx == 6 || rx == 26) && (ry == 5 || ry == 12)) return Grey(0.56f);
+                    return Grey(0.95f);
+                }
+
+                default:
+                {
+                    // 12px 가로 판자 + 나뭇결.
+                    if (y % 12 < 1) return Grey(0.60f);
+                    if (Noise(x, y / 12, 7) < 0.10f) return Grey(0.80f);
+                    return Grey(y % 12 < 4 ? 0.98f : 0.92f);
+                }
+            }
+        }
+
+        private static Color32 Ground(GroundStyle style, int variant, int x, int y)
+        {
+            switch (style)
+            {
+                case GroundStyle.Lawn:
+                {
+                    float n = Noise(x / 3, y / 3, variant);
+                    Color32 turf = Rgb(0.29f + (n * 0.07f), 0.58f + (n * 0.10f), 0.30f + (n * 0.06f));
+                    // 한 변형은 흙이 드러난 오솔길이다.
+                    if (variant == 3 && Mathf.Abs(x - 32) < 10) return Rgb(0.62f, 0.53f, 0.38f);
+                    if (Noise(x, y, variant + 5) < 0.04f) return Rgb(0.24f, 0.50f, 0.26f);
+                    return turf;
+                }
+
+                case GroundStyle.Paving:
+                {
+                    // 32x32 보도블록. 줄눈이 보인다.
+                    bool joint = (x % 32) < 2 || (y % 32) < 2;
+                    float n = Noise(x / 32, y / 32, variant) * 0.05f;
+                    if (joint) return Rgb(0.62f, 0.61f, 0.60f);
+                    return Rgb(0.78f + n, 0.77f + n, 0.75f + n);
+                }
+
+                case GroundStyle.Asphalt:
+                {
+                    float n = Noise(x, y, variant) * 0.06f;
+                    Color32 road = Rgb(0.26f + n, 0.26f + n, 0.28f + n);
+                    // 변형 2에만 차선 도색을 넣는다. 4칸 중 1칸이라 마당에 도로가 흐른다.
+                    if (variant == 2 && y > 26 && y < 38) return Rgb(0.92f, 0.84f, 0.28f);
+                    if (variant == 3 && Noise(x / 8, y / 8, 11) < 0.12f) return Rgb(0.33f, 0.33f, 0.34f);
+                    return road;
+                }
+
+                case GroundStyle.Yard:
+                {
+                    bool joint = (y % 32) < 2 || (x % 64) < 2;
+                    float n = Noise(x / 4, y / 4, variant) * 0.05f;
+                    // 변형 1은 하역 구획선이다.
+                    if (variant == 1 && (x < 4 || x > 59)) return Rgb(0.86f, 0.78f, 0.36f);
+                    if (joint) return Rgb(0.49f, 0.48f, 0.47f);
+                    return Rgb(0.63f + n, 0.62f + n, 0.60f + n);
+                }
+
+                case GroundStyle.Concrete:
+                {
+                    float n = Noise(x / 3, y / 3, variant) * 0.05f;
+                    // 변형 3은 노랑·검정 위험 줄무늬. 공장이라는 표시다.
+                    if (variant == 3)
+                    {
+                        return ((x + y) / 10) % 2 == 0 ? Rgb(0.88f, 0.74f, 0.20f) : Rgb(0.20f, 0.20f, 0.20f);
+                    }
+
+                    // 변형 2는 금이 갔다.
+                    if (variant == 2 && Mathf.Abs(((x * 3) % 64) - y) < 2) return Rgb(0.44f, 0.43f, 0.42f);
+                    if ((x % 64) < 2 || (y % 64) < 2) return Rgb(0.48f, 0.47f, 0.46f);
+                    return Rgb(0.58f + n, 0.57f + n, 0.56f + n);
+                }
+
+                default:
+                {
+                    // 부두 널판. 16px 판자 사이 틈으로 아래 물빛이 비친다.
+                    int gap = y % 16;
+                    if (gap < 2) return Rgb(0.20f, 0.34f, 0.40f);
+                    float n = Noise(x / 6, y / 16, variant) * 0.07f;
+                    // 변형 1에는 판자를 가로지르는 이음쇠가 있다.
+                    if (variant == 1 && (x % 64) > 56) return Rgb(0.42f, 0.40f, 0.38f);
+                    return Rgb(0.55f + n, 0.44f + n, 0.33f + n);
+                }
+            }
+        }
+
+        private static Color32 Border(BorderStyle style, int x, int y)
+        {
+            switch (style)
+            {
+                case BorderStyle.Hedge:
+                {
+                    float n = Noise(x / 2, y / 2, 3);
+                    if (n < 0.12f) return Rgb(0.13f, 0.30f, 0.15f);
+                    return Rgb(0.17f + (n * 0.10f), 0.40f + (n * 0.14f), 0.19f + (n * 0.08f));
+                }
+
+                case BorderStyle.Planter:
+                {
+                    // 위아래 테두리는 벽돌 턱, 가운데는 관목.
+                    if (y < 10 || y > 53) return Rgb(0.60f, 0.42f, 0.34f);
+                    float n = Noise(x / 2, y / 2, 4);
+                    return Rgb(0.20f + (n * 0.10f), 0.42f + (n * 0.12f), 0.24f + (n * 0.08f));
+                }
+
+                case BorderStyle.Guardrail:
+                {
+                    // 가운데 한 줄 가로대 + 일정 간격 지주.
+                    if (y > 22 && y < 42) return Rgb(0.84f, 0.85f, 0.87f);
+                    if ((x % 32) < 6) return Rgb(0.52f, 0.53f, 0.55f);
+                    return Rgb(0.32f, 0.32f, 0.34f);
+                }
+
+                case BorderStyle.Fence:
+                {
+                    // 마름모 철망. 기둥은 굵게.
+                    if ((x % 32) < 4) return Rgb(0.44f, 0.45f, 0.47f);
+                    bool mesh = ((x + y) % 10) < 2 || ((x - y + 640) % 10) < 2;
+                    return mesh ? Rgb(0.70f, 0.72f, 0.74f) : Rgb(0.30f, 0.31f, 0.33f);
+                }
+
+                default:
+                {
+                    // 방파제 — 안쪽은 돌 턱, 바깥은 물이다. 항구 맵에 바다를 주는 유일한 수단이다.
+                    if (y > 40)
+                    {
+                        float n = Noise(x / 3, y / 3, 6);
+                        return Rgb(0.52f + (n * 0.10f), 0.50f + (n * 0.10f), 0.47f + (n * 0.10f));
+                    }
+
+                    float w = Noise(x / 5, y / 4, 9);
+                    if (w < 0.10f) return Rgb(0.74f, 0.88f, 0.92f);      // 물마루
+                    return Rgb(0.18f + (w * 0.12f), 0.42f + (w * 0.16f), 0.54f + (w * 0.16f));
+                }
+            }
         }
     }
 }

@@ -35,6 +35,7 @@ namespace FireGame.EditorTools
             new List<KeyValuePair<string, Func<Camera>>>
             {
                 new KeyValuePair<string, Func<Camera>>("00_smoke", SmokeScene),
+                new KeyValuePair<string, Func<Camera>>("01_generated_art", GeneratedArt),
                 new KeyValuePair<string, Func<Camera>>("10_residential_start", ResidentialStart),
                 new KeyValuePair<string, Func<Camera>>("11_residential_fire", ResidentialFire),
                 new KeyValuePair<string, Func<Camera>>("12_shopping_electric", ShoppingElectric),
@@ -721,6 +722,84 @@ namespace FireGame.EditorTools
         /// <summary>
         /// 파이프라인 확인용: 스프라이트 로드, 카메라 렌더, 캔버스 렌더, 주아체 한글.
         /// </summary>
+        /// <summary>
+        /// 코드로 찍은 그림을 한 장에 모아 본다.
+        ///
+        /// 지붕·바닥·테두리 재질은 어디에도 쓰이기 전에는 눈으로 확인할 방법이 없다.
+        /// 여기서 먼저 걸러야 "현장에 깔았더니 전부 회색이더라"를 반복하지 않는다.
+        /// 지붕은 현장 색을 곱한 상태로 보여 준다 — 밝은 바탕이 아니면 여기서 색이 죽는다.
+        /// </summary>
+        private static Camera GeneratedArt()
+        {
+            var cameraObject = new GameObject("Camera");
+            var camera = cameraObject.AddComponent<Camera>();
+            camera.orthographic = true;
+            camera.orthographicSize = 9f;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.10f, 0.10f, 0.12f);
+            camera.transform.position = new Vector3(15f, 0f, -10f);
+
+            var roofColors = new[]
+            {
+                new Color(0.82f, 0.34f, 0.28f), new Color(0.32f, 0.54f, 0.82f),
+                new Color(0.93f, 0.95f, 0.96f), new Color(0.56f, 0.62f, 0.70f),
+                new Color(0.34f, 0.46f, 0.62f), new Color(0.70f, 0.42f, 0.30f),
+            };
+
+            // 1줄: 지붕 6종(현장 색을 곱한 상태)
+            for (int i = 0; i < 6; i++)
+            {
+                Swatch(Art.RoofTexture((RoofStyle)i), roofColors[i], i * 5f, 6f, 4f);
+                Caption(((RoofStyle)i).ToString(), (i * 5f) + 2f, 8.4f);
+            }
+
+            // 2~3줄: 바닥 6종 x 4변형
+            for (int i = 0; i < 6; i++)
+            {
+                for (int v = 0; v < 4; v++)
+                {
+                    Swatch(Art.GroundTexture((GroundStyle)i, v), Color.white, (i * 5f) + (v % 2 * 2.2f), 1f - (v / 2 * 2.2f), 2f);
+                }
+
+                Caption(((GroundStyle)i).ToString(), (i * 5f) + 1.1f, 3.4f);
+            }
+
+            // 4줄: 테두리 5종
+            for (int i = 0; i < 5; i++)
+            {
+                Swatch(Art.BorderTexture((BorderStyle)i), Color.white, i * 5f, -7f, 4f);
+                Caption(((BorderStyle)i).ToString(), (i * 5f) + 2f, -4.6f);
+            }
+
+            return camera;
+        }
+
+        private static void Swatch(Sprite sprite, Color tint, float x, float y, float size)
+        {
+            var go = new GameObject("Swatch");
+            var renderer = go.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.color = tint;
+            renderer.sortingOrder = 1;
+            go.transform.position = new Vector3(x + (size / 2f), y + (size / 2f), 0f);
+            go.transform.localScale = Vector3.one * (size / sprite.bounds.size.x);
+        }
+
+        private static void Caption(string text, float x, float y)
+        {
+            var go = new GameObject("Caption");
+            var mesh = go.AddComponent<TextMesh>();
+            mesh.font = Art.Font;
+            mesh.text = text;
+            mesh.fontSize = 64;
+            mesh.characterSize = 0.08f;
+            mesh.anchor = TextAnchor.MiddleCenter;
+            mesh.color = Color.white;
+            go.GetComponent<MeshRenderer>().sharedMaterial = Art.Font.material;
+            go.GetComponent<MeshRenderer>().sortingOrder = 5;
+            go.transform.position = new Vector3(x, y, 0f);
+        }
+
         private static Camera SmokeScene()
         {
             var cameraObject = new GameObject("Camera");
