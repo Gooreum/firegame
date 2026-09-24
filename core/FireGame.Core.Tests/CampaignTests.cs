@@ -7,9 +7,21 @@ namespace FireGame.Core.Tests
 {
     public class CampaignTests
     {
-        private static StageResult Result(bool won, float intact, int wet)
+        /// <summary>
+        /// 별 판정에 쓰는 결과 한 벌.
+        /// 별 기준이 "무결성 + 수손"에서 "생환 + 진압 + 보존"으로 바뀌면서
+        /// 구조 인원과 남은 불이 인자로 들어왔다.
+        /// </summary>
+        private static StageResult Result(bool won, float intact, int rescued, int total, int burning)
         {
-            return new StageResult { Won = won, IntactRatio = intact, WetCellCount = wet };
+            return new StageResult
+            {
+                Won = won,
+                IntactRatio = intact,
+                Rescued = rescued,
+                CiviliansTotal = total,
+                BurningCells = burning,
+            };
         }
 
         // --- TC-1 ---
@@ -76,29 +88,46 @@ namespace FireGame.Core.Tests
         [Fact]
         public void PerfectRun_EarnsThreeStars()
         {
-            Assert.Equal(3, StarRating.For(Result(true, 0.8f, 12)));
-            Assert.Equal(3, StarRating.For(Result(true, StarRating.IntactForStar, StarRating.MaxWetCellsForStar)));
+            // 전원 생환 + 완전 진압 + 건물 보존.
+            Assert.Equal(3, StarRating.For(Result(true, 0.8f, rescued: 3, total: 3, burning: 0)));
+            Assert.Equal(3, StarRating.For(Result(true, StarRating.IntactForStar, 1, 1, 0)));
         }
 
         // --- TC-7 ---
         [Fact]
         public void LosingTooMuchOfTheBuilding_CostsAStar()
         {
-            Assert.Equal(2, StarRating.For(Result(true, 0.5f, 10)));
+            Assert.Equal(2, StarRating.For(Result(true, 0.5f, rescued: 3, total: 3, burning: 0)));
+        }
+
+        // --- TC-7b ---
+        [Fact]
+        public void WalkingAwayWithFireStillBurning_CostsAStar()
+        {
+            // 사람은 다 구했지만 불을 남기고 철수했다. 이기긴 이겼다 — 별 하나다.
+            Assert.Equal(1, StarRating.For(Result(true, 0.8f, rescued: 3, total: 3, burning: 14)));
+        }
+
+        // --- TC-7c ---
+        [Fact]
+        public void LosingSomeone_CostsAStar_EvenOnAPerfectSuppression()
+        {
+            // 불은 다 껐고 건물도 지켰지만 한 명을 잃었다. 현장을 해결한 것이 아니다.
+            Assert.Equal(1, StarRating.For(Result(true, 0.9f, rescued: 2, total: 3, burning: 0)));
         }
 
         // --- TC-8 ---
         [Fact]
         public void AnyWin_IsWorthAtLeastOneStar()
         {
-            Assert.Equal(1, StarRating.For(Result(true, 0.3f, 80)));
+            Assert.Equal(1, StarRating.For(Result(true, 0.3f, rescued: 1, total: 3, burning: 20)));
         }
 
         // --- TC-9 ---
         [Fact]
         public void ALoss_IsWorthNoStars()
         {
-            Assert.Equal(0, StarRating.For(Result(false, 1f, 0)));
+            Assert.Equal(0, StarRating.For(Result(false, 1f, rescued: 3, total: 3, burning: 0)));
         }
 
         // --- TC-10 ---

@@ -290,7 +290,12 @@ namespace FireGame.Core.Tests
             save.RecordResult(first.Id, 0);
             Assert.False(save.IsMissionUnlocked(second));
 
+            // 별 하나는 "사람만 구하고 철수했다"는 뜻이다. 현장을 해결한 것이 아니므로
+            // 다음 신고가 오지 않는다 — 장비를 사서 다시 와야 한다.
             save.RecordResult(first.Id, 1);
+            Assert.False(save.IsMissionUnlocked(second));
+
+            save.RecordResult(first.Id, StarRating.StarsToUnlockNext);
             Assert.True(save.IsMissionUnlocked(second));
             Assert.False(save.IsMissionUnlocked(third));
             Assert.False(save.IsMissionUnlocked(null));
@@ -305,8 +310,10 @@ namespace FireGame.Core.Tests
 
             Assert.Equal(2500, save.Money);
             Assert.True(save.Owns(EquipmentId.Extinguisher));
-            Assert.Equal(1, save.StarsFor(0));
-            Assert.Equal(1, save.StarsFor(1));
+            // 별이 없던 시절의 "클리어"는 불을 다 끈 것이다.
+            // 해금에 필요한 별 수로 옮겨야 이미 깬 현장이 도로 잠기지 않는다.
+            Assert.Equal(StarRating.StarsToUnlockNext, save.StarsFor(0));
+            Assert.Equal(StarRating.StarsToUnlockNext, save.StarsFor(1));
             Assert.Equal(0, save.StarsFor(2));
             Assert.True(save.IsMissionUnlocked(Campaign.Missions[2]));
 

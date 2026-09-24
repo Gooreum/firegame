@@ -34,10 +34,10 @@ namespace FireGame.Core.Tests
         public void ReferenceStage_IsTheFiercestOpenStageWithThatFire()
         {
             SaveData save = SaveData.NewGame();
-            save.RecordResult(0, 1);
+            save.RecordResult(0, StarRating.StarsToUnlockNext);
             Assert.Same(StageCatalog.Shopping, LevelPreview.ReferenceStage(save, FireClass.C));
 
-            foreach (MissionDef mission in Campaign.Missions) save.RecordResult(mission.Id, 1);
+            foreach (MissionDef mission in Campaign.Missions) save.RecordResult(mission.Id, StarRating.StarsToUnlockNext);
             StageDef oil = LevelPreview.ReferenceStage(save, FireClass.B);
             Assert.Equal(6f, oil.FireIntensity);
         }

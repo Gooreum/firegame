@@ -50,10 +50,10 @@ namespace FireGame.Core.Tests
             SaveData save = SaveData.NewGame();
             Assert.Same(Campaign.Missions[0], Readiness.NextCall(save));
 
-            save.RecordResult(0, 1);
+            save.RecordResult(0, StarRating.StarsToUnlockNext);
             Assert.Same(Campaign.Missions[1], Readiness.NextCall(save));
 
-            foreach (MissionDef mission in Campaign.Missions) save.RecordResult(mission.Id, 1);
+            foreach (MissionDef mission in Campaign.Missions) save.RecordResult(mission.Id, StarRating.StarsToUnlockNext);
             Assert.Null(Readiness.NextCall(save));
         }
 

@@ -18,7 +18,7 @@ namespace FireGame.Core.Tests
         {
             SaveData save = SaveData.NewGame();
             save.Money = 100000;
-            for (int id = 0; id < Campaign.Missions.Length; id++) save.RecordResult(id, 1);
+            for (int id = 0; id < Campaign.Missions.Length; id++) save.RecordResult(id, StarRating.StarsToUnlockNext);
 
             var flow = new GameFlow(save);
             flow.OpenShop();

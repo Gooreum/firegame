@@ -176,7 +176,7 @@ namespace FireGame.Core.Tests
             save.RecordResult(1, 3);
             Assert.False(save.IsMissionUnlocked(warehouse));
 
-            save.RecordResult(2, 1);
+            save.RecordResult(2, StarRating.StarsToUnlockNext);
             Assert.True(save.IsMissionUnlocked(warehouse));
         }
 

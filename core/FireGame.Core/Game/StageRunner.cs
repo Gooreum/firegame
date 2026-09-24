@@ -79,6 +79,35 @@ namespace FireGame.Core.Game
         /// <summary>이번 프레임에 불에 휩싸여 잃은 시민.</summary>
         public Civilian JustLost { get; private set; }
 
+        /// <summary>
+        /// 출구에서 철수를 선언했는지. 불을 남긴 채 이기는 <b>유일한 길</b>이다.
+        ///
+        /// "시민을 다 구하면 자동으로 이긴다"로 두면 마지막 한 명을 내려놓는 순간
+        /// 판이 끝나 버려 불을 끌 이유가 통째로 사라진다. 그래서 선언하게 한다 —
+        /// 나갈지 더 싸울지를 고르는 것이 이 게임에서 처음 생기는 진짜 선택이다.
+        /// </summary>
+        public bool Withdrew { get; private set; }
+
+        /// <summary>한 명도 잃지 않고 전원 데리고 나왔는지.</summary>
+        public bool AllCiviliansSafe
+        {
+            get { return RescuedCount == Civilians.Count; }
+        }
+
+        /// <summary>
+        /// 지금 철수를 선언할 수 있는지. HUD가 이걸 보고 구조 버튼을 "철수"로 바꾼다.
+        /// </summary>
+        public bool CanWithdraw
+        {
+            get
+            {
+                return !IsOver
+                    && AllCiviliansSafe
+                    && Civilians.Count > 0
+                    && IsExit(Player.CellX, Player.CellY);
+            }
+        }
+
         /// <summary>이번 프레임의 문 조작 결과. 화면이 읽고 팝업으로 옮긴다.</summary>
         public InteractResult LastInteract { get; private set; }
 
@@ -226,6 +255,7 @@ namespace FireGame.Core.Game
             Refill(dt);
             AdvanceSimulation(dt);
             UpdateCivilians(input.Rescue);
+            TryWithdraw(input.Rescue);
             EvaluateOutcome();
         }
 
@@ -425,6 +455,20 @@ namespace FireGame.Core.Game
             JustPickedUp = RescueTarget;
         }
 
+        /// <summary>
+        /// 출구에서 철수를 선언한다. 시민을 막 내려놓은 프레임에는 받지 않는다 —
+        /// 마지막 한 명을 내려놓으면서 같은 입력으로 철수까지 되면
+        /// 고른 적도 없는데 판이 끝난다.
+        /// </summary>
+        private void TryWithdraw(bool rescuePressed)
+        {
+            if (!rescuePressed) return;
+            if (JustRescued != null) return;
+            if (!CanWithdraw) return;
+
+            Withdrew = true;
+        }
+
         private bool IsExit(int x, int y)
         {
             for (int i = 0; i < Exits.Count; i++)
@@ -444,6 +488,18 @@ namespace FireGame.Core.Game
                 return;
             }
 
+            // 사람을 다 데리고 나왔으면 출구에서 철수할 수 있다.
+            // 건물은 잃지만 그것이 소방의 판단이다.
+            if (Withdrew)
+            {
+                Outcome = StageOutcome.Won;
+                return;
+            }
+
+            // 건물 소실과 시간 초과는 그대로 패배다.
+            // 이걸 "전원 생환했으면 승리"로 풀면 아무것도 안 하고 시계만 보내는 것이
+            // 모든 현장의 공략이 되고, 장비를 살 이유도 불을 끌 이유도 사라진다.
+            // 사람만 구하고 이기고 싶으면 <b>출구까지 걸어가 철수를 선언해야 한다</b>.
             if (Grid.IntactRatio() < BuildingLostThreshold)
             {
                 Outcome = StageOutcome.LostBuildingDestroyed;
@@ -474,6 +530,7 @@ namespace FireGame.Core.Game
                 IntactRatio = Grid.IntactRatio(),
                 TimeLeft = TimeLeft,
                 WetCellCount = Grid.CountWet(),
+                BurningCells = Grid.CountBurning(),
                 ShotsFired = ShotsFired,
                 CellsExtinguished = CellsExtinguished,
                 ElapsedSeconds = Def.TimeLimitSeconds - TimeLeft,

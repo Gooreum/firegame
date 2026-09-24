@@ -138,6 +138,9 @@ namespace FireGame.Core.Game
         /// <summary>물을 머금은 셀 수. 수손 피해로 정산에서 차감된다.</summary>
         public int WetCellCount;
 
+        /// <summary>끝났을 때 아직 타고 있던 칸 수. 0이어야 완전 진압이다.</summary>
+        public int BurningCells;
+
         public int ShotsFired;
         public int CellsExtinguished;
 

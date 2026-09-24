@@ -93,7 +93,9 @@ namespace FireGame.Core.Game
             if (mission == null) return false;
             if (mission.RequiresMission < 0) return true;
 
-            return StarsFor(mission.RequiresMission) > 0;
+            // 별 하나(사람만 구하고 철수)로는 안 열린다.
+            // 앞 현장을 실제로 해결해야 다음 신고가 온다.
+            return StarsFor(mission.RequiresMission) >= StarRating.StarsToUnlockNext;
         }
 
         /// <summary>그 현장의 최단 클리어 시간(0.1초 단위). 기록이 없으면 -1.</summary>
@@ -159,7 +161,8 @@ namespace FireGame.Core.Game
         /// 잘릴 수 있으므로, 깨진 데이터에 예외를 던지는 대신 실패를 반환한다.
         ///
         /// 예전 형식도 읽는다. v1/v2의 unlocked(산 장비 목록)는 각 장비 Lv1로,
-        /// v1의 cleared=N은 앞에서부터 N개 현장 별 1개로 옮긴다.
+        /// v1의 cleared=N은 앞에서부터 N개 현장을 <b>해금에 필요한 별 수</b>로 옮긴다.
+        /// 별 하나로 옮기면 해금 기준이 둘로 오른 뒤부터 이미 깬 현장이 도로 잠긴다.
         /// 업데이트 후에도 산 장비와 열어 둔 현장이 사라지지 않게 하려는 것이다.
         /// </summary>
         public static bool TryDeserialize(string text, out SaveData save)
@@ -222,9 +225,12 @@ namespace FireGame.Core.Game
 
             if (!sawMoney) return false;
 
+            // 별이 없던 시절의 "클리어"는 불을 다 끈 것이었다.
+            // 별 하나로 옮기면 그건 지금 기준으로 "사람만 구하고 철수"라
+            // 이미 깬 현장이 도로 잠긴다.
             for (int id = 0; id < legacyCleared; id++)
             {
-                parsed.RecordResult(id, 1);
+                parsed.RecordResult(id, StarRating.StarsToUnlockNext);
             }
 
             save = parsed;

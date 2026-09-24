@@ -274,6 +274,17 @@ namespace FireGame.UnityLayer
                 return;
             }
 
+            // 사람을 다 데리고 나와 출구에 섰다. 이제 같은 버튼이 "철수"가 된다 —
+            // 불을 남기고 끝낼지 더 싸울지는 여기서 고른다.
+            if (runner.CanWithdraw)
+            {
+                _rescueBack.sprite = Art.Get("UI/button_yellow");
+                _rescueBack.color = Color.white;
+                _rescueLabel.text = "철수";
+                _rescueLabel.color = Color.white;
+                return;
+            }
+
             bool ready = runner.RescueTarget != null;
             _rescueBack.sprite = Art.Get(ready ? "UI/button_green" : "UI/button_grey");
             _rescueBack.color = ready ? Color.white : new Color(1f, 1f, 1f, 0.35f);

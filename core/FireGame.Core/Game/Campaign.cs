@@ -224,18 +224,38 @@ namespace FireGame.Core.Game
         /// <summary>이 이상 건물을 지켜야 별 하나.</summary>
         public const float IntactForStar = 0.6f;
 
-        /// <summary>젖은 칸이 이 이하여야 별 하나. 물을 아껴 쓴 보상이다.</summary>
-        public const int MaxWetCellsForStar = 30;
-
         public const int MaxStars = 3;
 
+        /// <summary>
+        /// 다음 현장을 열려면 받아야 하는 별.
+        ///
+        /// 하나가 아니라 <b>둘</b>인 것이 이 게임 성장 루프의 전부다.
+        /// 사람만 구하고 나오는 것(별 하나)도 이긴 것이고 보상도 받지만,
+        /// 그것으로 다음 신고까지 열리면 장비를 살 이유가 사라진다.
+        /// "사람은 구했다. 돈은 벌었다. 장비 사서 다시 오자"가 되게 한다.
+        /// </summary>
+        public const int StarsToUnlockNext = 2;
+
+        /// <summary>
+        /// 별 하나하나가 <b>무엇까지 지켰는가</b>를 말한다.
+        ///
+        ///   ★   살아서 돌아왔다 (사람만 구하고 철수해도 여기까지)
+        ///   ★★  한 명도 잃지 않고 불까지 껐다 — 현장을 해결했다
+        ///   ★★★ 건물까지 지켰다
+        ///
+        /// 물을 아껴 쓴 보상(젖은 칸 30 이하)이던 별은 뺐다.
+        /// 낭비를 막는 일은 이제 물탱크가 하고, 수손 피해는 보상에서 그대로 깎인다 —
+        /// 같은 것을 두 번 벌하면 물을 쓰는 것 자체가 손해가 된다.
+        /// </summary>
         public static int For(in StageResult result)
         {
             if (!result.Won) return 0;
 
+            bool solved = result.BurningCells == 0 && result.Rescued == result.CiviliansTotal;
+
             int stars = 1;
-            if (result.IntactRatio >= IntactForStar) stars++;
-            if (result.WetCellCount <= MaxWetCellsForStar) stars++;
+            if (solved) stars++;
+            if (solved && result.IntactRatio >= IntactForStar) stars++;
             return stars;
         }
     }
