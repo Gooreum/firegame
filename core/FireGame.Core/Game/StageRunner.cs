@@ -76,6 +76,16 @@ namespace FireGame.Core.Game
         /// <summary>이번 프레임에 불에 휩싸여 잃은 시민.</summary>
         public Civilian JustLost { get; private set; }
 
+        /// <summary>이번 프레임의 문 조작 결과. 화면이 읽고 팝업으로 옮긴다.</summary>
+        public InteractResult LastInteract { get; private set; }
+
+        /// <summary>
+        /// 지금 여닫을 수 있는 문. 없으면 null.
+        /// HUD가 이걸 보고 문 버튼을 켠다 — 곁에 문이 없는데 버튼이 켜져 있으면
+        /// 눌러 보고 나서야 아무 일도 안 일어난다는 걸 알게 된다.
+        /// </summary>
+        public GridPoint? DoorAtHand { get; private set; }
+
         /// <summary>장비 id 목록으로 시작한다. 전부 Lv1, 방화복·소방화 없음.</summary>
         public StageRunner(StageDef def, IReadOnlyList<int> unlockedEquipment)
             : this(def, Loadout.FromIds(unlockedEquipment))
@@ -197,6 +207,7 @@ namespace FireGame.Core.Game
             JustPickedUp = null;
             JustRescued = null;
             JustLost = null;
+            LastInteract = InteractResult.None;
 
             TimeLeft -= dt;
             if (TimeLeft < 0f) TimeLeft = 0f;
@@ -205,6 +216,9 @@ namespace FireGame.Core.Game
             Player.Update(dt, Grid, input.MoveX, input.MoveY);
 
             if (input.Fire) TryFire(input.Slot);
+
+            DoorAtHand = FindDoorAtHand();
+            if (input.Interact) TryInteract();
 
             AdvanceSimulation(dt);
             UpdateCivilians(input.Rescue);
@@ -253,6 +267,62 @@ namespace FireGame.Core.Game
             LastShotBackfired = backfired;
 
             Player.ConsumeFire(slot, def);
+        }
+
+        /// <summary>
+        /// 손이 닿는 문 한 짝. 여덟 이웃 중 조준 방향에 가장 가까운 것을 고른다.
+        ///
+        /// 조준 칸 하나만 보면 대각으로 선 문을 못 잡아, 문을 여닫으려고
+        /// 칸을 맞춰 서는 일이 생긴다. 반대로 서 있는 칸 자체는 보지 않는다 —
+        /// 문간에 선 채로 닫으면 제 발로 벽 속에 갇힌다.
+        /// </summary>
+        private GridPoint? FindDoorAtHand()
+        {
+            int aimX = Aiming.OffsetX(Player.Aim);
+            int aimY = Aiming.OffsetY(Player.Aim);
+
+            GridPoint? best = null;
+            int bestScore = int.MinValue;
+
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+
+                    int x = Player.CellX + dx;
+                    int y = Player.CellY + dy;
+                    if (!Grid.InBounds(x, y)) continue;
+                    if (Grid[x, y].Material != (byte)MaterialId.Door) continue;
+
+                    // 조준 방향과 얼마나 같은 쪽인지. 정면이 가장 높다.
+                    int score = (dx * aimX) + (dy * aimY);
+                    if (score <= bestScore) continue;
+
+                    bestScore = score;
+                    best = new GridPoint(x, y);
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>곁의 문을 여닫는다. 불타는 문에는 손을 못 댄다.</summary>
+        private void TryInteract()
+        {
+            if (DoorAtHand == null) return;
+
+            GridPoint at = DoorAtHand.Value;
+            ref Cell door = ref Grid[at.X, at.Y];
+
+            if (door.State == CellState.Burning)
+            {
+                LastInteract = InteractResult.Burning;
+                return;
+            }
+
+            door.Shut = !door.Shut;
+            LastInteract = door.Shut ? InteractResult.Shut : InteractResult.Opened;
         }
 
         /// <summary>

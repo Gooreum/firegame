@@ -34,6 +34,9 @@ namespace FireGame.Core.Game
         private float _keyboardY;
         private bool _keyboardFire;
         private bool _keyboardRescue;
+        private bool _interactHeld;
+        private bool _keyboardInteract;
+        private bool _interactWasDown;
 
         /// <summary>직전 프레임의 구조 버튼 상태. 누른 순간만 잡아내는 데 쓴다.</summary>
         private bool _rescueWasDown;
@@ -192,6 +195,15 @@ namespace FireGame.Core.Game
             _rescueHeld = held;
         }
 
+        /// <summary>
+        /// 문 버튼. 구조와 같은 이유로 누르는 순간에만 한 번 먹는다 —
+        /// 누른 채로 서 있으면 문이 매 프레임 여닫히며 떨린다.
+        /// </summary>
+        public void SetInteract(bool held)
+        {
+            _interactHeld = held;
+        }
+
         public void SelectSlot(int slot)
         {
             if (Runner == null) return;
@@ -207,12 +219,13 @@ namespace FireGame.Core.Game
         /// 키보드 상태. 에디터와 데스크톱에서 테스트할 때 쓴다.
         /// <paramref name="slotKey"/>는 이번 프레임에 누른 숫자키(0부터), 없으면 -1.
         /// </summary>
-        public void SetKeyboard(float moveX, float moveY, bool fire, bool rescue, int slotKey)
+        public void SetKeyboard(float moveX, float moveY, bool fire, bool rescue, int slotKey, bool interact = false)
         {
             _keyboardX = moveX;
             _keyboardY = moveY;
             _keyboardFire = fire;
             _keyboardRescue = rescue;
+            _keyboardInteract = interact;
 
             if (slotKey >= 0) SelectSlot(slotKey);
         }
@@ -238,6 +251,10 @@ namespace FireGame.Core.Game
             bool rescuePressed = rescueDown && !_rescueWasDown;
             _rescueWasDown = rescueDown;
 
+            bool interactDown = _interactHeld || _keyboardInteract;
+            bool interactPressed = interactDown && !_interactWasDown;
+            _interactWasDown = interactDown;
+
             var input = new StageInput
             {
                 MoveX = moveX,
@@ -245,6 +262,7 @@ namespace FireGame.Core.Game
                 Fire = _fireHeld || _keyboardFire,
                 Slot = ActiveSlot,
                 Rescue = rescuePressed,
+                Interact = interactPressed,
             };
 
             Runner.Update(dt, input);

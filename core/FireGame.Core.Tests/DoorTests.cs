@@ -166,6 +166,110 @@ namespace FireGame.Core.Tests
             Assert.False(shut.Vision.Visible(DoorX + 1, DoorY), "닫힌 문 너머는 안 보여야 한다");
         }
 
+        // --- TC-8 ---
+        [Fact]
+        public void Interact_TogglesTheDoorBeside()
+        {
+            StageRunner runner = Room(shutDoor: false, InRoom);
+
+            // 문 왼쪽 칸에 서서 오른쪽을 본다.
+            runner.Player.X = DoorX - 0.5f;
+            runner.Player.Y = DoorY + 0.5f;
+            runner.Player.Aim = AimDirection.E;
+            runner.Update(0.05f, default);
+
+            Assert.NotNull(runner.DoorAtHand);
+
+            runner.Update(0.05f, new StageInput { Interact = true });
+            Assert.True(runner.Grid[DoorX, DoorY].Shut, "닫히지 않았다");
+            Assert.Equal(InteractResult.Shut, runner.LastInteract);
+
+            runner.Update(0.05f, new StageInput { Interact = true });
+            Assert.False(runner.Grid[DoorX, DoorY].Shut, "다시 안 열렸다");
+            Assert.Equal(InteractResult.Opened, runner.LastInteract);
+        }
+
+        // --- TC-9 ---
+        [Fact]
+        public void Interact_DoesNothingWhenNoDoorIsNear()
+        {
+            StageRunner runner = Room(shutDoor: false, InRoom);
+
+            // 마당 한가운데. 사방에 문이 없다.
+            runner.Player.X = 5.5f;
+            runner.Player.Y = 7.5f;
+            runner.Update(0.05f, new StageInput { Interact = true });
+
+            Assert.Null(runner.DoorAtHand);
+            Assert.Equal(InteractResult.None, runner.LastInteract);
+        }
+
+        // --- TC-10 ---
+        [Fact]
+        public void Interact_RefusesABurningDoor()
+        {
+            StageRunner runner = Room(shutDoor: false, InRoom);
+            runner.Grid[DoorX, DoorY].State = CellState.Burning;
+
+            runner.Player.X = DoorX - 0.5f;
+            runner.Player.Y = DoorY + 0.5f;
+            runner.Update(0.05f, new StageInput { Interact = true });
+
+            Assert.False(runner.Grid[DoorX, DoorY].Shut, "불타는 문을 닫았다");
+            Assert.Equal(InteractResult.Burning, runner.LastInteract);
+        }
+
+        // --- TC-11 ---
+        [Fact]
+        public void Interact_ReachesDiagonally()
+        {
+            StageRunner runner = Room(shutDoor: false, InRoom);
+
+            // 문에서 대각으로 한 칸 떨어진 자리. 칸을 맞춰 서지 않아도 잡혀야 한다.
+            runner.Player.X = DoorX - 0.5f;
+            runner.Player.Y = DoorY - 0.5f;
+            runner.Update(0.05f, new StageInput { Interact = true });
+
+            Assert.True(runner.Grid[DoorX, DoorY].Shut, "대각으로 선 문을 못 잡았다");
+        }
+
+        // --- TC-12 ---
+        [Fact]
+        public void HoldingTheDoorButton_TogglesOnlyOnce()
+        {
+            // 구조 버튼과 같은 함정이다. 모서리를 안 거르면 누르고 있는 동안
+            // 문이 매 프레임 여닫히며 떨린다.
+            var flow = new GameFlow(SaveData.NewGame());
+            Assert.True(flow.SelectMission(0));
+            flow.BeginMission();
+
+            StageRunner runner = flow.Runner;
+            GridPoint? door = FirstDoor(runner);
+            Assert.NotNull(door);
+
+            // 문 왼쪽에 붙여 세운다.
+            runner.Player.X = door.Value.X - 0.5f;
+            runner.Player.Y = door.Value.Y + 0.5f;
+
+            flow.SetInteract(true);
+            for (int frame = 0; frame < 20; frame++) flow.Update(0.05f);
+
+            Assert.True(runner.Grid[door.Value.X, door.Value.Y].Shut,
+                "누르고 있는 1초 동안 문이 여닫히기를 반복해 도로 열렸다");
+        }
+
+        private static GridPoint? FirstDoor(StageRunner runner)
+        {
+            for (int y = 0; y < runner.Grid.Height; y++)
+            {
+                for (int x = 0; x < runner.Grid.Width; x++)
+                {
+                    if (runner.Grid[x, y].Material == (byte)MaterialId.Door) return new GridPoint(x, y);
+                }
+            }
+            return null;
+        }
+
         // --- TC-7 ---
         [Fact]
         public void OpenDoorNearby_MakesFireBurnHotter()

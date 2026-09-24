@@ -31,10 +31,15 @@ namespace FireGame.UnityLayer
 
         private readonly Image _rescueBack;
         private readonly Text _rescueLabel;
+        private readonly Image _doorBack;
+        private readonly Text _doorLabel;
 
         public readonly VirtualJoystick Joystick;
         public readonly HoldButton FireButton;
         public readonly HoldButton RescueButton;
+
+        /// <summary>문 버튼. 곁에 문이 있을 때만 켜진다.</summary>
+        public readonly HoldButton DoorButton;
 
         public MissionHud(Canvas canvas, GameFlow flow)
         {
@@ -117,6 +122,17 @@ namespace FireGame.UnityLayer
             RescueButton = _rescueBack.gameObject.AddComponent<HoldButton>();
             RescueButton.OnHold = held => _flow.SetRescue(held);
 
+            // 구조 버튼 바로 위. 둘 다 "지금 곁에 있는 것"에 대한 행동이라 붙여 둔다.
+            _doorBack = UiKit.Image(_root, "DoorButton", Art.Get("UI/button_grey"), Color.white);
+            UiKit.Place(_doorBack.rectTransform, new Vector2(1f, 0f), new Vector2(-70f, 458f), new Vector2(220f, 112f));
+            _doorBack.raycastTarget = true;
+            _doorLabel = UiKit.OutlinedLabel(_doorBack.transform, "Label", "문", 38, Color.white, TextAnchor.MiddleCenter);
+            UiKit.Stretch(_doorLabel.rectTransform);
+            _doorLabel.rectTransform.offsetMin = new Vector2(0f, 8f);
+
+            DoorButton = _doorBack.gameObject.AddComponent<HoldButton>();
+            DoorButton.OnHold = held => _flow.SetInteract(held);
+
             // ---- 발사 버튼 왼쪽: 장비 ----
             for (int slot = 0; slot < PlayerState.SlotCount; slot++)
             {
@@ -175,6 +191,7 @@ namespace FireGame.UnityLayer
             _rescued.color = waiting > 0 ? new Color(0.82f, 0.23f, 0.16f) : new Color(0.15f, 0.55f, 0.25f);
 
             RefreshRescueButton(runner);
+            RefreshDoorButton(runner);
 
             for (int slot = 0; slot < PlayerState.SlotCount; slot++)
             {
@@ -186,6 +203,41 @@ namespace FireGame.UnityLayer
         /// 구조 버튼의 세 상태. 시민을 업고 있으면 "출구로!", 손이 닿으면 밝은 "구조!",
         /// 그 밖에는 흐리게 남겨 둔다 — 버튼이 늘 밝으면 언제 눌러야 하는지 알 수 없다.
         /// </summary>
+        /// <summary>
+        /// 문 버튼. 곁에 문이 없으면 흐리게 죽인다 —
+        /// 켜 놓으면 눌러 보고 나서야 아무 일도 안 일어난다는 걸 알게 된다.
+        /// 지금 닫혀 있는지 열려 있는지를 글자로 미리 알려 준다.
+        /// </summary>
+        private void RefreshDoorButton(StageRunner runner)
+        {
+            GridPoint? at = runner.DoorAtHand;
+            if (at == null)
+            {
+                _doorBack.sprite = Art.Get("UI/button_grey");
+                _doorBack.color = new Color(1f, 1f, 1f, 0.28f);
+                _doorLabel.text = "문";
+                _doorLabel.color = new Color(1f, 1f, 1f, 0.45f);
+                return;
+            }
+
+            ref Cell door = ref runner.Grid[at.Value.X, at.Value.Y];
+
+            if (door.State == CellState.Burning)
+            {
+                _doorBack.sprite = Art.Get("UI/button_grey");
+                _doorBack.color = new Color(1f, 0.6f, 0.5f, 0.6f);
+                _doorLabel.text = "불붙음";
+                _doorLabel.color = new Color(1f, 0.8f, 0.75f);
+                return;
+            }
+
+            _doorBack.sprite = Art.Get("UI/button_yellow");
+            _doorBack.color = Color.white;
+            // 버튼 폭이 좁아 세 글자면 세로로 접힌다. 두 글자로 줄인다.
+            _doorLabel.text = door.Shut ? "열기" : "닫기";
+            _doorLabel.color = Color.white;
+        }
+
         private void RefreshRescueButton(StageRunner runner)
         {
             if (runner.Player.CarryingCivilian)

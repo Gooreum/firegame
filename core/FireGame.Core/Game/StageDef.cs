@@ -74,6 +74,26 @@ namespace FireGame.Core.Game
         /// 시민은 저절로 업히지 않는다 — 지나가다 말없이 업히면 구조한 느낌이 없다.
         /// </summary>
         public bool Rescue;
+
+        /// <summary>
+        /// 이번 프레임에 상호작용 버튼을 눌렀는지. 곁에 있는 문을 여닫는다.
+        /// 구조와 같은 이유로 누른 순간에만 한 번 먹는다 —
+        /// 누른 채로 서 있으면 문이 매 프레임 여닫히며 떨린다.
+        /// </summary>
+        public bool Interact;
+    }
+
+    /// <summary>문을 만지려 한 결과. 화면이 무엇을 알릴지 고르는 데 쓴다.</summary>
+    public enum InteractResult : byte
+    {
+        /// <summary>곁에 문이 없었다.</summary>
+        None = 0,
+
+        Opened = 1,
+        Shut = 2,
+
+        /// <summary>불타는 문이라 손을 못 댔다.</summary>
+        Burning = 3,
     }
 
     /// <summary>구조 대상 시민.</summary>
