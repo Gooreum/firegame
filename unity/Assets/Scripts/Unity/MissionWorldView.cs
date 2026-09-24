@@ -759,7 +759,9 @@ namespace FireGame.UnityLayer
 
             Aiming.Resolve(_grid, player.CellX, player.CellY, player.Aim, def.Pattern, def.Range, _hitBuffer, def.EndSpread);
 
-            // 역효과 칸은 흰빛과 자홍을 오가며 깜빡인다. 불꽃 위에 얹혀도 확실히 눈에 띈다.
+            // 역효과 칸은 옅은 자홍과 진한 자홍을 오가며 깜빡인다.
+            // 흰빛까지 갔다 오게 했더니 깜빡임의 절반이 흐릿한 흰 판이라, 맵 전체를 보는 줌에서는
+            // 역효과 경고가 그냥 사라진 것처럼 보였다(캡처로 확인).
             float pulse = Mathf.Abs(Mathf.Sin(time * 8f));
 
             for (int i = 0; i < _hitBuffer.Count; i++)
@@ -770,11 +772,14 @@ namespace FireGame.UnityLayer
 
                 SpriteRenderer cell = EnsureAimCell(i);
                 Color tint = FireLook.Verdict(verdict);
-                if (verdict == AgentVerdict.Backfire && burning) tint = Color.Lerp(Color.white, tint, pulse);
+                if (verdict == AgentVerdict.Backfire && burning)
+                {
+                    tint = Color.Lerp(new Color(1f, 0.55f, 0.95f), tint, 0.35f + (0.65f * pulse));
+                }
 
                 // 불 위에 얹히므로 진하면 불꽃을 가린다. 타는 칸만 또렷하게 한다.
                 float alpha = !burning ? 0.14f
-                    : verdict == AgentVerdict.Backfire ? 0.5f + (0.3f * pulse)
+                    : verdict == AgentVerdict.Backfire ? 0.62f + (0.25f * pulse)
                     : 0.42f;
 
                 cell.color = new Color(tint.r, tint.g, tint.b, alpha);

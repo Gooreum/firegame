@@ -63,7 +63,7 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("49_rescue_carry", RescueCarry),
                 new KeyValuePair<string, Func<Camera>>("50_shop_high_level", ShopHighLevel),
                 new KeyValuePair<string, Func<Camera>>("52_inside_shop", InsideShop),
-                new KeyValuePair<string, Func<Camera>>("54_inside_rescue", InsideRescue),
+                new KeyValuePair<string, Func<Camera>>("53_inside_rescue", InsideRescue),
                 new KeyValuePair<string, Func<Camera>>("40_warehouse_fire", WarehouseFire),
                 new KeyValuePair<string, Func<Camera>>("41_factory_mixed", FactoryMixed),
                 new KeyValuePair<string, Func<Camera>>("42_harbor_finale", HarborFinale),

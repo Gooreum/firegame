@@ -28,9 +28,9 @@ namespace FireGame.UnityLayer
         {
             { 0, new Color(0.82f, 0.34f, 0.28f) },   // 주택: 붉은 기와
             { 1, new Color(0.32f, 0.54f, 0.82f) },   // 상가: 파란 차양
-            { 2, new Color(0.92f, 0.74f, 0.28f) },   // 주유소: 노란 캐노피
+            { 2, new Color(0.30f, 0.62f, 0.66f) },   // 주유소: 청록 캐노피 (흙 마당과 같은 계열이면 묻힌다)
             { 3, new Color(0.56f, 0.62f, 0.70f) },   // 창고: 회청 함석
-            { 4, new Color(0.40f, 0.60f, 0.45f) },   // 공장: 초록 슬레이트
+            { 4, new Color(0.34f, 0.46f, 0.62f) },   // 공장: 청회 슬레이트 (벽돌 마당과 갈려야 한다)
             { 5, new Color(0.70f, 0.42f, 0.30f) },   // 항구: 적갈 널판
         };
 
@@ -216,10 +216,12 @@ namespace FireGame.UnityLayer
 
             EnsureHelpSign(building.Id);
 
+            // 건물 위 허공이 아니라 지붕 윗변 바로 안쪽에 얹는다.
+            // 허공에 띄웠더니 맵 위쪽 건물의 말풍선이 HUD 상단 바에 가려졌다(캡처로 확인).
             float bob = Mathf.Sin(time * 3.2f) * 0.12f;
             var at = new Vector3(
                 (building.MinX + building.MaxX + 1) * 0.5f,
-                _grid.Height - building.MinY + 1.1f + bob,
+                _grid.Height - building.MinY - 1f + bob,
                 0f);
 
             // 시민 옆 칸에 불이 붙었으면 붉게 깜빡인다. 어느 건물부터 가야 하는지가 갈린다.
