@@ -36,6 +36,12 @@ namespace FireGame.UnityLayer
         /// <summary>용마루 한 줄만 기준 색 그대로. 지붕이 어느 쪽으로 흐르는지를 이 선 하나가 말한다.</summary>
         private const float RidgeLine = 1f;
 
+        /// <summary>처마 그림자. 지붕 바로 밑이라 건물이 땅 위에 놓인 것으로 보인다.</summary>
+        private const int OrderEaves = OrderRoof - 1;
+
+        /// <summary>지붕 위에 얹는 부속물. 지붕과 표시 사이.</summary>
+        private const int OrderFixture = OrderRoof + 1;
+
         /// <summary>지붕 위 표시. 지붕보다 위에 그려야 보인다.</summary>
         private const int OrderRoofMark = OrderRoof + 2;
 
@@ -50,6 +56,12 @@ namespace FireGame.UnityLayer
 
         /// <summary>건물마다 그 건물을 덮는 지붕 칸들.</summary>
         private readonly List<SpriteRenderer>[] _roofs;
+
+        /// <summary>
+        /// 건물마다 처마 그림자·지붕 부속물·입구 간판.
+        /// 지붕과 함께 켜고 꺼야 한다 — 들어간 건물에 굴뚝만 떠 있으면 안 된다.
+        /// </summary>
+        private readonly List<Renderer>[] _dressing;
 
         /// <summary>셀별 지붕 타일과 원래 색. 타는 칸의 지붕을 그을리는 데 쓴다.</summary>
         private readonly SpriteRenderer[] _roofByCell;
@@ -95,7 +107,13 @@ namespace FireGame.UnityLayer
             _roofBaseColor = new Color[_grid.Count];
 
             _roofs = new List<SpriteRenderer>[buildings.All.Length];
-            for (int i = 0; i < buildings.All.Length; i++) _roofs[i] = BuildRoof(buildings.All[i]);
+            _dressing = new List<Renderer>[buildings.All.Length];
+            for (int i = 0; i < buildings.All.Length; i++)
+            {
+                _dressing[i] = new List<Renderer>();
+                _roofs[i] = BuildRoof(buildings.All[i]);
+                BuildDressing(buildings.All[i]);
+            }
 
             _fireSigns = new SpriteRenderer[buildings.All.Length, MaxFireSigns];
             _fireSmoke = new SpriteRenderer[buildings.All.Length, MaxFireSigns];
@@ -120,6 +138,9 @@ namespace FireGame.UnityLayer
                 bool covered = i != openBuildingId;
                 List<SpriteRenderer> roof = _roofs[i];
                 for (int k = 0; k < roof.Count; k++) roof[k].enabled = covered;
+
+                List<Renderer> dressing = _dressing[i];
+                for (int k = 0; k < dressing.Count; k++) dressing[k].enabled = covered;
 
                 // 들어간 건물은 진짜 불이 그대로 보인다. 지붕 위 표시를 겹쳐 그릴 이유가 없다.
                 if (covered)
@@ -535,6 +556,224 @@ namespace FireGame.UnityLayer
         private static Color Shade(Color color, float amount)
         {
             return new Color(color.r * amount, color.g * amount, color.b * amount, color.a);
+        }
+
+
+        // ------------------------------------------------------------------
+        // 건물 치장 — 처마 그림자, 지붕 부속물, 입구 간판
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// 지붕만으로는 "땅에 그린 사각형"이다. 그림자로 띄우고, 부속물로 무슨 건물인지 말하고,
+        /// 간판으로 어디로 들어가는지 알린다. 셋 다 생성 때 한 번만 만들고 지붕과 함께 켜고 끈다.
+        /// </summary>
+        private void BuildDressing(Building building)
+        {
+            var member = new HashSet<int>();
+            foreach (GridPoint cell in building.Cells) member.Add(_grid.Index(cell.X, cell.Y));
+
+            SiteTheme theme = SiteTheme.Of(_runner.Def.Id);
+
+            BuildEaveShadow(building, member);
+            BuildFixtures(building, theme);
+            BuildSigns(building, theme);
+        }
+
+        /// <summary>
+        /// 남·동쪽으로 삐져나온 지붕 칸 밑에 반투명 검정을 깐다.
+        /// 이 한 가지가 납작한 색판을 "땅 위에 놓인 덩어리"로 바꾼다.
+        /// 북·서는 빛이 오는 쪽이라 그림자가 없다.
+        /// </summary>
+        private void BuildEaveShadow(Building building, HashSet<int> member)
+        {
+            foreach (GridPoint cell in building.Cells)
+            {
+                bool south = !Inside(member, cell.X, cell.Y + 1);
+                bool east = !Inside(member, cell.X + 1, cell.Y);
+                if (!south && !east) continue;
+
+                SpriteRenderer shadow = Piece("Eaves", Art.White, OrderEaves, building.Id);
+                shadow.color = new Color(0f, 0f, 0f, 0.20f);
+                shadow.transform.position = _view.CellCenter(cell.X, cell.Y) + new Vector3(0.24f, -0.24f, 0f);
+                shadow.transform.localScale = Vector3.one;
+            }
+        }
+
+        /// <summary>
+        /// 현장별 지붕 부속물. 굴뚝 하나로 상자가 집이 되고, 덕트 하나로 공장이 된다.
+        /// 경계 상자 안의 비율 좌표라 건물 크기가 달라도 같은 자리에 앉는다.
+        /// </summary>
+        private void BuildFixtures(Building building, SiteTheme theme)
+        {
+            switch (theme.Fixture)
+            {
+                case RoofFixture.Chimney:       // 주택 — 굴뚝과 지붕창
+                    Block(building, 0.18f, 0.30f, 1.1f, 1.1f, new Color(0.46f, 0.26f, 0.22f));
+                    Block(building, 0.18f, 0.30f, 0.6f, 0.6f, new Color(0.20f, 0.15f, 0.14f));
+                    Block(building, 0.72f, 0.32f, 1.6f, 0.9f, new Color(0.64f, 0.80f, 0.90f));
+                    break;
+
+                case RoofFixture.Units:         // 상가 — 옥상 실외기
+                    for (int i = 0; i < 3; i++)
+                    {
+                        Block(building, 0.28f + (i * 0.22f), 0.30f, 1.1f, 1.0f, new Color(0.82f, 0.83f, 0.85f));
+                        Block(building, 0.28f + (i * 0.22f), 0.30f, 0.7f, 0.7f, new Color(0.55f, 0.57f, 0.60f));
+                    }
+
+                    break;
+
+                case RoofFixture.Pillars:       // 주유소 — 캐노피를 떠받치는 기둥
+                    foreach (Vector2 at in FixtureCorners)
+                    {
+                        Block(building, at.x, at.y, 0.9f, 0.9f, new Color(0.33f, 0.34f, 0.36f));
+                    }
+
+                    break;
+
+                case RoofFixture.Skylight:      // 창고 — 톱니 채광창
+                    for (int i = 0; i < 4; i++)
+                    {
+                        Block(building, 0.20f + (i * 0.20f), 0.5f, 0.8f, building.Height * 0.62f,
+                            new Color(0.88f, 0.94f, 0.99f));
+                    }
+
+                    break;
+
+                case RoofFixture.Duct:          // 공장 — 굴뚝과 덕트 배관
+                    Block(building, 0.45f, 0.52f, building.Width * 0.44f, 0.7f, new Color(0.64f, 0.66f, 0.68f));
+                    Block(building, 0.80f, 0.28f, 1.7f, 1.7f, new Color(0.52f, 0.53f, 0.56f));
+                    Block(building, 0.80f, 0.28f, 1.0f, 1.0f, new Color(0.17f, 0.17f, 0.18f));
+                    break;
+
+                default:                        // 항구 — 환기구
+                    Block(building, 0.28f, 0.34f, 1.2f, 1.2f, new Color(0.56f, 0.50f, 0.44f));
+                    Block(building, 0.66f, 0.64f, 1.2f, 1.2f, new Color(0.56f, 0.50f, 0.44f));
+                    break;
+            }
+        }
+
+        /// <summary>캐노피 기둥 자리. 네 귀퉁이에서 살짝 안쪽.</summary>
+        private static readonly Vector2[] FixtureCorners =
+        {
+            new Vector2(0.20f, 0.24f), new Vector2(0.80f, 0.24f),
+            new Vector2(0.20f, 0.76f), new Vector2(0.80f, 0.76f),
+        };
+
+        /// <summary>
+        /// 경계 상자 안의 비율 좌표(0~1)에 <paramref name="w"/>x<paramref name="h"/>칸짜리 판을 놓는다.
+        /// y는 화면 기준이 아니라 건물 기준이다 — 0이 북쪽 처마다.
+        /// </summary>
+        private void Block(Building building, float u, float v, float w, float h, Color color)
+        {
+            float x = building.MinX + (u * building.Width);
+            float y = _grid.Height - building.MinY - (v * building.Height);
+
+            SpriteRenderer piece = Piece("Fixture", Art.White, OrderFixture, building.Id);
+            piece.color = color;
+            piece.transform.position = new Vector3(x, y, 0f);
+            piece.transform.localScale = new Vector3(w, h, 1f);
+        }
+
+        /// <summary>
+        /// 입구 바깥 한 칸에 간판을 세운다. 지붕이 덮인 밖에서 "여기로 들어간다"를 말한다.
+        /// 지붕이 없는 자리라 가려지지 않는다.
+        /// </summary>
+        private void BuildSigns(Building building, SiteTheme theme)
+        {
+            foreach (Vector3 gate in Gateways(building))
+            {
+                var door = new GridPoint(Mathf.FloorToInt(gate.x), Mathf.FloorToInt(gate.y));
+                Vector3 outward = OutwardFrom(building, door);
+
+                SpriteRenderer board = Piece("Sign", Art.Get("UI/panel_grey"), OrderFixture, building.Id);
+                board.color = new Color(0.99f, 0.96f, 0.88f);
+                board.transform.position = _view.ToWorld(gate.x, gate.y) + (outward * 0.95f);
+                board.transform.localScale = new Vector3(
+                    Art.FitWidth(board.sprite, 2.1f), Art.FitWidth(board.sprite, 1.0f), 1f);
+
+                var go = new GameObject("SignText");
+                go.transform.SetParent(_root, false);
+                var text = go.AddComponent<TextMesh>();
+                text.font = Art.Font;
+                text.text = theme.SignLabel;
+                text.fontSize = 64;
+                text.characterSize = 0.075f;
+                text.fontStyle = FontStyle.Bold;
+                text.anchor = TextAnchor.MiddleCenter;
+                text.alignment = TextAlignment.Center;
+                text.color = new Color(0.32f, 0.20f, 0.12f);
+                text.transform.position = board.transform.position;
+
+                var mesh = go.GetComponent<MeshRenderer>();
+                mesh.sharedMaterial = Art.Font.material;
+                mesh.sortingOrder = OrderFixture + 1;
+                _dressing[building.Id].Add(mesh);
+            }
+        }
+
+
+        /// <summary>
+        /// 붙어 있는 입구를 한 출입구로 묶은 가운데 좌표(격자 단위).
+        /// 창고·주택처럼 문이 <c>DD</c>로 두 칸이면 간판이 두 장 겹쳐 글자가 뭉개진다(캡처로 확인).
+        /// </summary>
+        private List<Vector3> Gateways(Building building)
+        {
+            var left = new List<GridPoint>(building.Entrances);
+            var gates = new List<Vector3>();
+
+            while (left.Count > 0)
+            {
+                var clump = new List<GridPoint> { left[0] };
+                left.RemoveAt(0);
+
+                for (bool grew = true; grew;)
+                {
+                    grew = false;
+                    for (int i = left.Count - 1; i >= 0; i--)
+                    {
+                        for (int k = 0; k < clump.Count; k++)
+                        {
+                            if (Mathf.Abs(left[i].X - clump[k].X) + Mathf.Abs(left[i].Y - clump[k].Y) != 1) continue;
+                            clump.Add(left[i]);
+                            left.RemoveAt(i);
+                            grew = true;
+                            break;
+                        }
+                    }
+                }
+
+                float sx = 0f;
+                float sy = 0f;
+                foreach (GridPoint c in clump)
+                {
+                    sx += c.X + 0.5f;
+                    sy += c.Y + 0.5f;
+                }
+
+                gates.Add(new Vector3(sx / clump.Count, sy / clump.Count, 0f));
+            }
+
+            return gates;
+        }
+
+        /// <summary>문에서 마당 쪽으로 나가는 방향. 간판을 건물 안쪽에 세우면 지붕에 가린다.</summary>
+        private Vector3 OutwardFrom(Building building, GridPoint door)
+        {
+            if (door.X <= building.MinX) return Vector3.left;
+            if (door.X >= building.MaxX) return Vector3.right;
+            if (door.Y <= building.MinY) return Vector3.up;
+            return Vector3.down;
+        }
+
+        private SpriteRenderer Piece(string name, Sprite sprite, int order, int buildingId)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_root, false);
+            var renderer = go.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.sortingOrder = order;
+            _dressing[buildingId].Add(renderer);
+            return renderer;
         }
 
         /// <summary>덩어리 바깥과 맞닿은 칸인지. 이 칸만 어둡게 칠해 테두리를 만든다.</summary>
