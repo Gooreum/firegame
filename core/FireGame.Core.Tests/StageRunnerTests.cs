@@ -55,7 +55,7 @@ namespace FireGame.Core.Tests
             // 시민을 업어 출구로 옮긴다.
             for (int i = 0; i < 40 && runner.RescuedCount == 0; i++)
             {
-                runner.Update(0.1f, new StageInput { MoveX = 1f });
+                runner.Update(0.1f, new StageInput { MoveX = 1f, Rescue = true });
             }
 
             Assert.Equal(1, runner.RescuedCount);
@@ -224,14 +224,14 @@ namespace FireGame.Core.Tests
 
             for (int i = 0; i < 20 && !runner.Player.CarryingCivilian; i++)
             {
-                runner.Update(0.05f, new StageInput { MoveX = 1f });
+                runner.Update(0.05f, new StageInput { MoveX = 1f, Rescue = true });
             }
 
             Assert.True(runner.Player.CarryingCivilian);
 
             // 업은 뒤에는 같은 시간에 더 적게 움직인다.
             float before = runner.Player.X;
-            runner.Update(0.1f, new StageInput { MoveX = 1f });
+            runner.Update(0.1f, new StageInput { MoveX = 1f, Rescue = true });
             float carriedStep = runner.Player.X - before;
 
             Assert.True(carriedStep < GameConfig.PlayerSpeed * 0.1f,
@@ -252,7 +252,7 @@ namespace FireGame.Core.Tests
 
             for (int i = 0; i < 100 && runner.RescuedCount == 0; i++)
             {
-                runner.Update(0.05f, new StageInput { MoveX = 1f });
+                runner.Update(0.05f, new StageInput { MoveX = 1f, Rescue = true });
             }
 
             Assert.Equal(1, runner.RescuedCount);
@@ -273,7 +273,7 @@ namespace FireGame.Core.Tests
 
             for (int i = 0; i < 40; i++)
             {
-                runner.Update(0.05f, new StageInput { MoveX = 1f });
+                runner.Update(0.05f, new StageInput { MoveX = 1f, Rescue = true });
 
                 int carried = 0;
                 foreach (Civilian c in runner.Civilians)
@@ -432,7 +432,7 @@ namespace FireGame.Core.Tests
 
             for (int i = 0; i < 100 && runner.RescuedCount == 0; i++)
             {
-                runner.Update(0.05f, new StageInput { MoveX = 1f });
+                runner.Update(0.05f, new StageInput { MoveX = 1f, Rescue = true });
             }
 
             // 바닥 한 칸을 적셔 수손 집계가 반영되는지 본다.

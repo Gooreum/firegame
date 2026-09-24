@@ -52,6 +52,24 @@ namespace FireGame.Core.Game
         /// <summary>마지막 한 발이 끈 칸 수. 화면이 "3칸 진압!"을 띄우는 데 쓴다.</summary>
         public int LastShotExtinguished;
 
+        /// <summary>마지막 한 발에서 역효과가 난 칸 수. 화면이 "역효과!"를 띄우는 데 쓴다.</summary>
+        public int LastShotBackfired;
+
+        /// <summary>
+        /// 지금 업을 수 있는 시민(사거리 안에서 가장 가까운 한 명). 없으면 null.
+        /// HUD가 이걸 보고 구조 버튼을 켜고, 현장 화면이 그 시민 표식을 초록으로 바꾼다.
+        /// </summary>
+        public Civilian RescueTarget { get; private set; }
+
+        /// <summary>이번 프레임에 막 업은 시민. 화면이 "구조!"를 띄우고 나면 다음 프레임에 비워진다.</summary>
+        public Civilian JustPickedUp { get; private set; }
+
+        /// <summary>이번 프레임에 막 출구로 데려나간 시민.</summary>
+        public Civilian JustRescued { get; private set; }
+
+        /// <summary>이번 프레임에 불에 휩싸여 잃은 시민.</summary>
+        public Civilian JustLost { get; private set; }
+
         /// <summary>장비 id 목록으로 시작한다. 전부 Lv1, 방화복·소방화 없음.</summary>
         public StageRunner(StageDef def, IReadOnlyList<int> unlockedEquipment)
             : this(def, Loadout.FromIds(unlockedEquipment))
@@ -146,6 +164,12 @@ namespace FireGame.Core.Game
         {
             if (IsOver || dt <= 0f) return;
 
+            // 한 프레임짜리 신호다. 화면이 이번 프레임에 읽고 팝업으로 옮긴다.
+            RescueTarget = null;
+            JustPickedUp = null;
+            JustRescued = null;
+            JustLost = null;
+
             TimeLeft -= dt;
             if (TimeLeft < 0f) TimeLeft = 0f;
 
@@ -155,7 +179,7 @@ namespace FireGame.Core.Game
             if (input.Fire) TryFire(input.Slot);
 
             AdvanceSimulation(dt);
-            UpdateCivilians();
+            UpdateCivilians(input.Rescue);
             EvaluateOutcome();
         }
 
@@ -186,20 +210,30 @@ namespace FireGame.Core.Game
             Aiming.Resolve(Grid, Player.CellX, Player.CellY, Player.Aim, def.Pattern, def.Range, _hitBuffer, def.EndSpread);
 
             int putOut = 0;
+            int backfired = 0;
             for (int i = 0; i < _hitBuffer.Count; i++)
             {
-                if (Suppression.Apply(Grid, _hitBuffer[i].X, _hitBuffer[i].Y, def.Agent) == SuppressionOutcome.Extinguished) putOut++;
+                SuppressionOutcome outcome = Suppression.Apply(Grid, _hitBuffer[i].X, _hitBuffer[i].Y, def.Agent);
+                if (outcome == SuppressionOutcome.Extinguished) putOut++;
+                else if (outcome == SuppressionOutcome.Backfired) backfired++;
             }
 
             ShotsFired++;
             CellsExtinguished += putOut;
             LastShotExtinguished = putOut;
+            LastShotBackfired = backfired;
 
             Player.ConsumeFire(slot, def);
         }
 
-        private void UpdateCivilians()
+        /// <summary>
+        /// 시민을 살핀다. 사거리 안에 들어와도 저절로 업히지 않고,
+        /// 구조 버튼을 누른 프레임에만 가장 가까운 한 명을 업는다.
+        /// </summary>
+        private void UpdateCivilians(bool rescuePressed)
         {
+            float nearest = -1f;
+
             for (int i = 0; i < Civilians.Count; i++)
             {
                 Civilian civilian = Civilians[i];
@@ -215,6 +249,7 @@ namespace FireGame.Core.Game
                         civilian.Carried = false;
                         civilian.Rescued = true;
                         Player.CarryingCivilian = false;
+                        JustRescued = civilian;
                     }
 
                     continue;
@@ -226,6 +261,7 @@ namespace FireGame.Core.Game
                 if (Grid.InBounds(cx, cy) && Grid[cx, cy].State == CellState.Burning)
                 {
                     civilian.Lost = true;
+                    JustLost = civilian;
                     continue;
                 }
 
@@ -233,12 +269,19 @@ namespace FireGame.Core.Game
 
                 float dx = civilian.X - Player.X;
                 float dy = civilian.Y - Player.Y;
-                if ((dx * dx) + (dy * dy) <= PickupRadius * PickupRadius)
-                {
-                    civilian.Carried = true;
-                    Player.CarryingCivilian = true;
-                }
+                float distance = (dx * dx) + (dy * dy);
+                if (distance > PickupRadius * PickupRadius) continue;
+                if (nearest >= 0f && distance >= nearest) continue;
+
+                nearest = distance;
+                RescueTarget = civilian;
             }
+
+            if (!rescuePressed || RescueTarget == null || Player.CarryingCivilian) return;
+
+            RescueTarget.Carried = true;
+            Player.CarryingCivilian = true;
+            JustPickedUp = RescueTarget;
         }
 
         private bool IsExit(int x, int y)

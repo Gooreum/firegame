@@ -68,6 +68,12 @@ namespace FireGame.Core.Game
 
         /// <summary>사용할 장비 슬롯.</summary>
         public int Slot;
+
+        /// <summary>
+        /// 이번 프레임에 구조 버튼을 눌렀는지.
+        /// 시민은 저절로 업히지 않는다 — 지나가다 말없이 업히면 구조한 느낌이 없다.
+        /// </summary>
+        public bool Rescue;
     }
 
     /// <summary>구조 대상 시민.</summary>

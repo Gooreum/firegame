@@ -269,7 +269,7 @@ namespace FireGame.Core.Tests
             float x0 = flow.Runner.Player.X;
 
             flow.SetMove(1f, 0f);
-            flow.SetKeyboard(1f, 0f, false, -1);
+            flow.SetKeyboard(1f, 0f, false, false, -1);
             flow.Update(0.1f);
 
             // 둘을 더해도 최대 속도를 넘지 않는다.

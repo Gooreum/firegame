@@ -28,10 +28,15 @@ namespace FireGame.Core.Game
         private float _stickX;
         private float _stickY;
         private bool _fireHeld;
+        private bool _rescueHeld;
 
         private float _keyboardX;
         private float _keyboardY;
         private bool _keyboardFire;
+        private bool _keyboardRescue;
+
+        /// <summary>직전 프레임의 구조 버튼 상태. 누른 순간만 잡아내는 데 쓴다.</summary>
+        private bool _rescueWasDown;
 
         public readonly SaveData Save;
 
@@ -178,6 +183,15 @@ namespace FireGame.Core.Game
             _fireHeld = held;
         }
 
+        /// <summary>
+        /// 구조 버튼. 누르는 순간에만 한 번 먹는다.
+        /// 계속 누른 채로 걸어다니면 지나치는 시민이 줄줄이 업혀 자동 픽업과 다를 게 없어진다.
+        /// </summary>
+        public void SetRescue(bool held)
+        {
+            _rescueHeld = held;
+        }
+
         public void SelectSlot(int slot)
         {
             if (Runner == null) return;
@@ -193,11 +207,12 @@ namespace FireGame.Core.Game
         /// 키보드 상태. 에디터와 데스크톱에서 테스트할 때 쓴다.
         /// <paramref name="slotKey"/>는 이번 프레임에 누른 숫자키(0부터), 없으면 -1.
         /// </summary>
-        public void SetKeyboard(float moveX, float moveY, bool fire, int slotKey)
+        public void SetKeyboard(float moveX, float moveY, bool fire, bool rescue, int slotKey)
         {
             _keyboardX = moveX;
             _keyboardY = moveY;
             _keyboardFire = fire;
+            _keyboardRescue = rescue;
 
             if (slotKey >= 0) SelectSlot(slotKey);
         }
@@ -218,12 +233,18 @@ namespace FireGame.Core.Game
             float moveY = _stickY + _keyboardY;
             ClampToUnit(ref moveX, ref moveY);
 
+            // 구조는 누른 순간 한 번만. 떼었다 다시 눌러야 다음 시민을 업는다.
+            bool rescueDown = _rescueHeld || _keyboardRescue;
+            bool rescuePressed = rescueDown && !_rescueWasDown;
+            _rescueWasDown = rescueDown;
+
             var input = new StageInput
             {
                 MoveX = moveX,
                 MoveY = moveY,
                 Fire = _fireHeld || _keyboardFire,
                 Slot = ActiveSlot,
+                Rescue = rescuePressed,
             };
 
             Runner.Update(dt, input);

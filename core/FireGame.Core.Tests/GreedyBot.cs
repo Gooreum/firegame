@@ -75,9 +75,12 @@ namespace FireGame.Core.Tests
                     ? MoveToward(NearestExit())
                     : MoveToward(NearestCivilian());
 
+                // 시민은 저절로 업히지 않는다. 손이 닿으면 버튼을 누른다.
+                rescue.Rescue = _runner.RescueTarget != null;
+
                 // 길이 불로 막혀 갈 수 없으면 가만히 서 있지 말고 불부터 끈다.
                 // 그래야 길이 열린다.
-                if (rescue.MoveX != 0f || rescue.MoveY != 0f) return rescue;
+                if (rescue.Rescue || rescue.MoveX != 0f || rescue.MoveY != 0f) return rescue;
             }
 
             if (grid.CountBurning() > 0)
