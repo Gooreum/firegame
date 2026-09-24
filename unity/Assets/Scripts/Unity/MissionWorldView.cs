@@ -283,10 +283,11 @@ namespace FireGame.UnityLayer
             FloorTheme theme;
             if (!FloorThemes.TryGetValue(_runner.Def.Id, out theme)) theme = FloorThemes[0];
 
+            SiteTheme site = SiteTheme.Of(_runner.Def.Id);
+
+            // 실내 바닥은 켄니 타일 그대로 쓴다 — 마루·타일·돌은 이미 실내답다.
             string indoorA = "TopDown/" + theme.IndoorA;
             string indoorB = "TopDown/" + theme.IndoorB;
-            string outdoorA = "TopDown/" + theme.OutdoorA;
-            string outdoorB = "TopDown/" + theme.OutdoorB;
 
             for (int y = 0; y < _grid.Height; y++)
             {
@@ -294,16 +295,23 @@ namespace FireGame.UnityLayer
                 {
                     int i = _grid.Index(x, y);
                     var material = (MaterialId)_grid[x, y].Material;
+
+                    // 실외는 4변형을 섞어 깐다. 2변형뿐일 때는 넓은 마당이 같은 그림으로 뒤덮였다.
+                    int variant = Art.GroundVariant(site.Ground, x, y);
                     bool alternate = ((x * 7) + (y * 13)) % 5 == 0;
 
                     // 어떤 건물에도 안 속하면 바깥 마당이다. 마당의 급수전처럼 통행 불가라
                     // 실외 탐색이 닿지 못한 칸도 여기서는 마당으로 친다 — 잔디 위 급수전이
                     // 저 혼자 마루를 깔고 서 있으면 안 된다.
-                    string floorSprite = _buildings.At(x, y) == BuildingMap.None
-                        ? (alternate ? outdoorB : outdoorA)
-                        : (alternate ? indoorB : indoorA);
+                    bool outdoors = _buildings.At(x, y) == BuildingMap.None;
+                    // 어떤 건물에도 안 속하면 바깥 마당이다. 마당의 급수전처럼 통행 불가라
+                    // 실외 탐색이 닿지 못한 칸도 여기서는 마당으로 친다 — 잔디 위 급수전이
+                    // 저 혼자 마루를 깔고 서 있으면 안 된다.
+                    Sprite floor = outdoors
+                        ? Art.GroundTexture(site.Ground, variant)
+                        : Art.Get(alternate ? indoorB : indoorA);
 
-                    _floor[i] = CreateRenderer("Floor", Art.Get(floorSprite), OrderFloor);
+                    _floor[i] = CreateRenderer("Floor", floor, OrderFloor);
                     _floor[i].transform.position = CellCenter(x, y);
 
                     Sprite top = null;
@@ -320,7 +328,13 @@ namespace FireGame.UnityLayer
                             break;
 
                         case MaterialId.Concrete:
-                            top = Art.Wall(WallStyle.Concrete, WallMask(x, y));
+                            // 격자 맨 바깥 한 줄은 벽이 아니라 그 현장의 경계다.
+                            // 게임에 아무 영향이 없는 칸이라, 항구 방파제를 여기에 그리면
+                            // 맵을 한 칸도 안 고치고 물가가 생긴다.
+                            bool onBorder = x == 0 || y == 0 || x == _grid.Width - 1 || y == _grid.Height - 1;
+                            top = onBorder
+                                ? Art.BorderTexture(site.Border)
+                                : Art.Wall(WallStyle.Concrete, WallMask(x, y));
                             order = OrderWall;
                             _isWall[i] = true;
                             break;

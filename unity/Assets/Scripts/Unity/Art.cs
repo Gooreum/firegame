@@ -283,6 +283,43 @@ namespace FireGame.UnityLayer
             return Make(('G' << 16) | ((int)style << 4) | v, (x, y) => Ground(style, v, x, y));
         }
 
+        /// <summary>
+        /// 그 칸에 깔 바닥 변형.
+        ///
+        /// 해시로만 고르면 도색이 든 변형이 마당에 흩뿌려져 도로가 아니라 얼룩으로 보인다(캡처로 확인).
+        /// 차선·위험 줄무늬·하역 구획선처럼 <b>이어져야 뜻이 통하는 도색</b>은 자리로 정한다.
+        /// </summary>
+        public static int GroundVariant(GroundStyle style, int x, int y)
+        {
+            int noise = (x * 7) + (y * 13);
+
+            switch (style)
+            {
+                case GroundStyle.Asphalt:
+                    // 7칸마다 가로 차선. 두 칸 긋고 두 칸 쉬어 점선이 된다.
+                    if (y % 7 == 3 && x % 4 < 2) return 2;
+                    return noise % 2 == 0 ? 0 : 3;
+
+                case GroundStyle.Concrete:
+                    // 위험 줄무늬는 띠로 간다. 한 칸씩 흩어지면 그냥 노란 반점이다.
+                    if (x % 17 == 8) return 3;
+                    return noise % 3;
+
+                case GroundStyle.Yard:
+                    // 하역 구획선은 세로 줄.
+                    if (x % 9 == 4) return 1;
+                    return noise % 2 == 0 ? 0 : 2;
+
+                case GroundStyle.Lawn:
+                    // 흙길 한 줄이 마당을 가로지른다.
+                    if (x % 23 == 11) return 3;
+                    return noise % 3;
+
+                default:
+                    return noise % 4;
+            }
+        }
+
         /// <summary>맵 가장자리 한 장.</summary>
         public static Sprite BorderTexture(BorderStyle style)
         {
