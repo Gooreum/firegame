@@ -61,6 +61,7 @@ namespace FireGame.EditorTools
                 new KeyValuePair<string, Func<Camera>>("47_aim_backfire", AimBackfire),
                 new KeyValuePair<string, Func<Camera>>("48_rescue_ready", RescueReady),
                 new KeyValuePair<string, Func<Camera>>("49_rescue_carry", RescueCarry),
+                new KeyValuePair<string, Func<Camera>>("50_shop_high_level", ShopHighLevel),
                 new KeyValuePair<string, Func<Camera>>("40_warehouse_fire", WarehouseFire),
                 new KeyValuePair<string, Func<Camera>>("41_factory_mixed", FactoryMixed),
                 new KeyValuePair<string, Func<Camera>>("42_harbor_finale", HarborFinale),
@@ -426,6 +427,24 @@ namespace FireGame.EditorTools
             save.SetLevel(EquipmentId.Extinguisher, 1);
             save.SetLevel(EquipmentId.FoamExtinguisher, 4);
             save.SetLevel(GearId.Suit, 2);
+            var flow = new GameFlow(save);
+            flow.OpenShop();
+            return Direct(flow);
+        }
+
+        /// <summary>예전이면 "최대"였을 레벨. 상한이 없어 여전히 값이 찍힌다.</summary>
+        private static Camera ShopHighLevel()
+        {
+            SaveData save = SaveData.NewGame();
+            save.Money = 40000;
+            save.RecordResult(0, 3);
+            save.RecordResult(1, 2);
+            save.SetLevel(EquipmentId.Bucket, 12);
+            save.SetLevel(EquipmentId.Extinguisher, 9);
+            save.SetLevel(EquipmentId.Hose, 10);
+            save.SetLevel(EquipmentId.FoamExtinguisher, 7);
+            save.SetLevel(GearId.Suit, 10);
+            save.SetLevel(GearId.Boots, 14);
             var flow = new GameFlow(save);
             flow.OpenShop();
             return Direct(flow);

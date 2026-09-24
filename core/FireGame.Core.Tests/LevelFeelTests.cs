@@ -88,8 +88,12 @@ namespace FireGame.Core.Tests
             List<string> high = LevelPreview.NextLevelLines(save, UpgradeCatalog.Suit);
             Assert.Contains("→", high[1]);
 
+            // 방화복엔 특성이 없다.
             Assert.Null(LevelPreview.NextMilestone(UpgradeCatalog.Suit, 3));
-            Assert.Null(LevelPreview.NextMilestone(UpgradeCatalog.Hose, 10));
+
+            // 호스는 Lv10이면 사거리·끝퍼짐·연사가 모두 상한이다. 그래도 위력은 계속 오른다.
+            Assert.Equal("모양은 여기까지 · 위력은 계속", LevelPreview.NextMilestone(UpgradeCatalog.Hose, 10));
+            Assert.Equal("Lv5 · 물줄기 끝이 T자로 퍼진다", LevelPreview.NextMilestone(UpgradeCatalog.Hose, 1));
         }
 
         // --- TC-6 ---

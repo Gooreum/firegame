@@ -82,9 +82,9 @@ namespace FireGame.UnityLayer
         {
             SaveData save = flow.Save;
             int level = save.LevelOf(track.Id);
+            // 최대 레벨이 없으므로 값은 늘 있다. "최대" 상태 자체가 사라졌다.
             int cost = Shop.NextCost(save, track.Id);
-            bool maxed = cost < 0;
-            bool affordable = !maxed && save.Money >= cost;
+            bool affordable = save.Money >= cost;
 
             Image card = UiKit.Image(panel, "Card" + track.Id, Art.Get("UI/panel_blue"), level == 0 ? new Color(0.78f, 0.82f, 0.9f) : Color.white);
             UiKit.Place(card.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(x, 20f), new Vector2(CardWidth, CardHeight));
@@ -98,8 +98,8 @@ namespace FireGame.UnityLayer
 
             if (track.Kind == UpgradeKind.Suit)
             {
-                // 다음 레벨(최대면 지금) 옷을 미리 보여 준다. 방화복엔 특성이 없어 그 자리를 쓴다.
-                int shown = maxed ? level : level + 1;
+                // 다음 레벨 옷을 미리 보여 준다. 방화복엔 특성이 없어 그 자리를 쓴다.
+                int shown = level + 1;
                 Image suit = UiKit.Image(card.transform, "Suit", Art.Get(MissionWorldView.SuitSprite(shown)), Color.white);
                 UiKit.Place(suit.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -138f), new Vector2(56f, 68f));
                 suit.rectTransform.pivot = new Vector2(0.5f, 0.5f);
@@ -130,9 +130,9 @@ namespace FireGame.UnityLayer
             effect.rectTransform.pivot = new Vector2(0.5f, 0f);
             effect.lineSpacing = 1.0f;
 
-            // 상태별 버튼: 최대(회색) / 살 수 있음(초록) / 잔액 부족(빨강)
-            string sprite = maxed ? "UI/button_grey" : affordable ? "UI/button_green" : "UI/button_red";
-            string label = maxed ? "최대" : (level == 0 ? "해금 " : "레벨업 ") + Format.Money(cost);
+            // 상태별 버튼: 살 수 있음(초록) / 잔액 부족(빨강). 회색 "최대"는 이제 없다.
+            string sprite = affordable ? "UI/button_green" : "UI/button_red";
+            string label = (level == 0 ? "해금 " : "레벨업 ") + Format.Money(cost);
             int id = track.Id;
             UnityEngine.UI.Button buy = UiKit.Button(card.transform, "Buy", Art.Get(sprite), label, 30, () => flow.Upgrade(id));
             UiKit.Place((RectTransform)buy.transform, new Vector2(0.5f, 0f), new Vector2(0f, 24f), new Vector2(CardWidth - 28f, 92f));
@@ -145,7 +145,7 @@ namespace FireGame.UnityLayer
             colors.disabledColor = Color.white;
             buy.colors = colors;
 
-            if (!maxed && !affordable)
+            if (!affordable)
             {
                 Text need = UiKit.Label(card.transform, "Need", "잔액 부족", 22, new Color(1f, 0.85f, 0.85f), TextAnchor.MiddleCenter);
                 UiKit.Place(need.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 116f), new Vector2(CardWidth - 20f, 28f));

@@ -142,7 +142,6 @@ namespace FireGame.Core.Game
 
             int level = save.LevelOf(track.Id);
             // 최대 레벨이 없으므로 늘 다음 레벨이 있다.
-            const bool maxed = false;
             int next = level + 1;
             var lines = new List<string>();
 
@@ -150,11 +149,11 @@ namespace FireGame.Core.Game
             {
                 case UpgradeKind.Suit:
                     lines.Add(GearStats.SuitName(next));
-                    lines.Add("불 속에서 버티는 시간\n" + Change(Seconds(SecondsInFire(level)), Seconds(SecondsInFire(next)), maxed));
+                    lines.Add("불 속에서 버티는 시간\n" + Change(Seconds(SecondsInFire(level)), Seconds(SecondsInFire(next))));
                     return lines;
 
                 case UpgradeKind.Boots:
-                    lines.Add("초당 " + Change(Speed(level), Speed(next), maxed) + "칸 달린다");
+                    lines.Add("초당 " + Change(Speed(level), Speed(next)) + "칸 달린다");
                     return lines;
             }
 
@@ -173,30 +172,44 @@ namespace FireGame.Core.Game
             EquipmentDef now = def.AtLevel(level);
             EquipmentDef then = def.AtLevel(next);
 
-            if (!maxed && EquipmentDef.Milestones(next) > EquipmentDef.Milestones(level))
+            if (EquipmentDef.Milestones(next) > EquipmentDef.Milestones(level))
             {
                 string milestone = MilestoneText(def, next);
                 if (milestone != null) lines.Add("특성! " + milestone);
             }
 
-            lines.Add(fire + "\n" + Change(Shots(ShotsToPutOut(now, fireClass, stage.FireIntensity)), Shots(ShotsToPutOut(then, fireClass, stage.FireIntensity)), maxed));
+            lines.Add(fire + "\n" + Change(Shots(ShotsToPutOut(now, fireClass, stage.FireIntensity)), Shots(ShotsToPutOut(then, fireClass, stage.FireIntensity))));
 
-            if (def.Resource == ResourceKind.Charges) lines.Add("횟수 " + Change(now.MaxCharges.ToString(CultureInfo.InvariantCulture), then.MaxCharges.ToString(CultureInfo.InvariantCulture), maxed));
-            else if (def.Pattern == AimPattern.Line && then.Range != now.Range) lines.Add("사거리 " + Change(now.Range.ToString(CultureInfo.InvariantCulture), then.Range.ToString(CultureInfo.InvariantCulture), maxed) + "칸");
-            else if (then.CooldownSeconds != now.CooldownSeconds) lines.Add("연사 " + Change(Seconds(now.CooldownSeconds), Seconds(then.CooldownSeconds), maxed));
+            if (def.Resource == ResourceKind.Charges) lines.Add("횟수 " + Change(now.MaxCharges.ToString(CultureInfo.InvariantCulture), then.MaxCharges.ToString(CultureInfo.InvariantCulture)));
+            else if (def.Pattern == AimPattern.Line && then.Range != now.Range) lines.Add("사거리 " + Change(now.Range.ToString(CultureInfo.InvariantCulture), then.Range.ToString(CultureInfo.InvariantCulture)) + "칸");
+            else if (then.CooldownSeconds != now.CooldownSeconds) lines.Add("연사 " + Change(Seconds(now.CooldownSeconds), Seconds(then.CooldownSeconds)));
 
             return lines;
         }
 
-        /// <summary>다음 특성: "Lv10 · 앞 12칸에 뿜기". 더 없으면 null.</summary>
+        /// <summary>
+        /// 다음 특성: "Lv10 · 앞 12칸에 뿜기". 뿌리는 모양이 상한에 닿았으면
+        /// "모양은 여기까지 · 위력은 계속"으로 알린다. 특성이 없는 항목은 null.
+        /// </summary>
         public static string NextMilestone(UpgradeTrack track, int level)
         {
             if (track == null || track.Kind != UpgradeKind.Equipment) return null;
 
             EquipmentDef def = EquipmentCatalog.ById(track.Id);
             int target = (EquipmentDef.Milestones(level) + 1) * EquipmentDef.MilestoneEvery;
+            if (ShapeIsCapped(def, level)) return "모양은 여기까지 · 위력은 계속";
+
             string text = MilestoneText(def, target);
             return text == null ? null : "Lv" + target + " · " + text;
+        }
+
+        /// <summary>뿌리는 모양이 더 커지지 않는지. 닿은 뒤에도 위력·횟수는 계속 오른다.</summary>
+        private static bool ShapeIsCapped(EquipmentDef def, int level)
+        {
+            int target = (EquipmentDef.Milestones(level) + 1) * EquipmentDef.MilestoneEvery;
+            EquipmentDef now = def.AtLevel(Math.Max(1, level));
+            EquipmentDef then = def.AtLevel(target);
+            return now.Range == then.Range && now.EndSpread == then.EndSpread && now.CooldownSeconds == then.CooldownSeconds;
         }
 
         /// <summary>그 레벨에서 받는 특성 설명. 그 레벨에 특성이 없으면 null.</summary>
@@ -226,9 +239,10 @@ namespace FireGame.Core.Game
             return GameConfig.PlayerMaxHp / (GameConfig.FireDamageInCell * GearStats.DamageMultiplier(suitLevel));
         }
 
-        private static string Change(string now, string next, bool maxed)
+        /// <summary>"3발 → 2발". 값이 그대로면 화살표 없이 한 번만 적는다.</summary>
+        private static string Change(string now, string next)
         {
-            return maxed || now == next ? now : now + " → " + next;
+            return now == next ? now : now + " → " + next;
         }
 
         private static string Shots(int shots)
