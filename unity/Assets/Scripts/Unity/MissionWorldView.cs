@@ -42,6 +42,12 @@ namespace FireGame.UnityLayer
         private readonly FireGrid _grid;
         private readonly Transform _root;
 
+        /// <summary>맵에서 되찾아 낸 건물들. 실내·실외 판정과 지붕·카메라의 근거다.</summary>
+        private BuildingMap _buildings;
+
+        /// <summary>건물을 덮는 지붕. 소방관이 들어간 건물만 걷힌다.</summary>
+        private BuildingOverlay _roofView;
+
         private readonly SpriteRenderer[] _floor;
         private readonly SpriteRenderer[] _top;
         private readonly SpriteRenderer[] _overlay;
@@ -176,6 +182,9 @@ namespace FireGame.UnityLayer
 
             BuildTiles();
 
+            // 지붕은 바닥·벽을 다 깐 뒤에 덮는다.
+            _roofView = new BuildingOverlay(_root, runner, _buildings, this);
+
             // 방화복 레벨마다 옷 색·헬멧이 다른 그림(tools/import-art.py가 만든다)
             _player = CreateRenderer("Player", Art.Get(SuitSprite(runner.Player.SuitLevel)), OrderPeople + 1);
             string[] civilianSprites = { "TopDown/civilian_woman", "TopDown/civilian_old", "TopDown/civilian_man" };
@@ -260,7 +269,11 @@ namespace FireGame.UnityLayer
 
         private void BuildTiles()
         {
-            bool[] outdoor = FindOutdoor();
+            // 실내·실외 판정과 건물 목록의 출처는 코어 하나다.
+            // 현장 도중에 화면을 다시 만들면 소방관이 실내에 있을 수 있어, 지금 위치가 아니라
+            // 맵에 정해진 시작 지점을 기준으로 삼는다.
+            _buildings = BuildingMap.From(_grid, MapLoader.Parse(_runner.Def.Map).PlayerSpawn);
+
             FloorTheme theme;
             if (!FloorThemes.TryGetValue(_runner.Def.Id, out theme)) theme = FloorThemes[0];
 
@@ -277,7 +290,10 @@ namespace FireGame.UnityLayer
                     var material = (MaterialId)_grid[x, y].Material;
                     bool alternate = ((x * 7) + (y * 13)) % 5 == 0;
 
-                    string floorSprite = outdoor[i]
+                    // 어떤 건물에도 안 속하면 바깥 마당이다. 마당의 급수전처럼 통행 불가라
+                    // 실외 탐색이 닿지 못한 칸도 여기서는 마당으로 친다 — 잔디 위 급수전이
+                    // 저 혼자 마루를 깔고 서 있으면 안 된다.
+                    string floorSprite = _buildings.At(x, y) == BuildingMap.None
                         ? (alternate ? outdoorB : outdoorA)
                         : (alternate ? indoorB : indoorA);
 
@@ -347,45 +363,6 @@ namespace FireGame.UnityLayer
         /// 소방관 시작 위치에서 문을 지나지 않고 갈 수 있는 바닥 = 바깥.
         /// 바깥은 잔디·흙, 안쪽은 마루·타일로 깔아 건물 윤곽이 보이게 한다.
         /// </summary>
-        private bool[] FindOutdoor()
-        {
-            var outdoor = new bool[_grid.Count];
-            var queue = new Queue<GridPoint>();
-
-            // 지금 소방관 위치가 아니라 맵에 정해진 시작 지점을 기준으로 한다.
-            // 현장 도중에 화면을 다시 만들면 소방관이 실내에 있을 수 있기 때문이다.
-            GridPoint start = MapLoader.Parse(_runner.Def.Map).PlayerSpawn;
-
-            outdoor[_grid.Index(start.X, start.Y)] = true;
-            queue.Enqueue(start);
-
-            int[] dx = { 0, 0, -1, 1 };
-            int[] dy = { -1, 1, 0, 0 };
-
-            while (queue.Count > 0)
-            {
-                GridPoint p = queue.Dequeue();
-                for (int k = 0; k < 4; k++)
-                {
-                    int nx = p.X + dx[k];
-                    int ny = p.Y + dy[k];
-                    if (!_grid.InBounds(nx, ny)) continue;
-
-                    int n = _grid.Index(nx, ny);
-                    if (outdoor[n]) continue;
-
-                    var material = (MaterialId)_grid.Cells[n].Material;
-                    if (material == MaterialId.Door) continue;
-                    if (!Materials.Of(material).Walkable) continue;
-
-                    outdoor[n] = true;
-                    queue.Enqueue(new GridPoint(nx, ny));
-                }
-            }
-
-            return outdoor;
-        }
-
         private bool IsWallAt(int x, int y)
         {
             if (!_grid.InBounds(x, y)) return false;
@@ -427,6 +404,13 @@ namespace FireGame.UnityLayer
             DetectExtinguished();
             AdvanceParticles(dt);
             AdvancePopups(dt);
+            _roofView.Refresh(time, PlayerBuildingId);
+        }
+
+        /// <summary>소방관이 지금 들어가 있는 건물. 밖이면 <see cref="BuildingMap.None"/>.</summary>
+        public int PlayerBuildingId
+        {
+            get { return _buildings.At((int)_runner.Player.X, (int)_runner.Player.Y); }
         }
 
         private void RefreshCell(int x, int y, float time)
