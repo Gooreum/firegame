@@ -194,6 +194,29 @@ namespace FireGame.Core.Tests
             Assert.InRange(FeelMath.FireLoudness(grid, 8.5f, 1.5f), near, 1f);
         }
 
+        // --- TC-11 ---
+        [Fact]
+        public void AFewCellsOfFire_TwoStepsAhead_AreClearlyAudible()
+        {
+            var runner = new StageRunner(new StageDef(98, "T", new[]
+            {
+                "##########",
+                "#........#",
+                "#@.......X",
+                "#........#",
+                "##########",
+            }, Wind.None, 60f, 100), Loadout.FromIds(new[] { EquipmentId.Bucket }));
+            FireGrid grid = runner.Grid;
+
+            // 불과 싸우는 흔한 순간: 두 칸 앞에 불이 세 칸.
+            grid[3, 1].State = CellState.Burning;
+            grid[3, 2].State = CellState.Burning;
+            grid[3, 3].State = CellState.Burning;
+
+            float loudness = FeelMath.FireLoudness(grid, 1.5f, 2.5f);
+            Assert.True(loudness >= 0.3f, "불 세 칸 앞인데 " + loudness + "밖에 안 들린다");
+        }
+
         // --- TC-8 ---
         [Fact]
         public void Trauma_DecaysToZero_AndNeverBelow()

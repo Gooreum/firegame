@@ -190,8 +190,12 @@ namespace FireGame.UnityLayer.Feel
         /// <summary>trauma가 초당 줄어드는 양. 최대 흔들림도 0.6초면 멎는다.</summary>
         public const float TraumaDecayPerSecond = 1.6f;
 
-        /// <summary>가까운 불 몇 칸이면 소리가 거의 다 차는지.</summary>
-        private const float FullFire = 6f;
+        /// <summary>
+        /// 소리 크기를 정하는 기준 불 크기. 작을수록 적은 불에도 크게 들린다.
+        /// 6이었을 때는 창고에서 불과 싸우는 내내 0.18에 그쳐 거의 안 들렸다.
+        /// 2.5면 두 칸 앞의 불 세 칸이 0.3을 넘고, 큰 불 한가운데는 거의 1이다.
+        /// </summary>
+        public const float FullFire = 2.5f;
 
         /// <summary>
         /// 소방관 주변 불의 크기 0~1. 가까운 칸일수록 크게 친다.
