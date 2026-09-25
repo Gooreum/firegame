@@ -24,7 +24,7 @@ namespace FireGame.UnityLayer
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
         {
-            if (FindAnyObjectByType<GameRoot>() != null) return;
+            if (FindAnyObjectByType<GameRoot>() != null || Prototypes.PrototypeLauncher.TakesOver) return;
 
             var root = new GameObject("FireGame");
             DontDestroyOnLoad(root);

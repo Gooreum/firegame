@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 재미 검증 시험판의 규칙 테스트. 시험판을 버리면 이 폴더도 함께 지운다. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>FireGame.Prototypes.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../core/FireGame.Core/FireGame.Core.csproj" />
+    <!-- 규칙은 Unity 폴더에 있지만 UnityEngine을 안 쓰므로 여기서 검증한다. -->
+    <Compile Include="../unity/Assets/Scripts/Prototypes/Logic/*.cs" LinkBase="Logic" />
+  </ItemGroup>
+
+</Project>
