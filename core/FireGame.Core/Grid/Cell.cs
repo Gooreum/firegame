@@ -63,6 +63,11 @@ namespace FireGame.Core.Grid
         /// </summary>
         public bool Shut;
 
+        /// <summary>
+        /// 건물이 무너져 문이 막혔는지. 막힌 문은 닫힌 채로 다시 열리지 않는다.
+        /// </summary>
+        public bool Jammed;
+
         public CellState State;
     }
 }

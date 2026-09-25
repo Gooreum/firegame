@@ -1156,6 +1156,18 @@ namespace FireGame.UnityLayer
             if (_runner.JustPickedUp != null) SpawnPopup("구조!", PlayerWorld, PopupGood);
             if (_runner.JustRescued != null) SpawnPopup("구조 완료! +$" + Economy.RescueBonus, PlayerWorld, PopupGood);
             if (_runner.JustLost != null) SpawnPopup("구조 실패…", ToWorld(_runner.JustLost.X, _runner.JustLost.Y), PopupBad);
+
+            // 사건이 난 자리에 바로 띄운다. HUD 배너는 무슨 일인지, 팝업은 어디인지를 맡는다.
+            GridPoint at = _runner.Events.JustHappenedAt;
+            switch (_runner.Events.JustHappened)
+            {
+                case StageEventKind.SecondIgnition:
+                    SpawnPopup("불이 옮겨 붙었다!", ToWorld(at.X + 0.5f, at.Y + 0.5f), PopupBad);
+                    break;
+                case StageEventKind.Collapse:
+                    SpawnPopup("무너짐!", ToWorld(at.X + 0.5f, at.Y + 0.5f), PopupBad);
+                    break;
+            }
         }
 
         /// <summary>

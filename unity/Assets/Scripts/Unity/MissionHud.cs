@@ -35,6 +35,19 @@ namespace FireGame.UnityLayer
         private readonly Image _doorBack;
         private readonly Text _doorLabel;
 
+        /// <summary>사건 배너. 2차 발화 예고와 방금 난 사건을 현장 이름 아래 띄운다.</summary>
+        private readonly Image _bannerBack;
+        private readonly Text _bannerLabel;
+
+        /// <summary>방금 난 사건 문구와 남은 표시 시간. 한 프레임짜리 신호를 몇 초 붙들어 둔다.</summary>
+        private string _eventMessage;
+        private float _eventMessageLeft;
+
+        private const float EventMessageSeconds = 2.5f;
+
+        /// <summary>문구를 띄운 판. 다시 하기로 새 판이 되면 지난 판의 문구를 지운다.</summary>
+        private StageRunner _bannerRunner;
+
         public readonly VirtualJoystick Joystick;
         public readonly HoldButton FireButton;
         public readonly HoldButton RescueButton;
@@ -53,6 +66,13 @@ namespace FireGame.UnityLayer
             _title = UiKit.Label(titleBack.transform, "Title", string.Empty, 34, UiKit.Ink, TextAnchor.MiddleCenter);
             UiKit.Stretch(_title.rectTransform);
             _title.rectTransform.offsetMin = new Vector2(12f, 8f);
+
+            // ---- 현장 이름 아래: 사건 배너 ----
+            _bannerBack = UiKit.Image(_root, "BannerBack", Art.Get("UI/panel_grey"), new Color(0.85f, 0.2f, 0.15f, 0.92f));
+            UiKit.Place(_bannerBack.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -104f), new Vector2(760f, 64f));
+            _bannerLabel = UiKit.OutlinedLabel(_bannerBack.transform, "Label", string.Empty, 30, Color.white, TextAnchor.MiddleCenter);
+            UiKit.Stretch(_bannerLabel.rectTransform);
+            _bannerBack.gameObject.SetActive(false);
 
             // ---- 왼쪽 위: 체력 ----
             Image statusBack = UiKit.Image(_root, "StatusBack", Art.Get("UI/panel_grey"), new Color(1f, 1f, 1f, 0.9f));
@@ -218,6 +238,7 @@ namespace FireGame.UnityLayer
 
             RefreshRescueButton(runner);
             RefreshDoorButton(runner);
+            RefreshBanner(runner);
 
             for (int slot = 0; slot < PlayerState.SlotCount; slot++)
             {
@@ -248,6 +269,15 @@ namespace FireGame.UnityLayer
 
             ref Cell door = ref runner.Grid[at.Value.X, at.Value.Y];
 
+            if (door.Jammed)
+            {
+                _doorBack.sprite = Art.Get("UI/button_grey");
+                _doorBack.color = new Color(0.6f, 0.55f, 0.5f, 0.7f);
+                _doorLabel.text = "막힘";
+                _doorLabel.color = new Color(1f, 1f, 1f, 0.7f);
+                return;
+            }
+
             if (door.State == CellState.Burning)
             {
                 _doorBack.sprite = Art.Get("UI/button_grey");
@@ -262,6 +292,47 @@ namespace FireGame.UnityLayer
             // 버튼 폭이 좁아 세 글자면 세로로 접힌다. 두 글자로 줄인다.
             _doorLabel.text = door.Shut ? "열기" : "닫기";
             _doorLabel.color = Color.white;
+        }
+
+        /// <summary>
+        /// 예고가 우선이다 — 아직 막을 수 있는 일이라서다. 예고가 없으면 방금 난 사건을 잠깐 남긴다.
+        /// </summary>
+        private void RefreshBanner(StageRunner runner)
+        {
+            StageEvents events = runner.Events;
+
+            if (!ReferenceEquals(_bannerRunner, runner))
+            {
+                _bannerRunner = runner;
+                _eventMessageLeft = 0f;
+            }
+
+            switch (events.JustHappened)
+            {
+                case StageEventKind.SecondIgnition:
+                    _eventMessage = "옆 건물에 불이 옮겨 붙었다!";
+                    _eventMessageLeft = EventMessageSeconds;
+                    break;
+                case StageEventKind.Collapse:
+                    _eventMessage = "건물이 무너져 문이 막혔다!";
+                    _eventMessageLeft = EventMessageSeconds;
+                    break;
+            }
+
+            string text = null;
+            if (events.PendingIgnition != null)
+            {
+                int seconds = Mathf.CeilToInt(events.SecondsUntilIgnition);
+                text = "불똥 경고! " + seconds + "초 뒤 옆 건물에 불 — 미리 적시면 막는다";
+            }
+            else if (_eventMessageLeft > 0f)
+            {
+                _eventMessageLeft -= Time.deltaTime;
+                text = _eventMessage;
+            }
+
+            _bannerBack.gameObject.SetActive(text != null);
+            if (text != null) _bannerLabel.text = text;
         }
 
         private void RefreshRescueButton(StageRunner runner)

@@ -94,6 +94,9 @@ namespace FireGame.Core.Game
 
         /// <summary>불타는 문이라 손을 못 댔다.</summary>
         Burning = 3,
+
+        /// <summary>무너져 막힌 문이라 열 수 없다.</summary>
+        Jammed = 4,
     }
 
     /// <summary>구조 대상 시민.</summary>

@@ -49,6 +49,12 @@ namespace FireGame.Core.Game
         /// </summary>
         public Action<string> SaveWriter;
 
+        /// <summary>
+        /// 변주판 시드를 만든다. 0이 아니어야 한다. 테스트가 바꿔 끼워 판을 고정한다.
+        /// 코어는 시계를 모르는 편이 좋지만, 다시 뛸 때마다 다른 판이어야 해서 기본값만 시계를 쓴다.
+        /// </summary>
+        public Func<int> SeedSource = () => Environment.TickCount | 1;
+
         public GameFlow(SaveData save)
         {
             Save = save ?? SaveData.NewGame();
@@ -129,10 +135,24 @@ namespace FireGame.Core.Game
 
         private void StartRun()
         {
-            Runner = new StageRunner(CurrentMission.Stage, Loadout.From(Save));
+            Runner = new StageRunner(CurrentMission.Stage, Loadout.From(Save), SeedFor(CurrentMission));
             ActiveSlot = 0;
             ResetInput();
             Screen = GameScreen.Playing;
+        }
+
+        /// <summary>
+        /// 한 번 깬 현장(다음 현장을 연 별)만 변주판으로 뛴다.
+        /// 첫 클리어는 언제나 설계된 판이다 — 필요 장비 표는 그 판으로 잰 것이고,
+        /// 공장은 발화점이 옮겨지면 필요 장비로 못 깨는 판이 나온다. 외운 동선이 지루해지는 것도
+        /// 돈을 벌러 다시 뛸 때부터다.
+        /// </summary>
+        private int SeedFor(MissionDef mission)
+        {
+            if (Save.StarsFor(mission.Id) < StarRating.StarsToUnlockNext) return 0;
+
+            int seed = SeedSource();
+            return seed == 0 ? 1 : seed;
         }
 
         // ------------------------------------------------------------------

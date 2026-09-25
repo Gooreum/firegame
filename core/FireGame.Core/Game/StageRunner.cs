@@ -49,6 +49,9 @@ namespace FireGame.Core.Game
         /// <summary>건물 구획. 실내·실외 판정과 연기 배출, 시야 차단에 쓴다.</summary>
         public readonly BuildingMap Buildings;
 
+        /// <summary>진행 중 사건. 시드 0이면 아무 일도 안 일어난다.</summary>
+        public readonly StageEvents Events;
+
         /// <summary>지금 보이는 범위. 화면과 HUD가 이걸 보고 무엇을 그릴지 정한다.</summary>
         public readonly VisionField Vision;
 
@@ -164,6 +167,7 @@ namespace FireGame.Core.Game
             Sim.Outdoor = OutdoorMask(Grid, Buildings);
 
             if (seed != 0) RelocateIgnitions(map.IgnitionPoints, map.PlayerSpawn, new Rng(seed));
+            Events = new StageEvents(seed, Buildings.All.Length);
 
             Player = new PlayerState();
             Player.Spawn(map.PlayerSpawn);
@@ -228,7 +232,7 @@ namespace FireGame.Core.Game
         }
 
         /// <summary>시민 두 칸 안인지. 시작하자마자 불이 덮쳐 잃는 판을 만들지 않는다.</summary>
-        private bool NearCivilian(int x, int y)
+        public bool NearCivilian(int x, int y)
         {
             foreach (Civilian civilian in Civilians)
             {
@@ -342,6 +346,7 @@ namespace FireGame.Core.Game
 
             Refill(dt);
             AdvanceSimulation(dt);
+            Events.Update(this);
             UpdateCivilians(input.Rescue);
             TryWithdraw(input.Rescue);
             EvaluateOutcome();
@@ -476,6 +481,12 @@ namespace FireGame.Core.Game
             if (door.State == CellState.Burning)
             {
                 LastInteract = InteractResult.Burning;
+                return;
+            }
+
+            if (door.Jammed)
+            {
+                LastInteract = InteractResult.Jammed;
                 return;
             }
 

@@ -575,6 +575,9 @@ namespace FireGame.Core.Tests
                     if (_distance[next] >= 0) continue;
                     if (!Materials.Of(grid.Cells[next].Material).Walkable) continue;
 
+                    // 닫힌 문은 못 지난다. 봇은 문을 닫지 않으므로 무너져 막힌 문이다.
+                    if (grid.Cells[next].Shut) continue;
+
                     // 불길 속으로는 걸어 들어가지 않는다.
                     if (grid.Cells[next].State == CellState.Burning) continue;
 
