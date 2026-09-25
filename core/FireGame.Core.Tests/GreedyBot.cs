@@ -72,10 +72,16 @@ namespace FireGame.Core.Tests
 
             for (int step = 0; step < maxSteps && !_runner.IsOver; step++)
             {
-                _runner.Update(dt, NextInput());
+                Step(dt);
             }
 
             return _runner.Outcome;
+        }
+
+        /// <summary>한 틱만 둔다. 매 틱 무언가를 지켜봐야 하는 테스트(연출 판정 등)가 쓴다.</summary>
+        public void Step(float dt)
+        {
+            _runner.Update(dt, NextInput());
         }
 
         private StageInput NextInput()

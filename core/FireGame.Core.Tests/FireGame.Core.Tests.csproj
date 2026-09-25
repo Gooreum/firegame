@@ -15,6 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 연출 판정 로직은 Unity 폴더에 있지만 UnityEngine을 안 쓰므로 여기서 실제 판으로 검증한다. -->
+    <Compile Include="../../unity/Assets/Scripts/Unity/Feel/*.cs" LinkBase="Feel" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../FireGame.Core/FireGame.Core.csproj" />
   </ItemGroup>
 
