@@ -32,6 +32,9 @@ namespace FireGame.Core.Game
         private float _lastDelta;
 
         public readonly StageDef Def;
+
+        /// <summary>이 판을 만든 시드. 0이면 맵에 표시된 그대로다.</summary>
+        public readonly int Seed;
         public readonly FireGrid Grid;
         public readonly FireSim Sim;
         public readonly PlayerState Player;
@@ -128,11 +131,21 @@ namespace FireGame.Core.Game
         }
 
         public StageRunner(StageDef def, Loadout loadout)
+            : this(def, loadout, 0)
+        {
+        }
+
+        /// <summary>
+        /// <paramref name="seed"/> 0이면 맵에 표시된 자리에 그대로 불이 난다(기존 동작).
+        /// 0이 아니면 그 시드로 발화점을 옮긴다 — 외운 순서가 안 통하게 된다.
+        /// </summary>
+        public StageRunner(StageDef def, Loadout loadout, int seed)
         {
             if (loadout == null) throw new ArgumentNullException(nameof(loadout));
             if (def == null) throw new ArgumentNullException(nameof(def));
 
             Def = def;
+            Seed = seed;
 
             ParsedMap map = MapLoader.Parse(def.Map);
             Grid = map.Grid;
@@ -150,6 +163,8 @@ namespace FireGame.Core.Game
             Buildings = BuildingMap.From(Grid, map.PlayerSpawn);
             Sim.Outdoor = OutdoorMask(Grid, Buildings);
 
+            if (seed != 0) RelocateIgnitions(map.IgnitionPoints, map.PlayerSpawn, new Rng(seed));
+
             Player = new PlayerState();
             Player.Spawn(map.PlayerSpawn);
             Player.SuitLevel = loadout.SuitLevel;
@@ -161,6 +176,74 @@ namespace FireGame.Core.Game
 
             Vision = new VisionField(Grid.Width, Grid.Height);
             Vision.Refresh(Grid, Buildings, Player.CellX, Player.CellY);
+        }
+
+        /// <summary>
+        /// 맵에 표시된 발화점을 같은 재질의 다른 칸으로 옮긴다.
+        ///
+        /// 재질을 지키는 이유: 전기 불이 나무 불로 바뀌면 CO2가 필요 없어지고,
+        /// 나무 불이 기름 불이 되면 양동이로 못 깬다. 현장마다 적어 둔 필요 장비가
+        /// 거짓말이 된다. 건물도 지킨다 — 설계자가 고른 건물에서 방만 바뀐다.
+        /// 실외 불은 실외에 남는다.
+        /// </summary>
+        private void RelocateIgnitions(List<GridPoint> marked, GridPoint spawn, Rng rng)
+        {
+            var candidates = new List<GridPoint>();
+
+            foreach (GridPoint origin in marked)
+            {
+                byte material = Grid[origin.X, origin.Y].Material;
+                int building = Buildings.At(origin.X, origin.Y);
+
+                candidates.Clear();
+                for (int y = 0; y < Grid.Height; y++)
+                {
+                    for (int x = 0; x < Grid.Width; x++)
+                    {
+                        if (Grid[x, y].Material != material || Grid[x, y].State != CellState.Intact) continue;
+                        if (Buildings.At(x, y) != building) continue;
+                        if (NearCivilian(x, y)) continue;
+                        candidates.Add(new GridPoint(x, y));
+                    }
+                }
+
+                // 옮길 곳이 없으면 표시된 자리 그대로 둔다.
+                if (candidates.Count == 0) continue;
+
+                // 스폰에서 먼 순. 거리가 같으면 좌표로 가른다 — List.Sort는 불안정 정렬이라
+                // 동률 순서가 런타임마다 달라지면 같은 시드가 .NET과 Unity에서 다른 판이 된다.
+                candidates.Sort((a, b) =>
+                {
+                    int byDistance = SquaredDistance(b, spawn).CompareTo(SquaredDistance(a, spawn));
+                    if (byDistance != 0) return byDistance;
+                    return a.Y != b.Y ? a.Y.CompareTo(b.Y) : a.X.CompareTo(b.X);
+                });
+
+                // 먼 쪽 절반에서 고른다. 문 앞에서 불이 나면 들어가자마자 끝난다.
+                GridPoint target = candidates[rng.Next((candidates.Count + 1) / 2)];
+
+                Grid[origin.X, origin.Y].State = CellState.Intact;
+                Grid[target.X, target.Y].State = CellState.Burning;
+            }
+        }
+
+        /// <summary>시민 두 칸 안인지. 시작하자마자 불이 덮쳐 잃는 판을 만들지 않는다.</summary>
+        private bool NearCivilian(int x, int y)
+        {
+            foreach (Civilian civilian in Civilians)
+            {
+                int cx = (int)Math.Floor(civilian.X);
+                int cy = (int)Math.Floor(civilian.Y);
+                if (Math.Abs(cx - x) <= 2 && Math.Abs(cy - y) <= 2) return true;
+            }
+            return false;
+        }
+
+        private static int SquaredDistance(GridPoint a, GridPoint b)
+        {
+            int dx = a.X - b.X;
+            int dy = a.Y - b.Y;
+            return (dx * dx) + (dy * dy);
         }
 
         /// <summary>칸별 실외 여부. 연기는 실외에서 고이지 않고 빠져나간다.</summary>
