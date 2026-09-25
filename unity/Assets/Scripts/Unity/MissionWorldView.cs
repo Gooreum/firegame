@@ -968,7 +968,11 @@ namespace FireGame.UnityLayer
                 }
 
                 bool ready = ReferenceEquals(_runner.RescueTarget, civilian);
-                bool danger = FireNearby((int)Mathf.Floor(civilian.X), (int)Mathf.Floor(civilian.Y));
+
+                // 위독은 불이 가까운 것과 다르다. 연기만으로도 사람은 쓰러진다 —
+                // 불길이 안 보이는데 급한 사람이 있다는 것이 순서를 고르게 만든다.
+                bool danger = civilian.Critical
+                    || FireNearby((int)Mathf.Floor(civilian.X), (int)Mathf.Floor(civilian.Y));
 
                 Color color = ready ? new Color(0.3f, 1f, 0.45f)
                     : danger ? new Color(1f, 0.25f, 0.2f)
@@ -983,8 +987,8 @@ namespace FireGame.UnityLayer
                 mark.enabled = true;
 
                 // 후광만으로는 흐릿해서 글자를 얹는다. 지금 누르면 되는 시민만 "구조"라고 알린다.
-                call.text = ready ? "구조" : "!";
-                call.characterSize = ready ? 0.055f : 0.085f;
+                call.text = ready ? "구조" : civilian.Critical ? "위독" : "!";
+                call.characterSize = ready || civilian.Critical ? 0.055f : 0.085f;
                 call.color = Color.Lerp(Color.white, color, 0.35f + (0.5f * pulse));
                 call.transform.position = above;
                 call.gameObject.SetActive(true);

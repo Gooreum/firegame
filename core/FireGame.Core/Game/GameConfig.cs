@@ -57,5 +57,15 @@ namespace FireGame.Core.Game
         /// 연기 속에서는 숨을 못 돌려야 건물 안이 실제로 위험해진다.
         /// </summary>
         public const float SmokeChokeThreshold = 0.3f;
+
+        /// <summary>
+        /// 연기 농도 1.0인 칸에 선 시민이 초당 잃는 버티는 힘(1.0에서 시작).
+        ///
+        /// 시민에게는 방화복도 마스크도 없다. 이 값이 있어야
+        /// <b>"먼저 누구부터"</b>가 질문이 된다 — 없으면 순서가 아무 상관 없고
+        /// 구조는 그냥 택배 배달이 된다.
+        /// 0.09면 짙은 연기(1.0) 속에서 약 11초를 버틴다.
+        /// </summary>
+        public const float CivilianChokePerSecond = 0.09f;
     }
 }

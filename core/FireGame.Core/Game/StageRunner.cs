@@ -28,6 +28,9 @@ namespace FireGame.Core.Game
         // 오차가 쌓여 실제 경과 시간과 틱 수가 어긋난다. double로 누적한다.
         private double _tickAccumulator;
 
+        /// <summary>이번 프레임의 dt. 시민 쇠약처럼 프레임 단위로 재는 값이 쓴다.</summary>
+        private float _lastDelta;
+
         public readonly StageDef Def;
         public readonly FireGrid Grid;
         public readonly FireSim Sim;
@@ -241,6 +244,8 @@ namespace FireGame.Core.Game
             JustLost = null;
             LastInteract = InteractResult.None;
 
+            _lastDelta = dt;
+
             TimeLeft -= dt;
             if (TimeLeft < 0f) TimeLeft = 0f;
 
@@ -434,6 +439,19 @@ namespace FireGame.Core.Game
                     civilian.Lost = true;
                     JustLost = civilian;
                     continue;
+                }
+
+                // 불길이 닿기 전에도 연기로 잃을 수 있다. 그래야 순서가 의미를 갖는다.
+                if (Grid.InBounds(cx, cy) && Grid[cx, cy].Smoke > 0f)
+                {
+                    civilian.Stamina -= Grid[cx, cy].Smoke * GameConfig.CivilianChokePerSecond * _lastDelta;
+                    if (civilian.Stamina <= 0f)
+                    {
+                        civilian.Stamina = 0f;
+                        civilian.Lost = true;
+                        JustLost = civilian;
+                        continue;
+                    }
                 }
 
                 if (Player.CarryingCivilian) continue;

@@ -117,6 +117,20 @@ namespace FireGame.Core.Game
         /// </summary>
         public bool Spotted;
 
+        /// <summary>
+        /// 버티는 힘 1..0. 연기 속에서 줄고 0이 되면 잃는다.
+        /// 불이 덮치기 전에도 잃을 수 있어야 "먼저 누구부터"가 질문이 된다.
+        /// <b>업고 있는 동안에는 줄지 않는다</b> — 소방관이 마스크를 씌운 것으로 본다.
+        /// 안 그러면 멀리 있는 사람을 먼저 구하는 것이 언제나 손해라 선택이 사라진다.
+        /// </summary>
+        public float Stamina = 1f;
+
+        /// <summary>실려 나가야 하는 위독 상태. 화면이 붉게 표시한다.</summary>
+        public bool Critical
+        {
+            get { return Stamina < 0.35f; }
+        }
+
         /// <summary>아직 맵 위에서 구조를 기다리는 중인지.</summary>
         public bool Pending
         {

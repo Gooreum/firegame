@@ -159,6 +159,89 @@ namespace FireGame.Core.Tests
             Assert.True(StarRating.For(result) < StarRating.StarsToUnlockNext);
         }
 
+        // --- TC-10 ---
+        [Fact]
+        public void Smoke_WearsCiviliansDown_BeforeTheFlamesArrive()
+        {
+            StageRunner runner = Runner();
+            Civilian target = runner.Civilians[0];
+
+            // 불은 전부 끄고 연기만 채운다. 불길이 닿기 전에도 잃을 수 있어야
+            // "먼저 누구부터"가 질문이 된다.
+            for (int i = 0; i < runner.Grid.Count; i++)
+            {
+                if (runner.Grid.Cells[i].State == CellState.Burning) runner.Grid.Cells[i].State = CellState.Intact;
+                runner.Grid.Cells[i].Smoke = 1f;
+            }
+
+            Assert.Equal(1f, target.Stamina);
+
+            for (int frame = 0; frame < 60; frame++) runner.Update(0.05f, default);
+
+            Assert.True(target.Stamina < 1f, "연기 속인데 멀쩡하다");
+            Assert.Equal(0, runner.Grid.CountBurning());
+        }
+
+        // --- TC-11 ---
+        [Fact]
+        public void ThickSmoke_EventuallyKills()
+        {
+            StageRunner runner = Runner();
+            Civilian target = runner.Civilians[0];
+
+            for (int i = 0; i < runner.Grid.Count; i++)
+            {
+                if (runner.Grid.Cells[i].State == CellState.Burning) runner.Grid.Cells[i].State = CellState.Intact;
+                runner.Grid.Cells[i].Smoke = 1f;
+            }
+
+            // 연기는 매 틱 빠지고 흩어지므로 시험 동안 농도를 1.0으로 붙들어 둔다.
+            // 안 그러면 무엇을 재고 있는지가 확산 계수에 좌우된다.
+            // 1.0 / 0.09 = 약 11초.
+            for (int frame = 0; frame < 400 && !target.Lost; frame++)
+            {
+                for (int i = 0; i < runner.Grid.Count; i++) runner.Grid.Cells[i].Smoke = 1f;
+                runner.Update(0.05f, default);
+            }
+
+            Assert.True(target.Lost, "짙은 연기 속에서 20초를 버텼다. 체력 " + target.Stamina);
+        }
+
+        // --- TC-12 ---
+        [Fact]
+        public void CarriedCivilians_StopLosingStamina()
+        {
+            // 업은 동안에도 줄면 멀리 있는 사람을 먼저 구하는 것이 언제나 손해라
+            // 순서를 고를 이유가 사라진다.
+            StageRunner runner = Runner();
+            Civilian target = runner.Civilians[0];
+
+            for (int i = 0; i < runner.Grid.Count; i++)
+            {
+                if (runner.Grid.Cells[i].State == CellState.Burning) runner.Grid.Cells[i].State = CellState.Intact;
+                runner.Grid.Cells[i].Smoke = 1f;
+            }
+
+            target.Carried = true;
+            runner.Player.CarryingCivilian = true;
+            float before = target.Stamina;
+
+            for (int frame = 0; frame < 60; frame++) runner.Update(0.05f, default);
+
+            Assert.Equal(before, target.Stamina);
+        }
+
+        // --- TC-13 ---
+        [Fact]
+        public void Critical_TurnsOnBeforeDeath()
+        {
+            var civilian = new Civilian { Stamina = 1f };
+            Assert.False(civilian.Critical);
+
+            civilian.Stamina = 0.34f;
+            Assert.True(civilian.Critical);
+        }
+
         // --- TC-9 ---
         [Fact]
         public void TheBot_NeverWithdraws_SoGearGatesStillHold()
