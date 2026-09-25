@@ -277,5 +277,24 @@ namespace FireGame.Core.Tests
             flow.BeginMission();
             Assert.NotEqual(0, flow.Runner.Seed);
         }
+
+        // --- TC-12 ---
+        [Fact]
+        public void DefaultSeedSource_IsDeterministic_SoTestsNeverFlake()
+        {
+            // 기본값이 시계면 깬 현장을 GameFlow로 다시 뛰는 테스트가 가끔만 진다.
+            var save = SaveData.NewGame();
+            save.RecordResult(0, StarRating.StarsToUnlockNext);
+
+            var flow = new GameFlow(save);
+            Assert.True(flow.SelectMission(0));
+            flow.BeginMission();
+            Assert.Equal(1, flow.Runner.Seed);
+
+            new GreedyBot(flow.Runner).Play();
+            flow.Update(0.016f);
+            flow.RetryMission();
+            Assert.Equal(2, flow.Runner.Seed);
+        }
     }
 }

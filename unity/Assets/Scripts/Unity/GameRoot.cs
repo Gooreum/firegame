@@ -40,7 +40,12 @@ namespace FireGame.UnityLayer
             Canvas canvas = UiKit.CreateCanvas(transform, camera, "Canvas", 0);
             UiKit.EnsureEventSystem(transform);
 
-            _flow = new GameFlow(LoadSave()) { SaveWriter = WriteSave };
+            // 다시 뛰는 현장이 판마다 달라야 하므로 시계로 시드를 만든다. 코어는 시계를 모른다.
+            _flow = new GameFlow(LoadSave())
+            {
+                SaveWriter = WriteSave,
+                SeedSource = () => System.Environment.TickCount | 1,
+            };
             _director = new ScreenDirector(transform, camera, canvas, _flow);
         }
 
