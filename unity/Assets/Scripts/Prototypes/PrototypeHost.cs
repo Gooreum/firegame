@@ -1,6 +1,5 @@
 using FireGame.UnityLayer;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace FireGame.Prototypes
 {
@@ -58,7 +57,7 @@ namespace FireGame.Prototypes
         public static IPrototype Create(string mode, Transform parent, Camera camera, Canvas canvas)
         {
             if (mode == "B") return new TacticsView(parent, camera, canvas);
-            return new Placeholder(canvas, "시험판 A — 액션 (준비 중)");
+            return new ActionView(parent, camera, canvas);
         }
 
         public static Camera SetUpCamera()
@@ -77,27 +76,6 @@ namespace FireGame.Prototypes
             camera.backgroundColor = new Color(0.1f, 0.1f, 0.12f);
             camera.transform.position = new Vector3(0f, 0f, -10f);
             return camera;
-        }
-
-        /// <summary>시험판이 아직 없을 때 보이는 제목 화면.</summary>
-        private sealed class Placeholder : IPrototype
-        {
-            private readonly Text _label;
-
-            public Placeholder(Canvas canvas, string title)
-            {
-                _label = UiKit.OutlinedLabel(canvas.transform, "Title", title + "\nR 다시 시작 · Tab 전환", 48, Color.white, TextAnchor.MiddleCenter);
-                UiKit.Stretch(_label.rectTransform);
-            }
-
-            public void Tick(float dt, in ProtoInput input)
-            {
-            }
-
-            public void Destroy()
-            {
-                UiKit.Discard(_label.gameObject);
-            }
         }
     }
 }

@@ -42,6 +42,9 @@ namespace FireGame.Prototypes.EditorTools
                 for (int i = 0; i < 6; i++) view.Game.EndTurn();
             });
 
+            failures += ActionShot(dir, "a1_action_fight", 7f);
+            failures += ActionShot(dir, "a2_action_later", 16f);
+
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
         }
@@ -64,6 +67,38 @@ namespace FireGame.Prototypes.EditorTools
                 Canvas.ForceUpdateCanvases();
                 Capture(camera, Path.Combine(dir, name + ".png"));
                 Debug.Log("[ProtoShots] " + name);
+                return 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[ProtoShots] 실패: " + name + " — " + e);
+                return 1;
+            }
+        }
+
+        /// <summary>봇에게 몇 초 맡겨 교전 중인 화면을 찍는다.</summary>
+        private static int ActionShot(string dir, string name, float seconds)
+        {
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var root = new GameObject("Prototype");
+                Camera camera = PrototypeHost.SetUpCamera();
+                camera.aspect = (float)Width / Height;
+                Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
+
+                var view = new ActionView(root.transform, camera, canvas);
+                var bot = new ActionBot(view.Sim);
+                int ticks = (int)(seconds / ActionSim.Dt);
+                for (int i = 0; i < ticks && view.Sim.Outcome == AOutcome.Playing; i++)
+                {
+                    view.Step(bot.Next());
+                    view.Refresh(ActionSim.Dt);
+                }
+
+                Canvas.ForceUpdateCanvases();
+                Capture(camera, Path.Combine(dir, name + ".png"));
+                Debug.Log("[ProtoShots] " + name + " (" + view.Sim.Outcome + ", 구조 " + view.Sim.Rescued + ")");
                 return 0;
             }
             catch (Exception e)
