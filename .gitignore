@@ -38,4 +38,5 @@ tools/.art-cache/
 
 # ---- unity-check.sh 스크린샷 ----
 tools/.shots/
+tools/.shots-proto/
 tools/.unity-mirror/

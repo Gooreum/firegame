@@ -57,7 +57,8 @@ namespace FireGame.Prototypes
         /// <summary>시험판 하나를 만든다. 스크린샷 하니스도 이 함수로 만든다.</summary>
         public static IPrototype Create(string mode, Transform parent, Camera camera, Canvas canvas)
         {
-            return new Placeholder(canvas, mode == "A" ? "시험판 A — 액션 (준비 중)" : "시험판 B — 전략 (준비 중)");
+            if (mode == "B") return new TacticsView(parent, camera, canvas);
+            return new Placeholder(canvas, "시험판 A — 액션 (준비 중)");
         }
 
         public static Camera SetUpCamera()

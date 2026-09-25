@@ -3,6 +3,7 @@
 #
 #   tools/unity-check.sh compile          실제 Unity 컴파일. error CS가 있으면 실패
 #   tools/unity-check.sh shots [폴더]      화면을 PNG로 찍는다(기본: tools/.shots)
+#   tools/unity-check.sh proto-shots [폴더] 재미 검증 시험판 화면(기본: tools/.shots-proto)
 #
 # 에디터가 같은 프로젝트를 열고 있으면 배치 모드가 실행되지 않는다. 먼저 에디터를 닫는다.
 set -uo pipefail
@@ -68,8 +69,24 @@ case "$MODE" in
     ls "$OUT"/*.png
     ;;
 
+  proto-shots)
+    # 재미 검증 시험판 화면(unity/Assets/Scripts/Prototypes). 시험판을 버리면 이 모드도 지운다.
+    OUT="${2:-$REPO_ROOT/tools/.shots-proto}"
+    mkdir -p "$OUT"
+    rm -f "$OUT"/*.png
+    "$UNITY" -batchmode -projectPath "$PROJECT" -logFile "$LOG" \
+      -executeMethod FireGame.Prototypes.EditorTools.PrototypeShots.CaptureAll -shotDir "$OUT"
+    status=$?
+    report_compile_errors || exit 1
+    grep -E "\[ProtoShots\]" "$LOG" | sed 's/^/  /'
+    exceptions=$(grep -cE "[A-Za-z]Exception: " "$LOG" || true)
+    [ "$exceptions" -eq 0 ] || { echo "예외 ${exceptions}건 (로그: $LOG)"; grep -E "[A-Za-z]Exception: " -A2 "$LOG" | head -20; }
+    [ $status -eq 0 ] || { echo "시험판 캡처 실패, 종료 코드 $status (로그: $LOG)"; exit 1; }
+    ls "$OUT"/*.png
+    ;;
+
   *)
-    echo "사용법: $0 compile | shots [폴더]" >&2
+    echo "사용법: $0 compile | shots [폴더] | proto-shots [폴더]" >&2
     exit 2
     ;;
 esac
