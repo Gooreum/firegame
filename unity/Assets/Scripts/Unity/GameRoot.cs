@@ -69,6 +69,9 @@ namespace FireGame.UnityLayer
                 camera = cameraObject.AddComponent<Camera>();
             }
 
+            // 코드로 만든 카메라엔 귀가 없다. 없으면 소리가 하나도 안 들린다.
+            if (camera.GetComponent<AudioListener>() == null) camera.gameObject.AddComponent<AudioListener>();
+
             camera.orthographic = true;
             camera.orthographicSize = CameraHalfHeight;
             camera.clearFlags = CameraClearFlags.SolidColor;

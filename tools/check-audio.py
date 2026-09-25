@@ -18,6 +18,8 @@ import wave
 
 import numpy as np
 
+sys.dont_write_bytecode = True
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 audio = __import__("import-audio")
@@ -62,7 +64,11 @@ def main():
                 problems.append(f"불 루프 이음매가 튄다 ({seam * 100:.1f}%)")
 
     if os.path.exists(GAME_AUDIO):
-        used = set(re.findall(r'"Audio/([a-z_0-9]+)"', open(GAME_AUDIO, encoding="utf-8").read()))
+        code = open(GAME_AUDIO, encoding="utf-8").read()
+        used = set(re.findall(r'(?:Emit|Load)\("([a-z_0-9]+)"', code))
+        # "collapse_" + Random.Range(0, 3) 처럼 번호를 골라 붙이는 이름
+        for prefix, count in re.findall(r'"([a-z_]+_)" \+ Random\.Range\(0, (\d+)\)', code):
+            used.update(f"{prefix}{i}" for i in range(int(count)))
         files = {os.path.splitext(f)[0] for f in os.listdir(audio.AUDIO) if f.endswith((".ogg", ".wav"))}
         print(f"  GameAudio가 부르는 소리 {len(used)}개")
         for name in sorted(used - files):

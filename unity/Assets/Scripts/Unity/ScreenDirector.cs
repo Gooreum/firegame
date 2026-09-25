@@ -64,6 +64,7 @@ namespace FireGame.UnityLayer
             else
             {
                 _camera.backgroundColor = MapScreen.Sea;
+                GameAudio.SetFireLevel(0f, dt);
             }
 
             if (_hud != null) _hud.Refresh();

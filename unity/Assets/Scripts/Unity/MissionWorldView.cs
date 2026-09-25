@@ -3,6 +3,7 @@ using FireGame.Core.Data;
 using FireGame.Core.Game;
 using FireGame.Core.Grid;
 using FireGame.Core.Sim;
+using FireGame.UnityLayer.Feel;
 using UnityEngine;
 
 namespace FireGame.UnityLayer
@@ -152,6 +153,10 @@ namespace FireGame.UnityLayer
         private readonly List<Popup> _popups = new List<Popup>();
         private int _lastShotsFired;
 
+        // 소리와 화면 흔들림. 언제 무엇을 낼지는 FeelTracker가 정하고 여기는 틀기만 한다.
+        private readonly FeelTracker _feel;
+        private float _trauma;
+
         private struct Popup
         {
             public TextMesh Text;
@@ -208,6 +213,7 @@ namespace FireGame.UnityLayer
         {
             _runner = runner;
             _grid = runner.Grid;
+            _feel = new FeelTracker(runner);
 
             _root = new GameObject("MissionWorld").transform;
             _root.SetParent(parent, false);
@@ -326,6 +332,8 @@ namespace FireGame.UnityLayer
 
         public void Destroy()
         {
+            // 지도로 돌아가면 불 소리가 남으면 안 된다.
+            GameAudio.SetFireLevel(0f, 1f);
             UiKit.Discard(_root.gameObject);
         }
 
@@ -671,6 +679,7 @@ namespace FireGame.UnityLayer
             AnnounceRescues();
             DetectShots();
             DetectExtinguished();
+            PlayFeel(dt);
             AdvanceParticles(dt);
             AdvancePopups(dt);
             _roofView.Refresh(time, PlayerBuildingId);
@@ -1279,6 +1288,21 @@ namespace FireGame.UnityLayer
         }
 
         /// <summary>
+        /// 이번 프레임의 소리를 틀고 흔들림을 쌓는다. 불 소리는 소방관 주변 불의 크기를 따라가고,
+        /// 판이 끝나면(결과 화면 뒤) 잦아든다.
+        /// </summary>
+        private void PlayFeel(float dt)
+        {
+            _feel.Update(_runner);
+            foreach (Cue cue in _feel.Cues) GameAudio.Play(cue);
+
+            _trauma = Mathf.Min(1f, FeelMath.DecayTrauma(_trauma, dt) + _feel.Shake);
+
+            float level = _runner.IsOver ? 0f : FeelMath.FireLoudness(_grid, _runner.Player.X, _runner.Player.Y);
+            GameAudio.SetFireLevel(level, dt);
+        }
+
+        /// <summary>
         /// 한 발의 연출: 칸마다 물줄기 선 + 흩뿌린 물방울 여러 개 + 도착한 칸의 물보라.
         /// CO2는 물방울 대신 흰 가스 덩어리를 뿜는다.
         /// </summary>
@@ -1634,6 +1658,13 @@ namespace FireGame.UnityLayer
             // 건물이 조금 치우치더라도 검은 여백을 보이지 않는 쪽이 낫다.
             if (_grid.Width >= halfWidth * 2f) x = Mathf.Clamp(x, halfWidth, _grid.Width - halfWidth);
             if (_grid.Height >= halfHeight * 2f) y = Mathf.Clamp(y, halfHeight, _grid.Height - halfHeight);
+
+            // 흔들림. 제곱이라 작은 충격은 거의 안 흔들리고 큰 충격만 확 흔들린다.
+            // 펄린 노이즈라 떨림이 매끄럽고, trauma가 0이면 오프셋도 0이라 캡처 구도가 그대로다.
+            float amp = _trauma * _trauma * FeelMath.MaxShakeOffset;
+            float t = Time.unscaledTime * 25f;
+            x += amp * ((Mathf.PerlinNoise(t, 0f) * 2f) - 1f);
+            y += amp * ((Mathf.PerlinNoise(0f, t) * 2f) - 1f);
 
             camera.transform.position = new Vector3(x, y, -10f);
         }
