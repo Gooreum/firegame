@@ -17,7 +17,7 @@ namespace FireGame.Prototypes
     public sealed class SurvivorView : IPrototype
     {
         private const float CameraSize = 9f;
-        private const int MaxParticles = 700;
+        private const int MaxParticles = 1100;
         private const int MaxNumbers = 60;
         private const int MaxScorch = 220;
 
@@ -51,6 +51,9 @@ namespace FireGame.Prototypes
         private float _gemClock;
         private float _comboClock;
         private int _combo;
+        private float _hitStop;
+        private float _zoomKick;
+        private float _recoil;
         private SOutcome _lastOutcome;
         private Vector3 _cameraAt;
 
@@ -65,8 +68,9 @@ namespace FireGame.Prototypes
         private Pool _gems;
         private Pool _gemCores;
         private Pool _drops;
-        private Pool _dropTrails;
-        private Pool _jets;
+        private Pool _dropGlow;
+        private Pool _beams;
+        private Pool _beamCores;
         private Pool _bombs;
         private Pool _bombShadows;
         private Pool _drones;
@@ -89,6 +93,8 @@ namespace FireGame.Prototypes
         private int _scorchNext;
 
         private static Material _additive;
+        private static Sprite _ringSprite;
+        private static Sprite _beamSprite;
         private Material _spriteMaterial;
 
         /// <summary>불·빛·불똥은 더해 그려야 겹칠수록 환하게 타오른다(기본 스프라이트는 겹치면 탁해진다).</summary>
@@ -141,6 +147,7 @@ namespace FireGame.Prototypes
             public float Size1;
             public float Rot;
             public float Spin;
+            public float Gravity;
             public Color C0;
             public Color C1;
             public float Unit;
@@ -191,6 +198,9 @@ namespace FireGame.Prototypes
             _alertAge = 99f;
             _bossBannerAge = 99f;
             _shownXp = 0f;
+            _hitStop = 0f;
+            _zoomKick = 0f;
+            _recoil = 0f;
             _lastOutcome = SOutcome.Playing;
             _cameraAt = new Vector3(_sim.Player.X, _sim.Player.Y, -10f);
             ClearEffects();
@@ -229,6 +239,11 @@ namespace FireGame.Prototypes
                     else if (input.Key3) Choose(2);
                 }
             }
+            else if (_hitStop > 0f)
+            {
+                // 히트스톱: 아주 잠깐 멈춰 "쾅"을 느끼게 한다(화면 효과는 계속 움직인다).
+                _hitStop -= dt;
+            }
             else
             {
                 _accumulator += dt * (_slowmo > 0f ? 0.3f : 1f);
@@ -261,7 +276,7 @@ namespace FireGame.Prototypes
                 _trauma = Mathf.Min(1f, _trauma + 0.8f);
                 _slowmo = 0.5f;
                 Flash(new Color(1f, 0.85f, 0.3f), 0.7f);
-                Ring(_sim.Player, new Color(1f, 0.85f, 0.3f), 9f, 0.6f);
+                Shockwave(W(_sim.Player), new Color(1f, 0.85f, 0.3f), 9f, 0.6f);
                 GameAudio.Play(Cue.Won);
                 ShowAlert("진화! 고압 방수포", new Color(1f, 0.85f, 0.3f));
             }
@@ -276,16 +291,15 @@ namespace FireGame.Prototypes
             int kills = 0;
             foreach (Hit h in _sim.Hits)
             {
+                if (h.Killed) kills++;
+            }
+            // 한 틱에 너무 많이 꺼지면(방수포 한 바퀴) 수증기를 줄여 화면이 하얗게 덮이지 않게 한다.
+            bool crowded = kills > 12;
+            foreach (Hit h in _sim.Hits)
+            {
                 Vector3 at = W(h.Pos);
-                if (h.Killed)
-                {
-                    kills++;
-                    DeathBurst(at, h.Kind);
-                }
-                else
-                {
-                    Splash(at, 2, 0.25f);
-                }
+                if (h.Killed) DeathBurst(at, h.Kind, crowded);
+                else HitSplash(at, Away(h.Pos));
                 if (h.Damage >= 0.5f) SpawnNumber(at, h.Damage, h.Crit);
             }
             if (kills > 0)
@@ -300,16 +314,20 @@ namespace FireGame.Prototypes
 
             foreach (Vec2 e in _sim.Explosions)
             {
-                Ring(e, new Color(0.6f, 0.9f, 1f, 0.9f), 3.6f, 0.35f);
-                Splash(W(e), 12, 1.2f);
-                _trauma = Mathf.Min(1f, _trauma + 0.08f);
+                WaterBlast(W(e));
+                _trauma = Mathf.Min(1f, _trauma + 0.12f);
+                HitStop(0.02f);
                 GameAudio.Play(Cue.SprayFoam);
             }
 
-            if (_sim.ShotsFired > 0 && _sprayClock <= 0f)
+            if (_sim.ShotsFired > 0)
             {
-                GameAudio.Play(Cue.SprayWater);
-                _sprayClock = 0.28f;
+                Muzzles();
+                if (_sprayClock <= 0f)
+                {
+                    GameAudio.Play(Cue.SprayWater);
+                    _sprayClock = 0.28f;
+                }
             }
 
             if (_sim.GemsCollected > 0)
@@ -327,7 +345,7 @@ namespace FireGame.Prototypes
             if (_sim.JustLeveled)
             {
                 Flash(Color.white, 0.55f);
-                Ring(_sim.Player, Color.white, 8f, 0.45f);
+                Shockwave(W(_sim.Player), Color.white, 8f, 0.45f);
                 _trauma = Mathf.Min(1f, _trauma + 0.25f);
                 GameAudio.Play(Cue.Rescued);
                 ShowCards();
@@ -369,7 +387,7 @@ namespace FireGame.Prototypes
                 if (_sim.Outcome == SOutcome.Won)
                 {
                     Flash(Color.white, 0.8f);
-                    Ring(_sim.Boss.Pos, new Color(0.6f, 0.9f, 1f), 14f, 0.8f);
+                    Shockwave(W(_sim.Boss.Pos), new Color(0.6f, 0.9f, 1f), 14f, 0.8f);
                     Burst(W(_sim.Boss.Pos), 60, new Color(1f, 0.7f, 0.3f), 12f);
                     _trauma = 1f;
                     GameAudio.Play(Cue.Won);
@@ -394,6 +412,8 @@ namespace FireGame.Prototypes
             _hurt = Mathf.Max(0f, _hurt - (dt * 1.5f));
             _slowmo = Mathf.Max(0f, _slowmo - dt);
             _xpPunch = Mathf.Max(0f, _xpPunch - (dt * 5f));
+            _zoomKick *= Mathf.Exp(-6f * dt);
+            _recoil = Mathf.Max(0f, _recoil - (dt * 12f));
             _sprayClock -= dt;
             _putOutClock -= dt;
             _gemClock -= dt;
@@ -434,7 +454,7 @@ namespace FireGame.Prototypes
                 Vector3 at = W(e.Pos);
                 float flicker = 1f + (0.09f * Mathf.Sin((_time * 14f) + (i * 1.7f)));
                 bool hit = e.HitFlash > 0f;
-                float punch = hit ? 1.25f : 1f;
+                float punch = hit ? 1.35f : 1f;
                 var water = new Color(0.7f, 0.95f, 1f);
 
                 if (e.Kind == EnemyKind.Boss)
@@ -532,14 +552,32 @@ namespace FireGame.Prototypes
                 switch (s.Kind)
                 {
                     case ShotKind.Drop:
-                        float deg = Mathf.Atan2(s.Vel.Y, s.Vel.X) * Mathf.Rad2Deg;
-                        Vector3 back = new Vector3(s.Vel.X, s.Vel.Y, 0f).normalized * 0.45f;
-                        _dropTrails.Put(at - back, 0.32f, deg - 90f, new Color(0.5f, 0.85f, 1f, 0.7f), null, 3f);
-                        _drops.Put(at, 0.55f, deg - 90f, new Color(0.55f, 0.88f, 1f));
+                    {
+                        // 소방관에서 머리까지 이어지는 물줄기(최대 3.2칸) + 흰 심지 + 머리 물방울.
+                        Vector3 dir = new Vector3(s.Vel.X, s.Vel.Y, 0f).normalized;
+                        float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
+                        float len = Mathf.Min(s.Pos.DistanceTo(s.From), 3.2f);
+                        if (len > 0.05f)
+                        {
+                            Vector3 mid = at - (dir * (len * 0.5f));
+                            _beams.Put(mid, 0.42f, deg, new Color(0.35f, 0.7f, 1f, 0.8f), null, len / 0.42f);
+                            _beamCores.Put(mid, 0.16f, deg, new Color(0.85f, 0.97f, 1f, 0.9f), null, len / 0.16f);
+                        }
+                        _dropGlow.Put(at, 1.3f, 0f, new Color(0.35f, 0.75f, 1f, 0.45f));
+                        _drops.Put(at, 0.7f, deg, new Color(0.7f, 0.93f, 1f));
                         break;
+                    }
                     case ShotKind.Jet:
-                        _jets.Put(at, 1.1f, Mathf.Atan2(s.Vel.Y, s.Vel.X) * Mathf.Rad2Deg - 90f, new Color(0.6f, 0.9f, 1f, 1f), null, 3f);
+                    {
+                        Vector3 dir = new Vector3(s.Vel.X, s.Vel.Y, 0f).normalized;
+                        float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
+                        float len = Mathf.Min(s.Pos.DistanceTo(s.From), 2.6f);
+                        Vector3 mid = at - (dir * (len * 0.5f));
+                        _beams.Put(mid, 0.9f, deg, new Color(0.3f, 0.65f, 1f, 0.8f), null, len / 0.9f);
+                        _beamCores.Put(mid, 0.35f, deg, new Color(0.9f, 0.98f, 1f, 0.95f), null, len / 0.35f);
+                        _dropGlow.Put(at, 2f, 0f, new Color(0.35f, 0.75f, 1f, 0.5f));
                         break;
+                    }
                     case ShotKind.Bomb:
                         float t = Mathf.Clamp01(s.Age / s.Life);
                         float lift = Mathf.Sin(t * Mathf.PI) * 2f;
@@ -561,7 +599,8 @@ namespace FireGame.Prototypes
         private void DrawPlayer()
         {
             Vector3 at = W(_sim.Player);
-            _player.transform.localPosition = at + new Vector3(0f, 0f, -0.01f);
+            Vector3 kick = new Vector3(_sim.Facing.X, _sim.Facing.Y, 0f) * (-0.1f * _recoil);
+            _player.transform.localPosition = at + kick + new Vector3(0f, 0f, -0.01f);
             _player.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(_sim.Facing.Y, _sim.Facing.X) * Mathf.Rad2Deg);
             _player.color = Color.Lerp(Color.white, new Color(1f, 0.35f, 0.3f), Mathf.Clamp01(_hurt * 2f));
             _playerGlow.transform.localPosition = at;
@@ -573,21 +612,117 @@ namespace FireGame.Prototypes
         // 효과
         // ------------------------------------------------------------------
 
-        private void DeathBurst(Vector3 at, EnemyKind kind)
+        /// <summary>불이 꺼지는 순간: 흰 번쩍 + 하얀 수증기 + 불똥. 큰 불은 충격파와 짧은 멈춤까지.</summary>
+        private void DeathBurst(Vector3 at, EnemyKind kind, bool crowded)
         {
             bool big = kind == EnemyKind.Blaze || kind == EnemyKind.Boss;
-            int sparks = big ? 10 : 6;
+            Emit("Effects/glow", at, Vector3.zero, 0f, 0.1f, big ? 2.4f : 1.3f, big ? 3f : 1.7f, new Color(1f, 1f, 1f, 0.9f), new Color(0.7f, 0.9f, 1f, 0f), 0f, true);
+            int sparks = big ? 13 : crowded ? 4 : 8;
             for (int i = 0; i < sparks; i++)
             {
                 float a = Random.value * Mathf.PI * 2f;
-                float speed = Random.Range(3f, big ? 9f : 6f);
+                float speed = Random.Range(3f, big ? 10f : 7f);
                 Emit(Sparks[Random.Range(0, Sparks.Length)], at, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * speed, 5f, Random.Range(0.25f, 0.45f),
                     Random.Range(0.45f, 0.75f), 0.05f, new Color(1f, 0.8f, 0.3f), new Color(1f, 0.25f, 0.02f, 0f), Random.Range(-600f, 600f), true);
             }
-            Emit(Smokes[Random.Range(0, Smokes.Length)], at, new Vector3(0f, 0.8f, 0f), 1f, big ? 0.9f : 0.6f,
-                big ? 1.2f : 0.7f, big ? 2.6f : 1.6f, new Color(0.75f, 0.75f, 0.8f, 0.55f), new Color(0.5f, 0.5f, 0.55f, 0f), Random.Range(-90f, 90f));
-            Splash(at, big ? 6 : 3, big ? 0.7f : 0.4f);
+            Steam(at, big ? 5 : crowded ? 1 : 2, big ? 1.4f : 1f);
+            Splash(at, big ? 8 : crowded ? 2 : 4, big ? 0.9f : 0.5f);
             Scorch(at, big ? 1.6f : 0.9f);
+            if (big && kind == EnemyKind.Blaze)
+            {
+                Shockwave(at, new Color(0.6f, 0.9f, 1f, 0.9f), 3.5f, 0.3f);
+                _trauma = Mathf.Min(1f, _trauma + 0.06f);
+                HitStop(0.03f);
+            }
+        }
+
+        /// <summary>물이 불에 닿으면 하얀 김이 뭉게뭉게 올라간다.</summary>
+        private void Steam(Vector3 at, int count, float scale)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var jitter = new Vector3(Random.Range(-0.3f, 0.3f), Random.Range(-0.2f, 0.2f), 0f) * scale;
+                var up = new Vector3(Random.Range(-0.6f, 0.6f), Random.Range(1.2f, 2.2f), 0f);
+                Emit(Smokes[Random.Range(0, Smokes.Length)], at + jitter, up, 1.2f, Random.Range(0.6f, 0.9f),
+                    0.8f * scale, 2.8f * scale, new Color(0.95f, 0.97f, 1f, 0.75f), new Color(0.85f, 0.9f, 0.95f, 0f), Random.Range(-120f, 120f));
+            }
+        }
+
+        /// <summary>맞았는데 안 꺼졌을 때: 쏜 방향으로 튀는 물보라 + 흰 번쩍 + 작은 김.</summary>
+        private void HitSplash(Vector3 at, Vector3 away)
+        {
+            float baseAngle = Mathf.Atan2(away.y, away.x);
+            for (int i = 0; i < 5; i++)
+            {
+                float a = baseAngle + Random.Range(-0.9f, 0.9f);
+                Emit("Effects/water_drop", at, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Random.Range(4f, 8f), 7f, Random.Range(0.18f, 0.3f),
+                    Random.Range(0.28f, 0.42f), 0.05f, new Color(0.75f, 0.95f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
+            }
+            Emit("Effects/glow", at, Vector3.zero, 0f, 0.07f, 0.7f, 1f, new Color(0.85f, 0.95f, 1f, 0.8f), new Color(0.6f, 0.9f, 1f, 0f), 0f, true);
+            if (Random.value < 0.35f) Steam(at, 1, 0.55f);
+        }
+
+        /// <summary>물폭탄: 퍼지는 물 고리 + 위로 솟았다 떨어지는 물기둥 + 김.</summary>
+        private void WaterBlast(Vector3 at)
+        {
+            Shockwave(at, new Color(0.55f, 0.85f, 1f, 1f), 4.2f, 0.35f);
+            Emit("Effects/glow", at, Vector3.zero, 0f, 0.12f, 2.5f, 3.5f, new Color(0.9f, 0.97f, 1f, 0.9f), new Color(0.5f, 0.85f, 1f, 0f), 0f, true);
+            for (int i = 0; i < 16; i++)
+            {
+                float a = Random.value * Mathf.PI * 2f;
+                var v = new Vector3(Mathf.Cos(a) * Random.Range(1.5f, 4.5f), Random.Range(3f, 7f), 0f);
+                EmitFalling("Effects/water_drop", at, v, Random.Range(0.45f, 0.7f), Random.Range(0.3f, 0.5f), new Color(0.7f, 0.93f, 1f, 1f));
+            }
+            Splash(at, 10, 1.2f);
+            Steam(at, 3, 1.3f);
+        }
+
+        /// <summary>이번 틱에 새로 나간 물줄기마다 총구에서 물이 부채꼴로 튄다(방수포는 사방 한 번에).</summary>
+        private void Muzzles()
+        {
+            Vector3 p = W(_sim.Player);
+            int shown = 0;
+            bool jet = false;
+            foreach (Shot s in _sim.Shots)
+            {
+                if (s.Age > SurvivorSim.Dt * 1.5f) continue;
+                if (s.Kind == ShotKind.Jet)
+                {
+                    jet = true;
+                    continue;
+                }
+                if (s.Kind != ShotKind.Drop || shown >= 3) continue;
+                shown++;
+                var dir = new Vector3(s.Vel.X, s.Vel.Y, 0f).normalized;
+                Vector3 nozzle = p + (dir * 0.55f);
+                float baseAngle = Mathf.Atan2(dir.y, dir.x);
+                for (int i = 0; i < 4; i++)
+                {
+                    float a = baseAngle + Random.Range(-0.45f, 0.45f);
+                    Emit("Effects/water_drop", nozzle, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Random.Range(6f, 9f), 9f, 0.15f,
+                        0.3f, 0.08f, new Color(0.8f, 0.96f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
+                }
+                Emit("Effects/glow", nozzle, Vector3.zero, 0f, 0.08f, 1.1f, 0.6f, new Color(0.7f, 0.92f, 1f, 0.8f), new Color(0.5f, 0.85f, 1f, 0f), 0f, true);
+            }
+            if (shown > 0) _recoil = 1f;
+            if (jet)
+            {
+                Shockwave(p, new Color(0.55f, 0.85f, 1f, 0.9f), 5f, 0.25f);
+                _recoil = 1f;
+                _zoomKick = Mathf.Max(_zoomKick, 0.15f);
+            }
+        }
+
+        /// <summary>플레이어에서 멀어지는 방향(물이 날아온 방향).</summary>
+        private Vector3 Away(Vec2 from)
+        {
+            var d = new Vector3(from.X - _sim.Player.X, from.Y - _sim.Player.Y, 0f);
+            return d.sqrMagnitude > 0.0001f ? d.normalized : Vector3.up;
+        }
+
+        private void HitStop(float seconds)
+        {
+            _hitStop = Mathf.Min(0.08f, Mathf.Max(_hitStop, seconds));
         }
 
         private void Splash(Vector3 at, int count, float spread)
@@ -611,9 +746,12 @@ namespace FireGame.Prototypes
             }
         }
 
-        private void Ring(Vec2 at, Color color, float size, float life)
+        /// <summary>속이 빈 고리가 퍼지는 파동 + 안쪽 은은한 빛.</summary>
+        private void Shockwave(Vector3 at, Color color, float size, float life)
         {
-            Emit("Effects/glow", W(at), Vector3.zero, 0f, life, 0.5f, size, color, new Color(color.r, color.g, color.b, 0f), 0f, true);
+            var clear = new Color(color.r, color.g, color.b, 0f);
+            EmitSprite(RingSprite(), at, Vector3.zero, 0f, life, size * 0.15f, size, color, clear, 0f, true);
+            Emit("Effects/glow", at, Vector3.zero, 0f, life * 0.6f, size * 0.2f, size * 0.6f, new Color(color.r, color.g, color.b, color.a * 0.45f), clear, 0f, true);
         }
 
         private void Flash(Color color, float strength)
@@ -645,10 +783,23 @@ namespace FireGame.Prototypes
         private void Emit(string sprite, Vector3 at, Vector3 vel, float drag, float life, float size0, float size1, Color c0, Color c1, float spin, bool glow = false)
         {
             if (_particles.Count >= MaxParticles) return;
+            EmitSprite(Art.Get(sprite), at, vel, drag, life, size0, size1, c0, c1, spin, glow);
+        }
+
+        /// <summary>떨어지는 물방울(중력을 받는다).</summary>
+        private void EmitFalling(string sprite, Vector3 at, Vector3 vel, float life, float size, Color color)
+        {
+            if (_particles.Count >= MaxParticles) return;
+            EmitSprite(Art.Get(sprite), at, vel, 0.5f, life, size, size * 0.6f, color, new Color(color.r, color.g, color.b, 0f), 0f, false, 14f);
+        }
+
+        private void EmitSprite(Sprite sprite, Vector3 at, Vector3 vel, float drag, float life, float size0, float size1, Color c0, Color c1, float spin, bool glow, float gravity = 0f)
+        {
+            if (_particles.Count >= MaxParticles) return;
             SpriteRenderer r = _particlePool.Count > 0 ? _particlePool.Pop() : NewSprite(_world, "Particle", null, 14);
             if (_spriteMaterial == null) _spriteMaterial = r.sharedMaterial;
             r.sharedMaterial = glow && Additive != null ? Additive : _spriteMaterial;
-            r.sprite = Art.Get(sprite);
+            r.sprite = sprite;
             r.enabled = true;
             _particles.Add(new Particle
             {
@@ -661,6 +812,7 @@ namespace FireGame.Prototypes
                 Size1 = size1,
                 Rot = Random.value * 360f,
                 Spin = spin,
+                Gravity = gravity,
                 C0 = c0,
                 C1 = c1,
                 Unit = Art.FitWidth(r.sprite, 1f),
@@ -682,6 +834,7 @@ namespace FireGame.Prototypes
                 }
                 float t = p.Age / p.Life;
                 p.Vel *= Mathf.Exp(-p.Drag * dt);
+                p.Vel.y -= p.Gravity * dt;
                 p.Pos += p.Vel * dt;
                 p.Rot += p.Spin * dt;
                 p.R.transform.localPosition = p.Pos + new Vector3(0f, 0f, -0.2f);
@@ -766,7 +919,8 @@ namespace FireGame.Prototypes
         private void FollowCamera(float dt)
         {
             if (_camera == null) return;
-            _camera.orthographicSize = CameraSize;
+            // 줌 킥: +면 확 다가오고(레벨업·진화), −면 물러난다(보스 등장).
+            _camera.orthographicSize = CameraSize * (1f - (0.12f * Mathf.Clamp(_zoomKick, -1.5f, 1.5f)));
             _camera.backgroundColor = new Color(0.05f, 0.05f, 0.07f);
 
             var target = new Vector3(_sim.Player.X, _sim.Player.Y, -10f);
@@ -869,9 +1023,12 @@ namespace FireGame.Prototypes
             _bombShadows = AddPool("BombShadow", "Effects/glow", 11);
             _droneGlow = AddPool("DroneGlow", "Effects/glow", 11, true);
             _drones = AddPool("Drone", "UI/button_blue_round", 12);
-            _dropTrails = AddPool("DropTrail", "Effects/water_trace", 12, true);
+            _beams = new Pool(_world, "Beam", BeamSprite(), 12, Additive);
+            _beamCores = new Pool(_world, "BeamCore", BeamSprite(), 13, Additive);
+            _pools.Add(_beams);
+            _pools.Add(_beamCores);
+            _dropGlow = AddPool("DropGlow", "Effects/glow", 12, true);
             _drops = AddPool("Drop", "Effects/water_drop", 13);
-            _jets = AddPool("Jet", "Effects/water_trace", 13, true);
             _bombs = AddPool("Bomb", "Effects/water_drop", 13);
 
             _playerGlow = NewSprite(_root, "Magnet", Art.Get("Effects/glow"), 5);
@@ -1198,6 +1355,54 @@ namespace FireGame.Prototypes
                 float hover = 1f + (0.015f * Mathf.Sin((_time * 4f) + i));
                 _cards[i].localScale = Vector3.one * s * hover;
             }
+        }
+
+        /// <summary>속이 빈 고리(충격파). 가장자리가 부드럽다.</summary>
+        private static Sprite RingSprite()
+        {
+            if (_ringSprite != null) return _ringSprite;
+            const int n = 128;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float dx = ((x + 0.5f) / n * 2f) - 1f;
+                    float dy = ((y + 0.5f) / n * 2f) - 1f;
+                    float d = Mathf.Abs(Mathf.Sqrt((dx * dx) + (dy * dy)) - 0.85f);
+                    float a = 1f - Mathf.SmoothStep(0f, 0.13f, d);
+                    pixels[(y * n) + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _ringSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _ringSprite;
+        }
+
+        /// <summary>물줄기 몸통. 가운데가 밝고 옆과 양 끝이 흐리다. 세로로 늘려 쓴다.</summary>
+        private static Sprite BeamSprite()
+        {
+            if (_beamSprite != null) return _beamSprite;
+            const int n = 32;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float dx = ((x + 0.5f) / n * 2f) - 1f;
+                    float ty = (y + 0.5f) / n;
+                    float side = Mathf.Pow(Mathf.Clamp01(1f - (dx * dx)), 1.5f);
+                    float ends = Mathf.SmoothStep(0f, 1f, Mathf.Min(ty, 1f - ty) / 0.2f);
+                    pixels[(y * n) + x] = new Color32(255, 255, 255, (byte)(side * ends * 255));
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _beamSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _beamSprite;
         }
 
         /// <summary>가장자리만 진한 원형 그라데이션. 색은 Image.color로 입힌다.</summary>
