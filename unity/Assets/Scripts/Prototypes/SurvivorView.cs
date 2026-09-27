@@ -90,12 +90,10 @@ namespace FireGame.Prototypes
         private Pool _gems;
         private Pool _gemCores;
         private Pool _dropGlow;
-        private Pool _hoseBody;
-        private Pool _hoseCore;
-        private Pool _stream;
+        private RibbonPool _waterSheath;
+        private RibbonPool _waterBody;
+        private RibbonPool _waterShine;
         private Pool _streamJoint;
-        private Pool _streamCore;
-        private Pool _streamFlow;
         private Pool _nozzle;
         private Pool _reticle;
         private Pool _shadows;
@@ -148,6 +146,7 @@ namespace FireGame.Prototypes
         private SpriteRenderer _player;
         private SpriteRenderer _playerGlow;
         private readonly List<Pool> _pools = new List<Pool>();
+        private readonly List<RibbonPool> _ribbons = new List<RibbonPool>();
 
         // --- 수명이 있는 효과 ---
         private readonly List<Particle> _particles = new List<Particle>();
@@ -161,11 +160,13 @@ namespace FireGame.Prototypes
         private static Sprite _ringSprite;
         private static Sprite _beamSprite;
         private static Sprite _bubbleSprite;
-        private static Sprite _hoseSprite;
-        private static Sprite _streamSprite;
+        private static Texture2D _flowTexture;
         private static Sprite _discSprite;
         private readonly List<Shot> _chain = new List<Shot>();
         private readonly List<Vector3> _streamPts = new List<Vector3>();
+        private readonly List<Vec2> _ribbonIn = new List<Vec2>();
+        private readonly List<WaterRibbon.Point> _ribbon = new List<WaterRibbon.Point>();
+        private readonly List<WaterRibbon.Blob> _blobs = new List<WaterRibbon.Blob>();
         private Material _spriteMaterial;
 
         /// <summary>불·빛·불똥은 더해 그려야 겹칠수록 환하게 타오른다(기본 스프라이트는 겹치면 탁해진다).</summary>
@@ -757,6 +758,7 @@ namespace FireGame.Prototypes
             if (_sim.Outcome != SOutcome.Playing) _overAge += dt;
 
             foreach (Pool p in _pools) p.Begin();
+            foreach (RibbonPool r in _ribbons) r.Begin(_time);
             DrawTown();
             DrawPuddles();
             DrawGems();
@@ -767,6 +769,7 @@ namespace FireGame.Prototypes
             DrawGear(dt);
             DrawEdgeArrows();
             foreach (Pool p in _pools) p.End();
+            foreach (RibbonPool r in _ribbons) r.End();
 
             UpdateSpraySound(dt);
             AdvanceParticles(dt);
@@ -957,25 +960,11 @@ namespace FireGame.Prototypes
                         bool jet = s.Kind == ShotKind.Jet;
                         Vector3 dir = new Vector3(s.Vel.X, s.Vel.Y, 0f).normalized;
                         Vector3 tail = at - (dir * Mathf.Min(s.Pos.DistanceTo(s.From), jet ? 3.4f : 4.8f));
-                        float len = Vector3.Distance(tail, at);
-                        float seed = (s.From.X * 1.7f) + (s.Vel.Y * 0.9f);
-                        // 물줄기 굵기 = 실제 판정 반경. 레벨이 오를수록 한 줄기가 눈에 띄게 굵어진다.
-                        float thick = jet ? 1.6f : Mathf.Max(1f, s.Radius / 0.3f * 0.75f);
-                        float w = jet ? 1.5f : Mathf.Max(0.95f, s.Radius * 2.3f);
-                        if (len > 0.1f)
-                        {
-                            float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f + ((Mathf.PerlinNoise(seed, _time * 9f) - 0.5f) * 2.4f);
-                            Vector3 mid = (tail + at) * 0.5f;
-                            _hoseBody.Put(mid, w, deg, new Color(0.55f, 0.8f, 1f, jet ? 0.7f : 0.92f), null, len / (w * HoseAspect));
-                            _hoseCore.Put(mid, w * 0.45f, deg, new Color(0.9f, 0.97f, 1f, jet ? 0.3f : 0.7f), null, len / (w * 0.45f * HoseAspect));
-                            // 흐름: 짧은 흰 물결이 노즐에서 끝으로 빠르게 흘러간다.
-                            for (int k = 0; k < 2; k++)
-                            {
-                                float u = Mathf.Repeat((_time * 4f) + seed + (k * 0.5f), 1f);
-                                _hoseCore.Put(Vector3.Lerp(tail, at, u), w * 0.22f * (0.6f + u), deg, new Color(1f, 1f, 1f, 0.7f), null, 1f);
-                            }
-                        }
-                        EmitSpray(at, dir, jet ? 1.6f : thick);
+                        // 날아가는 한 토막도 호스와 같은 물 리본으로(끝 물보라는 DrawStream이 낸다).
+                        _streamPts.Clear();
+                        _streamPts.Add(tail);
+                        _streamPts.Add(at);
+                        DrawStream(_streamPts, s);
                         break;
                     }
                     case ShotKind.Heli:
@@ -1062,87 +1051,47 @@ namespace FireGame.Prototypes
             DrawStream(_streamPts, prev);
         }
 
-        /// <summary>점들을 잇는 한 줄기: 노즐 쪽은 가늘고 끝으로 갈수록 벌어지며, 흰 물결이 끝으로 흘러가고 끝에서 물보라가 튄다.</summary>
+        /// <summary>
+        /// 점들을 잇는 한 줄기(모양은 WaterRibbon): 비치는 겉물 + 결이 흐르는 몸통 + 빛 쪽 하이라이트 세 겹.
+        /// 끝은 물덩어리로 부서지고, 줄기 옆으로 물방울이 튀며, 맨 끝에서 물보라가 인다.
+        /// </summary>
         private void DrawStream(List<Vector3> pts, Shot last)
         {
             if (pts.Count < 2 || last == null) return;
             bool jet = last.Kind == ShotKind.Jet;
             float w = jet ? 1.5f : Mathf.Max(0.95f, last.Radius * 2.3f);
-            float total = 0f;
-            for (int i = 1; i < pts.Count; i++) total += Vector3.Distance(pts[i - 1], pts[i]);
-            if (total < 0.05f) return;
+            _ribbonIn.Clear();
+            foreach (Vector3 p in pts) _ribbonIn.Add(new Vec2(p.x, p.y));
+            // 방수포 제트는 고압이라 덜 출렁인다.
+            WaterRibbon.Build(_ribbonIn, w, _time, jet ? 0.6f : 1f, _ribbon, _blobs);
+            if (_ribbon.Count < 2) return;
 
-            // 살아 있는 물: 끝으로 갈수록 좌우로 조금 출렁인다(노즐 쪽은 곧다).
-            float along = 0f;
-            for (int i = 0; i < pts.Count; i++)
+            _waterSheath.Put(_ribbon, 1.35f, 0f, new Color(0.5f, 0.78f, 1f, 0.35f), 5f);
+            _waterBody.Put(_ribbon, 1f, 0f, new Color(0.55f, 0.8f, 1f, jet ? 0.8f : 0.92f), 8f);
+            // 빛은 왼쪽 위에서 온다: 하이라이트를 진행 방향 왼쪽으로 치우친다.
+            _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f);
+            foreach (WaterRibbon.Blob b in _blobs)
             {
-                if (i > 0) along += Vector3.Distance(pts[i - 1], pts[i]);
-                Vector3 d = pts[Mathf.Min(i + 1, pts.Count - 1)] - pts[Mathf.Max(i - 1, 0)];
-                if (d.sqrMagnitude < 0.0001f) continue;
-                d.Normalize();
-                float u = along / total;
-                pts[i] += new Vector3(-d.y, d.x, 0f) * (Mathf.Sin((_time * 18f) + (along * 1.3f)) * 0.06f * u * w);
+                _streamJoint.Put(new Vector3(b.Pos.X, b.Pos.Y, 0f), b.Radius * 2f, 0f, new Color(0.6f, 0.85f, 1f, b.Alpha * 0.9f));
             }
-
-            // 겹치는 토막·이음매가 비치지 않게 몸통은 불투명하게.
-            var body = new Color(0.55f, 0.8f, 1f, jet ? 0.75f : 1f);
-            var core = new Color(0.9f, 0.97f, 1f, jet ? 0.3f : 0.45f);
-            along = 0f;
-            for (int i = 1; i < pts.Count; i++)
-            {
-                Vector3 a = pts[i - 1];
-                Vector3 b = pts[i];
-                float len = Vector3.Distance(a, b);
-                if (len < 0.01f) continue;
-                float deg = (Mathf.Atan2(b.y - a.y, b.x - a.x) * Mathf.Rad2Deg) - 90f;
-                // 굵기가 매끈하게 변하도록 짧은 토막으로 나눠 놓는다.
-                int pieces = Mathf.CeilToInt(len / 0.2f);
-                for (int k = 0; k < pieces; k++)
-                {
-                    Vector3 p0 = Vector3.Lerp(a, b, (float)k / pieces);
-                    Vector3 p1 = Vector3.Lerp(a, b, (float)(k + 1) / pieces);
-                    float piece = len / pieces;
-                    float wi = StreamWidth(w, along + (piece * 0.5f), total);
-                    Vector3 mid = (p0 + p1) * 0.5f;
-                    _stream.Put(mid, wi, deg, body, null, piece / wi);
-                    _streamJoint.Put(p1, wi, 0f, body);
-                    _streamCore.Put(mid, wi * 0.4f, deg, core, null, piece / (wi * 0.4f));
-                    along += piece;
-                }
-            }
-            _streamJoint.Put(pts[0], StreamWidth(w, 0f, total), 0f, body);
-
-            // 흐름: 가늘고 긴 흰 결이 물 속도(초당 16칸)로 노즐에서 끝으로 흘러간다. 구슬처럼 보이지 않게 옅고 길게.
-            const float gap = 1.3f;
-            for (float d = Mathf.Repeat(_time * 16f, gap); d < total; d += gap)
-            {
-                float walked = 0f;
-                for (int i = 1; i < pts.Count; i++)
-                {
-                    float len = Vector3.Distance(pts[i - 1], pts[i]);
-                    if (walked + len < d)
-                    {
-                        walked += len;
-                        continue;
-                    }
-                    Vector3 dir = (pts[i] - pts[i - 1]) / Mathf.Max(len, 0.0001f);
-                    float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
-                    float wi = StreamWidth(w, d, total);
-                    _streamFlow.Put(pts[i - 1] + (dir * (d - walked)), wi * 0.12f, deg, new Color(1f, 1f, 1f, 0.22f), null, 9f);
-                    break;
-                }
-            }
+            ShedDrops(_ribbon);
 
             Vector3 end = pts[pts.Count - 1];
             Vector3 endDir = (end - pts[pts.Count - 2]).normalized;
             EmitSpray(end, endDir, jet ? 1.6f : Mathf.Max(1f, last.Radius / 0.3f * 0.75f));
         }
 
-        /// <summary>물줄기 굵기: 노즐 구멍만큼 가늘게 나와 2칸 안에 제 굵기가 되고, 끝으로 갈수록 조금 더 벌어진다.</summary>
-        private static float StreamWidth(float w, float along, float total)
+        /// <summary>줄기 옆구리에서 가끔 물방울이 떨어져 나와 바깥으로 튄다. 노즐 1.5칸 안은 아직 뭉쳐 있어 안 튄다.</summary>
+        private void ShedDrops(List<WaterRibbon.Point> ribbon)
         {
-            float open = Mathf.Lerp(0.16f, w * 0.75f, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(along / 2f)));
-            return open * Mathf.Lerp(1f, 1.4f, along / total);
+            WaterRibbon.Point tip = ribbon[ribbon.Count - 1];
+            if (tip.Along < 2f || Random.value > 0.18f) return;
+            WaterRibbon.Point p = ribbon[Random.Range(0, ribbon.Count)];
+            if (p.Along < 1.5f) return;
+            float side = Random.value < 0.5f ? -1f : 1f;
+            var n = new Vector3(p.Normal.X, p.Normal.Y, 0f) * side;
+            Vector3 at = new Vector3(p.Pos.X, p.Pos.Y, 0f) + (n * p.Half);
+            EmitFalling("Effects/water_drop", at, (n * Random.Range(1.5f, 3.5f)) + new Vector3(0f, 1.5f, 0f), 0.3f, Random.Range(0.14f, 0.24f), new Color(0.75f, 0.95f, 1f, 0.9f));
         }
 
         /// <summary>방화복을 갈아입는 순간: 금빛 고리 + 반짝이 + 글자.</summary>
@@ -2261,21 +2210,21 @@ namespace FireGame.Prototypes
             _drones = AddPool("Drone", "UI/button_blue_round", 12);
             _hoseTubeEdge = new Pool(_world, "HoseTubeEdge", Art.White, 9, null);
             _hoseTube = new Pool(_world, "HoseTube", Art.White, 10, null);
-            _hoseBody = new Pool(_world, "HoseStream", HoseSprite(), 12, null);
-            _hoseCore = new Pool(_world, "HoseCore", HoseSprite(), 13, Additive);
-            _stream = new Pool(_world, "HoseFlow", StreamSprite(), 12, null);
-            _streamJoint = new Pool(_world, "HoseFlowJoint", DiscSprite(), 12, null);
-            _streamCore = new Pool(_world, "HoseFlowCore", StreamSprite(), 13, Additive);
-            _streamFlow = new Pool(_world, "HoseFlowStreak", DiscSprite(), 13, Additive);
-            _pools.Add(_streamFlow);
-            _pools.Add(_stream);
+            // 물줄기: 비치는 겉물(11) 아래, 몸통(12), 더해 그리는 하이라이트(13). 끝 물덩어리는 몸통과 같은 층.
+            Shader sprites = Shader.Find("Sprites/Default");
+            var water = new Material(sprites) { mainTexture = FlowTexture() };
+            Material shine = Additive != null ? new Material(Additive) { mainTexture = FlowTexture() } : water;
+            _waterSheath = new RibbonPool(_world, "WaterSheath", water, 11);
+            _waterBody = new RibbonPool(_world, "WaterBody", water, 12);
+            _waterShine = new RibbonPool(_world, "WaterShine", shine, 13);
+            _ribbons.Add(_waterSheath);
+            _ribbons.Add(_waterBody);
+            _ribbons.Add(_waterShine);
+            _streamJoint = new Pool(_world, "WaterBlob", DiscSprite(), 12, null);
             _pools.Add(_streamJoint);
-            _pools.Add(_streamCore);
             _nozzle = new Pool(_world, "Nozzle", Art.White, 16, null);
             _pools.Add(_hoseTubeEdge);
             _pools.Add(_hoseTube);
-            _pools.Add(_hoseBody);
-            _pools.Add(_hoseCore);
             _pools.Add(_nozzle);
             _reticle = new Pool(_world, "Reticle", RingSprite(), 21, null);
             _pools.Add(_reticle);
@@ -2384,6 +2333,114 @@ namespace FireGame.Prototypes
                 for (int i = _used; i < _items.Count; i++)
                 {
                     if (_items[i].enabled) _items[i].enabled = false;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 물줄기 리본을 한 장의 메쉬로 그린다. 사각형 토막을 잇는 것과 달리 가장자리에 계단이 없다.
+        /// 결 텍스처가 길이를 따라 흘러가고(UV 스크롤), 끝 15%는 정점색으로 옅어진다.
+        /// </summary>
+        private sealed class RibbonPool
+        {
+            /// <summary>결 텍스처 한 장이 덮는 길이(칸).</summary>
+            private const float TexLength = 2f;
+
+            private readonly List<MeshRenderer> _renderers = new List<MeshRenderer>();
+            private readonly List<Mesh> _meshes = new List<Mesh>();
+            private readonly List<Vector3> _vertices = new List<Vector3>();
+            private readonly List<Color> _colors = new List<Color>();
+            private readonly List<Vector2> _uvs = new List<Vector2>();
+            private readonly List<int> _triangles = new List<int>();
+            private readonly Transform _parent;
+            private readonly string _name;
+            private readonly Material _material;
+            private readonly int _order;
+            private int _used;
+            private float _time;
+
+            public RibbonPool(Transform parent, string name, Material material, int order)
+            {
+                _parent = parent;
+                _name = name;
+                _material = material;
+                _order = order;
+            }
+
+            public void Begin(float time)
+            {
+                _used = 0;
+                _time = time;
+            }
+
+            /// <param name="widthScale">리본 반폭 배율.</param>
+            /// <param name="offset">반폭 대비 법선 쪽으로 옮기는 양(+ = 진행 방향 왼쪽).</param>
+            /// <param name="flowSpeed">결이 흐르는 속도(칸/초).</param>
+            public void Put(List<WaterRibbon.Point> pts, float widthScale, float offset, Color color, float flowSpeed)
+            {
+                if (pts.Count < 2) return;
+                if (_used == _meshes.Count)
+                {
+                    var go = new GameObject(_name);
+                    go.transform.SetParent(_parent, false);
+                    var mesh = new Mesh { name = _name };
+                    mesh.MarkDynamic();
+                    go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                    MeshRenderer created = go.AddComponent<MeshRenderer>();
+                    created.sharedMaterial = _material;
+                    created.sortingOrder = _order;
+                    _renderers.Add(created);
+                    _meshes.Add(mesh);
+                }
+                MeshRenderer r = _renderers[_used];
+                Mesh m = _meshes[_used];
+                _used++;
+                if (!r.enabled) r.enabled = true;
+
+                _vertices.Clear();
+                _colors.Clear();
+                _uvs.Clear();
+                _triangles.Clear();
+                float total = pts[pts.Count - 1].Along;
+                float scroll = _time * flowSpeed / TexLength;
+                for (int i = 0; i < pts.Count; i++)
+                {
+                    WaterRibbon.Point p = pts[i];
+                    var center = new Vector3(p.Pos.X, p.Pos.Y, 0f);
+                    var n = new Vector3(p.Normal.X, p.Normal.Y, 0f);
+                    Vector3 shift = n * (p.Half * offset);
+                    Vector3 half = n * (p.Half * widthScale);
+                    _vertices.Add(center + shift + half);
+                    _vertices.Add(center + shift - half);
+                    float fade = total > 0f ? Mathf.Clamp01((total - p.Along) / (total * 0.15f)) : 1f;
+                    var c = new Color(color.r, color.g, color.b, color.a * fade);
+                    _colors.Add(c);
+                    _colors.Add(c);
+                    float v = (p.Along / TexLength) - scroll;
+                    _uvs.Add(new Vector2(0f, v));
+                    _uvs.Add(new Vector2(1f, v));
+                    if (i == 0) continue;
+                    int a = (i - 1) * 2;
+                    _triangles.Add(a);
+                    _triangles.Add(a + 1);
+                    _triangles.Add(a + 2);
+                    _triangles.Add(a + 1);
+                    _triangles.Add(a + 3);
+                    _triangles.Add(a + 2);
+                }
+                m.Clear();
+                m.SetVertices(_vertices);
+                m.SetColors(_colors);
+                m.SetUVs(0, _uvs);
+                m.SetTriangles(_triangles, 0);
+                m.RecalculateBounds();
+            }
+
+            public void End()
+            {
+                for (int i = _used; i < _renderers.Count; i++)
+                {
+                    if (_renderers[i].enabled) _renderers[i].enabled = false;
                 }
             }
         }
@@ -2816,65 +2873,44 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>
-        /// 소방호스 물줄기 텍스처. 아래(y=0)가 노즐, 위가 끝. 끝으로 갈수록 넓어지는 원뿔에
-        /// 거친 가장자리와 결을 따른 줄무늬를 넣고, 끝 20%는 물방울로 부서지며 사라진다.
+        /// 물줄기 결 텍스처(가로 = 폭, 세로 = 길이 방향으로 이어 붙는다). 옆 가장자리는 부드럽게 빠지고 테두리가 살짝 밝다.
+        /// 폭을 가로지르는 몇 가닥의 결마다 밝기 덩이가 다른 박자로 놓여 있어서, UV를 흘리면 물살이 앞으로 흘러가 보인다.
         /// </summary>
-        /// <summary>호스 텍스처 세로/가로 비. Put의 stretch를 길이로 맞출 때 나눈다.</summary>
-        private const float HoseAspect = 4f;
-
-        private static Sprite HoseSprite()
+        private static Texture2D FlowTexture()
         {
-            if (_hoseSprite != null) return _hoseSprite;
+            if (_flowTexture != null) return _flowTexture;
             const int w = 64;
-            const int h = 256;
-            var texture = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            const int h = 128;
+            var texture = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            {
+                wrapModeU = TextureWrapMode.Clamp,
+                wrapModeV = TextureWrapMode.Repeat,
+                filterMode = FilterMode.Bilinear,
+            };
             var pixels = new Color32[w * h];
-            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
             {
-                float ty = (y + 0.5f) / h;
-                float half = Mathf.Lerp(0.16f, 0.46f, ty) * (1f + (0.12f * ((Noise(ty * 9f, 0) * 2f) - 1f)));
-                for (int x = 0; x < w; x++)
+                float dx = ((x + 0.5f) / w * 2f) - 1f;
+                float ax = Mathf.Abs(dx);
+                float edge = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((ax - 0.55f) / 0.45f));
+                float rim = Mathf.Exp(-Mathf.Pow((ax - 0.72f) / 0.08f, 2f)) * 0.18f;
+                // 가닥마다 박자(위상)와 세기가 다르다.
+                float lane = Noise((dx * 7f) + 20f, 5);
+                float phase = Noise((dx * 5f) + 40f, 6);
+                for (int y = 0; y < h; y++)
                 {
-                    float dx = ((x + 0.5f) / w) - 0.5f;
-                    float ax = Mathf.Abs(dx);
-                    float edge = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((ax - (half * 0.6f)) / (half * 0.4f)));
-                    float streak = 0.72f + (0.28f * Noise((dx * 22f) + (ty * 0.6f), 1));
-                    float head = ty < 0.78f ? 1f : Mathf.Clamp01((1f - ty) / 0.22f) * (Hash(x, y) > 0.35f ? 1f : 0.3f);
-                    float tail = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(ty / 0.04f));
-                    float a = Mathf.Clamp01(edge * streak * head * tail);
-                    pixels[(y * w) + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                    float ty = (y + 0.5f) / h;
+                    // 정수 배 주기라 세로로 이어 붙여도 이음매가 없다.
+                    float lump = (0.5f + (0.5f * Mathf.Sin(2f * Mathf.PI * ((ty * 2f) + phase))))
+                        * (0.6f + (0.4f * Mathf.Sin(2f * Mathf.PI * ((ty * 5f) + (phase * 3f)))));
+                    float a = edge * (0.62f + (0.38f * lane * lump)) + rim;
+                    pixels[(y * w) + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(a) * 255));
                 }
             }
             texture.SetPixels32(pixels);
             texture.Apply();
-            _hoseSprite = Sprite.Create(texture, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
-            return _hoseSprite;
-        }
-
-        /// <summary>
-        /// 이어 그리는 물줄기 한 토막(64×64, 세로로 늘려 쓴다). 옆 가장자리만 부드럽고 위아래 끝은 잘려 있어서,
-        /// 토막을 이어 놓으면 이음매 없이 한 줄이 된다. 결을 따라 옅은 줄무늬가 있다.
-        /// </summary>
-        private static Sprite StreamSprite()
-        {
-            if (_streamSprite != null) return _streamSprite;
-            const int n = 64;
-            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            var pixels = new Color32[n * n];
-            for (int y = 0; y < n; y++)
-            {
-                for (int x = 0; x < n; x++)
-                {
-                    float ax = Mathf.Abs(((x + 0.5f) / n) - 0.5f) * 2f;
-                    float edge = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((ax - 0.6f) / 0.4f));
-                    float streak = 0.8f + (0.2f * Noise(ax * 9f, 3));
-                    pixels[(y * n) + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(edge * streak) * 255));
-                }
-            }
-            texture.SetPixels32(pixels);
-            texture.Apply();
-            _streamSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
-            return _streamSprite;
+            _flowTexture = texture;
+            return _flowTexture;
         }
 
         /// <summary>가장자리가 부드러운 꽉 찬 원. 물줄기 이음매와 장갑에 쓴다.</summary>
