@@ -40,3 +40,6 @@ tools/.art-cache/
 tools/.shots/
 tools/.shots-proto/
 tools/.unity-mirror/
+
+# ---- 아이폰 시험판 빌드(tools/unity-check.sh ios) ----
+tools/.unity-ios/

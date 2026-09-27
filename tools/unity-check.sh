@@ -4,6 +4,7 @@
 #   tools/unity-check.sh compile          실제 Unity 컴파일. error CS가 있으면 실패
 #   tools/unity-check.sh shots [폴더]      화면을 PNG로 찍는다(기본: tools/.shots)
 #   tools/unity-check.sh proto-shots [폴더] 재미 검증 시험판 화면(기본: tools/.shots-proto)
+#   tools/unity-check.sh ios [폴더]        시험판 C 아이폰용 Xcode 프로젝트(기본: unity/Builds/ios). 설치는 tools/ios-install.sh
 #
 # 에디터가 같은 프로젝트를 열고 있으면 배치 모드가 실행되지 않는다. 먼저 에디터를 닫는다.
 set -uo pipefail
@@ -85,8 +86,24 @@ case "$MODE" in
     ls "$OUT"/*.png
     ;;
 
+  ios)
+    # 빌드 대상(iOS)과 PlayerSettings를 바꾸므로 늘 따로 둔 복사본(tools/.unity-ios)에서 돈다.
+    # 실제 프로젝트·에디터 복사본은 그대로 Mac 대상으로 남는다. Library는 두고 가서 두 번째부터 빠르다.
+    OUT="${2:-$REPO_ROOT/unity/Builds/ios}"
+    PROJECT="$REPO_ROOT/tools/.unity-ios"
+    mkdir -p "$PROJECT"
+    rsync -a --delete --exclude Temp --exclude Logs --exclude Library --exclude Builds "$REPO_ROOT/unity/" "$PROJECT/"
+    "$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -logFile "$LOG" -buildTarget iOS \
+      -executeMethod FireGame.Prototypes.EditorTools.PrototypeBuild.BuildIOS -buildPath "$OUT"
+    status=$?
+    report_compile_errors || exit 1
+    grep -E "\[ProtoBuild\]" "$LOG" | sed 's/^/  /'
+    [ $status -eq 0 ] || { echo "iOS 빌드 실패, 종료 코드 $status (로그: $LOG)"; grep -E "error|Error" "$LOG" | grep -v "^$" | tail -15; exit 1; }
+    echo "Xcode 프로젝트: $OUT/Unity-iPhone.xcodeproj"
+    ;;
+
   *)
-    echo "사용법: $0 compile | shots [폴더] | proto-shots [폴더]" >&2
+    echo "사용법: $0 compile | shots [폴더] | proto-shots [폴더] | ios [폴더]" >&2
     exit 2
     ;;
 esac

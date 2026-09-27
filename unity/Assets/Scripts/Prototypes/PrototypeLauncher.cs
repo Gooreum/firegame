@@ -12,7 +12,7 @@ namespace FireGame.Prototypes
     {
         public const string Key = "firegame.prototype";
 
-        /// <summary>에디터에서 시험판을 골랐는지. 빌드에서는 언제나 false라 본 게임만 뜬다.</summary>
+        /// <summary>에디터에서 시험판을 골랐는지. 빌드에서는 폰 시험판 빌드(FIREGAME_PROTO_BUILD)만 true다.</summary>
         public static bool TakesOver
         {
             get { return Selected != ""; }
@@ -25,6 +25,9 @@ namespace FireGame.Prototypes
             {
 #if UNITY_EDITOR
                 return UnityEditor.EditorPrefs.GetString(Key, "");
+#elif FIREGAME_PROTO_BUILD
+                // 폰 시험판 빌드(tools/ios-install.sh)만 이 표시를 붙인다. 본 게임 빌드는 아래처럼 "".
+                return "C";
 #else
                 return "";
 #endif
