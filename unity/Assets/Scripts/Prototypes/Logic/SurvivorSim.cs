@@ -172,7 +172,7 @@ namespace FireGame.Prototypes.Logic
 
         public int XpToNext
         {
-            get { return 5 + (Level * 4); }
+            get { return 4 + (Level * 3) + (Level * Level / 8); }
         }
 
         public float MaxHp
@@ -257,13 +257,13 @@ namespace FireGame.Prototypes.Logic
         public Enemy Spawn(EnemyKind kind, Vec2 at)
         {
             var e = new Enemy { Kind = kind, Pos = at };
-            float scale = 1f + (Time / 150f);
+            float scale = 1f + ((Time / 120f) * (Time / 120f));
             switch (kind)
             {
-                case EnemyKind.Ember: e.MaxHp = 3f * scale; e.Speed = 2.4f; e.Radius = 0.35f; e.Touch = 9f; e.Xp = 1; break;
-                case EnemyKind.Blaze: e.MaxHp = 14f * scale; e.Speed = 1.5f; e.Radius = 0.6f; e.Touch = 16f; e.Xp = 5; break;
-                case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 7f; e.Xp = 1; break;
-                case EnemyKind.Boss: e.MaxHp = 900f; e.Speed = 1.1f; e.Radius = 1.4f; e.Touch = 35f; e.Xp = 0; break;
+                case EnemyKind.Ember: e.MaxHp = 3f * scale; e.Speed = 2.4f; e.Radius = 0.35f; e.Touch = 5f; e.Xp = 1; break;
+                case EnemyKind.Blaze: e.MaxHp = 14f * scale; e.Speed = 1.5f; e.Radius = 0.6f; e.Touch = 10f; e.Xp = 5; break;
+                case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 5f; e.Xp = 1; break;
+                case EnemyKind.Boss: e.MaxHp = 1500f; e.Speed = 1.1f; e.Radius = 1.4f; e.Touch = 35f; e.Xp = 0; break;
             }
             e.Hp = e.MaxHp;
             Enemies.Add(e);
@@ -321,7 +321,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>스폰 감독: 시간이 갈수록 많이, 1·2·3분엔 포위, 4분엔 보스.</summary>
         private void Direct()
         {
-            float rate = Time < BossAt ? 1f + (9f * (Time / BossAt)) : 4f;
+            float rate = Time < BossAt ? 1f + (15f * (float)Math.Pow(Time / BossAt, 1.5)) : 6f;
             _spawnDebt += rate * Dt;
             while (_spawnDebt >= 1f)
             {
@@ -485,9 +485,9 @@ namespace FireGame.Prototypes.Logic
                     Enemy target = Nearest(Player, 9f);
                     if (target != null)
                     {
-                        _hoseClock = 0.55f * cd;
+                        _hoseClock = 0.45f * cd;
                         float baseAngle = (float)Math.Atan2(target.Pos.Y - Player.Y, target.Pos.X - Player.X);
-                        float damage = 2.2f * (1f + (0.25f * (hose - 1)));
+                        float damage = 3f * (1f + (0.25f * (hose - 1)));
                         for (int k = 0; k < hose; k++)
                         {
                             float spread = (k - ((hose - 1) / 2f)) * 0.16f;
@@ -726,7 +726,7 @@ namespace FireGame.Prototypes.Logic
             _bossBurstClock -= Dt;
             if (_bossBurstClock > 0f) return;
             _bossBurstClock = 3f;
-            for (int k = 0; k < 12; k++)
+            for (int k = 0; k < 12 && Enemies.Count < MaxEnemies; k++)
             {
                 double a = Math.PI * 2 * k / 12;
                 var at = new Vec2(Boss.Pos.X + (float)(Math.Cos(a) * 1.8), Boss.Pos.Y + (float)(Math.Sin(a) * 1.8));
