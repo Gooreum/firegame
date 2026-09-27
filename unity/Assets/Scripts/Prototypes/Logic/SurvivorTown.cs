@@ -39,6 +39,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>안에 있는 주민. 불이 나면 갇힌다.</summary>
         public int Residents;
 
+        /// <summary>갇힌 사람이 큰 불 연기를 마신 시간. 쌓이면 한 명씩 잃는다.</summary>
+        public float Smoke;
+
         /// <summary>소방관이 문 앞에 서 있던 시간.</summary>
         public float RescueHold;
         public bool Collapsed;

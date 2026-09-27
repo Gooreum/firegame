@@ -352,7 +352,7 @@ namespace FireGame.Prototypes.Tests
         }
 
         /// <summary>봇이 보스까지 가는 시드(보스·성능 테스트용).</summary>
-        private const int BossSeed = 2;
+        private const int BossSeed = 1;
 
         // --- S2 TC-6 ---
         [Fact]
@@ -378,10 +378,10 @@ namespace FireGame.Prototypes.Tests
 
         // --- S2 TC-7 ---
         [Fact]
-        public void StandingStill_LosesWithin90Seconds()
+        public void StandingStill_LosesWithin150Seconds()
         {
             var sim = new SurvivorSim(1);
-            while (sim.Outcome == SOutcome.Playing && sim.Time < 90f)
+            while (sim.Outcome == SOutcome.Playing && sim.Time < 150f)
             {
                 if (sim.PendingChoices != null) sim.Choose(0);
                 sim.Step(0f, 0f);
@@ -558,7 +558,7 @@ namespace FireGame.Prototypes.Tests
             Structure shop = Shop(sim, 10f, 0f, 2);
             sim.Ignite(shop, 0.15f);
             // 쏟아지는 불씨에 쓰러지지 않게 매 틱 체력을 채운다(가게만 본다).
-            for (int i = 0; i < 60 * 20; i++)
+            for (int i = 0; i < 60 * 25; i++)
             {
                 sim.Hp = sim.MaxHp;
                 sim.Step(0f, 0f);
@@ -568,13 +568,13 @@ namespace FireGame.Prototypes.Tests
             Assert.Contains(sim.Enemies, e => e.Kind == EnemyKind.Ember);
 
             bool fell = false;
-            for (int i = 0; i < 60 * 40 && !fell; i++)
+            for (int i = 0; i < 60 * 60 && !fell; i++)
             {
                 sim.Hp = sim.MaxHp;
                 sim.Step(0f, 0f);
                 if (sim.Fell.Contains(shop)) fell = true;
             }
-            Assert.True(fell, "방치한 가게가 60초 안에 안 무너졌다");
+            Assert.True(fell, "방치한 가게가 85초 안에 안 무너졌다");
             Assert.True(shop.Collapsed);
             Assert.Equal(1, sim.HousesLost);
             Assert.Equal(2, sim.CiviliansLost);
@@ -624,6 +624,180 @@ namespace FireGame.Prototypes.Tests
             Structure shop = Shop(sim, 3f, 0f);
             Run(sim, 3f, 1f, 0f);
             Assert.True(sim.Player.X <= shop.Pos.X - shop.Half.X - SurvivorSim.PlayerRadius + 0.01f, "소방관이 가게 벽 안으로 들어갔다: x=" + sim.Player.X);
+        }
+
+        // --- 구조·가스통·신고·승패 ---
+
+        [Fact]
+        public void StandingAtTheDoor_RescuesTrappedPeople()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 0f, 3.2f, 2);
+            Structure calm = Shop(sim, 9f, 3.2f, 1);
+            Assert.True(shop.Door.DistanceTo(sim.Player) <= SurvivorSim.RescueRange);
+            sim.Ignite(shop, 0.2f);
+
+            bool signalled = false;
+            for (int i = 0; i < 60 * 3; i++)
+            {
+                // 구조 구슬로 레벨이 오르면 카드를 고르고 계속 선다.
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+                if (sim.JustRescued && sim.RescuedFrom.Contains(shop)) signalled = true;
+            }
+            Assert.Equal(2, sim.Rescued);
+            Assert.Equal(0, shop.Residents);
+            Assert.True(signalled);
+            Assert.Equal(1, calm.Residents);
+
+            // 안 타는 가게 문 앞에서는 아무도 안 나온다.
+            sim.Player = new Vec2(calm.Door.X, calm.Door.Y);
+            Run(sim, 2f);
+            Assert.Equal(1, calm.Residents);
+        }
+
+        [Fact]
+        public void TrappedPeople_ChokeInABigFire()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 12f, 0f, 2);
+            sim.Ignite(shop, 1f);
+            bool signalled = false;
+            for (int i = 0; i < (int)((SurvivorSim.SmokeTime + 0.5f) * 60); i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                if (sim.PeopleLost.Contains(shop)) signalled = true;
+            }
+            Assert.Equal(1, sim.CiviliansLost);
+            Assert.Equal(1, shop.Residents);
+            Assert.True(signalled);
+        }
+
+        [Fact]
+        public void GasTank_ExplodesAndSpreads_UnlessWetFirst()
+        {
+            SurvivorSim sim = Quiet();
+            var gas = new Structure { Kind = StructureKind.Gas, Name = "가스통", Pos = new Vec2(sim.Player.X + 7f, sim.Player.Y), Half = new Vec2(0.4f, 0.4f) };
+            sim.Structures.Add(gas);
+            Structure shop = Shop(sim, 9.6f, 0f);
+            sim.Ignite(gas, 0.2f);
+            bool blasted = false;
+            for (int i = 0; i < (int)((SurvivorSim.GasFuse + 0.2f) * 60); i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                if (sim.GasBlasts.Count > 0) blasted = true;
+            }
+            Assert.True(blasted, "불붙은 가스통이 안 터졌다");
+            Assert.True(gas.Collapsed);
+            Assert.True(shop.Burning, "터진 가스통 옆 가게에 불이 안 옮았다");
+            Assert.True(shop.Fire >= 0.5f);
+
+            SurvivorSim wet = Quiet();
+            var gas2 = new Structure { Kind = StructureKind.Gas, Name = "가스통", Pos = new Vec2(wet.Player.X + 5f, wet.Player.Y), Half = new Vec2(0.4f, 0.4f) };
+            wet.Structures.Add(gas2);
+            Spray(wet, gas2.Pos, 20);
+            wet.Spraying = false;
+            Assert.True(gas2.Wet > 0f, "물을 뿌린 가스통이 안 젖었다");
+            Assert.False(wet.Ignite(gas2, 0.5f), "젖은 가스통에 불이 붙었다");
+            Run(wet, 3f);
+            Assert.False(gas2.Collapsed);
+        }
+
+        [Fact]
+        public void Reports_IgniteShopsOnSchedule()
+        {
+            var sim = new SurvivorSim(1);
+            var times = new List<float>();
+            int pairs = 0;
+            while (sim.Time < SurvivorSim.ReportTimes[SurvivorSim.ReportTimes.Length - 1] + 0.5f)
+            {
+                // 신고로 난 불만 보려고 매 틱 다른 불을 치운다.
+                sim.Enemies.Clear();
+                foreach (Structure s in sim.Structures) s.Fire = 0f;
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                int shops = sim.Ignited.FindAll(s => s.Kind == StructureKind.House).Count;
+                for (int k = 0; k < shops; k++) times.Add(sim.Time);
+                if (shops >= 2) pairs++;
+            }
+            Assert.Equal(SurvivorSim.ReportTimes.Length, times.Count);
+            Assert.InRange(times[0], SurvivorSim.ReportTimes[0], SurvivorSim.ReportTimes[0] + 0.05f);
+            Assert.Equal(2, pairs);
+        }
+
+        [Fact]
+        public void LosingHalfTheTown_LosesTheRun()
+        {
+            var sim = new SurvivorSim(1);
+            sim.Enemies.Clear();
+            List<Structure> shops = sim.Structures.FindAll(s => s.Kind == StructureKind.House);
+            for (int k = 0; k < 4; k++)
+            {
+                sim.Ignite(shops[k], 1f);
+                shops[k].Integrity = 0.0001f;
+            }
+            sim.Step(0f, 0f);
+            Assert.Equal(4, sim.HousesLost);
+            Assert.Equal(SOutcome.Playing, sim.Outcome);
+
+            sim.Ignite(shops[4], 1f);
+            shops[4].Integrity = 0.0001f;
+            sim.Step(0f, 0f);
+            Assert.Equal(SOutcome.Lost, sim.Outcome);
+            Assert.True(sim.LostTown);
+            Assert.True(sim.CiviliansLost > 0);
+        }
+
+        /// <summary>4:00까지 건너뛰고 창고에서 나온 거인을 끈다.</summary>
+        private static void BeatTheBoss(SurvivorSim sim)
+        {
+            while (sim.Boss == null)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+            }
+            Enemy boss = sim.Boss;
+            boss.Hp = 0.1f;
+            sim.Player = new Vec2(boss.Pos.X, boss.Pos.Y - 4f);
+            for (int i = 0; i < 300 && sim.Outcome == SOutcome.Playing; i++) Spray(sim, boss.Pos, 1);
+        }
+
+        [Fact]
+        public void Boss_ComesOutOfTheBurningDepot()
+        {
+            var sim = new SurvivorSim(1);
+            sim.Reports = false;
+            while (sim.Boss == null)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+            }
+            Structure depot = sim.Structures.Find(s => s.Kind == StructureKind.Depot);
+            Assert.True(depot.Burning);
+            Assert.True(sim.Boss.Pos.DistanceTo(depot.Door) < 0.5f);
+        }
+
+        [Fact]
+        public void WinningStars_CountSavedHousesAndLostPeople()
+        {
+            var perfect = new SurvivorSim(1);
+            perfect.Reports = false;
+            BeatTheBoss(perfect);
+            Assert.Equal(SOutcome.Won, perfect.Outcome);
+            Assert.Equal(3, perfect.Stars);
+
+            var oneLost = new SurvivorSim(1);
+            oneLost.Reports = false;
+            Structure shop = oneLost.Structures.Find(s => s.Kind == StructureKind.House && s.Residents > 0);
+            oneLost.Ignite(shop, 1f);
+            shop.Integrity = 0.0001f;
+            BeatTheBoss(oneLost);
+            Assert.Equal(SOutcome.Won, oneLost.Outcome);
+            Assert.Equal(1, oneLost.HousesLost);
+            Assert.Equal(2, oneLost.Stars);
         }
 
         // --- 풀장비 시작 ---

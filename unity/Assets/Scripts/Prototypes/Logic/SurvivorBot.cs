@@ -145,37 +145,33 @@ namespace FireGame.Prototypes.Logic
                 fy += dy / d * 0.5f;
             }
 
-            // 위험이 적으면: 갇힌 사람이 있는 불난 가게 문 → 타는 건물(5칸까지) → 구슬.
+            // 불난 곳으로 간다(갇힌 사람이 있으면 문 앞까지, 아니면 5칸까지). 위험이 적을 때만 구슬을 줍는다.
             float danger = (float)Math.Sqrt((fx * fx) + (fy * fy));
-            if (danger < 0.6f)
+            Structure fire = FireToFight(p);
+            Vec2? goal = null;
+            float pull = 0.7f;
+            if (fire != null && fire.Residents > 0 && danger < 1.5f)
             {
-                Vec2? goal = null;
-                float stop = 0f;
-                Structure fire = FireToFight(p);
-                if (fire != null && fire.Residents > 0)
-                {
-                    goal = fire.Door;
-                }
-                else if (fire != null && fire.DistanceTo(p) > 5f)
-                {
-                    goal = fire.Pos;
-                    stop = 5f;
-                }
-                else
-                {
-                    goal = NearestLoot(p, 8f);
-                }
+                goal = fire.Door;
+            }
+            else if (fire != null && fire.DistanceTo(p) > 5f && danger < 1.5f)
+            {
+                goal = fire.Pos;
+            }
+            else if (danger < 0.6f)
+            {
+                goal = NearestLoot(p, 8f);
+            }
 
-                if (goal.HasValue)
+            if (goal.HasValue)
+            {
+                float dx = goal.Value.X - p.X;
+                float dy = goal.Value.Y - p.Y;
+                float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
+                if (d > 0.3f)
                 {
-                    float dx = goal.Value.X - p.X;
-                    float dy = goal.Value.Y - p.Y;
-                    float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
-                    if (d > 0.3f && (stop <= 0f || fire.DistanceTo(p) > stop))
-                    {
-                        fx += dx / d * 0.7f;
-                        fy += dy / d * 0.7f;
-                    }
+                    fx += dx / d * pull;
+                    fy += dy / d * pull;
                 }
             }
 

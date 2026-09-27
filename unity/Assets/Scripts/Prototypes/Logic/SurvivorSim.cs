@@ -185,11 +185,11 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>물 1 피해가 건물 불 세기를 줄이는 양. 물대포 Lv1이면 다 탄 가게를 약 3초에 끈다.</summary>
         public const float WaterPerDamage = 0.035f;
-        public const float FireGrowth = 0.05f;
+        public const float FireGrowth = 0.04f;
         public const float WetTime = 10f;
 
         /// <summary>불 세기 1로 이만큼 타면 건물이 무너진다(초). 나무·차는 BurnSmall.</summary>
-        public const float BurnBuilding = 35f;
+        public const float BurnBuilding = 40f;
         public const float BurnSmall = 20f;
         public const float EmberSight = 9f;
         public const float SpreadAt = 0.4f;
@@ -198,6 +198,32 @@ namespace FireGame.Prototypes.Logic
         public bool Reports = true;
         public int HousesLost;
         public int CiviliansLost;
+
+        /// <summary>건물이 절반 넘게 무너져서 졌다.</summary>
+        public bool LostTown;
+
+        /// <summary>이긴 판의 별(1~3). 지면 0.</summary>
+        public int Stars;
+
+        /// <summary>이 시각마다 안 탄 가게 하나에 불이 난다(신고). 같은 시각이 둘이면 동시에 두 곳.</summary>
+        public static readonly float[] ReportTimes = { 10f, 30f, 50f, 70f, 90f, 110f, 120f, 120f, 140f, 160f, 180f, 180f, 200f, 215f, 230f };
+        public const float GasFuse = 2.5f;
+        public const float GasRadius = 3.5f;
+        public const float RescueRange = 1.3f;
+        public const float RescueTime = 1.2f;
+
+        /// <summary>큰 불(이 세기 이상) 속에 갇힌 사람은 SmokeTime마다 한 명씩 잃는다.</summary>
+        public const float SmokeFire = 0.6f;
+        public const float SmokeTime = 15f;
+
+        /// <summary>이번 틱에 사람을 잃은 건물(연기·무너짐).</summary>
+        public readonly List<Structure> PeopleLost = new List<Structure>();
+
+        /// <summary>이번 틱에 터진 가스통 자리.</summary>
+        public readonly List<Vec2> GasBlasts = new List<Vec2>();
+
+        /// <summary>이번 틱에 누군가를 구해 낸 건물.</summary>
+        public readonly List<Structure> RescuedFrom = new List<Structure>();
 
         /// <summary>이번 틱에 새로 불붙은 구조물.</summary>
         public readonly List<Structure> Ignited = new List<Structure>();
@@ -225,7 +251,7 @@ namespace FireGame.Prototypes.Logic
         private int _jetQueue;
         private float _jetAngle;
         private float _droneAngle;
-        private float _civilianClock = 20f;
+        private int _reportsDone;
         private float _bossBurstClock;
         private int _wavesDone;
 
@@ -292,7 +318,7 @@ namespace FireGame.Prototypes.Logic
             TickStructures();
             TouchPlayer();
             CollectGems();
-            TickCivilians();
+            TickRescue();
             TickBoss();
             Sweep();
 
@@ -303,9 +329,19 @@ namespace FireGame.Prototypes.Logic
                 Outcome = SOutcome.Lost;
                 return;
             }
+            int houses = HousesTotal;
+            if (houses > 0 && HousesLost * 2 > houses)
+            {
+                LostTown = true;
+                Outcome = SOutcome.Lost;
+                return;
+            }
             if (Boss != null && Boss.Dead)
             {
                 Outcome = SOutcome.Won;
+                // 별: 이기면 1, 건물 75% 이상 지키면 +1, 한 명도 안 잃으면 +1.
+                float saved = houses > 0 ? (houses - HousesLost) / (float)houses : 1f;
+                Stars = 1 + (saved >= 0.75f ? 1 : 0) + (CiviliansLost == 0 ? 1 : 0);
                 return;
             }
 
@@ -382,6 +418,9 @@ namespace FireGame.Prototypes.Logic
             Ignited.Clear();
             Fell.Clear();
             Doused.Clear();
+            GasBlasts.Clear();
+            RescuedFrom.Clear();
+            PeopleLost.Clear();
             JustLeveled = false;
             JustEvolved = false;
             JustBossArrived = false;
@@ -437,6 +476,12 @@ namespace FireGame.Prototypes.Logic
                 }
             }
 
+            while (Reports && _reportsDone < ReportTimes.Length && Time >= ReportTimes[_reportsDone])
+            {
+                _reportsDone++;
+                Report();
+            }
+
             if (Boss == null && Time >= BossAt)
             {
                 // 상한이 꽉 찼어도 거인은 나온다: 불씨 하나를 조용히 치운다.
@@ -445,10 +490,36 @@ namespace FireGame.Prototypes.Logic
                     Enemy spare = Enemies.Find(e => e.Kind == EnemyKind.Ember && !e.Dead);
                     if (spare != null) Enemies.Remove(spare);
                 }
-                Boss = Spawn(EnemyKind.Boss, SpawnPoint(12f));
+                // 물류창고가 확 타오르고 그 문 앞에서 거인이 나온다(창고가 없으면 가까운 곳에서).
+                Structure depot = Structures.Find(x => x.Kind == StructureKind.Depot);
+                Vec2 at = SpawnPoint(12f);
+                if (depot != null)
+                {
+                    at = depot.Door;
+                    if (!depot.Collapsed)
+                    {
+                        depot.Wet = 0f;
+                        Ignite(depot, 1f);
+                    }
+                }
+                Boss = Spawn(EnemyKind.Boss, at);
                 JustBossArrived = true;
                 _bossBurstClock = 3f;
             }
+        }
+
+        /// <summary>신고: 안 타고 안 무너진 가게 하나에 불을 낸다(젖어 있어도 난다).</summary>
+        private void Report()
+        {
+            var pool = new List<Structure>();
+            foreach (Structure s in Structures)
+            {
+                if (s.Kind == StructureKind.House && !s.Collapsed && !s.Burning) pool.Add(s);
+            }
+            if (pool.Count == 0) return;
+            Structure pick = pool[_rng.Next(pool.Count)];
+            pick.Wet = 0f;
+            Ignite(pick, 0.35f);
         }
 
         private EnemyKind PickKind()
@@ -607,8 +678,8 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
                 e.Pos = ClampToArena(e.Pos);
-                // 건물에서 나온 불씨와 큰 불만 옮겨붙인다. 가장자리에서 오는 불씨는 소방관만 쫓는다.
-                if (e.Seeker || e.Kind == EnemyKind.Blaze || e.Kind == EnemyKind.Boss) TouchStructures(e);
+                // 건물에서 나온 불씨와 거인만 옮겨붙인다. 소방관을 쫓는 불(가장자리 불씨·큰 불)은 발밑에 불을 흘릴 뿐이다.
+                if (e.Seeker || e.Kind == EnemyKind.Boss) TouchStructures(e);
                 e.Knock.X *= knockDecay;
                 e.Knock.Y *= knockDecay;
             }
@@ -828,6 +899,8 @@ namespace FireGame.Prototypes.Logic
                 Ignited.Add(s);
                 s.SpitClock = 2f;
                 s.BlazeClock = 6f;
+                s.RescueHold = 0f;
+                if (s.Kind == StructureKind.Gas) s.Fuse = GasFuse;
             }
             return fresh;
         }
@@ -843,6 +916,8 @@ namespace FireGame.Prototypes.Logic
                 s.Fire = 0f;
                 s.Fuse = -1f;
                 Doused.Add(s);
+                // 불을 끈 보상: 건물은 큰 구슬, 작은 것은 작은 구슬.
+                DropGem(s.Door, s.IsBuilding ? 8 : 3);
             }
             s.Wet = WetTime;
         }
@@ -927,6 +1002,16 @@ namespace FireGame.Prototypes.Logic
                 if (s.Wet > 0f) s.Wet -= Dt;
                 if (!s.Burning) continue;
 
+                if (s.Kind == StructureKind.Gas && s.Fuse >= 0f)
+                {
+                    s.Fuse -= Dt;
+                    if (s.Fuse <= 0f)
+                    {
+                        Blow(s);
+                        continue;
+                    }
+                }
+
                 s.Fire = Math.Min(1f, s.Fire + (FireGrowth * Dt));
                 s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding : BurnSmall);
                 if (s.Integrity <= 0f)
@@ -947,11 +1032,29 @@ namespace FireGame.Prototypes.Logic
                     s.BlazeClock -= Dt;
                     if (s.BlazeClock <= 0f && Enemies.Count < MaxEnemies)
                     {
-                        s.BlazeClock = 12f;
+                        s.BlazeClock = 16f;
                         Spawn(EnemyKind.Blaze, EdgePoint(s, 0.8f));
                     }
                 }
             }
+        }
+
+        /// <summary>가스통 폭발: 둘레 탈 것에 불을 크게 붙이고, 불씨를 튀기고, 가까우면 소방관도 다친다.</summary>
+        private void Blow(Structure gas)
+        {
+            gas.Collapsed = true;
+            gas.Fire = 0f;
+            gas.Integrity = 0f;
+            gas.Fuse = -1f;
+            GasBlasts.Add(gas.Pos);
+            foreach (Structure st in Structures)
+            {
+                if (st == gas || st.Collapsed || !st.Within(gas.Pos, GasRadius)) continue;
+                if (st.Burning) st.Fire = Math.Min(1f, st.Fire + 0.5f);
+                else Ignite(st, 0.5f);
+            }
+            for (int k = 0; k < 8; k++) SpitEmber(gas, 9f);
+            if (Player.DistanceTo(gas.Pos) <= GasRadius) Hurt(25f);
         }
 
         private void Fall(Structure s)
@@ -964,6 +1067,7 @@ namespace FireGame.Prototypes.Logic
             if (s.IsBuilding)
             {
                 HousesLost++;
+                if (s.Residents > 0) PeopleLost.Add(s);
                 CiviliansLost += s.Residents;
                 s.Residents = 0;
             }
@@ -1032,27 +1136,45 @@ namespace FireGame.Prototypes.Logic
             }
         }
 
-        private void TickCivilians()
+        /// <summary>
+        /// 불난 가게 문 앞에 잠깐 서 있으면 갇힌 사람을 한 명씩 데리고 나온다.
+        /// 나온 사람은 잠깐 뛰어 나가는 모습으로만 남는다(Civilians는 화면용).
+        /// </summary>
+        private void TickRescue()
         {
-            _civilianClock -= Dt;
-            if (_civilianClock <= 0f)
+            foreach (Structure s in Structures)
             {
-                _civilianClock = 25f;
-                Civilians.Add(new Civilian { Pos = SpawnPoint(8f + (Rand() * 4f)), Life = 20f });
+                // 큰 불 속에 오래 갇혀 있으면 연기에 한 명씩 잃는다: 멀리서 끄기만 할 게 아니라 빨리 가야 한다.
+                if (s.Burning && s.Residents > 0 && s.Fire >= SmokeFire)
+                {
+                    s.Smoke += Dt;
+                    if (s.Smoke >= SmokeTime)
+                    {
+                        s.Smoke = 0f;
+                        s.Residents--;
+                        CiviliansLost++;
+                        PeopleLost.Add(s);
+                    }
+                }
+
+                if (!s.Burning || s.Residents <= 0 || s.Door.DistanceTo(Player) > RescueRange)
+                {
+                    s.RescueHold = 0f;
+                    continue;
+                }
+                s.RescueHold += Dt;
+                if (s.RescueHold < RescueTime) continue;
+                s.RescueHold = 0f;
+                s.Residents--;
+                Rescued++;
+                Xp += 20;
+                Hp = Math.Min(MaxHp, Hp + 20f);
+                JustRescued = true;
+                RescuedFrom.Add(s);
+                Civilians.Add(new Civilian { Pos = s.Door, Life = 1.5f });
             }
 
-            foreach (Civilian c in Civilians)
-            {
-                c.Life -= Dt;
-                if (c.Life > 0f && c.Pos.DistanceTo(Player) <= 0.9f)
-                {
-                    c.Life = 0f;
-                    Xp += 20;
-                    Hp = Math.Min(MaxHp, Hp + 20f);
-                    Rescued++;
-                    JustRescued = true;
-                }
-            }
+            foreach (Civilian c in Civilians) c.Life -= Dt;
         }
 
         private void TickBoss()
