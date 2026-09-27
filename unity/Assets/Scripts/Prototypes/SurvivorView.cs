@@ -103,6 +103,7 @@ namespace FireGame.Prototypes
         private RibbonPool _waterBody;
         private RibbonPool _waterShine;
         private Pool _streamJoint;
+        private Pool _blobShine;
         private Pool _nozzle;
         private Pool _reticle;
         private Pool _shadows;
@@ -1127,9 +1128,12 @@ namespace FireGame.Prototypes
             _waterBody.Put(_ribbon, 1f, 0f, new Color(0.55f, 0.8f, 1f, jet ? 0.8f : 0.92f), 8f);
             // 빛은 왼쪽 위에서 온다: 하이라이트를 진행 방향 왼쪽으로 치우친다.
             _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f);
+            // 끝 물덩어리: 작은 물 알갱이 + 빛 쪽 반짝임. 크게 그리면 풍선처럼 보인다.
             foreach (WaterRibbon.Blob b in _blobs)
             {
-                _streamJoint.Put(new Vector3(b.Pos.X, b.Pos.Y, 0f), b.Radius * 2f, 0f, new Color(0.6f, 0.85f, 1f, b.Alpha * 0.9f));
+                var at = new Vector3(b.Pos.X, b.Pos.Y, 0f);
+                _streamJoint.Put(at, b.Radius * 1.1f, 0f, new Color(0.6f, 0.86f, 1f, b.Alpha * 0.85f));
+                _blobShine.Put(at + (new Vector3(-0.2f, 0.2f, 0f) * b.Radius), b.Radius * 0.35f, 0f, new Color(1f, 1f, 1f, b.Alpha * 0.6f));
             }
             ShedDrops(_ribbon);
 
@@ -2278,7 +2282,9 @@ namespace FireGame.Prototypes
             _ribbons.Add(_waterBody);
             _ribbons.Add(_waterShine);
             _streamJoint = new Pool(_world, "WaterBlob", DiscSprite(), 12, null);
+            _blobShine = new Pool(_world, "WaterBlobShine", DiscSprite(), 13, Additive);
             _pools.Add(_streamJoint);
+            _pools.Add(_blobShine);
             _nozzle = new Pool(_world, "Nozzle", Art.White, 16, null);
             _pools.Add(_hoseTubeEdge);
             _pools.Add(_hoseTube);
