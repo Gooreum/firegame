@@ -76,6 +76,7 @@ namespace FireGame.Prototypes
         private Pool _dropGlow;
         private Pool _beams;
         private Pool _beamCores;
+        private Pool _bubbles;
         private Pool _bombs;
         private Pool _bombShadows;
         private Pool _drones;
@@ -100,6 +101,7 @@ namespace FireGame.Prototypes
         private static Material _additive;
         private static Sprite _ringSprite;
         private static Sprite _beamSprite;
+        private static Sprite _bubbleSprite;
         private Material _spriteMaterial;
 
         /// <summary>불·빛·불똥은 더해 그려야 겹칠수록 환하게 타오른다(기본 스프라이트는 겹치면 탁해진다).</summary>
@@ -629,30 +631,31 @@ namespace FireGame.Prototypes
                 switch (s.Kind)
                 {
                     case ShotKind.Drop:
-                    {
-                        // 소방관에서 머리까지 이어지는 물줄기(최대 3.2칸) + 흰 심지 + 머리 물방울.
-                        Vector3 dir = new Vector3(s.Vel.X, s.Vel.Y, 0f).normalized;
-                        float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
-                        float len = Mathf.Min(s.Pos.DistanceTo(s.From), 3.2f);
-                        if (len > 0.05f)
-                        {
-                            Vector3 mid = at - (dir * (len * 0.5f));
-                            _beams.Put(mid, 0.42f, deg, new Color(0.35f, 0.7f, 1f, 0.8f), null, len / 0.42f);
-                            _beamCores.Put(mid, 0.16f, deg, new Color(0.85f, 0.97f, 1f, 0.9f), null, len / 0.16f);
-                        }
-                        _dropGlow.Put(at, 1.3f, 0f, new Color(0.35f, 0.75f, 1f, 0.45f));
-                        _drops.Put(at, 0.7f, deg, new Color(0.7f, 0.93f, 1f));
-                        break;
-                    }
                     case ShotKind.Jet:
                     {
+                        // 소방관 쪽 꼬리에서 머리까지 마디로 쪼갠 물줄기가 출렁이고, 거품이 앞으로 흘러간다.
+                        bool jet = s.Kind == ShotKind.Jet;
                         Vector3 dir = new Vector3(s.Vel.X, s.Vel.Y, 0f).normalized;
-                        float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
-                        float len = Mathf.Min(s.Pos.DistanceTo(s.From), 2.6f);
-                        Vector3 mid = at - (dir * (len * 0.5f));
-                        _beams.Put(mid, 0.9f, deg, new Color(0.3f, 0.65f, 1f, 0.8f), null, len / 0.9f);
-                        _beamCores.Put(mid, 0.35f, deg, new Color(0.9f, 0.98f, 1f, 0.95f), null, len / 0.35f);
-                        _dropGlow.Put(at, 2f, 0f, new Color(0.35f, 0.75f, 1f, 0.5f));
+                        float len = Mathf.Min(s.Pos.DistanceTo(s.From), jet ? 3f : 4.5f);
+                        float seed = (s.From.X * 1.7f) + (s.Vel.Y * 0.9f);
+                        Vector3 tail = at - (dir * len);
+                        if (len > 0.05f) DrawStream(tail, at, dir, seed, jet ? 1.1f : 0.62f, jet ? 6 : 8, jet ? 4 : 5);
+                        _dropGlow.Put(at, jet ? 2f : 1.3f, 0f, new Color(0.35f, 0.75f, 1f, jet ? 0.5f : 0.45f));
+                        if (!jet) _drops.Put(at, 0.7f, (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f, new Color(0.7f, 0.93f, 1f));
+                        // 머리 둘레에서 빙글 도는 거품 뭉치
+                        for (int b = 0; b < 2; b++)
+                        {
+                            float a = (_time * 14f) + seed + (b * Mathf.PI);
+                            Vector3 o = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * (jet ? 0.35f : 0.2f);
+                            _bubbles.Put(at + o, (jet ? 0.5f : 0.34f) + (0.06f * b), 0f, new Color(0.95f, 1f, 1f, 0.9f));
+                        }
+                        // 머리에서 물이 부서져 옆·뒤로 떨어져 나간다.
+                        if (Random.value < 0.25f)
+                        {
+                            Vector3 side = new Vector3(-dir.y, dir.x, 0f) * Random.Range(-3f, 3f);
+                            Emit("Effects/water_drop", at, side - (dir * Random.Range(1f, 3f)), 5f, 0.25f,
+                                Random.Range(0.18f, 0.3f), 0.05f, new Color(0.75f, 0.95f, 1f, 0.95f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
+                        }
                         break;
                     }
                     case ShotKind.Bomb:
@@ -671,6 +674,44 @@ namespace FireGame.Prototypes
                 _drones.Put(at, 0.65f, _time * 720f, Color.white);
                 if (Random.value < 0.25f) Splash(at, 1, 0.15f);
             }
+        }
+
+        /// <summary>
+        /// 줄기를 마디로 쪼개 그린다. 각 마디는 앞 마디와 조금씩 겹쳐 이음매를 숨기고,
+        /// 흔들림은 노즐 쪽에서 0이다가 머리로 갈수록 커지며 시간에 따라 앞으로 흘러간다.
+        /// </summary>
+        private void DrawStream(Vector3 tail, Vector3 head, Vector3 dir, float seed, float width, int segments, int bubbles)
+        {
+            Vector3 side = new Vector3(-dir.y, dir.x, 0f);
+            Vector3 prev = Bend(tail, head, side, seed, 0f);
+            for (int k = 1; k <= segments; k++)
+            {
+                float u = k / (float)segments;
+                Vector3 next = Bend(tail, head, side, seed, u);
+                Vector3 d = next - prev;
+                float deg = (Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg) - 90f;
+                float w = width * Mathf.Lerp(0.7f, 1.15f, u) * (1f + (0.12f * Mathf.Sin((_time * 30f) + seed + k)));
+                float alpha = Mathf.Lerp(0.35f, 1f, u);
+                Vector3 mid = (prev + next) * 0.5f;
+                float span = d.magnitude * 1.35f;
+                _beams.Put(mid, w, deg, new Color(0.25f, 0.6f, 1f, alpha), null, span / w);
+                _beamCores.Put(mid, w * 0.3f, deg, new Color(0.8f, 0.95f, 1f, alpha * 0.8f), null, span / (w * 0.3f));
+                prev = next;
+            }
+
+            for (int b = 0; b < bubbles; b++)
+            {
+                float u = Mathf.Repeat((b * 0.23f) + (_time * 2.2f) + seed, 1f);
+                Vector3 at = Bend(tail, head, side, seed, u) + (side * (Mathf.Sin((_time * 25f) + (b * 3f)) * 0.1f * (width / 0.62f)));
+                _bubbles.Put(at, Mathf.Lerp(0.14f, 0.3f, u) * Mathf.Sqrt(width / 0.62f), 0f, new Color(0.9f, 0.98f, 1f, 0.85f));
+            }
+        }
+
+        /// <summary>u=0 꼬리(노즐), u=1 머리. 흐르는 사인 두 개를 더해 옆으로 휜다.</summary>
+        private Vector3 Bend(Vector3 tail, Vector3 head, Vector3 side, float seed, float u)
+        {
+            float wave = (Mathf.Sin((u * 7f) - (_time * 18f) + seed) * 0.22f) + (Mathf.Sin((u * 3f) - (_time * 9f) + (seed * 2f)) * 0.16f);
+            return Vector3.Lerp(tail, head, u) + (side * (wave * u));
         }
 
         private void DrawPlayer()
@@ -1137,6 +1178,8 @@ namespace FireGame.Prototypes
             _beamCores = new Pool(_world, "BeamCore", BeamSprite(), 13, Additive);
             _pools.Add(_beams);
             _pools.Add(_beamCores);
+            _bubbles = new Pool(_world, "Bubble", BubbleSprite(), 14, Additive);
+            _pools.Add(_bubbles);
             _dropGlow = AddPool("DropGlow", "Effects/glow", 12, true);
             _drops = AddPool("Drop", "Effects/water_drop", 13);
             _bombs = AddPool("Bomb", "Effects/water_drop", 13);
@@ -1523,6 +1566,35 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>물줄기 몸통. 가운데가 밝고 옆과 양 끝이 흐리다. 세로로 늘려 쓴다.</summary>
+        /// <summary>물거품: 속이 비치고 테두리가 밝은 원 + 왼쪽 위 하이라이트.</summary>
+        private static Sprite BubbleSprite()
+        {
+            if (_bubbleSprite != null) return _bubbleSprite;
+            const int n = 32;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float dx = ((x + 0.5f) / n * 2f) - 1f;
+                    float dy = ((y + 0.5f) / n * 2f) - 1f;
+                    float r = Mathf.Sqrt((dx * dx) + (dy * dy));
+                    float rim = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(Mathf.Abs(r - 0.78f) / 0.18f));
+                    float fill = r < 0.8f ? 0.18f : 0f;
+                    float hx = dx + 0.32f;
+                    float hy = dy - 0.32f;
+                    float shine = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(Mathf.Sqrt((hx * hx) + (hy * hy)) / 0.22f));
+                    float a = Mathf.Clamp01(Mathf.Max(rim, Mathf.Max(fill, shine)));
+                    pixels[(y * n) + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _bubbleSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _bubbleSprite;
+        }
+
         private static Sprite BeamSprite()
         {
             if (_beamSprite != null) return _beamSprite;
