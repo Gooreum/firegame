@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using FireGame.Prototypes.Logic;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -32,6 +34,11 @@ namespace FireGame.Prototypes
 
         /// <summary>G: 시험판 C 풀장비로 다시 시작(누를 때마다 풀장비/일반 전환).</summary>
         public bool MaxGear;
+
+        /// <summary>폰: 이번 프레임 화면에 닿은 손가락들. 없으면 null이거나 비어 있다.</summary>
+        public List<Finger> Fingers;
+
+        private static readonly List<Finger> FingerBuffer = new List<Finger>();
 
         public static ProtoInput Read()
         {
@@ -80,7 +87,18 @@ namespace FireGame.Prototypes
             input.MouseHeld = Input.GetMouseButton(0);
             input.MouseClicked = Input.GetMouseButtonDown(0);
             input.RightClicked = Input.GetMouseButtonDown(1);
+            FingerBuffer.Clear();
+            for (int i = 0; i < Input.touchCount; i++)
+            {
+                Touch t = Input.GetTouch(i);
+                FingerPhase phase = t.phase == TouchPhase.Began ? FingerPhase.Down
+                    : t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled ? FingerPhase.Up
+                    : FingerPhase.Held;
+                FingerBuffer.Add(new Finger { Id = t.fingerId, Phase = phase, At = new Vec2(t.position.x, t.position.y) });
+            }
+            input.Fingers = FingerBuffer;
 #endif
+            // 새 Input System 쪽은 손가락을 받지 않는다(이 프로젝트는 구형 Input Manager를 쓴다).
             if (input.Move.sqrMagnitude > 1f) input.Move.Normalize();
             return input;
         }

@@ -69,6 +69,15 @@ namespace FireGame.Prototypes
         private int _suitShown = -1;
         private Vector3 _mouseAt;
         private bool _hasMouse;
+
+        /// <summary>폰 두 엄지 조작. 손가락이 한 번이라도 닿으면 그때부터 마우스 흉내를 무시한다.</summary>
+        private readonly TwinStick _stick = new TwinStick();
+        private static readonly List<Finger> NoFingers = new List<Finger>();
+        private bool _touch;
+        private Image _leftRing;
+        private Image _leftKnob;
+        private Image _rightRing;
+        private Image _rightKnob;
         private float _jetPulse;
         private float _igniteClock;
         private readonly List<Vector3> _trail = new List<Vector3>();
@@ -255,6 +264,8 @@ namespace FireGame.Prototypes
             BuildGround();
             BuildPools();
             BuildHud();
+            // 조이스틱은 HUD 맨 위에(카드·결과창은 따로 켜고 끈다).
+            foreach (Image stick in new[] { _leftRing, _leftKnob, _rightRing, _rightKnob }) stick.transform.SetAsLastSibling();
             BuildAudio();
             Restart(_seed);
         }
@@ -293,6 +304,7 @@ namespace FireGame.Prototypes
             _aim = Vector3.right;
             _aimAge = 99f;
             _trail.Clear();
+            _stick.Clear();
             _suitShown = -1;
             _lastOutcome = SOutcome.Playing;
             _cameraAt = new Vector3(_sim.Player.X, _sim.Player.Y, -10f);
@@ -316,6 +328,11 @@ namespace FireGame.Prototypes
 
         public void Tick(float dt, in ProtoInput input)
         {
+            List<Finger> fingers = input.Fingers ?? NoFingers;
+            if (fingers.Count > 0) _touch = true;
+            // 카드·결과창 중에도 손가락을 먹여서, 그 사이 뗀 손가락이 계속 눌린 채 남지 않게 한다.
+            if (_touch) _stick.Feed(fingers, _camera.pixelWidth, _camera.pixelHeight / UiKit.ReferenceHeight);
+
             if (_sim.Outcome != SOutcome.Playing)
             {
                 if (_overAge > 1f && input.MouseClicked)
@@ -342,13 +359,24 @@ namespace FireGame.Prototypes
             {
                 _accumulator += dt * (_slowmo > 0f ? 0.3f : 1f);
                 var move = new Vec2(input.Move.x, input.Move.y);
-                // 호스: 마우스로 겨누고 왼쪽 버튼을 쥔 동안 쏜다.
-                Vector3 screen = new Vector3(input.Mouse.x, input.Mouse.y, 10f);
-                _mouseAt = _world.InverseTransformPoint(_camera.ScreenToWorldPoint(screen));
-                _mouseAt.z = 0f;
-                _hasMouse = true;
-                _sim.Aim = new Vec2(_mouseAt.x - _sim.Player.X, _mouseAt.y - _sim.Player.Y);
-                _sim.Spraying = input.MouseHeld;
+                if (_touch)
+                {
+                    // 폰: 왼손 스틱으로 걷고, 오른손이 닿아 있는 동안 쏜다. 끌지 않고 누르기만 하면 걷는 쪽으로 쏜다.
+                    if (_stick.LeftOn) move = _stick.Move;
+                    _sim.Aim = _stick.AimFresh ? _stick.Aim : _sim.Facing;
+                    _sim.Spraying = _stick.Firing;
+                    _hasMouse = false;
+                }
+                else
+                {
+                    // 호스: 마우스로 겨누고 왼쪽 버튼을 쥔 동안 쏜다.
+                    Vector3 screen = new Vector3(input.Mouse.x, input.Mouse.y, 10f);
+                    _mouseAt = _world.InverseTransformPoint(_camera.ScreenToWorldPoint(screen));
+                    _mouseAt.z = 0f;
+                    _hasMouse = true;
+                    _sim.Aim = new Vec2(_mouseAt.x - _sim.Player.X, _mouseAt.y - _sim.Player.Y);
+                    _sim.Spraying = input.MouseHeld;
+                }
                 while (_accumulator >= SurvivorSim.Dt && _sim.PendingChoices == null && _sim.Outcome == SOutcome.Playing)
                 {
                     _accumulator -= SurvivorSim.Dt;
@@ -357,7 +385,36 @@ namespace FireGame.Prototypes
                 if (_sim.PendingChoices != null) _accumulator = 0f;
             }
 
+            DrawSticks();
             Refresh(dt);
+        }
+
+        /// <summary>폰 조이스틱: 누른 자리에 받침 고리, 엄지 자리에 손잡이. 쏘는 동안 오른쪽 손잡이는 물빛.</summary>
+        private void DrawSticks()
+        {
+            bool live = _touch && _sim.Outcome == SOutcome.Playing && _sim.PendingChoices == null;
+            PlaceStick(_leftRing, _leftKnob, live && _stick.LeftOn, _stick.LeftBase, _stick.LeftKnob, Color.white);
+            PlaceStick(_rightRing, _rightKnob, live && _stick.RightOn, _stick.RightBase, _stick.RightKnob, new Color(0.55f, 0.85f, 1f));
+        }
+
+        private void PlaceStick(Image ring, Image knob, bool on, Vec2 origin, Vec2 thumb, Color tint)
+        {
+            ring.gameObject.SetActive(on);
+            knob.gameObject.SetActive(on);
+            if (!on) return;
+            ring.rectTransform.anchoredPosition = ToHud(origin);
+            knob.rectTransform.anchoredPosition = ToHud(thumb);
+            knob.color = new Color(tint.r, tint.g, tint.b, 0.6f);
+        }
+
+        /// <summary>
+        /// 화면 픽셀 → HUD 좌표. 캔버스는 높이 1080 기준으로 맞추고(CanvasScaler) HUD 중심이 화면 중심이다.
+        /// 카메라 광선으로 바꾸면 카메라가 따라 움직인 뒤 캔버스가 아직 안 따라온 프레임에 어긋난다.
+        /// </summary>
+        private Vector2 ToHud(Vec2 screen)
+        {
+            float k = UiKit.ReferenceHeight / _camera.pixelHeight;
+            return new Vector2((screen.X - (_camera.pixelWidth * 0.5f)) * k, (screen.Y - (_camera.pixelHeight * 0.5f)) * k);
         }
 
         /// <summary>한 틱 진행하고 그 틱의 효과·소리를 만든다. 하니스도 이걸로 판을 굴린다.</summary>
@@ -2449,8 +2506,21 @@ namespace FireGame.Prototypes
         // HUD
         // ------------------------------------------------------------------
 
+        private Image StickImage(string name, Sprite sprite, float size, Color color)
+        {
+            Image image = UiKit.Image(_hud, name, sprite, color);
+            image.rectTransform.sizeDelta = new Vector2(size, size);
+            image.gameObject.SetActive(false);
+            return image;
+        }
+
         private void BuildHud()
         {
+            _leftRing = StickImage("StickRingL", RingSprite(), TwinStick.Radius * 2f, new Color(1f, 1f, 1f, 0.35f));
+            _leftKnob = StickImage("StickKnobL", DiscSprite(), 90f, new Color(1f, 1f, 1f, 0.6f));
+            _rightRing = StickImage("StickRingR", RingSprite(), TwinStick.Radius * 2f, new Color(0.7f, 0.9f, 1f, 0.35f));
+            _rightKnob = StickImage("StickKnobR", DiscSprite(), 90f, new Color(0.55f, 0.85f, 1f, 0.6f));
+
             _vignette = UiKit.Image(_hud, "Vignette", VignetteSprite(), Color.clear);
             UiKit.Stretch(_vignette.rectTransform);
             _vignette.raycastTarget = false;
@@ -2518,7 +2588,11 @@ namespace FireGame.Prototypes
             _bossBandText = UiKit.OutlinedLabel(_bossBand.transform, "Text", "대형 화재 접근!", 84, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
             UiKit.Stretch(_bossBandText.rectTransform);
 
-            Text help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + "WASD 이동 · 마우스로 겨누고 왼쪽 버튼을 누르면 물 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 불난 가게 문 앞에 서 있으면 구조      R 다시  G " + (_maxGear ? "일반" : "풀장비") + "  Tab 시험판 전환", 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
+            // 폰(터치 화면)에서는 두 엄지 조작을 알려 준다.
+            string controls = Input.touchSupported
+                ? "왼손 끌어 이동 · 오른손 누르면 물(끌어서 겨누기) · 구슬을 모아 레벨업 · 카드는 탭 · 불난 가게 문 앞에 서 있으면 구조"
+                : "WASD 이동 · 마우스로 겨누고 왼쪽 버튼을 누르면 물 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 불난 가게 문 앞에 서 있으면 구조      R 다시  G " + (_maxGear ? "일반" : "풀장비") + "  Tab 시험판 전환";
+            Text help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + controls, 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
             UiKit.Place(help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 20f), new Vector2(1850f, 40f));
 
             _flashImage = UiKit.Image(_hud, "Flash", Art.White, Color.clear);

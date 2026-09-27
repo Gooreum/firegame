@@ -74,6 +74,8 @@ namespace FireGame.Prototypes.EditorTools
                 camera.orthographicSize = 4.5f;
             });
 
+            failures += TouchShot(dir, "c12_touch_sticks");
+
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
         }
@@ -185,6 +187,76 @@ namespace FireGame.Prototypes.EditorTools
             {
                 Debug.LogError("[ProtoShots] 실패: " + name + " — " + e);
                 return 1;
+            }
+        }
+
+        /// <summary>
+        /// 폰 조작: 봇이 몇 초 굴린 판에 가짜 두 손가락(왼손 오른쪽으로 끌기, 오른손 위로 끌기)을 Tick으로 넣는다.
+        /// 조이스틱 두 개가 보이고, 소방관이 걸으면서 끈 쪽으로 물을 쏘는지 본다.
+        /// </summary>
+        private static int TouchShot(string dir, string name)
+        {
+            RenderTexture screen = null;
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var root = new GameObject("Prototype");
+                Camera camera = PrototypeHost.SetUpCamera();
+                // 손가락 좌표와 캔버스가 찍을 화면(1920×1080)과 같은 크기를 보게 한다.
+                screen = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
+                camera.targetTexture = screen;
+                Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
+
+                var view = new SurvivorView(root.transform, camera, canvas);
+                var bot = new SurvivorBot(view.Sim);
+                while (view.Sim.Time < 8f && view.Sim.Outcome == SOutcome.Playing)
+                {
+                    if (view.Sim.PendingChoices != null)
+                    {
+                        view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices));
+                        continue;
+                    }
+                    bot.AimHose();
+                    view.Step(bot.Move());
+                    view.Refresh(SurvivorSim.Dt);
+                }
+
+                var left = new Vec2(Width * 0.18f, Height * 0.3f);
+                var right = new Vec2(Width * 0.78f, Height * 0.35f);
+                for (int frame = 0; frame < 45; frame++)
+                {
+                    if (view.Sim.PendingChoices != null) view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices));
+                    FingerPhase phase = frame == 0 ? FingerPhase.Down : FingerPhase.Held;
+                    float t = Mathf.Clamp01(frame / 10f);
+                    var input = new ProtoInput
+                    {
+                        Fingers = new List<Finger>
+                        {
+                            new Finger { Id = 0, Phase = phase, At = new Vec2(left.X + (80f * t), left.Y) },
+                            new Finger { Id = 1, Phase = phase, At = new Vec2(right.X + (40f * t), right.Y + (90f * t)) },
+                        },
+                    };
+                    view.Tick(SurvivorSim.Dt, input);
+                }
+                if (!view.Sim.Spraying) throw new Exception("오른손 스틱을 눌렀는데 물이 안 나간다");
+                foreach (RectTransform r in canvas.GetComponentsInChildren<RectTransform>(true))
+                {
+                    if (r.name.StartsWith("Stick")) Debug.Log("[ProtoShots] 스틱 " + r.name + " 켜짐 " + r.gameObject.activeInHierarchy + " 자리 " + r.anchoredPosition + " 크기 " + r.rect.size + " 부모 " + r.parent.name);
+                }
+
+                Canvas.ForceUpdateCanvases();
+                Capture(camera, Path.Combine(dir, name + ".png"));
+                Debug.Log("[ProtoShots] " + name + " (조준 " + view.Sim.Aim.X.ToString("0.00") + "," + view.Sim.Aim.Y.ToString("0.00") + ", 쏨 " + view.Sim.Spraying + ")");
+                return 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[ProtoShots] 실패: " + name + " — " + e);
+                return 1;
+            }
+            finally
+            {
+                if (screen != null) UnityEngine.Object.DestroyImmediate(screen);
             }
         }
 
