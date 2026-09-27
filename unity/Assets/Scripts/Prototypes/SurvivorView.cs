@@ -114,6 +114,10 @@ namespace FireGame.Prototypes
         private Pool _roofFire;
         private Pool _bars;
         private readonly List<TextMesh> _signs = new List<TextMesh>();
+        private readonly List<TextMesh> _helps = new List<TextMesh>();
+        private Pool _edgeArrows;
+        private readonly List<Image> _stars = new List<Image>();
+        private static Sprite _arrowSprite;
 
         /// <summary>가게 지붕 색(동네 배치 순서). 마지막은 창고.</summary>
         private static readonly Color[] RoofColors =
@@ -497,6 +501,8 @@ namespace FireGame.Prototypes
                 GameAudio.Play(Cue.Backfire);
             }
 
+            ReactTown();
+
             if (_sim.JustWave)
             {
                 ShowAlert("불길이 사방에서 몰려온다!", new Color(1f, 0.6f, 0.3f));
@@ -556,6 +562,99 @@ namespace FireGame.Prototypes
             }
         }
 
+        /// <summary>동네 신호: 불남·꺼짐·무너짐·폭발·사람 잃음.</summary>
+        private void ReactTown()
+        {
+            foreach (Structure st in _sim.Ignited)
+            {
+                Vector3 at = W(st.Pos);
+                if (st.IsBuilding)
+                {
+                    ShowAlert(st.Name + "에 불!" + (st.Residents > 0 ? "  " + st.Residents + "명 갇힘" : ""), new Color(1f, 0.6f, 0.25f));
+                    Shockwave(at, new Color(1f, 0.45f, 0.1f, 0.9f), 6f, 0.5f);
+                    Burst(at, 18, new Color(1f, 0.55f, 0.15f), 6f);
+                }
+                else if (st.Kind == StructureKind.Gas)
+                {
+                    ShowAlert("가스통에 불! 곧 터진다", new Color(1f, 0.35f, 0.25f));
+                    GameAudio.Play(Cue.Critical);
+                }
+                if (_igniteClock <= 0f)
+                {
+                    GameAudio.Play(Cue.SecondIgnition);
+                    _igniteClock = 0.25f;
+                }
+            }
+
+            foreach (Structure st in _sim.Doused)
+            {
+                Vector3 at = W(st.Pos);
+                Steam(at, st.IsBuilding ? 10 : 4, st.IsBuilding ? 2f : 1.2f);
+                if (st.IsBuilding)
+                {
+                    Shockwave(at, new Color(0.6f, 0.9f, 1f, 0.9f), 7f, 0.5f);
+                    SpawnText(at + new Vector3(0f, 1.6f, 0f), "진화!", new Color(0.6f, 0.9f, 1f), 1.6f);
+                }
+                GameAudio.Play(Cue.PutOut);
+            }
+
+            foreach (Structure st in _sim.Fell)
+            {
+                Vector3 at = W(st.Pos);
+                if (st.Kind == StructureKind.Gas) continue;
+                bool big = st.IsBuilding;
+                Scorch(at, big ? Mathf.Max(st.Half.X, st.Half.Y) * 3f : 2.5f);
+                Burst(at, big ? 50 : 15, new Color(1f, 0.5f, 0.15f), big ? 9f : 5f);
+                for (int k = 0; k < (big ? 10 : 3); k++)
+                {
+                    float a = Random.value * Mathf.PI * 2f;
+                    Emit(Smokes[Random.Range(0, Smokes.Length)], at, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Random.Range(1.5f, 4f), 1.5f, Random.Range(1.2f, 2f),
+                        1.5f, 4f, new Color(0.15f, 0.13f, 0.13f, 0.75f), new Color(0.2f, 0.2f, 0.2f, 0f), Random.Range(-90f, 90f));
+                }
+                if (big)
+                {
+                    ShowAlert(st.Name + Josa(st.Name, "이", "가") + " 무너졌다", new Color(1f, 0.35f, 0.3f));
+                    _trauma = Mathf.Min(1f, _trauma + 0.6f);
+                    GameAudio.Play(Cue.Collapse);
+                }
+            }
+
+            foreach (Vec2 p in _sim.GasBlasts)
+            {
+                Vector3 at = W(p);
+                var orange = new Color(1f, 0.5f, 0.1f);
+                Flash(orange, 0.5f);
+                Shockwave(at, orange, SurvivorSim.GasRadius * 2.4f, 0.5f);
+                Shockwave(at, new Color(1f, 0.85f, 0.4f), SurvivorSim.GasRadius * 1.6f, 0.35f, 0.08f);
+                Burst(at, 70, orange, 13f);
+                Scorch(at, SurvivorSim.GasRadius * 2f);
+                for (int k = 0; k < 12; k++)
+                {
+                    float a = Random.value * Mathf.PI * 2f;
+                    Emit(Smokes[Random.Range(0, Smokes.Length)], at, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Random.Range(3f, 7f), 2f, Random.Range(1f, 1.6f),
+                        1.5f, 4.5f, new Color(0.12f, 0.1f, 0.1f, 0.8f), new Color(0.1f, 0.1f, 0.1f, 0f), Random.Range(-90f, 90f));
+                }
+                _trauma = 1f;
+                HitStop(0.06f);
+                GameAudio.Play(Cue.Backfire);
+            }
+
+            foreach (Structure st in _sim.PeopleLost)
+            {
+                ShowAlert(st.Name + "에서 사람을 잃었다", new Color(0.85f, 0.75f, 0.75f));
+                GameAudio.Play(Cue.CivilianLost);
+            }
+        }
+
+        /// <summary>받침이 있으면 a(이/을), 없으면 b(가/를).</summary>
+        private static string Josa(string word, string a, string b)
+        {
+            if (string.IsNullOrEmpty(word)) return b;
+            char c = word[word.Length - 1];
+            if (c < 0xAC00 || c > 0xD7A3) return b;
+            return (c - 0xAC00) % 28 != 0 ? a : b;
+        }
+
         // ------------------------------------------------------------------
         // 매 프레임
         // ------------------------------------------------------------------
@@ -597,6 +696,7 @@ namespace FireGame.Prototypes
             DrawShots();
             DrawPlayer();
             DrawGear(dt);
+            DrawEdgeArrows();
             foreach (Pool p in _pools) p.End();
 
             UpdateSpraySound(dt);
@@ -689,17 +789,18 @@ namespace FireGame.Prototypes
             }
         }
 
+        /// <summary>구해 낸 사람: 문 앞에서 아래로 뛰어 나가며 사라진다.</summary>
         private void DrawCivilians()
         {
             for (int i = 0; i < _sim.Civilians.Count; i++)
             {
                 Civilian c = _sim.Civilians[i];
-                Vector3 at = W(c.Pos);
-                float blink = c.Life < 5f && Mathf.Sin(_time * 18f) < 0f ? 0.3f : 1f;
-                float ring = 1.6f + (0.3f * Mathf.Sin(_time * 6f));
-                _civilianRings.Put(at, ring, 0f, new Color(0.4f, 1f, 0.4f, 0.45f * blink));
-                _shadows.Put(at + new Vector3(0f, -0.3f, 0f), 0.8f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
-                _civilians.Put(at + new Vector3(0f, 0.08f * Mathf.Abs(Mathf.Sin(_time * 8f)), 0f), 0.85f, 0f, new Color(1f, 1f, 1f, blink), Art.Get(Faces[i % Faces.Length]));
+                float t = 1f - Mathf.Clamp01(c.Life / 1.5f);
+                Vector3 at = W(c.Pos) + new Vector3(Mathf.Sin(i * 2.3f) * 1.2f * t, -2.6f * t, 0f);
+                float a = t < 0.7f ? 1f : 1f - ((t - 0.7f) / 0.3f);
+                _civilianRings.Put(at, 1.2f, 0f, new Color(0.4f, 1f, 0.4f, 0.4f * a));
+                _shadows.Put(at + new Vector3(0f, -0.3f, 0f), 0.8f, 0f, new Color(0f, 0f, 0f, 0.35f * a), null, 0.5f);
+                _civilians.Put(at + new Vector3(0f, 0.12f * Mathf.Abs(Mathf.Sin(_time * 16f)), 0f), 0.85f, 0f, new Color(1f, 1f, 1f, a), Art.Get(Faces[i % Faces.Length]));
             }
         }
 
@@ -1497,7 +1598,9 @@ namespace FireGame.Prototypes
         private void BuildSigns()
         {
             foreach (TextMesh t in _signs) UiKit.Discard(t.gameObject);
+            foreach (TextMesh t in _helps) UiKit.Discard(t.gameObject);
             _signs.Clear();
+            _helps.Clear();
             foreach (Structure st in _sim.Structures)
             {
                 if (!st.IsBuilding) continue;
@@ -1509,6 +1612,14 @@ namespace FireGame.Prototypes
                 t.color = new Color(1f, 1f, 1f, 0.9f);
                 t.transform.localPosition = new Vector3(st.Pos.X, st.Pos.Y + (st.Half.Y * 0.4f), -0.1f);
                 _signs.Add(t);
+
+                // 갇힌 사람이 외치는 말풍선(불이 나야 보인다).
+                TextMesh help = NewText();
+                help.transform.SetParent(_root, false);
+                help.GetComponent<MeshRenderer>().sortingOrder = 18;
+                help.characterSize = 0.06f;
+                help.gameObject.SetActive(false);
+                _helps.Add(help);
             }
         }
 
@@ -1533,6 +1644,7 @@ namespace FireGame.Prototypes
                     if (sign < _signs.Count)
                     {
                         _signs[sign].gameObject.SetActive(!st.Collapsed);
+                        DrawTrapped(st, _helps[sign], i);
                         sign++;
                     }
                     DrawBuilding(st, at, w, h, roof, burnt, wet, i);
@@ -1641,6 +1753,41 @@ namespace FireGame.Prototypes
             }
         }
 
+        /// <summary>
+        /// 불난 가게에 갇힌 사람: 창문에서 얼굴이 흔들리고, 머리 위에 "살려줘!", 문 앞에 초록 원이 뜬다.
+        /// 문 앞에 서 있으면 바깥 원이 조여 들며 구조가 차오른다. 큰 불 연기가 차면 말풍선이 빨갛게 급해진다.
+        /// </summary>
+        private void DrawTrapped(Structure st, TextMesh help, int seed)
+        {
+            bool trapped = st.Burning && st.Residents > 0;
+            help.gameObject.SetActive(trapped);
+            if (!trapped) return;
+
+            Vector3 at = W(st.Pos);
+            float bob = Mathf.Abs(Mathf.Sin((_time * 7f) + seed));
+            Vector3 win = at + new Vector3(-st.Half.X * 2f * 0.27f, (-st.Half.Y * 2f * 0.22f) + (0.06f * bob), 0f);
+            _civilians.Put(win, 0.55f, 8f * Mathf.Sin(_time * 9f + seed), Color.white, Art.Get(Faces[seed % Faces.Length]));
+
+            bool choking = st.Fire >= SurvivorSim.SmokeFire;
+            float urgent = choking ? Mathf.Clamp01(st.Smoke / SurvivorSim.SmokeTime) : 0f;
+            help.text = "살려줘!" + (st.Residents > 1 ? " ×" + st.Residents : "");
+            bool blink = choking && Mathf.Sin(_time * (8f + (16f * urgent))) > 0f;
+            help.color = blink ? new Color(1f, 0.35f, 0.3f) : Color.white;
+            help.transform.localPosition = at + new Vector3(0f, st.Half.Y + 1.1f + (0.15f * bob), -0.2f);
+            help.characterSize = 0.06f * (1f + (0.12f * bob));
+
+            Vector3 door = W(st.Door);
+            float pulse = 1.5f + (0.25f * Mathf.Sin(_time * 6f));
+            _civilianRings.Put(door, pulse * 1.3f, 0f, new Color(0.4f, 1f, 0.4f, 0.55f));
+            _reticle.Put(door, SurvivorSim.RescueRange * 2f, 0f, new Color(0.5f, 1f, 0.5f, 0.8f));
+            if (st.RescueHold > 0f)
+            {
+                float t = Mathf.Clamp01(st.RescueHold / SurvivorSim.RescueTime);
+                _reticle.Put(door, Mathf.Lerp(SurvivorSim.RescueRange * 2.6f, 0.5f, t), 0f, new Color(0.8f, 1f, 0.6f, 0.95f));
+                _civilianRings.Put(door, 2.5f * t, 0f, new Color(0.6f, 1f, 0.5f, 0.6f * t));
+            }
+        }
+
         /// <summary>타는 구조물 위 불꽃(세기만큼 많고 크게) + 밑빛 + 연기 기둥.</summary>
         private void DrawRoofFire(Structure st, Vector3 at, float w, float h, int seed)
         {
@@ -1696,6 +1843,8 @@ namespace FireGame.Prototypes
             _roofGlow = AddPool("RoofGlow", "Effects/glow", 8, true);
             _roofFire = AddPool("RoofFire", "Effects/fire_02", 11);
             _bars = new Pool(_world, "Bar", Art.White, 19, null);
+            _edgeArrows = new Pool(_world, "EdgeArrow", ArrowSprite(), 22, null);
+            _pools.Add(_edgeArrows);
             _pools.Add(_houseShadows);
             _pools.Add(_roofEdges);
             _pools.Add(_roofs);
@@ -1873,7 +2022,7 @@ namespace FireGame.Prototypes
             _timer = UiKit.OutlinedLabel(_hud, "Timer", "", 58, Color.white, TextAnchor.UpperCenter);
             UiKit.Place(_timer.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -32f), new Vector2(400f, 70f));
             _kills = UiKit.OutlinedLabel(_hud, "Kills", "", 30, new Color(1f, 0.85f, 0.6f), TextAnchor.UpperCenter);
-            UiKit.Place(_kills.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -100f), new Vector2(400f, 40f));
+            UiKit.Place(_kills.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -100f), new Vector2(900f, 40f));
 
             Image hpBack = UiKit.Image(_hud, "HpBack", Art.White, new Color(0f, 0f, 0f, 0.6f));
             UiKit.Place(hpBack.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -96f), new Vector2(380f, 32f));
@@ -1911,7 +2060,7 @@ namespace FireGame.Prototypes
             _bossBandText = UiKit.OutlinedLabel(_bossBand.transform, "Text", "대형 화재 접근!", 84, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
             UiKit.Stretch(_bossBandText.rectTransform);
 
-            Text help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + "WASD 이동 · 마우스로 겨누고 왼쪽 버튼을 누르면 물 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 초록 원 시민에게 가면 구조      R 다시  G " + (_maxGear ? "일반" : "풀장비") + "  Tab 시험판 전환", 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
+            Text help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + "WASD 이동 · 마우스로 겨누고 왼쪽 버튼을 누르면 물 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 불난 가게 문 앞에 서 있으면 구조      R 다시  G " + (_maxGear ? "일반" : "풀장비") + "  Tab 시험판 전환", 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
             UiKit.Place(help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 20f), new Vector2(1850f, 40f));
 
             _flashImage = UiKit.Image(_hud, "Flash", Art.White, Color.clear);
@@ -1922,9 +2071,15 @@ namespace FireGame.Prototypes
             UiKit.Stretch(_cardLayer);
 
             _resultBack = UiKit.Image(_hud, "ResultBack", Art.White, new Color(0f, 0f, 0f, 0.78f));
-            UiKit.Place(_resultBack.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1000f, 460f));
-            _result = UiKit.OutlinedLabel(_resultBack.transform, "Result", "", 46, Color.white, TextAnchor.MiddleCenter);
+            UiKit.Place(_resultBack.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1100f, 560f));
+            _result = UiKit.OutlinedLabel(_resultBack.transform, "Result", "", 42, Color.white, TextAnchor.MiddleCenter);
             UiKit.Stretch(_result.rectTransform, 20f);
+            for (int i = 0; i < 3; i++)
+            {
+                Image star = UiKit.Image(_resultBack.transform, "Star", Art.Get("UI/star"), Color.white);
+                UiKit.Place(star.rectTransform, new Vector2(0.5f, 0.5f), new Vector2((i - 1) * 130f, 115f), new Vector2(110f, 110f));
+                _stars.Add(star);
+            }
             _resultBack.gameObject.SetActive(false);
         }
 
@@ -1933,7 +2088,11 @@ namespace FireGame.Prototypes
             int seconds = Mathf.FloorToInt(_sim.Time);
             _timer.text = (seconds / 60).ToString("00") + ":" + (seconds % 60).ToString("00");
             _timer.color = _sim.Time >= SurvivorSim.BossAt - 10f && _sim.Boss == null && Mathf.Sin(_time * 12f) > 0f ? new Color(1f, 0.4f, 0.3f) : Color.white;
-            _kills.text = "처치 " + _sim.Kills;
+            int total = _sim.HousesTotal;
+            _kills.text = "지킨 건물 " + (total - _sim.HousesLost) + "/" + total + "  ·  구조 " + _sim.Rescued + "  ·  잃음 " + _sim.CiviliansLost;
+            // 하나만 더 무너지면 진다: 붉게 깜빡인다.
+            bool edge = total > 0 && (_sim.HousesLost + 1) * 2 > total && _sim.Outcome == SOutcome.Playing;
+            _kills.color = edge && Mathf.Sin(_time * 10f) > 0f ? new Color(1f, 0.35f, 0.3f) : new Color(1f, 0.85f, 0.6f);
             _level.text = "Lv " + _sim.Level;
 
             float xp = Mathf.Clamp01(_sim.Xp / (float)_sim.XpToNext);
@@ -2002,11 +2161,75 @@ namespace FireGame.Prototypes
             _resultBack.gameObject.SetActive(over);
             if (over)
             {
-                string head = _sim.Outcome == SOutcome.Won ? "승리! 화염 거인을 껐다" : "쓰러졌다";
-                _result.text = head + "\n\n" + _timer.text + " 버팀   처치 " + _sim.Kills + "   Lv " + _sim.Level + "   구조 " + _sim.Rescued + "\n\n" + (_overAge > 1f ? "클릭하면 다른 판" : "");
+                bool won = _sim.Outcome == SOutcome.Won;
+                string head = won ? "화재 진압 완료!" : _sim.LostTown ? "동네가 다 타 버렸다" : "쓰러졌다";
+                string stats = "지킨 건물 " + (total - _sim.HousesLost) + "/" + total + "    구조 " + _sim.Rescued + "    잃음 " + _sim.CiviliansLost;
+                string more = _timer.text + " 버팀  ·  처치 " + _sim.Kills + "  ·  Lv " + _sim.Level;
+                _result.text = head + "\n\n" + (won ? "\n\n" : "") + stats + "\n" + more + "\n\n" + (_overAge > 1f ? "클릭하면 다른 판" : "");
+                for (int i = 0; i < _stars.Count; i++)
+                {
+                    _stars[i].gameObject.SetActive(won);
+                    // 별은 하나씩 톡톡 튀어나온다.
+                    float pop2 = Mathf.Clamp01((_overAge - 0.3f - (i * 0.25f)) / 0.2f);
+                    _stars[i].sprite = Art.Get(i < _sim.Stars ? "UI/star" : "UI/star_empty");
+                    _stars[i].rectTransform.localScale = Vector3.one * (pop2 < 1f ? Mathf.Lerp(0f, 1.3f, pop2) : 1f);
+                }
                 float pop = _overAge < 0.2f ? Mathf.Lerp(0.6f, 1f, _overAge / 0.2f) : 1f;
                 _resultBack.rectTransform.localScale = Vector3.one * pop;
             }
+        }
+
+        /// <summary>화면 밖 타는 건물·가스통을 화면 가장자리 화살표로 가리킨다. 갇힌 사람이 있으면 초록으로 크게 뛴다.</summary>
+        private void DrawEdgeArrows()
+        {
+            if (_sim.Outcome != SOutcome.Playing || _camera == null) return;
+            // 카메라가 따라갈 자리 기준으로 잡는다(이번 프레임 FollowCamera 전이라).
+            Vector3 eye = _cameraAt;
+            float halfH = _camera.orthographicSize;
+            float halfW = halfH * _camera.aspect;
+            foreach (Structure st in _sim.Structures)
+            {
+                if (!st.Burning || !(st.IsBuilding || st.Kind == StructureKind.Gas)) continue;
+                float dx = st.Pos.X - eye.x;
+                float dy = st.Pos.Y - eye.y;
+                if (Mathf.Abs(dx) < halfW * 0.96f && Mathf.Abs(dy) < halfH * 0.96f) continue;
+                // 가장자리(위는 HUD를 피해 조금 더 안쪽)에 붙인다.
+                float k = Mathf.Min((halfW * 0.92f) / Mathf.Max(Mathf.Abs(dx), 0.001f), (halfH * (dy > 0f ? 0.72f : 0.84f)) / Mathf.Max(Mathf.Abs(dy), 0.001f));
+                var spot = new Vector3(eye.x + (dx * k), eye.y + (dy * k), 0f);
+                bool people = st.Residents > 0;
+                float beat = 1f + ((people ? 0.25f : 0.1f) * Mathf.Abs(Mathf.Sin(_time * (people ? 8f : 5f))));
+                Color c = people ? new Color(0.45f, 1f, 0.45f) : st.Kind == StructureKind.Gas ? new Color(1f, 0.3f, 0.25f) : new Color(1f, 0.55f, 0.2f);
+                _edgeArrows.Put(spot, 1.1f * beat * (people ? 1.3f : 1f), Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, c);
+            }
+        }
+
+        /// <summary>오른쪽을 가리키는 화살표(굵은 꼬리 + 뾰족한 머리). 테두리는 어둡다.</summary>
+        private static Sprite ArrowSprite()
+        {
+            if (_arrowSprite != null) return _arrowSprite;
+            const int n = 64;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = (x + 0.5f) / n;
+                    float v = Mathf.Abs(((y + 0.5f) / n) - 0.5f) * 2f;
+                    // 머리: u 0.45~0.95에서 반폭 0.9→0. 꼬리: u 0.08~0.75에서 반폭 0.32(머리 안까지 이어 틈이 없게).
+                    float head = Mathf.Min((0.9f * (0.95f - u) / 0.5f) - v, u - 0.45f);
+                    float tail = Mathf.Min(0.32f - v, Mathf.Min(u - 0.08f, 0.75f - u));
+                    float inside = Mathf.Max(head, tail);
+                    float a = Mathf.Clamp01(inside * 25f);
+                    float rim = Mathf.Clamp01((inside - 0.07f) * 25f);
+                    byte c = (byte)Mathf.Lerp(40f, 255f, rim);
+                    pixels[(y * n) + x] = new Color32(c, c, c, (byte)(a * 255));
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _arrowSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _arrowSprite;
         }
 
         private void ShowAlert(string text, Color color)
