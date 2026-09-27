@@ -147,6 +147,7 @@ namespace FireGame.Prototypes.EditorTools
                         view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices));
                         continue;
                     }
+                    bot.AimHose();
                     view.Step(bot.Move());
                     view.Refresh(SurvivorSim.Dt);
                 }

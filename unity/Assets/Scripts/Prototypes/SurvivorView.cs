@@ -65,6 +65,10 @@ namespace FireGame.Prototypes
         private Vector3 _aim = Vector3.right;
         private float _aimAge = 99f;
         private int _suitShown = -1;
+        private Vector3 _mouseAt;
+        private bool _hasMouse;
+        private int _muzzleTick;
+        private float _jetPulse;
         private readonly List<Vector3> _trail = new List<Vector3>();
         private readonly List<RectTransform> _rays = new List<RectTransform>();
         private SOutcome _lastOutcome;
@@ -84,6 +88,7 @@ namespace FireGame.Prototypes
         private Pool _hoseBody;
         private Pool _hoseCore;
         private Pool _nozzle;
+        private Pool _reticle;
         private Pool _hoseTube;
         private Pool _hoseTubeEdge;
         private Pool _bubbles;
@@ -283,6 +288,13 @@ namespace FireGame.Prototypes
             {
                 _accumulator += dt * (_slowmo > 0f ? 0.3f : 1f);
                 var move = new Vec2(input.Move.x, input.Move.y);
+                // 호스: 마우스로 겨누고 왼쪽 버튼을 쥔 동안 쏜다.
+                Vector3 screen = new Vector3(input.Mouse.x, input.Mouse.y, 10f);
+                _mouseAt = _world.InverseTransformPoint(_camera.ScreenToWorldPoint(screen));
+                _mouseAt.z = 0f;
+                _hasMouse = true;
+                _sim.Aim = new Vec2(_mouseAt.x - _sim.Player.X, _mouseAt.y - _sim.Player.Y);
+                _sim.Spraying = input.MouseHeld;
                 while (_accumulator >= SurvivorSim.Dt && _sim.PendingChoices == null && _sim.Outcome == SOutcome.Playing)
                 {
                     _accumulator -= SurvivorSim.Dt;
@@ -788,9 +800,22 @@ namespace FireGame.Prototypes
         /// <summary>마지막 발사 뒤 이만큼은 조준 방향을 유지한다(연사 사이에 몸이 돌아가지 않게).</summary>
         private const float AimHold = 0.8f;
 
+        /// <summary>조준점: 마우스 자리(하니스에서는 겨눈 쪽 4칸)에 고리 + 점. 쏘는 동안 살짝 조여든다.</summary>
+        private void DrawReticle(Vector3 at)
+        {
+            if (_sim.Outcome != SOutcome.Playing) return;
+            Vector3 aim = new Vector3(_sim.Aim.X, _sim.Aim.Y, 0f);
+            Vector3 spot = _hasMouse ? _mouseAt : at + (aim.sqrMagnitude > 0.0001f ? aim.normalized * 4f : Vector3.right * 4f);
+            float squeeze = _sim.Spraying ? 0.8f + (0.05f * Mathf.Sin(_time * 30f)) : 1f;
+            var white = new Color(1f, 1f, 1f, 0.8f);
+            _reticle.Put(spot, 0.75f * squeeze, 0f, white);
+            _reticle.Put(spot, 0.16f, 0f, white, BubbleSprite());
+        }
+
         /// <summary>몸이 보는 방향: 방금 쐈으면 조준 방향, 아니면 이동 방향.</summary>
         private Vector3 Look()
         {
+            if (_sim.Spraying && (_sim.Aim.X != 0f || _sim.Aim.Y != 0f)) return new Vector3(_sim.Aim.X, _sim.Aim.Y, 0f).normalized;
             return _aimAge < AimHold ? _aim : new Vector3(_sim.Facing.X, _sim.Facing.Y, 0f);
         }
 
@@ -852,6 +877,7 @@ namespace FireGame.Prototypes
             _nozzle.Put(at + kick + (look * 0.45f), 0.16f, lookDeg - 90f, new Color(0.22f, 0.22f, 0.25f), null, 0.5f / 0.16f);
             _nozzle.Put(at + kick + (look * 0.72f), 0.2f, lookDeg - 90f, new Color(0.85f, 0.65f, 0.25f), null, 0.7f);
             DrawHoseLine(at, look);
+            DrawReticle(at);
             // 방화복 레벨만큼 옷을 갈아입는다: 파랑 → 노란 헬멧 → 빨간 헬멧 → 빨간 방화복 → 은색 방열복.
             int suit = _sim.Build.Level(UpgradeId.Suit);
             int outfit = Mathf.Min(suit, 4);
@@ -1016,6 +1042,8 @@ namespace FireGame.Prototypes
         private void Muzzles()
         {
             Vector3 p = W(_sim.Player);
+            // 호스가 0.1초마다 나가므로 총구 물보라는 세 번에 한 번만 뿌린다.
+            if (_muzzleTick++ % 3 != 0) return;
             int shown = 0;
             bool jet = false;
             foreach (Shot s in _sim.Shots)
@@ -1040,8 +1068,10 @@ namespace FireGame.Prototypes
                 Emit("Effects/glow", nozzle, Vector3.zero, 0f, 0.06f, 0.6f, 0.4f, new Color(0.7f, 0.92f, 1f, 0.5f), new Color(0.5f, 0.85f, 1f, 0f), 0f, true);
             }
             if (shown > 0) _recoil = 1f;
-            if (jet)
+            _jetPulse -= SurvivorSim.Dt * 3f;
+            if (jet && _jetPulse <= 0f)
             {
+                _jetPulse = 0.5f;
                 Shockwave(p, new Color(0.55f, 0.85f, 1f, 0.9f), 5f, 0.25f);
                 _recoil = 1f;
                 _zoomKick = Mathf.Max(_zoomKick, 0.15f);
@@ -1401,6 +1431,8 @@ namespace FireGame.Prototypes
             _pools.Add(_hoseBody);
             _pools.Add(_hoseCore);
             _pools.Add(_nozzle);
+            _reticle = new Pool(_world, "Reticle", RingSprite(), 21, null);
+            _pools.Add(_reticle);
             _bubbles = new Pool(_world, "Bubble", BubbleSprite(), 14, Additive);
             _pools.Add(_bubbles);
             _auras = new Pool(_world, "Aura", RingSprite(), 10, Additive);
