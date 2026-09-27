@@ -90,6 +90,7 @@ namespace FireGame.Prototypes
         private Pool _hoseCore;
         private Pool _nozzle;
         private Pool _reticle;
+        private Pool _shadows;
         private Pool _hoseTube;
         private Pool _hoseTubeEdge;
         private Pool _bubbles;
@@ -139,6 +140,10 @@ namespace FireGame.Prototypes
 
         private AudioSource _chime;
         private AudioClip _chimeClip;
+        private AudioSource _spray;
+        private AudioSource _sfx;
+        private AudioClip _sizzleClip;
+        private float _sizzleClock;
 
         // --- HUD ---
         private Image _vignette;
@@ -362,7 +367,11 @@ namespace FireGame.Prototypes
             {
                 Vector3 at = W(h.Pos);
                 if (h.Killed) DeathBurst(at, h.Kind, crowded);
-                else HitSplash(at, Away(h.Pos));
+                else
+                {
+                    HitSplash(at, Away(h.Pos));
+                    Sizzle();
+                }
                 if (h.Damage >= 0.5f) SpawnNumber(at, h.Damage, h.Crit);
             }
             if (kills > 0)
@@ -554,6 +563,7 @@ namespace FireGame.Prototypes
             _sprayClock -= dt;
             _putOutClock -= dt;
             _igniteClock -= dt;
+            _sizzleClock -= dt;
             _gemClock -= dt;
             _comboClock -= dt;
             _cardAge += dt;
@@ -571,6 +581,7 @@ namespace FireGame.Prototypes
             DrawGear(dt);
             foreach (Pool p in _pools) p.End();
 
+            UpdateSpraySound(dt);
             AdvanceParticles(dt);
             AdvanceNumbers(dt);
             RefreshHud(dt);
@@ -593,6 +604,8 @@ namespace FireGame.Prototypes
                 Vector3 at = W(e.Pos);
                 float flicker = 1f + (0.09f * Mathf.Sin((_time * 14f) + (i * 1.7f)));
                 bool hit = e.HitFlash > 0f;
+                float foot = e.Kind == EnemyKind.Boss ? 5f : e.Kind == EnemyKind.Blaze ? 1.8f : 1f;
+                _shadows.Put(at + new Vector3(0f, -0.1f, 0f), foot, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
                 // 물을 먹을수록 불이 쪼그라든다(체력 비례).
                 float life = 0.55f + (0.45f * Mathf.Clamp01(e.Hp / Mathf.Max(0.01f, e.MaxHp)));
                 float punch = (hit ? 1.35f : 1f) * life;
@@ -623,6 +636,16 @@ namespace FireGame.Prototypes
                         break;
                     case EnemyKind.Blaze:
                         _enemyGlow.Put(at, 2.4f * flicker * life, 0f, new Color(1f, 0.3f, 0.05f, 0.35f));
+                        if (Random.value < 0.03f)
+                        {
+                            Emit(Smokes[Random.Range(0, Smokes.Length)], at + new Vector3(0f, 0.8f * life, 0f), new Vector3(Random.Range(-0.3f, 0.3f), 1.2f, 0f), 0.5f, 1.2f,
+                                0.6f, 1.8f, new Color(0.25f, 0.22f, 0.22f, 0.45f), new Color(0.2f, 0.2f, 0.2f, 0f), Random.Range(-60f, 60f));
+                        }
+                        if (Random.value < 0.04f)
+                        {
+                            Emit(Sparks[Random.Range(0, Sparks.Length)], at, new Vector3(Random.Range(-0.8f, 0.8f), Random.Range(1.5f, 3f), 0f), 1f, 0.6f,
+                                0.35f, 0.05f, new Color(1f, 0.8f, 0.3f), new Color(1f, 0.3f, 0.05f, 0f), 0f, true);
+                        }
                         _blazes.Put(at + new Vector3(0f, 0.25f, 0f), 3.1f * flicker * punch, 0f, hit ? water : new Color(0.95f, 0.28f, 0.06f));
                         if (!hit) _enemyCore.Put(at + new Vector3(0f, 0.12f, 0f), 1.8f * flicker * life, 0f, new Color(1f, 0.7f, 0.25f, 0.9f));
                         break;
@@ -657,6 +680,7 @@ namespace FireGame.Prototypes
                 float blink = c.Life < 5f && Mathf.Sin(_time * 18f) < 0f ? 0.3f : 1f;
                 float ring = 1.6f + (0.3f * Mathf.Sin(_time * 6f));
                 _civilianRings.Put(at, ring, 0f, new Color(0.4f, 1f, 0.4f, 0.45f * blink));
+                _shadows.Put(at + new Vector3(0f, -0.3f, 0f), 0.8f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
                 _civilians.Put(at + new Vector3(0f, 0.08f * Mathf.Abs(Mathf.Sin(_time * 8f)), 0f), 0.85f, 0f, new Color(1f, 1f, 1f, blink), Art.Get(Faces[i % Faces.Length]));
             }
         }
@@ -782,7 +806,7 @@ namespace FireGame.Prototypes
                         float bombSize = 0.8f + (0.08f * bombLevel);
                         _bombShadows.Put(at, 0.6f * bombSize, 0f, new Color(0f, 0f, 0f, 0.35f));
                         _bombs.Put(at + new Vector3(0f, lift, 0f), bombSize, t * 540f, new Color(0.45f, 0.78f, 1f));
-                        _dropGlow.Put(at + new Vector3(0f, lift, 0f), bombSize * (1.2f + (0.15f * bombLevel)), 0f, new Color(0.35f, 0.75f, 1f, 0.3f + (0.05f * bombLevel)));
+                        _dropGlow.Put(at + new Vector3(0f, lift, 0f), bombSize * (1.2f + (0.15f * bombLevel)), 0f, new Color(0.55f, 0.8f, 1f, 0.25f + (0.04f * bombLevel)));
                         // 날아가며 물방울 꼬리를 흘린다.
                         if (Random.value < 0.4f)
                         {
@@ -811,9 +835,10 @@ namespace FireGame.Prototypes
                 {
                     float b = a - (j * 0.13f);
                     Vector3 trail = center + (new Vector3(Mathf.Cos(b), Mathf.Sin(b), 0f) * 2.3f);
-                    _droneGlow.Put(trail, (0.9f - (j * 0.1f)) * droneScale, 0f, new Color(0.35f, 0.75f, 1f, 0.5f - (j * 0.07f)));
+                    _droneGlow.Put(trail, (0.9f - (j * 0.1f)) * droneScale, 0f, new Color(0.55f, 0.8f, 1f, 0.45f - (j * 0.06f)));
                 }
-                _droneGlow.Put(at, 1.8f * droneScale, 0f, new Color(0.3f, 0.7f, 1f, 0.6f));
+                _shadows.Put(at + new Vector3(0f, -0.35f, 0f), 0.6f * droneScale, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
+                _droneGlow.Put(at, 1.6f * droneScale, 0f, new Color(0.55f, 0.8f, 1f, 0.45f));
                 _drones.Put(at, 0.65f * droneScale, _time * 720f, Color.white);
                 if (Random.value < 0.25f) Splash(at, 1, 0.15f);
             }
@@ -902,6 +927,7 @@ namespace FireGame.Prototypes
             Vector3 kick = look * (-0.1f * _recoil);
             float lookDeg = Mathf.Atan2(look.y, look.x) * Mathf.Rad2Deg;
             _player.transform.localPosition = at + kick + new Vector3(0f, 0f, -0.01f);
+            _shadows.Put(at + new Vector3(0.05f, -0.15f, 0f), 1f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.55f);
             _player.transform.localRotation = Quaternion.Euler(0f, 0f, lookDeg);
 
             // 손에 든 노즐: 짙은 몸통 + 놋쇠 끝, 조준 방향으로.
@@ -1367,6 +1393,38 @@ namespace FireGame.Prototypes
             _chimeClip = Resources.Load<AudioClip>("Audio/pickup");
             _chime = _root.gameObject.AddComponent<AudioSource>();
             _chime.playOnAwake = false;
+
+            // 호스 소리: 쥐고 있는 동안만 볼륨을 올리는 반복 재생.
+            _spray = _root.gameObject.AddComponent<AudioSource>();
+            _spray.clip = Resources.Load<AudioClip>("Audio/spray_water");
+            _spray.loop = true;
+            _spray.playOnAwake = false;
+            _spray.volume = 0f;
+            if (_spray.clip != null) _spray.Play();
+
+            // 물이 불에 닿는 "치익".
+            _sfx = _root.gameObject.AddComponent<AudioSource>();
+            _sfx.playOnAwake = false;
+            _sizzleClip = Resources.Load<AudioClip>("Audio/putout");
+        }
+
+        /// <summary>호스 루프 볼륨을 쥔 상태에 맞춰 0.08초 만에 올리고 내린다. 방수포는 더 묵직하게.</summary>
+        private void UpdateSpraySound(float dt)
+        {
+            if (_spray == null) return;
+            bool on = _sim.Spraying && _sim.Outcome == SOutcome.Playing && _sim.PendingChoices == null;
+            float target = on ? 0.45f : 0f;
+            _spray.volume = Mathf.MoveTowards(_spray.volume, target, dt * (0.45f / 0.08f));
+            _spray.pitch = _sim.Build.Level(UpgradeId.Cannon) > 0 ? 0.85f : 1f;
+        }
+
+        /// <summary>물이 불에 닿는 동안 작은 "치익"(0.12초 간격).</summary>
+        private void Sizzle()
+        {
+            if (_sfx == null || _sizzleClip == null || _sizzleClock > 0f) return;
+            _sizzleClock = 0.12f;
+            _sfx.pitch = Random.Range(0.9f, 1.2f);
+            _sfx.PlayOneShot(_sizzleClip, 0.25f);
         }
 
         /// <summary>구슬 흡수음. 연달아 먹을수록 높아진다(뱀서의 "딩딩딩" 손맛).</summary>
@@ -1434,6 +1492,7 @@ namespace FireGame.Prototypes
         private void BuildPools()
         {
             _groundGlow = AddPool("GroundGlow", "Effects/glow", 3, true);
+            _shadows = AddPool("Shadow", "Effects/glow", 4);
             _foam = AddPool("Foam", "Effects/smoke_01", 3);
             _groundFire = AddPool("GroundFire", "Effects/fire_01", 4);
             _civilianRings = AddPool("CivilianRing", "Effects/glow", 5, true);
@@ -1642,7 +1701,7 @@ namespace FireGame.Prototypes
             _bossBandText = UiKit.OutlinedLabel(_bossBand.transform, "Text", "대형 화재 접근!", 84, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
             UiKit.Stretch(_bossBandText.rectTransform);
 
-            Text help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + "WASD 이동 · 무기는 자동 발사 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 초록 원 시민에게 가면 구조      R 다시  G " + (_maxGear ? "일반" : "풀장비") + "  Tab 시험판 전환", 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
+            Text help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + "WASD 이동 · 마우스로 겨누고 왼쪽 버튼을 누르면 물 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 초록 원 시민에게 가면 구조      R 다시  G " + (_maxGear ? "일반" : "풀장비") + "  Tab 시험판 전환", 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
             UiKit.Place(help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 20f), new Vector2(1850f, 40f));
 
             _flashImage = UiKit.Image(_hud, "Flash", Art.White, Color.clear);
