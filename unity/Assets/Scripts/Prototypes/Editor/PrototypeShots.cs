@@ -46,6 +46,12 @@ namespace FireGame.Prototypes.EditorTools
             failures += ActionShot(dir, "a1_action_fight", 7f);
             failures += ActionShot(dir, "a2_action_later", 16f);
 
+            // 동네 전체를 한 화면에: 가게 아홉 채가 저마다 알아볼 수 있게 그려졌는지 본다.
+            failures += SurvivorShot(dir, "c0_town", view => view.Sim.Time >= 1f, 5, false, camera =>
+            {
+                camera.transform.position = new Vector3(SurvivorSim.ArenaSize / 2f, 31f, -10f);
+                camera.orthographicSize = 14f;
+            });
             failures += SurvivorShot(dir, "c1_early", view => view.Sim.Time >= 40f);
             // 레벨 5로 오르는 카드: 노란 특수 장비가 반드시 한 장 있다.
             failures += SurvivorShot(dir, "c2_levelup_cards", view => view.Sim.Level == 5 && view.Sim.PendingChoices != null, 45);
@@ -134,7 +140,8 @@ namespace FireGame.Prototypes.EditorTools
             return string.Join(" · ", parts);
         }
 
-        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false)
+        /// <param name="frame">찍기 직전에 카메라를 옮긴다(동네 전체 보기 등).</param>
+        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<Camera> frame = null)
         {
             try
             {
@@ -161,6 +168,7 @@ namespace FireGame.Prototypes.EditorTools
                 if (!until(view)) throw new Exception("조건에 닿기 전에 판이 끝났다: " + view.Sim.Outcome + " t=" + view.Sim.Time);
                 // 카드는 0.3초 뒤에 튀어 오르니 다 뜬 뒤를 찍는다. 효과도 조금 흐르게 둔다.
                 for (int i = 0; i < settle; i++) view.Refresh(SurvivorSim.Dt);
+                frame?.Invoke(camera);
 
                 Canvas.ForceUpdateCanvases();
                 Capture(camera, Path.Combine(dir, name + ".png"));
