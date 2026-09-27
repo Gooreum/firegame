@@ -31,6 +31,7 @@ namespace FireGame.Prototypes.Logic
                 return;
             }
             Vec2 move = Move();
+            AimHose();
             _sim.Step(move.X, move.Y);
         }
 
@@ -42,6 +43,26 @@ namespace FireGame.Prototypes.Logic
                 if (i >= 0) return i;
             }
             return 0;
+        }
+
+        /// <summary>가장 가까운 불(10칸 안)을 겨누고 쏜다. 없으면 손을 뗀다.</summary>
+        public void AimHose()
+        {
+            Vec2 p = _sim.Player;
+            Enemy target = null;
+            float best = 10f;
+            foreach (Enemy e in _sim.Enemies)
+            {
+                if (e.Dead) continue;
+                float d = e.Pos.DistanceTo(p);
+                if (d < best)
+                {
+                    best = d;
+                    target = e;
+                }
+            }
+            _sim.Spraying = target != null;
+            if (target != null) _sim.Aim = new Vec2(target.Pos.X - p.X, target.Pos.Y - p.Y);
         }
 
         public Vec2 Move()

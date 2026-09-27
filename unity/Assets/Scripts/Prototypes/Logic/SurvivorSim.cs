@@ -124,6 +124,15 @@ namespace FireGame.Prototypes.Logic
 
         public Vec2 Player = new Vec2(ArenaSize / 2f, ArenaSize / 2f);
         public Vec2 Facing = new Vec2(1f, 0f);
+
+        /// <summary>호스를 겨눈 방향(길이는 상관없다). 뷰·봇·테스트가 Step 전에 넣는다.</summary>
+        public Vec2 Aim = new Vec2(1f, 0f);
+
+        /// <summary>호스 손잡이를 쥐고 있는지. 쥔 동안만 물대포·방수포가 나간다.</summary>
+        public bool Spraying;
+
+        /// <summary>호스 연사 간격. 촘촘해야 끊김 없는 물줄기로 보인다.</summary>
+        public const float HoseInterval = 0.1f;
         public float Time;
         public float Hp = BaseMaxHp;
         public int Level = 1;
@@ -483,23 +492,26 @@ namespace FireGame.Prototypes.Logic
         {
             float cd = Build.CooldownScale;
 
+            // 물대포: 겨눈 쪽으로, 쥐고 있을 때만. 예전 자동 조준(0.32초)과 초당 피해를 맞췄다.
             int hose = Build.Level(UpgradeId.Hose);
-            if (hose > 0)
+            bool cannon = Build.Level(UpgradeId.Cannon) > 0;
+            _hoseClock -= Dt;
+            if (Spraying && (hose > 0 || cannon) && _hoseClock <= 0f && (Aim.X != 0f || Aim.Y != 0f))
             {
-                _hoseClock -= Dt;
-                if (_hoseClock <= 0f)
+                _hoseClock = HoseInterval * cd;
+                float baseAngle = (float)Math.Atan2(Aim.Y, Aim.X);
+                if (cannon)
                 {
-                    Enemy target = Nearest(Player, 9f);
-                    if (target != null)
+                    // 진화 후: 한 줄기로 모든 불을 꿰뚫는 고압 제트.
+                    FireDrop(baseAngle, 13.2f * (HoseInterval / 0.4f), 18f, 0.55f, 999, 0.6f, ShotKind.Jet);
+                }
+                else
+                {
+                    float damage = 3f * (HoseInterval / 0.32f) * (1f + (0.25f * (hose - 1)));
+                    for (int k = 0; k < hose; k++)
                     {
-                        _hoseClock = 0.32f * cd;
-                        float baseAngle = (float)Math.Atan2(target.Pos.Y - Player.Y, target.Pos.X - Player.X);
-                        float damage = 3f * (1f + (0.25f * (hose - 1)));
-                        for (int k = 0; k < hose; k++)
-                        {
-                            float spread = (k - ((hose - 1) / 2f)) * 0.16f;
-                            FireDrop(baseAngle + spread, damage, 14f, 0.3f, 2, 0.75f, ShotKind.Drop);
-                        }
+                        float spread = (k - ((hose - 1) / 2f)) * 0.12f;
+                        FireDrop(baseAngle + spread, damage, 16f, 0.3f, 2, 0.6f, ShotKind.Drop);
                     }
                 }
             }

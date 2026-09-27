@@ -22,28 +22,57 @@ namespace FireGame.Prototypes.Tests
             return sim;
         }
 
-        // --- TC-1 ---
+        /// <summary>플레이어가 하듯 과녁을 겨누고 누른 채로 시간을 보낸다.</summary>
+        private static void Spray(SurvivorSim sim, Vec2 at, int ticks)
+        {
+            for (int i = 0; i < ticks; i++)
+            {
+                sim.Aim = new Vec2(at.X - sim.Player.X, at.Y - sim.Player.Y);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+            }
+        }
+
+        // --- 물대포: 직접 겨눈다 ---
         [Fact]
-        public void Hose_HitsTheNearestFire_AndAKillDropsAGem()
+        public void Hose_SpraysWhereYouAim_AndAKillDropsAGem()
         {
             SurvivorSim sim = Quiet();
             Enemy e = sim.Spawn(EnemyKind.Blaze, new Vec2(sim.Player.X + 3f, sim.Player.Y));
             e.Speed = 0f;
 
-            bool hurt = false;
-            for (int i = 0; i < 60 && !e.Dead; i++)
-            {
-                sim.Step(0f, 0f);
-                if (e.Hp < e.MaxHp) hurt = true;
-            }
-            Assert.True(hurt, "물대포가 1초 동안 한 번도 못 맞혔다");
+            Spray(sim, e.Pos, 60);
+            Assert.True(e.Hp < e.MaxHp, "겨누고 1초 쐈는데 한 번도 못 맞혔다");
 
             Enemy ember = sim.Spawn(EnemyKind.Ember, new Vec2(sim.Player.X - 3f, sim.Player.Y));
             ember.Speed = 0f;
             e.Dead = true;
-            for (int i = 0; i < 120 && !ember.Dead; i++) sim.Step(0f, 0f);
+            for (int i = 0; i < 120 && !ember.Dead; i++) Spray(sim, ember.Pos, 1);
             Assert.True(ember.Dead, "불씨를 2초 안에 못 껐다");
             Assert.Contains(sim.Gems, g => g.Pos.DistanceTo(ember.Pos) < 1f);
+        }
+
+        [Fact]
+        public void Hose_DoesNothing_WhenNotSpraying()
+        {
+            SurvivorSim sim = Quiet();
+            Enemy e = sim.Spawn(EnemyKind.Blaze, new Vec2(sim.Player.X + 3f, sim.Player.Y));
+            e.Speed = 0f;
+            sim.Aim = new Vec2(1f, 0f);
+            sim.Spraying = false;
+            Run(sim, 1f);
+            Assert.Empty(sim.Shots);
+            Assert.Equal(e.MaxHp, e.Hp);
+        }
+
+        [Fact]
+        public void Hose_MissesAFire_BehindYou()
+        {
+            SurvivorSim sim = Quiet();
+            Enemy e = sim.Spawn(EnemyKind.Blaze, new Vec2(sim.Player.X + 3f, sim.Player.Y));
+            e.Speed = 0f;
+            Spray(sim, new Vec2(sim.Player.X - 5f, sim.Player.Y), 60);
+            Assert.Equal(e.MaxHp, e.Hp);
         }
 
         // --- TC-2 ---
@@ -178,10 +207,14 @@ namespace FireGame.Prototypes.Tests
         {
             var a = new SurvivorSim(42);
             var b = new SurvivorSim(42);
+            var aimA = new SurvivorBot(a);
+            var aimB = new SurvivorBot(b);
             for (int i = 0; i < 1200; i++)
             {
                 float mx = (float)System.Math.Sin(i * 0.01);
                 float my = (float)System.Math.Cos(i * 0.013);
+                aimA.AimHose();
+                aimB.AimHose();
                 a.Step(mx, my);
                 b.Step(mx, my);
                 if (a.PendingChoices != null) a.Choose(0);
@@ -299,7 +332,8 @@ namespace FireGame.Prototypes.Tests
         {
             SurvivorSim sim = Quiet();
             Enemy e = Dummy(sim, EnemyKind.Blaze, 1.5f, 0f, 1f);
-            for (int i = 0; i < 60 && !e.Dead; i++) sim.Step(0f, 0f);
+            for (int i = 0; i < 60 && !e.Dead; i++) Spray(sim, e.Pos, 1);
+            sim.Spraying = false;
             Assert.True(e.Dead);
             Assert.Single(sim.BurningGround);
 
@@ -385,6 +419,27 @@ namespace FireGame.Prototypes.Tests
             watch.Stop();
             Assert.True(sim.Time > SurvivorSim.BossAt, "시드 3이 보스까지 못 가 성능 측정이 짧아졌다");
             Assert.True(watch.Elapsed.TotalSeconds < 3.0, "한 판에 " + watch.Elapsed.TotalSeconds + "초");
+        }
+
+        [Fact]
+        public void Cannon_SpraysPiercingJets_WhereYouAim()
+        {
+            SurvivorSim sim = Quiet();
+            sim.GiveMaxGear();
+            var line = new List<Enemy>();
+            for (int r = 2; r <= 6; r += 2) line.Add(Dummy(sim, EnemyKind.Blaze, 0f, r));
+
+            int aimed = 0;
+            for (int i = 0; i < 40; i++)
+            {
+                Spray(sim, new Vec2(sim.Player.X, sim.Player.Y + 10f), 1);
+                foreach (Shot s in sim.Shots)
+                {
+                    if (s.Kind == ShotKind.Jet && s.Age <= SurvivorSim.Dt && s.Vel.Y > 0f && System.Math.Abs(s.Vel.X) < 0.2f * s.Vel.Y) aimed++;
+                }
+            }
+            Assert.True(aimed >= 5, "위로 겨눈 방수포 제트가 " + aimed + "줄뿐");
+            Assert.True(line.TrueForAll(e => e.Hp < e.MaxHp), "겨눈 제트가 한 줄을 꿰뚫지 못했다");
         }
 
         // --- 풀장비 시작 ---
