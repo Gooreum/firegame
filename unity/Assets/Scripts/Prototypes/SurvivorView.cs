@@ -105,6 +105,22 @@ namespace FireGame.Prototypes
         private Pool _groundGlow;
         private Pool _civilians;
         private Pool _civilianRings;
+        private Pool _houseShadows;
+        private Pool _roofEdges;
+        private Pool _roofs;
+        private Pool _roofTrim;
+        private Pool _props;
+        private Pool _roofGlow;
+        private Pool _roofFire;
+        private Pool _bars;
+        private readonly List<TextMesh> _signs = new List<TextMesh>();
+
+        /// <summary>가게 지붕 색(동네 배치 순서). 마지막은 창고.</summary>
+        private static readonly Color[] RoofColors =
+        {
+            new Color(0.85f, 0.45f, 0.3f), new Color(0.9f, 0.55f, 0.7f), new Color(0.35f, 0.6f, 0.9f), new Color(0.45f, 0.78f, 0.82f),
+            new Color(0.4f, 0.72f, 0.45f), new Color(0.95f, 0.75f, 0.3f), new Color(0.6f, 0.5f, 0.85f), new Color(0.85f, 0.3f, 0.35f),
+        };
         private SpriteRenderer _player;
         private SpriteRenderer _playerGlow;
         private readonly List<Pool> _pools = new List<Pool>();
@@ -250,6 +266,7 @@ namespace FireGame.Prototypes
             _lastOutcome = SOutcome.Playing;
             _cameraAt = new Vector3(_sim.Player.X, _sim.Player.Y, -10f);
             ClearEffects();
+            BuildSigns();
             HideCards();
             _resultBack.gameObject.SetActive(false);
             Refresh(0f);
@@ -572,6 +589,7 @@ namespace FireGame.Prototypes
             if (_sim.Outcome != SOutcome.Playing) _overAge += dt;
 
             foreach (Pool p in _pools) p.Begin();
+            DrawTown();
             DrawPuddles();
             DrawGems();
             DrawCivilians();
@@ -1442,16 +1460,21 @@ namespace FireGame.Prototypes
         private void BuildGround()
         {
             int size = (int)SurvivorSim.ArenaSize;
+            float mid = size / 2f;
             for (int y = 0; y < size; y += 2)
             {
                 for (int x = 0; x < size; x += 2)
                 {
+                    // 가운데 광장과 가게 앞 길은 돌바닥, 나머지는 풀밭.
+                    bool plaza = Mathf.Abs(x + 1f - mid) < 8f && Mathf.Abs(y + 1f - mid) < 8f;
+                    bool street = Mathf.Abs(y + 1f - 25f) < 1.5f || Mathf.Abs(y + 1f - 37f) < 1.5f || Mathf.Abs(x + 1f - 23f) < 1.5f || Mathf.Abs(x + 1f - 37f) < 1.5f;
                     bool alt = ((x * 7) + (y * 13)) % 5 == 0;
-                    SpriteRenderer r = NewSprite(_root, "Ground", Art.Get(alt ? "TopDown/floor_stone_b" : "TopDown/floor_stone_a"), 0);
+                    string art = plaza || street ? (alt ? "TopDown/floor_stone_b" : "TopDown/floor_stone_a") : (alt ? "TopDown/grass_b" : "TopDown/grass_a");
+                    SpriteRenderer r = NewSprite(_root, "Ground", Art.Get(art), 0);
                     r.transform.localPosition = new Vector3(x + 1f, y + 1f, 0.1f);
                     r.transform.localScale = Vector3.one * Art.FitWidth(r.sprite, 2f);
-                    float shade = 0.3f + (0.04f * (((x * 3) + (y * 5)) % 4) / 3f);
-                    r.color = new Color(shade, shade, shade * 1.08f);
+                    float shade = (plaza || street ? 0.42f : 0.36f) + (0.05f * (((x * 3) + (y * 5)) % 4) / 3f);
+                    r.color = plaza || street ? new Color(shade, shade, shade * 1.05f) : new Color(shade * 1.1f, shade, shade * 0.8f);
                 }
             }
 
@@ -1463,21 +1486,195 @@ namespace FireGame.Prototypes
                 Wall(size, i);
             }
 
-            // 도시 광장 느낌만 내는 장식(판정 없음). 늘 같은 자리에 놓는다.
-            string[] props = { "Props/tree_large", "Props/tree_small", "Props/barrel_red", "Props/barrel_blue", "Vehicles/cone", "Props/barrier" };
-            float[] sizes = { 1.6f, 1.1f, 0.6f, 0.6f, 0.5f, 1f };
-            var rng = new FireGame.Core.Sim.Rng(12345);
-            for (int i = 0; i < 45; i++)
+            // 출동해 온 소방차(장식, 판정 없음).
+            SpriteRenderer truck = NewSprite(_root, "FireTruck", Art.Get("Vehicles/firetruck"), 2);
+            truck.transform.localPosition = new Vector3(mid - 3.5f, mid - 2.5f, 0.05f);
+            truck.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            truck.transform.localScale = Vector3.one * Art.FitWidth(truck.sprite, 1.3f);
+        }
+
+        /// <summary>가게·창고 이름표. 판마다 동네를 새로 깔므로 다시 만든다.</summary>
+        private void BuildSigns()
+        {
+            foreach (TextMesh t in _signs) UiKit.Discard(t.gameObject);
+            _signs.Clear();
+            foreach (Structure st in _sim.Structures)
             {
-                int k = rng.Next(props.Length);
-                float px = 2f + rng.Next((size - 4) * 10) / 10f;
-                float py = 2f + rng.Next((size - 4) * 10) / 10f;
-                if (Mathf.Abs(px - (size / 2f)) < 4f && Mathf.Abs(py - (size / 2f)) < 4f) continue;
-                SpriteRenderer r = NewSprite(_root, "Prop", Art.Get(props[k]), 2);
-                r.transform.localPosition = new Vector3(px, py, 0.05f);
-                r.transform.localRotation = Quaternion.Euler(0f, 0f, k == 5 ? rng.Next(4) * 90f : 0f);
-                r.transform.localScale = Vector3.one * Art.FitWidth(r.sprite, sizes[k]);
-                r.color = new Color(0.55f, 0.55f, 0.6f);
+                if (!st.IsBuilding) continue;
+                TextMesh t = NewText();
+                t.transform.SetParent(_root, false);
+                t.GetComponent<MeshRenderer>().sortingOrder = 5;
+                t.text = st.Name;
+                t.characterSize = 0.045f;
+                t.color = new Color(1f, 1f, 1f, 0.9f);
+                t.transform.localPosition = new Vector3(st.Pos.X, st.Pos.Y + (st.Half.Y * 0.4f), -0.1f);
+                _signs.Add(t);
+            }
+        }
+
+        /// <summary>동네: 건물(그림자·벽·지붕·창·문·불·튼튼함 막대), 나무·차·가스통.</summary>
+        private void DrawTown()
+        {
+            int house = 0;
+            int sign = 0;
+            for (int i = 0; i < _sim.Structures.Count; i++)
+            {
+                Structure st = _sim.Structures[i];
+                Vector3 at = W(st.Pos);
+                float w = st.Half.X * 2f;
+                float h = st.Half.Y * 2f;
+                float burnt = 1f - Mathf.Clamp01(st.Integrity);
+                float wet = st.Wet > 0f ? Mathf.Min(1f, st.Wet / 2f) : 0f;
+
+                if (st.IsBuilding)
+                {
+                    Color roof = st.Kind == StructureKind.Depot ? new Color(0.55f, 0.58f, 0.62f) : RoofColors[house % RoofColors.Length];
+                    house++;
+                    if (sign < _signs.Count)
+                    {
+                        _signs[sign].gameObject.SetActive(!st.Collapsed);
+                        sign++;
+                    }
+                    DrawBuilding(st, at, w, h, roof, burnt, wet, i);
+                    continue;
+                }
+
+                if (st.Collapsed)
+                {
+                    // 탄 자리: 검은 그루터기·잔해만 남는다.
+                    if (st.Kind != StructureKind.Gas) _houseShadows.Put(at, w * 0.8f, 0f, new Color(0.08f, 0.07f, 0.07f, 0.8f), null, h / w);
+                    continue;
+                }
+
+                Color tint = Color.Lerp(Color.white, new Color(0.25f, 0.2f, 0.2f), burnt);
+                if (wet > 0f) tint = Color.Lerp(tint, new Color(0.7f, 0.85f, 1f), 0.35f * wet);
+                switch (st.Kind)
+                {
+                    case StructureKind.Tree:
+                        _shadows.Put(at + new Vector3(0.3f, -0.4f, 0f), 2f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.6f);
+                        _props.Put(at, 1.8f, 0f, tint, Art.Get("Props/tree_large"));
+                        break;
+                    case StructureKind.Car:
+                        _shadows.Put(at + new Vector3(0.15f, -0.3f, 0f), 2.3f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.5f);
+                        _props.Put(at, 1.08f, 90f, tint, Art.Get(i % 2 == 0 ? "Vehicles/car_blue" : "Vehicles/car_black"));
+                        break;
+                    case StructureKind.Gas:
+                        // 퓨즈가 도는 동안 빨갛게 깜빡이며 부풀고 불똥이 튄다.
+                        float fuse = st.Fuse >= 0f ? 1f - (st.Fuse / SurvivorSim.GasFuse) : 0f;
+                        bool blink = st.Fuse >= 0f && Mathf.Sin(_time * (10f + (30f * fuse))) > 0f;
+                        _shadows.Put(at + new Vector3(0.1f, -0.25f, 0f), 1f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.5f);
+                        if (st.Fuse >= 0f)
+                        {
+                            _roofGlow.Put(at, 2f + (2f * fuse), 0f, new Color(1f, 0.25f, 0.05f, blink ? 0.8f : 0.35f));
+                            if (Random.value < 0.3f)
+                            {
+                                Emit(Sparks[Random.Range(0, Sparks.Length)], at + new Vector3(0f, 0.3f, 0f), new Vector3(Random.Range(-2f, 2f), Random.Range(2f, 4f), 0f), 1f, 0.35f,
+                                    0.3f, 0.05f, new Color(1f, 0.9f, 0.4f), new Color(1f, 0.3f, 0.05f, 0f), 0f, true);
+                            }
+                        }
+                        _props.Put(at, 0.85f * (1f + (0.25f * fuse)), 0f, blink ? new Color(1f, 0.55f, 0.45f) : tint, Art.Get("Props/barrel_red"));
+                        break;
+                }
+                if (st.Burning && st.Kind != StructureKind.Gas) DrawRoofFire(st, at, w, h, i);
+            }
+        }
+
+        private void DrawBuilding(Structure st, Vector3 at, float w, float h, Color roof, float burnt, float wet, int seed)
+        {
+            if (st.Collapsed)
+            {
+                // 무너진 자리: 잿더미와 검은 잔해 몇 덩이, 가는 연기.
+                _roofEdges.Put(at, w + 0.2f, 0f, new Color(0.1f, 0.09f, 0.09f), null, (h + 0.2f) / (w + 0.2f));
+                for (int k = 0; k < 5; k++)
+                {
+                    float ox = (Hash01(seed * 7 + k) - 0.5f) * w * 0.8f;
+                    float oy = (Hash01(seed * 13 + k) - 0.5f) * h * 0.7f;
+                    _roofs.Put(at + new Vector3(ox, oy, 0f), 0.5f + (0.5f * Hash01(seed + k)), Hash01(k + seed * 3) * 90f, new Color(0.18f, 0.16f, 0.15f));
+                }
+                if (Random.value < 0.03f)
+                {
+                    Emit(Smokes[Random.Range(0, Smokes.Length)], at, new Vector3(0.4f, 1f, 0f), 0.3f, 2.2f, 0.8f, 2.4f,
+                        new Color(0.3f, 0.3f, 0.3f, 0.35f), new Color(0.3f, 0.3f, 0.3f, 0f), Random.Range(-40f, 40f));
+                }
+                return;
+            }
+
+            // 탈수록 지붕이 검게 그을리고, 젖으면 파랗게 번들거린다.
+            Color c = Color.Lerp(roof, new Color(0.13f, 0.1f, 0.1f), Mathf.Pow(burnt, 0.7f));
+            if (st.Burning) c = Color.Lerp(c, new Color(1f, 0.45f, 0.15f), 0.15f * st.Fire * (0.7f + (0.3f * Mathf.Sin(_time * 9f + seed))));
+            if (wet > 0f) c = Color.Lerp(c, new Color(0.6f, 0.8f, 1f), 0.3f * wet);
+            Color wall = Color.Lerp(new Color(0.42f, 0.3f, 0.26f), new Color(0.1f, 0.08f, 0.08f), burnt);
+
+            _houseShadows.Put(at + new Vector3(0.35f, -0.4f, 0f), w + 0.3f, 0f, new Color(0f, 0f, 0f, 0.4f), null, (h + 0.3f) / (w + 0.3f));
+            _roofEdges.Put(at, w + 0.3f, 0f, wall, null, (h + 0.3f) / (w + 0.3f));
+            _roofs.Put(at, w, 0f, c, null, h / w);
+            // 박공지붕: 위쪽 반은 밝게, 가운데 용마루 선.
+            _roofTrim.Put(at + new Vector3(0f, h * 0.25f, 0f), w, 0f, new Color(1f, 1f, 1f, 0.12f), null, (h * 0.5f) / w);
+            _roofTrim.Put(at, w, 0f, new Color(0f, 0f, 0f, 0.25f), null, 0.1f / w);
+            if (st.Kind == StructureKind.Depot)
+            {
+                for (int k = -2; k <= 2; k++) _roofTrim.Put(at + new Vector3(k * w / 6f, 0f, 0f), 0.08f, 0f, new Color(0f, 0f, 0f, 0.18f), null, h / 0.08f);
+            }
+
+            // 창 두 개(불이 나면 안쪽이 주황으로 일렁인다)와 아래쪽 문.
+            Color glass = st.Burning ? Color.Lerp(new Color(1f, 0.55f, 0.15f), new Color(1f, 0.85f, 0.4f), 0.5f + (0.5f * Mathf.Sin(_time * 13f + seed))) : Color.Lerp(new Color(0.55f, 0.72f, 0.85f), new Color(0.15f, 0.12f, 0.12f), burnt);
+            for (int k = -1; k <= 1; k += 2)
+            {
+                Vector3 win = at + new Vector3(k * w * 0.27f, -h * 0.22f, 0f);
+                _roofTrim.Put(win, 0.62f, 0f, new Color(0.2f, 0.15f, 0.12f), null, 0.75f);
+                _roofTrim.Put(win, 0.5f, 0f, glass, null, 0.72f);
+            }
+            Vector3 door = at + new Vector3(0f, -st.Half.Y + 0.3f, 0f);
+            _roofTrim.Put(door, st.Kind == StructureKind.Depot ? 1.6f : 0.7f, 0f, Color.Lerp(new Color(0.45f, 0.28f, 0.15f), new Color(0.1f, 0.08f, 0.08f), burnt), null, 0.6f / (st.Kind == StructureKind.Depot ? 1.6f : 0.7f));
+
+            if (st.Burning) DrawRoofFire(st, at, w, h, seed);
+
+            // 한 번이라도 탔으면 위에 튼튼함 막대(초록→빨강).
+            if (st.Integrity < 0.999f)
+            {
+                float bw = w * 0.8f;
+                Vector3 bar = at + new Vector3(0f, st.Half.Y + 0.45f, 0f);
+                _bars.Put(bar, bw + 0.08f, 0f, new Color(0f, 0f, 0f, 0.7f), null, 0.22f / (bw + 0.08f));
+                float fill = Mathf.Clamp01(st.Integrity);
+                _bars.Put(bar + new Vector3(-(bw * (1f - fill)) / 2f, 0f, -0.01f), Mathf.Max(0.01f, bw * fill), 0f,
+                    Color.Lerp(new Color(1f, 0.25f, 0.15f), new Color(0.45f, 0.95f, 0.4f), fill), null, 0.14f / Mathf.Max(0.01f, bw * fill));
+            }
+        }
+
+        /// <summary>타는 구조물 위 불꽃(세기만큼 많고 크게) + 밑빛 + 연기 기둥.</summary>
+        private void DrawRoofFire(Structure st, Vector3 at, float w, float h, int seed)
+        {
+            float f = st.Fire;
+            float area = Mathf.Max(w, h);
+            _roofGlow.Put(at, area * (1.4f + f), 0f, new Color(1f, 0.35f, 0.08f, 0.35f + (0.35f * f)));
+            int n = st.IsBuilding ? 2 + Mathf.RoundToInt(f * (st.Kind == StructureKind.Depot ? 9f : 6f)) : 1 + Mathf.RoundToInt(f * 2f);
+            for (int k = 0; k < n; k++)
+            {
+                float ox = (Hash01((seed * 31) + k) - 0.5f) * w * 0.85f;
+                float oy = (Hash01((seed * 17) + (k * 5)) - 0.5f) * h * 0.75f;
+                float flick = 0.85f + (0.2f * Mathf.Sin((_time * (11f + k)) + (k * 1.9f)));
+                float size = (0.8f + (1.3f * f)) * flick * (st.IsBuilding ? 1f : 0.8f);
+                _roofFire.Put(at + new Vector3(ox, oy + (size * 0.25f), 0f), size, 0f, new Color(1f, 0.5f + (0.2f * Hash01(k + seed)), 0.12f), Art.Get(k % 2 == 0 ? "Effects/fire_02" : "Effects/fire_01"));
+            }
+            if (Random.value < 0.04f + (0.12f * f))
+            {
+                Emit(Smokes[Random.Range(0, Smokes.Length)], at + new Vector3(Random.Range(-w, w) * 0.3f, h * 0.3f, 0f), new Vector3(Random.Range(0.2f, 0.9f), Random.Range(1.5f, 2.6f), 0f), 0.3f,
+                    Random.Range(1.6f, 2.4f), 0.8f + f, 2.6f + (2f * f), new Color(0.2f, 0.18f, 0.18f, 0.5f), new Color(0.25f, 0.24f, 0.24f, 0f), Random.Range(-60f, 60f));
+            }
+            if (Random.value < 0.08f * f)
+            {
+                Emit(Sparks[Random.Range(0, Sparks.Length)], at, new Vector3(Random.Range(-1.5f, 1.5f), Random.Range(2f, 4f), 0f), 1f, 0.7f,
+                    0.35f, 0.05f, new Color(1f, 0.85f, 0.35f), new Color(1f, 0.3f, 0.05f, 0f), 0f, true);
+            }
+        }
+
+        private static float Hash01(int n)
+        {
+            unchecked
+            {
+                uint x = (uint)n * 747796405u + 2891336453u;
+                x = ((x >> (int)((x >> 28) + 4u)) ^ x) * 277803737u;
+                return ((x >> 22) ^ x) / 4294967296f;
             }
         }
 
@@ -1491,6 +1688,19 @@ namespace FireGame.Prototypes
 
         private void BuildPools()
         {
+            _houseShadows = new Pool(_world, "HouseShadow", Art.White, 1, null);
+            _roofEdges = new Pool(_world, "RoofEdge", Art.White, 2, null);
+            _roofs = new Pool(_world, "Roof", Art.White, 3, null);
+            _roofTrim = new Pool(_world, "RoofTrim", Art.White, 4, null);
+            _props = AddPool("Prop", "Props/tree_large", 7);
+            _roofGlow = AddPool("RoofGlow", "Effects/glow", 8, true);
+            _roofFire = AddPool("RoofFire", "Effects/fire_02", 11);
+            _bars = new Pool(_world, "Bar", Art.White, 19, null);
+            _pools.Add(_houseShadows);
+            _pools.Add(_roofEdges);
+            _pools.Add(_roofs);
+            _pools.Add(_roofTrim);
+            _pools.Add(_bars);
             _groundGlow = AddPool("GroundGlow", "Effects/glow", 3, true);
             _shadows = AddPool("Shadow", "Effects/glow", 4);
             _foam = AddPool("Foam", "Effects/smoke_01", 3);
