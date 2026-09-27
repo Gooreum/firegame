@@ -41,6 +41,9 @@ namespace FireGame.Prototypes.Logic
         public float DroneCooldown;
         public float Slowed;
         public float Dot;
+
+        /// <summary>마지막으로 발밑에 불을 남긴 뒤 걸어온 거리(큰 불만).</summary>
+        public float Trail;
         public bool Dead;
     }
 
@@ -70,6 +73,8 @@ namespace FireGame.Prototypes.Logic
 
     public sealed class Puddle
     {
+        /// <summary>물로 꺼졌다(다시 번지지 않는다).</summary>
+        public bool Out;
         public Vec2 Pos;
         public float Radius;
         public float Life;
@@ -148,6 +153,19 @@ namespace FireGame.Prototypes.Logic
         // --- 한 틱 신호(화면·소리용) ---
         public readonly List<Hit> Hits = new List<Hit>();
         public readonly List<Vec2> Explosions = new List<Vec2>();
+
+        /// <summary>이번 틱에 물·폭탄·거품에 꺼진 바닥 불 자리.</summary>
+        public readonly List<Vec2> Extinguished = new List<Vec2>();
+
+        /// <summary>이번 틱에 끄지 않은 바닥 불에서 새 불씨가 일어난 자리(불이 번졌다).</summary>
+        public readonly List<Vec2> Reignited = new List<Vec2>();
+
+        /// <summary>큰 불이 이만큼 걸을 때마다 발밑에 불을 남긴다.</summary>
+        public const float TrailStep = 1.5f;
+        public const int MaxBurningGround = 60;
+
+        /// <summary>끄지 않은 바닥 불이 수명을 다했을 때 불씨로 다시 일어날 확률.</summary>
+        public const float ReigniteChance = 0.5f;
         public bool JustLeveled;
         public bool JustEvolved;
         public bool JustBossArrived;
@@ -305,6 +323,8 @@ namespace FireGame.Prototypes.Logic
         {
             Hits.Clear();
             Explosions.Clear();
+            Extinguished.Clear();
+            Reignited.Clear();
             JustLeveled = false;
             JustEvolved = false;
             JustBossArrived = false;
@@ -480,8 +500,25 @@ namespace FireGame.Prototypes.Logic
                 }
 
                 float heavy = e.Kind == EnemyKind.Boss ? 0.1f : 1f;
-                e.Pos.X += (vx + (sx * 3f) + (e.Knock.X * heavy)) * Dt;
-                e.Pos.Y += (vy + (sy * 3f) + (e.Knock.Y * heavy)) * Dt;
+                float stepX = (vx + (sx * 3f) + (e.Knock.X * heavy)) * Dt;
+                float stepY = (vy + (sy * 3f) + (e.Knock.Y * heavy)) * Dt;
+                e.Pos.X += stepX;
+                e.Pos.Y += stepY;
+
+                // 큰 불은 걸어온 자리에 불을 흘린다.
+                if (e.Kind == EnemyKind.Blaze || e.Kind == EnemyKind.Boss)
+                {
+                    e.Trail += (float)Math.Sqrt((stepX * stepX) + (stepY * stepY));
+                    if (e.Trail >= TrailStep)
+                    {
+                        e.Trail = 0f;
+                        if (BurningGround.Count < MaxBurningGround)
+                        {
+                            float r = e.Kind == EnemyKind.Boss ? 1.1f : 0.6f;
+                            BurningGround.Add(new Puddle { Pos = e.Pos, Radius = r, Life = 4f, MaxLife = 4f });
+                        }
+                    }
+                }
                 e.Pos = ClampToArena(e.Pos);
                 e.Knock.X *= knockDecay;
                 e.Knock.Y *= knockDecay;
@@ -616,6 +653,7 @@ namespace FireGame.Prototypes.Logic
                     {
                         s.Dead = true;
                         Explosions.Add(s.Target);
+                        Douse(s.Target, s.Radius);
                         Near(s.Target, s.Radius, _near);
                         foreach (Enemy e in _near) Damage(e, s.Damage, Knockback(s.Target, e.Pos, 7f), true);
                     }
@@ -630,6 +668,7 @@ namespace FireGame.Prototypes.Logic
                     continue;
                 }
 
+                Douse(s.Pos, s.Radius);
                 Near(s.Pos, s.Radius, _near);
                 foreach (Enemy e in _near)
                 {
@@ -655,6 +694,7 @@ namespace FireGame.Prototypes.Logic
             foreach (Puddle p in Foam)
             {
                 p.Life -= Dt;
+                Douse(p.Pos, p.Radius);
                 Near(p.Pos, p.Radius, _near);
                 foreach (Enemy e in _near)
                 {
@@ -781,6 +821,19 @@ namespace FireGame.Prototypes.Logic
             }
         }
 
+        /// <summary>물이 닿은 자리의 바닥 불을 끈다(샷의 관통 수는 쓰지 않는다).</summary>
+        private void Douse(Vec2 at, float radius)
+        {
+            foreach (Puddle p in BurningGround)
+            {
+                if (p.Out || p.Life <= 0f) continue;
+                if (p.Pos.DistanceTo(at) > radius + p.Radius) continue;
+                p.Out = true;
+                p.Life = 0f;
+                Extinguished.Add(p.Pos);
+            }
+        }
+
         private static Vec2 Knockback(Vec2 from, Vec2 to, float strength)
         {
             float dx = to.X - from.X;
@@ -839,6 +892,16 @@ namespace FireGame.Prototypes.Logic
             Shots.RemoveAll(s => s.Dead);
             Gems.RemoveAll(g => g.Value == 0);
             Foam.RemoveAll(p => p.Life <= 0f);
+            // 끄지 않은 채 다 탄 바닥 불은 확률로 새 불씨를 일으킨다(불이 번진다). 물로 끈 자리는 Out이라 번지지 않는다.
+            foreach (Puddle p in BurningGround)
+            {
+                if (p.Life > 0f || p.Out) continue;
+                if (Rand() < ReigniteChance && Enemies.Count < MaxEnemies)
+                {
+                    Spawn(EnemyKind.Ember, p.Pos);
+                    Reignited.Add(p.Pos);
+                }
+            }
             BurningGround.RemoveAll(p => p.Life <= 0f);
             Civilians.RemoveAll(c => c.Life <= 0f);
         }

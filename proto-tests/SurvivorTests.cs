@@ -343,8 +343,10 @@ namespace FireGame.Prototypes.Tests
             sim.Step(0f, 0f);
             Assert.True(sim.Hp < hp, "타는 바닥 위인데 체력이 안 줄었다");
 
-            Run(sim, 3.1f);
-            Assert.Empty(sim.BurningGround);
+            // 그때 있던 바닥 불(처치 자리 3초, 물에 밀려 걸으며 남긴 흔적 4초)은 모두 타서 사라진다.
+            var before = new List<Puddle>(sim.BurningGround);
+            Run(sim, 4.1f);
+            Assert.All(before, q => Assert.DoesNotContain(q, sim.BurningGround));
         }
 
         // --- S2 TC-6 ---
@@ -440,6 +442,54 @@ namespace FireGame.Prototypes.Tests
             }
             Assert.True(aimed >= 5, "위로 겨눈 방수포 제트가 " + aimed + "줄뿐");
             Assert.True(line.TrueForAll(e => e.Hp < e.MaxHp), "겨눈 제트가 한 줄을 꿰뚫지 못했다");
+        }
+
+        // --- 번지는 불 ---
+        [Fact]
+        public void MovingBlaze_LeavesATrailOfFire()
+        {
+            SurvivorSim sim = Quiet();
+            Enemy e = sim.Spawn(EnemyKind.Blaze, new Vec2(sim.Player.X + 8f, sim.Player.Y));
+            e.MaxHp = 999f;
+            e.Hp = 999f;
+            Run(sim, 3f);
+            Assert.True(sim.BurningGround.Count >= 2, "3초 걸어온 큰 불이 남긴 바닥 불이 " + sim.BurningGround.Count + "개");
+        }
+
+        [Fact]
+        public void WaterPutsOutBurningGround()
+        {
+            SurvivorSim sim = Quiet();
+            var patch = new Puddle { Pos = new Vec2(sim.Player.X + 3f, sim.Player.Y), Radius = 0.6f, Life = 4f, MaxLife = 4f };
+            sim.BurningGround.Add(patch);
+            bool signalled = false;
+            for (int i = 0; i < 40 && sim.BurningGround.Contains(patch); i++)
+            {
+                Spray(sim, patch.Pos, 1);
+                if (sim.Extinguished.Count > 0) signalled = true;
+            }
+            Assert.DoesNotContain(patch, sim.BurningGround);
+            Assert.True(signalled, "꺼진 자리를 알리지 않았다");
+        }
+
+        [Fact]
+        public void UnwateredGround_CanReignite()
+        {
+            SurvivorSim sim = Quiet();
+            for (int k = 0; k < 10; k++)
+            {
+                double a = System.Math.PI * 2 * k / 10;
+                var at = new Vec2(sim.Player.X + (float)(System.Math.Cos(a) * 8), sim.Player.Y + (float)(System.Math.Sin(a) * 8));
+                sim.BurningGround.Add(new Puddle { Pos = at, Radius = 0.6f, Life = 0.05f, MaxLife = 4f });
+            }
+            int reignited = 0;
+            for (int i = 0; i < 10; i++)
+            {
+                sim.Step(0f, 0f);
+                reignited += sim.Reignited.Count;
+            }
+            Assert.InRange(reignited, 1, 10);
+            Assert.Contains(sim.Enemies, e => e.Kind == EnemyKind.Ember);
         }
 
         // --- 풀장비 시작 ---
