@@ -54,6 +54,11 @@ namespace FireGame.Prototypes
         private float _hitStop;
         private float _zoomKick;
         private float _recoil;
+        private float _cardsIn = -1f;
+        private float _waveAge = 99f;
+        private float _hurtClock;
+        private int _comboShown;
+        private readonly List<RectTransform> _rays = new List<RectTransform>();
         private SOutcome _lastOutcome;
         private Vector3 _cameraAt;
 
@@ -148,6 +153,7 @@ namespace FireGame.Prototypes
             public float Rot;
             public float Spin;
             public float Gravity;
+            public float Stretch;
             public Color C0;
             public Color C1;
             public float Unit;
@@ -201,6 +207,10 @@ namespace FireGame.Prototypes
             _hitStop = 0f;
             _zoomKick = 0f;
             _recoil = 0f;
+            _cardsIn = -1f;
+            _waveAge = 99f;
+            _hurtClock = 0f;
+            _comboShown = 0;
             _lastOutcome = SOutcome.Playing;
             _cameraAt = new Vector3(_sim.Player.X, _sim.Player.Y, -10f);
             ClearEffects();
@@ -270,15 +280,30 @@ namespace FireGame.Prototypes
         {
             if (_sim.PendingChoices == null || index < 0 || index >= _sim.PendingChoices.Count) return;
             _sim.Choose(index);
+            _cardsIn = -1f;
             HideCards();
             if (_sim.JustEvolved)
             {
+                // 진화: 금빛 물줄기가 사방으로 뻗고 고리가 두 겹 퍼진다. 화면이 확 다가왔다가 느리게 흐른다.
+                var gold = new Color(1f, 0.85f, 0.3f);
+                Vector3 at = W(_sim.Player);
+                for (int i = 0; i < 24; i++)
+                {
+                    float a = i * Mathf.PI * 2f / 24f;
+                    var dir = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
+                    EmitSprite(BeamSprite(), at + (dir * 1.2f), dir * 16f, 2.5f, 0.45f, 0.7f, 0.25f, new Color(1f, 0.9f, 0.5f, 1f), new Color(1f, 0.7f, 0.2f, 0f), 0f, true,
+                        0f, 5f, (a * Mathf.Rad2Deg) - 90f);
+                }
+                Shockwave(at, gold, 10f, 0.6f);
+                Shockwave(at, new Color(1f, 0.95f, 0.7f), 16f, 0.7f, 0.12f);
+                Pillar(at, gold);
+                Burst(at, 40, gold, 12f);
                 _trauma = Mathf.Min(1f, _trauma + 0.8f);
-                _slowmo = 0.5f;
-                Flash(new Color(1f, 0.85f, 0.3f), 0.7f);
-                Shockwave(W(_sim.Player), new Color(1f, 0.85f, 0.3f), 9f, 0.6f);
+                _slowmo = 0.8f;
+                _zoomKick = 1f;
+                Flash(gold, 0.7f);
                 GameAudio.Play(Cue.Won);
-                ShowAlert("진화! 고압 방수포", new Color(1f, 0.85f, 0.3f));
+                ShowAlert("진화! 고압 방수포", gold);
             }
             else
             {
@@ -339,20 +364,46 @@ namespace FireGame.Prototypes
                 {
                     PlayChime(1f + Mathf.Min(1f, _combo * 0.04f));
                     _gemClock = 0.04f;
+                    Emit("Effects/glow", W(_sim.Player), Vector3.zero, 0f, 0.15f, 0.8f, 1.8f, new Color(0.4f, 0.8f, 1f, 0.6f), new Color(0.4f, 0.8f, 1f, 0f), 0f, true);
+                }
+                if (_combo < _comboShown) _comboShown = 0;
+                if (_combo >= _comboShown + 10)
+                {
+                    _comboShown = _combo - (_combo % 10);
+                    SpawnText(W(_sim.Player) + new Vector3(0.9f, 0.9f, 0f), "×" + _comboShown, new Color(0.5f, 0.85f, 1f), 1.2f);
                 }
             }
 
             if (_sim.JustLeveled)
             {
-                Flash(Color.white, 0.55f);
-                Shockwave(W(_sim.Player), Color.white, 8f, 0.45f);
+                // 빛기둥 + 고리 + 위로 솟는 반짝이. 카드는 0.3초 뒤에 떠서 터지는 걸 먼저 보여 준다.
+                Vector3 at = W(_sim.Player);
+                Flash(Color.white, 0.45f);
+                Pillar(at, new Color(0.8f, 0.95f, 1f));
+                Shockwave(at, Color.white, 10f, 0.45f);
+                Sparkle(at, 20, new Color(1f, 0.95f, 0.6f));
+                SpawnText(at + new Vector3(0f, 1.4f, 0f), "LEVEL UP!", new Color(1f, 0.95f, 0.5f), 2f);
+                _zoomKick = Mathf.Max(_zoomKick, 0.6f);
                 _trauma = Mathf.Min(1f, _trauma + 0.25f);
                 GameAudio.Play(Cue.Rescued);
-                ShowCards();
+                _cardsIn = 0.3f;
+                _cardAge = -1f;
             }
 
             if (_sim.JustBossArrived)
             {
+                // 보스 자리에서 붉은 고리 세 겹 + 검은 연기. 카메라는 뒤로 물러나 큰 놈을 보여 준다.
+                Vector3 at = W(_sim.Boss.Pos);
+                var red = new Color(1f, 0.25f, 0.05f);
+                for (int k = 0; k < 3; k++) Shockwave(at, red, 10f + (5f * k), 0.6f, k * 0.15f);
+                for (int i = 0; i < 18; i++)
+                {
+                    float a = Random.value * Mathf.PI * 2f;
+                    Emit(Smokes[Random.Range(0, Smokes.Length)], at, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Random.Range(3f, 7f), 2f, Random.Range(0.9f, 1.4f),
+                        2f, 5f, new Color(0.12f, 0.1f, 0.1f, 0.8f), new Color(0.1f, 0.08f, 0.08f, 0f), Random.Range(-90f, 90f));
+                }
+                Burst(at, 30, new Color(1f, 0.5f, 0.1f), 12f);
+                _zoomKick = -0.8f;
                 _bossBannerAge = 0f;
                 _trauma = 1f;
                 Flash(new Color(1f, 0.2f, 0.1f), 0.5f);
@@ -363,13 +414,18 @@ namespace FireGame.Prototypes
             if (_sim.JustWave)
             {
                 ShowAlert("불길이 사방에서 몰려온다!", new Color(1f, 0.6f, 0.3f));
+                _waveAge = 0f;
                 GameAudio.Play(Cue.SecondIgnition);
                 _trauma = Mathf.Min(1f, _trauma + 0.3f);
             }
 
             if (_sim.JustRescued)
             {
-                Burst(W(_sim.Player), 14, new Color(0.5f, 1f, 0.5f), 5f);
+                var green = new Color(0.5f, 1f, 0.5f);
+                Pillar(W(_sim.Player), green);
+                Shockwave(W(_sim.Player), green, 7f, 0.45f);
+                Sparkle(W(_sim.Player), 16, green);
+                Burst(W(_sim.Player), 14, green, 5f);
                 SpawnText(W(_sim.Player) + new Vector3(0f, 0.8f, 0f), "구조! +20", new Color(0.5f, 1f, 0.5f), 1.4f);
                 GameAudio.Play(Cue.PickUp);
             }
@@ -378,6 +434,14 @@ namespace FireGame.Prototypes
             {
                 _hurt = Mathf.Min(1f, _hurt + (_sim.PlayerHurt * 0.1f));
                 _trauma = Mathf.Min(1f, _trauma + (_sim.PlayerHurt * 0.01f));
+                // 닿아 있는 동안 계속 깎이므로 0.4초마다 한 번만 "아야"를 보여 준다.
+                if (_hurtClock <= 0f)
+                {
+                    _hurtClock = 0.4f;
+                    Burst(W(_sim.Player), 8, new Color(1f, 0.3f, 0.2f), 6f);
+                    _trauma = Mathf.Min(1f, _trauma + 0.15f);
+                    HitStop(0.04f);
+                }
             }
 
             if (_sim.Outcome != _lastOutcome)
@@ -386,9 +450,15 @@ namespace FireGame.Prototypes
                 _overAge = 0f;
                 if (_sim.Outcome == SOutcome.Won)
                 {
-                    Flash(Color.white, 0.8f);
-                    Shockwave(W(_sim.Boss.Pos), new Color(0.6f, 0.9f, 1f), 14f, 0.8f);
-                    Burst(W(_sim.Boss.Pos), 60, new Color(1f, 0.7f, 0.3f), 12f);
+                    // 거인이 꺼지는 순간: 번쩍 → (잠깐 뒤) 고리 세 겹 + 거대한 김 + 불똥 비.
+                    Vector3 at = W(_sim.Boss.Pos);
+                    Flash(Color.white, 0.9f);
+                    for (int k = 0; k < 3; k++) Shockwave(at, new Color(0.6f, 0.9f, 1f), 12f + (6f * k), 0.9f, 0.15f + (k * 0.15f));
+                    Steam(at, 20, 2.2f);
+                    Burst(at, 120, new Color(1f, 0.7f, 0.3f), 14f);
+                    Pillar(at, new Color(0.7f, 0.9f, 1f));
+                    _zoomKick = 1.2f;
+                    _slowmo = 1.2f;
                     _trauma = 1f;
                     GameAudio.Play(Cue.Won);
                 }
@@ -414,6 +484,13 @@ namespace FireGame.Prototypes
             _xpPunch = Mathf.Max(0f, _xpPunch - (dt * 5f));
             _zoomKick *= Mathf.Exp(-6f * dt);
             _recoil = Mathf.Max(0f, _recoil - (dt * 12f));
+            _hurtClock -= dt;
+            _waveAge += dt;
+            if (_cardsIn > 0f)
+            {
+                _cardsIn -= dt;
+                if (_cardsIn <= 0f && _sim.PendingChoices != null) ShowCards();
+            }
             _sprayClock -= dt;
             _putOutClock -= dt;
             _gemClock -= dt;
@@ -747,11 +824,31 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>속이 빈 고리가 퍼지는 파동 + 안쪽 은은한 빛.</summary>
-        private void Shockwave(Vector3 at, Color color, float size, float life)
+        private void Shockwave(Vector3 at, Color color, float size, float life, float delay = 0f)
         {
             var clear = new Color(color.r, color.g, color.b, 0f);
-            EmitSprite(RingSprite(), at, Vector3.zero, 0f, life, size * 0.15f, size, color, clear, 0f, true);
-            Emit("Effects/glow", at, Vector3.zero, 0f, life * 0.6f, size * 0.2f, size * 0.6f, new Color(color.r, color.g, color.b, color.a * 0.45f), clear, 0f, true);
+            EmitSprite(RingSprite(), at, Vector3.zero, 0f, life, size * 0.15f, size, color, clear, 0f, true, 0f, 1f, float.NaN, delay);
+            EmitSprite(Art.Get("Effects/glow"), at, Vector3.zero, 0f, life * 0.6f, size * 0.2f, size * 0.6f, new Color(color.r, color.g, color.b, color.a * 0.45f), clear, 0f, true,
+                0f, 1f, float.NaN, delay);
+        }
+
+        /// <summary>발밑에서 하늘로 솟는 빛기둥(레벨업·구조·진화).</summary>
+        private void Pillar(Vector3 at, Color color)
+        {
+            var clear = new Color(color.r, color.g, color.b, 0f);
+            EmitSprite(BeamSprite(), at + new Vector3(0f, 5f, 0f), Vector3.zero, 0f, 0.55f, 1.4f, 3f, new Color(color.r, color.g, color.b, 0.95f), clear, 0f, true, 0f, 8f, 0f);
+            EmitSprite(BeamSprite(), at + new Vector3(0f, 5f, 0f), Vector3.zero, 0f, 0.4f, 0.5f, 1f, Color.white, new Color(1f, 1f, 1f, 0f), 0f, true, 0f, 20f, 0f);
+        }
+
+        /// <summary>위로 흩날리며 사라지는 반짝이.</summary>
+        private void Sparkle(Vector3 at, int count, Color color)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var v = new Vector3(Random.Range(-2.5f, 2.5f), Random.Range(3f, 8f), 0f);
+                Emit(Sparks[Random.Range(0, Sparks.Length)], at + new Vector3(Random.Range(-0.6f, 0.6f), 0f, 0f), v, 2f, Random.Range(0.6f, 1f),
+                    Random.Range(0.4f, 0.7f), 0.1f, color, new Color(color.r, color.g, color.b, 0f), Random.Range(-500f, 500f), true);
+            }
         }
 
         private void Flash(Color color, float strength)
@@ -793,14 +890,18 @@ namespace FireGame.Prototypes
             EmitSprite(Art.Get(sprite), at, vel, 0.5f, life, size, size * 0.6f, color, new Color(color.r, color.g, color.b, 0f), 0f, false, 14f);
         }
 
-        private void EmitSprite(Sprite sprite, Vector3 at, Vector3 vel, float drag, float life, float size0, float size1, Color c0, Color c1, float spin, bool glow, float gravity = 0f)
+        /// <param name="stretch">세로 배율(빛기둥·물줄기).</param>
+        /// <param name="rotation">NaN이면 아무 방향.</param>
+        /// <param name="delay">이만큼 뒤에 나타난다(겹겹이 퍼지는 고리).</param>
+        private void EmitSprite(Sprite sprite, Vector3 at, Vector3 vel, float drag, float life, float size0, float size1, Color c0, Color c1, float spin, bool glow,
+            float gravity = 0f, float stretch = 1f, float rotation = float.NaN, float delay = 0f)
         {
             if (_particles.Count >= MaxParticles) return;
             SpriteRenderer r = _particlePool.Count > 0 ? _particlePool.Pop() : NewSprite(_world, "Particle", null, 14);
             if (_spriteMaterial == null) _spriteMaterial = r.sharedMaterial;
             r.sharedMaterial = glow && Additive != null ? Additive : _spriteMaterial;
             r.sprite = sprite;
-            r.enabled = true;
+            r.enabled = delay <= 0f;
             _particles.Add(new Particle
             {
                 R = r,
@@ -810,7 +911,9 @@ namespace FireGame.Prototypes
                 Life = life,
                 Size0 = size0,
                 Size1 = size1,
-                Rot = Random.value * 360f,
+                Rot = float.IsNaN(rotation) ? Random.value * 360f : rotation,
+                Age = -delay,
+                Stretch = stretch,
                 Spin = spin,
                 Gravity = gravity,
                 C0 = c0,
@@ -832,6 +935,12 @@ namespace FireGame.Prototypes
                     _particles.RemoveAt(i);
                     continue;
                 }
+                if (p.Age < 0f)
+                {
+                    _particles[i] = p;
+                    continue;
+                }
+                if (!p.R.enabled) p.R.enabled = true;
                 float t = p.Age / p.Life;
                 p.Vel *= Mathf.Exp(-p.Drag * dt);
                 p.Vel.y -= p.Gravity * dt;
@@ -839,7 +948,8 @@ namespace FireGame.Prototypes
                 p.Rot += p.Spin * dt;
                 p.R.transform.localPosition = p.Pos + new Vector3(0f, 0f, -0.2f);
                 p.R.transform.localRotation = Quaternion.Euler(0f, 0f, p.Rot);
-                p.R.transform.localScale = Vector3.one * (p.Unit * Mathf.Lerp(p.Size0, p.Size1, t));
+                float size = p.Unit * Mathf.Lerp(p.Size0, p.Size1, t);
+                p.R.transform.localScale = new Vector3(size, size * p.Stretch, 1f);
                 p.R.color = Color.Lerp(p.C0, p.C1, t);
                 _particles[i] = p;
             }
@@ -1249,13 +1359,24 @@ namespace FireGame.Prototypes
             float danger = _hurt * 0.6f;
             if (hp < 0.3f && _sim.Outcome == SOutcome.Playing) danger = Mathf.Max(danger, 0.35f + (0.25f * Mathf.Max(0f, Mathf.Sin(_time * 7f))));
             if (_sim.Boss != null && !_sim.Boss.Dead) danger = Mathf.Max(danger, 0.25f);
-            _vignette.color = new Color(0.8f, 0.05f, 0f, Mathf.Clamp01(danger));
+            if (_waveAge < 1.5f)
+            {
+                // 사방 포위: 가장자리가 주황으로 세 번 맥동한다.
+                float pulse = (1f - (_waveAge / 1.5f)) * (0.5f + (0.5f * Mathf.Sin(_waveAge * 13f)));
+                _vignette.color = Color.Lerp(new Color(0.8f, 0.05f, 0f, Mathf.Clamp01(danger)), new Color(1f, 0.5f, 0.05f, 0.9f), pulse);
+            }
+            else
+            {
+                _vignette.color = new Color(0.8f, 0.05f, 0f, Mathf.Clamp01(danger));
+            }
 
             _flashImage.color = new Color(_flashColor.r, _flashColor.g, _flashColor.b, _flash * 0.8f);
 
             _alert.color = new Color(_alert.color.r, _alert.color.g, _alert.color.b, _alertAge < 2f ? 1f : Mathf.Max(0f, 1f - ((_alertAge - 2f) * 2f)));
             float s = _alertAge < 0.15f ? Mathf.Lerp(1.6f, 1f, _alertAge / 0.15f) : 1f;
             _alert.rectTransform.localScale = Vector3.one * s;
+            float shake = _alertAge < 0.6f ? Mathf.Sin(_alertAge * 60f) * 14f * (1f - (_alertAge / 0.6f)) : 0f;
+            _alert.rectTransform.anchoredPosition = new Vector2(shake, 250f);
 
             bool bossAlive = _sim.Boss != null && !_sim.Boss.Dead;
             _bossBack.gameObject.SetActive(bossAlive);
@@ -1268,7 +1389,11 @@ namespace FireGame.Prototypes
                 float a = _bossBannerAge < 2.3f ? 1f : 1f - ((_bossBannerAge - 2.3f) / 0.5f);
                 _bossBand.color = new Color(0.6f, 0f, 0f, 0.75f * a * (0.8f + (0.2f * Mathf.Sin(_time * 20f))));
                 _bossBandText.color = new Color(1f, 0.9f, 0.4f, a);
-                _bossBandText.rectTransform.localScale = Vector3.one * (1f + (0.04f * Mathf.Sin(_time * 14f)));
+                // 띠는 가운데서 좌우로 펼쳐지고, 글자는 왼쪽에서 미끄러져 들어온다.
+                float open = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_bossBannerAge / 0.25f));
+                _bossBand.rectTransform.localScale = new Vector3(open, 1f, 1f);
+                _bossBandText.rectTransform.anchoredPosition = new Vector2(Mathf.Lerp(-1400f, 0f, open), 0f);
+                _bossBandText.rectTransform.localScale = new Vector3(1f / Mathf.Max(open, 0.05f), 1f, 1f) * (1f + (0.04f * Mathf.Sin(_time * 14f)));
             }
 
             AnimateCards();
@@ -1301,6 +1426,15 @@ namespace FireGame.Prototypes
             Image dim = UiKit.Image(_cardLayer, "Dim", Art.White, new Color(0f, 0f, 0.05f, 0.55f));
             UiKit.Stretch(dim.rectTransform);
             _cards.Add(dim.rectTransform);
+
+            // 제목 뒤에서 천천히 도는 빛살.
+            for (int i = 0; i < 4; i++)
+            {
+                Image ray = UiKit.Image(_cardLayer, "Ray" + i, BeamSprite(), new Color(1f, 0.9f, 0.5f, 0.35f));
+                ray.raycastTarget = false;
+                UiKit.Place(ray.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 360f), new Vector2(90f, 900f));
+                _rays.Add(ray.rectTransform);
+            }
 
             Text title = UiKit.OutlinedLabel(_cardLayer, "Title", "레벨 업!", 80, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
             UiKit.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 360f), new Vector2(900f, 110f));
@@ -1343,11 +1477,18 @@ namespace FireGame.Prototypes
         {
             foreach (RectTransform r in _cards) UiKit.Discard(r.gameObject);
             _cards.Clear();
+            foreach (RectTransform r in _rays) UiKit.Discard(r.gameObject);
+            _rays.Clear();
         }
 
         /// <summary>카드가 하나씩 튀어 오른다(0.07초 간격, 살짝 넘쳤다 돌아옴).</summary>
         private void AnimateCards()
         {
+            for (int i = 0; i < _rays.Count; i++)
+            {
+                _rays[i].localRotation = Quaternion.Euler(0f, 0f, (_time * 25f) + (i * 45f));
+            }
+            if (_cards.Count > 1) _cards[1].localScale = Vector3.one * (1f + (0.05f * Mathf.Sin(_time * 6f)));
             for (int i = 2; i < _cards.Count; i++)
             {
                 float t = Mathf.Clamp01((_cardAge - ((i - 2) * 0.07f)) / 0.25f);
@@ -1371,7 +1512,7 @@ namespace FireGame.Prototypes
                     float dx = ((x + 0.5f) / n * 2f) - 1f;
                     float dy = ((y + 0.5f) / n * 2f) - 1f;
                     float d = Mathf.Abs(Mathf.Sqrt((dx * dx) + (dy * dy)) - 0.85f);
-                    float a = 1f - Mathf.SmoothStep(0f, 0.13f, d);
+                    float a = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(d / 0.13f));
                     pixels[(y * n) + x] = new Color32(255, 255, 255, (byte)(a * 255));
                 }
             }

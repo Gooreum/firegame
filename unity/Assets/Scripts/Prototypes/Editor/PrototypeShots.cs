@@ -46,8 +46,10 @@ namespace FireGame.Prototypes.EditorTools
             failures += ActionShot(dir, "a2_action_later", 16f);
 
             failures += SurvivorShot(dir, "c1_early", view => view.Sim.Time >= 40f);
-            failures += SurvivorShot(dir, "c2_levelup_cards", view => view.Sim.Time >= 60f && view.Sim.PendingChoices != null);
+            failures += SurvivorShot(dir, "c2_levelup_cards", view => view.Sim.Time >= 60f && view.Sim.PendingChoices != null, 45);
             failures += SurvivorShot(dir, "c3_boss", view => view.Sim.Boss != null && view.Sim.Time >= SurvivorSim.BossAt + 5f);
+            failures += SurvivorShot(dir, "c4_evolved", view => view.Sim.JustEvolved, 9);
+            failures += SurvivorShot(dir, "c5_levelup_burst", view => view.Sim.Time >= 30f && view.Sim.JustLeveled, 8);
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
@@ -113,7 +115,8 @@ namespace FireGame.Prototypes.EditorTools
         }
 
         /// <summary>봇에게 판을 맡겨 조건이 될 때까지 굴린 뒤 찍는다. 카드 장면은 카드를 고르지 않고 멈춘다.</summary>
-        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until)
+        /// <param name="settle">조건에 닿은 뒤 효과를 흘려 보낼 프레임 수(60 = 1초).</param>
+        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20)
         {
             try
             {
@@ -137,8 +140,8 @@ namespace FireGame.Prototypes.EditorTools
                     view.Refresh(SurvivorSim.Dt);
                 }
                 if (!until(view)) throw new Exception("조건에 닿기 전에 판이 끝났다: " + view.Sim.Outcome + " t=" + view.Sim.Time);
-                // 카드는 튀어 오르는 중이니 다 뜬 뒤를 찍는다. 효과도 조금 흐르게 둔다.
-                for (int i = 0; i < 20; i++) view.Refresh(SurvivorSim.Dt);
+                // 카드는 0.3초 뒤에 튀어 오르니 다 뜬 뒤를 찍는다. 효과도 조금 흐르게 둔다.
+                for (int i = 0; i < settle; i++) view.Refresh(SurvivorSim.Dt);
 
                 Canvas.ForceUpdateCanvases();
                 Capture(camera, Path.Combine(dir, name + ".png"));
