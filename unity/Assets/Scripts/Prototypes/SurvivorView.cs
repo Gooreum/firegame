@@ -69,6 +69,7 @@ namespace FireGame.Prototypes
         private bool _hasMouse;
         private int _muzzleTick;
         private float _jetPulse;
+        private float _igniteClock;
         private readonly List<Vector3> _trail = new List<Vector3>();
         private readonly List<RectTransform> _rays = new List<RectTransform>();
         private SOutcome _lastOutcome;
@@ -374,6 +375,28 @@ namespace FireGame.Prototypes
                 }
             }
 
+            // 물에 꺼진 바닥 불: 하얀 김 + 치익.
+            foreach (Vec2 e in _sim.Extinguished)
+            {
+                Steam(W(e), 3, 0.9f);
+                if (_putOutClock <= 0f)
+                {
+                    GameAudio.Play(Cue.PutOut);
+                    _putOutClock = 0.07f;
+                }
+            }
+            // 끄지 않은 바닥 불에서 불씨가 다시 일어났다: 주황 고리 + 불똥 + 점화음.
+            foreach (Vec2 e in _sim.Reignited)
+            {
+                Shockwave(W(e), new Color(1f, 0.5f, 0.1f, 0.9f), 2.5f, 0.3f);
+                Burst(W(e), 10, new Color(1f, 0.6f, 0.15f), 5f);
+                if (_igniteClock <= 0f)
+                {
+                    GameAudio.Play(Cue.SecondIgnition);
+                    _igniteClock = 0.25f;
+                }
+            }
+
             foreach (Vec2 e in _sim.Explosions)
             {
                 WaterBlast(W(e), _sim.Build.BombRadius, _sim.Build.Level(UpgradeId.WaterBomb));
@@ -530,6 +553,7 @@ namespace FireGame.Prototypes
             }
             _sprayClock -= dt;
             _putOutClock -= dt;
+            _igniteClock -= dt;
             _gemClock -= dt;
             _comboClock -= dt;
             _cardAge += dt;
@@ -569,15 +593,18 @@ namespace FireGame.Prototypes
                 Vector3 at = W(e.Pos);
                 float flicker = 1f + (0.09f * Mathf.Sin((_time * 14f) + (i * 1.7f)));
                 bool hit = e.HitFlash > 0f;
-                float punch = hit ? 1.35f : 1f;
+                // 물을 먹을수록 불이 쪼그라든다(체력 비례).
+                float life = 0.55f + (0.45f * Mathf.Clamp01(e.Hp / Mathf.Max(0.01f, e.MaxHp)));
+                float punch = (hit ? 1.35f : 1f) * life;
+                if (hit && Random.value < 0.12f) Steam(at, 1, 0.45f * life);
                 var water = new Color(0.7f, 0.95f, 1f);
 
                 if (e.Kind == EnemyKind.Boss)
                 {
                     float pulse = 1f + (0.05f * Mathf.Sin(_time * 5f));
-                    _enemyGlow.Put(at, 12f * pulse, 0f, new Color(1f, 0.3f, 0.05f, 0.75f));
+                    _enemyGlow.Put(at, 12f * pulse * life, 0f, new Color(1f, 0.3f, 0.05f, 0.75f));
                     _bossBody.Put(at + new Vector3(0f, 0.5f, 0f), 8f * pulse * punch, 0f, hit ? water : new Color(0.95f, 0.25f, 0.05f));
-                    _enemyCore.Put(at + new Vector3(0f, 0.3f, 0f), 5f * flicker, 0f, new Color(1f, 0.8f, 0.3f, 0.95f));
+                    _enemyCore.Put(at + new Vector3(0f, 0.3f, 0f), 5f * flicker * life, 0f, new Color(1f, 0.8f, 0.3f, 0.95f));
                     for (int k = 0; k < 10; k++)
                     {
                         float a = (_time * 1.3f) + (k * Mathf.PI / 5f);
@@ -590,14 +617,14 @@ namespace FireGame.Prototypes
                 switch (e.Kind)
                 {
                     case EnemyKind.Ember:
-                        _enemyGlow.Put(at, 1.4f * flicker, 0f, new Color(1f, 0.4f, 0.08f, 0.25f));
+                        _enemyGlow.Put(at, 1.4f * flicker * life, 0f, new Color(1f, 0.4f, 0.08f, 0.25f));
                         _embers.Put(at + new Vector3(0f, 0.15f, 0f), 1.9f * flicker * punch, 0f, hit ? water : new Color(1f, 0.45f, 0.1f));
-                        if (!hit) _enemyCore.Put(at + new Vector3(0f, 0.08f, 0f), 1.1f * flicker, 0f, new Color(1f, 0.8f, 0.35f, 0.9f));
+                        if (!hit) _enemyCore.Put(at + new Vector3(0f, 0.08f, 0f), 1.1f * flicker * life, 0f, new Color(1f, 0.8f, 0.35f, 0.9f));
                         break;
                     case EnemyKind.Blaze:
-                        _enemyGlow.Put(at, 2.4f * flicker, 0f, new Color(1f, 0.3f, 0.05f, 0.35f));
+                        _enemyGlow.Put(at, 2.4f * flicker * life, 0f, new Color(1f, 0.3f, 0.05f, 0.35f));
                         _blazes.Put(at + new Vector3(0f, 0.25f, 0f), 3.1f * flicker * punch, 0f, hit ? water : new Color(0.95f, 0.28f, 0.06f));
-                        if (!hit) _enemyCore.Put(at + new Vector3(0f, 0.12f, 0f), 1.8f * flicker, 0f, new Color(1f, 0.7f, 0.25f, 0.9f));
+                        if (!hit) _enemyCore.Put(at + new Vector3(0f, 0.12f, 0f), 1.8f * flicker * life, 0f, new Color(1f, 0.7f, 0.25f, 0.9f));
                         break;
                     case EnemyKind.Dart:
                         float toward = Mathf.Atan2(_sim.Player.Y - e.Pos.Y, _sim.Player.X - e.Pos.X) * Mathf.Rad2Deg;
@@ -658,13 +685,17 @@ namespace FireGame.Prototypes
                 Puddle p = _sim.BurningGround[i];
                 float t = Mathf.Clamp01(p.Life / p.MaxLife);
                 Vector3 at = W(p.Pos);
-                _groundGlow.Put(at, p.Radius * 3.4f, 0f, new Color(1f, 0.3f, 0.05f, 0.6f * t));
+                // 끄지 않으면 곧 번진다: 마지막 1초는 크게 맥동하며 경고한다.
+                float warn = p.Life < 1f ? 1f + (0.3f * Mathf.Abs(Mathf.Sin(_time * 12f))) : 1f;
+                float big = 1.3f * warn * (p.Radius / 0.9f);
+                t = Mathf.Max(t, p.Life < 1f ? 0.6f : 0f);
+                _groundGlow.Put(at, p.Radius * 3.4f * warn, 0f, new Color(1f, 0.3f, 0.05f, 0.6f * t));
                 for (int k = 0; k < 3; k++)
                 {
                     float a = (k * 2.1f) + i;
                     Vector3 o = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.4f;
                     float f = 0.6f + (0.15f * Mathf.Sin((_time * 16f) + (k * 2f) + i));
-                    _groundFire.Put(at + o, f * (0.6f + (0.5f * t)), 0f, new Color(1f, 0.55f, 0.12f, t), Art.Get(k == 0 ? "Effects/fire_01" : "Effects/fire_02"));
+                    _groundFire.Put(at + (o * big), f * (0.6f + (0.5f * t)) * big, 0f, new Color(1f, 0.55f, 0.12f, t), Art.Get(k == 0 ? "Effects/fire_01" : "Effects/fire_02"));
                 }
             }
         }
