@@ -11,13 +11,19 @@ namespace FireGame.Prototypes.EditorTools
             Play("C");
         }
 
-        [MenuItem("FireGame/시험판 A (액션)", false, 1)]
+        [MenuItem("FireGame/시험판 C (풀장비)", false, 1)]
+        private static void PlaySurvivorMaxGear()
+        {
+            Play("C+");
+        }
+
+        [MenuItem("FireGame/시험판 A (액션)", false, 2)]
         private static void PlayActionPrototype()
         {
             Play("A");
         }
 
-        [MenuItem("FireGame/시험판 B (전략)", false, 2)]
+        [MenuItem("FireGame/시험판 B (전략)", false, 3)]
         private static void PlayTacticsPrototype()
         {
             Play("B");

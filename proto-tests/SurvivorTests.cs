@@ -386,5 +386,43 @@ namespace FireGame.Prototypes.Tests
             Assert.True(sim.Time > SurvivorSim.BossAt, "시드 3이 보스까지 못 가 성능 측정이 짧아졌다");
             Assert.True(watch.Elapsed.TotalSeconds < 3.0, "한 판에 " + watch.Elapsed.TotalSeconds + "초");
         }
+
+        // --- 풀장비 시작 ---
+        [Fact]
+        public void GiveMaxGear_MaxesEveryItem_AndEvolvesTheHose()
+        {
+            var sim = new SurvivorSim(1);
+            sim.GiveMaxGear();
+
+            UpgradeId[] maxed = { UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Foam, UpgradeId.Tank, UpgradeId.Suit, UpgradeId.Boots, UpgradeId.Radio };
+            foreach (UpgradeId id in maxed) Assert.Equal(Loadout.MaxLevel, sim.Build.Level(id));
+            Assert.Equal(1, sim.Build.Level(UpgradeId.Cannon));
+            Assert.Equal(0, sim.Build.Level(UpgradeId.Hose));
+            Assert.Equal(200f, sim.MaxHp);
+            Assert.Equal(sim.MaxHp, sim.Hp);
+        }
+
+        [Fact]
+        public void MaxGear_FiresJetsBombsAndFiveDrones_FromTheStart()
+        {
+            SurvivorSim sim = Quiet();
+            sim.GiveMaxGear();
+            sim.Spawn(EnemyKind.Blaze, new Vec2(sim.Player.X + 4f, sim.Player.Y)).Speed = 0f;
+
+            bool jet = false;
+            bool bomb = false;
+            for (int i = 0; i < 30; i++)
+            {
+                sim.Step(0f, 0f);
+                foreach (Shot s in sim.Shots)
+                {
+                    if (s.Kind == ShotKind.Jet) jet = true;
+                    if (s.Kind == ShotKind.Bomb) bomb = true;
+                }
+            }
+            Assert.True(jet, "방수포 제트가 나가지 않았다");
+            Assert.True(bomb, "물폭탄이 나가지 않았다");
+            Assert.Equal(5, sim.Drones.Count);
+        }
     }
 }

@@ -72,6 +72,13 @@ namespace FireGame.Prototypes.Logic
             if (_levels[i] < MaxLevelOf(id)) _levels[i]++;
         }
 
+        /// <summary>모든 무기·보조를 최대로 올리고 물대포는 방수포로 진화시킨다(시험용 풀장비).</summary>
+        public void MaxAll()
+        {
+            for (int i = 0; i <= (int)UpgradeId.Radio; i++) _levels[i] = MaxLevelOf((UpgradeId)i);
+            Add(UpgradeId.Cannon);
+        }
+
         public IEnumerable<UpgradeId> Owned()
         {
             for (int i = 0; i < _levels.Length; i++)

@@ -22,7 +22,7 @@ namespace FireGame.Prototypes
             UiKit.EnsureEventSystem(transform);
 
             string selected = PrototypeLauncher.Selected;
-            _mode = selected == "A" || selected == "B" ? selected : "C";
+            _mode = selected == "A" || selected == "B" || selected == "C+" ? selected : "C";
             Launch();
         }
 
@@ -59,6 +59,7 @@ namespace FireGame.Prototypes
         {
             if (mode == "B") return new TacticsView(parent, camera, canvas);
             if (mode == "C") return new SurvivorView(parent, camera, canvas);
+            if (mode == "C+") return new SurvivorView(parent, camera, canvas, true);
             return new ActionView(parent, camera, canvas);
         }
 

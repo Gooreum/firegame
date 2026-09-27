@@ -180,6 +180,13 @@ namespace FireGame.Prototypes.Logic
             get { return BaseMaxHp + Build.MaxHpBonus; }
         }
 
+        /// <summary>풀장비로 시작한다: 모든 아이템 최대 + 체력 가득.</summary>
+        public void GiveMaxGear()
+        {
+            Build.MaxAll();
+            Hp = MaxHp;
+        }
+
         public float Magnet
         {
             get { return BaseMagnet * Build.MagnetScale; }
