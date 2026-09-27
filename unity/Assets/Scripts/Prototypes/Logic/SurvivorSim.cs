@@ -24,6 +24,9 @@ namespace FireGame.Prototypes.Logic
         Drop,
         Bomb,
         Jet,
+
+        /// <summary>소방 헬기가 쏟는 물. 폭탄처럼 날아가 떨어지지만 훨씬 크다.</summary>
+        Heli,
     }
 
     public sealed class Enemy
@@ -139,6 +142,9 @@ namespace FireGame.Prototypes.Logic
         public readonly List<Civilian> Civilians = new List<Civilian>();
         public readonly List<Vec2> Drones = new List<Vec2>();
 
+        /// <summary>구조대원 동료가 서 있는 곳. 동료가 없으면 null.</summary>
+        public Vec2? Partner;
+
         /// <summary>지켜야 하는 동네. 생성자에서 고정 배치로 깐다.</summary>
         public readonly List<Structure> Structures = SurvivorTown.Build();
         public readonly Loadout Build = new Loadout();
@@ -233,6 +239,12 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이번 틱에 물로 완전히 꺼진 구조물.</summary>
         public readonly List<Structure> Doused = new List<Structure>();
+
+        /// <summary>이번 틱에 헬기 물이 떨어진 자리.</summary>
+        public readonly List<Vec2> HeliDrops = new List<Vec2>();
+
+        /// <summary>이번 틱에 물의 장막이 터졌다(소방관 자리에서).</summary>
+        public bool JustCurtain;
         public bool JustLeveled;
         public bool JustEvolved;
         public bool JustBossArrived;
@@ -248,6 +260,8 @@ namespace FireGame.Prototypes.Logic
         private float _bombClock;
         private float _foamClock;
         private float _jetClock;
+        private float _heliClock;
+        private float _curtainClock;
         private int _jetQueue;
         private float _jetAngle;
         private float _droneAngle;
@@ -278,6 +292,7 @@ namespace FireGame.Prototypes.Logic
         public void GiveMaxGear()
         {
             Build.MaxAll();
+            Partner = new Vec2(Player.X - 1.2f, Player.Y);
             Hp = MaxHp;
         }
 
@@ -349,7 +364,7 @@ namespace FireGame.Prototypes.Logic
             {
                 Xp -= XpToNext;
                 Level++;
-                PendingChoices = SurvivorUpgrades.Roll(Build, ref _rng);
+                PendingChoices = SurvivorUpgrades.Roll(Build, Level, ref _rng);
                 JustLeveled = true;
                 PushAway(Player, 4f, 3f);
             }
@@ -375,6 +390,9 @@ namespace FireGame.Prototypes.Logic
                 JustEvolved = true;
                 _jetClock = 0f;
             }
+            if (id == UpgradeId.Heli) _heliClock = 1f;
+            if (id == UpgradeId.Curtain) _curtainClock = 0.5f;
+            if (id == UpgradeId.Partner) Partner = new Vec2(Player.X - 1.2f, Player.Y);
         }
 
         /// <summary>테스트용: 적을 직접 놓는다.</summary>
@@ -418,6 +436,8 @@ namespace FireGame.Prototypes.Logic
             Ignited.Clear();
             Fell.Clear();
             Doused.Clear();
+            HeliDrops.Clear();
+            JustCurtain = false;
             GasBlasts.Clear();
             RescuedFrom.Clear();
             PeopleLost.Clear();
@@ -687,15 +707,13 @@ namespace FireGame.Prototypes.Logic
 
         private void FireWeapons()
         {
-            float cd = Build.CooldownScale;
-
             // 물대포: 겨눈 쪽으로, 쥐고 있을 때만. 예전 자동 조준(0.32초)과 초당 피해를 맞췄다.
             int hose = Build.Level(UpgradeId.Hose);
             bool cannon = Build.Level(UpgradeId.Cannon) > 0;
             _hoseClock -= Dt;
             if (Spraying && (hose > 0 || cannon) && _hoseClock <= 0f && (Aim.X != 0f || Aim.Y != 0f))
             {
-                _hoseClock = HoseInterval * cd;
+                _hoseClock = HoseInterval;
                 float baseAngle = (float)Math.Atan2(Aim.Y, Aim.X);
                 if (cannon)
                 {
@@ -704,12 +722,9 @@ namespace FireGame.Prototypes.Logic
                 }
                 else
                 {
-                    float damage = 3f * (HoseInterval / 0.32f) * (1f + (0.25f * (hose - 1)));
-                    for (int k = 0; k < hose; k++)
-                    {
-                        float spread = (k - ((hose - 1) / 2f)) * 0.12f;
-                        FireDrop(baseAngle + spread, damage, 16f, 0.3f, 2, 0.6f, ShotKind.Drop);
-                    }
+                    // 늘 한 줄기. 레벨이 오를수록 굵고(반경) 세고(피해) 멀리(수명) 나가며 더 많이 꿰뚫는다.
+                    float damage = 3f * (HoseInterval / 0.32f) * HosePower(hose) * Build.HosePower;
+                    FireDrop(baseAngle, damage, 16f, HoseRadius(hose), 1 + hose, 0.6f * (1f + (0.1f * (hose - 1))) * Build.HoseRange, ShotKind.Drop);
                 }
             }
 
@@ -718,7 +733,7 @@ namespace FireGame.Prototypes.Logic
                 _jetClock -= Dt;
                 if (_jetClock <= 0f && _jetQueue == 0)
                 {
-                    _jetClock = 2.4f * cd;
+                    _jetClock = 2.4f;
                     _jetQueue = 18;
                 }
                 if (_jetQueue > 0)
@@ -736,7 +751,7 @@ namespace FireGame.Prototypes.Logic
                 _bombClock -= Dt;
                 if (_bombClock <= 0f)
                 {
-                    _bombClock = 2.2f * cd;
+                    _bombClock = 2.2f;
                     float radius = Build.BombRadius;
                     for (int k = 0; k < bomb; k++)
                     {
@@ -778,6 +793,68 @@ namespace FireGame.Prototypes.Logic
                     Foam.Add(new Puddle { Pos = Player, Radius = 1f, Life = life, MaxLife = life });
                 }
             }
+
+            if (Build.Level(UpgradeId.Heli) > 0)
+            {
+                _heliClock -= Dt;
+                if (_heliClock <= 0f)
+                {
+                    _heliClock = HeliInterval;
+                    Vec2 target = HeliTarget();
+                    // 헬기는 소방관 뒤쪽 화면 밖에서 날아온다(From은 그림용).
+                    var from = new Vec2(target.X - 14f, target.Y + 10f);
+                    Shots.Add(new Shot { Kind = ShotKind.Heli, From = from, Pos = from, Target = target, Life = HeliFlight, Damage = 30f, Radius = HeliRadius });
+                }
+            }
+
+            if (Build.Level(UpgradeId.Curtain) > 0)
+            {
+                _curtainClock -= Dt;
+                if (_curtainClock <= 0f)
+                {
+                    _curtainClock = CurtainInterval;
+                    JustCurtain = true;
+                    Douse(Player, CurtainRadius);
+                    foreach (Structure st in Structures)
+                    {
+                        if (st.Within(Player, CurtainRadius)) Soak(st, 0.5f);
+                    }
+                    Near(Player, CurtainRadius, _near);
+                    foreach (Enemy e in _near) Damage(e, 12f, Knockback(Player, e.Pos, 8f), true);
+                }
+            }
+        }
+
+        /// <summary>물대포 레벨별 위력 배수: Lv5면 2.8배(예전 다섯 줄기의 총량과 비슷).</summary>
+        public static float HosePower(int level)
+        {
+            return 1f + (0.45f * (level - 1));
+        }
+
+        /// <summary>물대포 레벨별 물줄기 반경(굵기).</summary>
+        public static float HoseRadius(int level)
+        {
+            return 0.3f + (0.12f * (level - 1));
+        }
+
+        public const float HeliInterval = 9f;
+        public const float HeliFlight = 1.2f;
+        public const float HeliRadius = 4.5f;
+        public const float CurtainInterval = 5f;
+        public const float CurtainRadius = 5f;
+        public const float PartnerSpeed = 4.5f;
+
+        /// <summary>12칸 안에서 가장 크게 타는 건물 → 불이 몰린 곳 → 소방관 앞.</summary>
+        private Vec2 HeliTarget()
+        {
+            Structure best = null;
+            foreach (Structure st in Structures)
+            {
+                if (!st.Burning || st.Kind == StructureKind.Gas || st.DistanceTo(Player) > 12f) continue;
+                if (best == null || st.Fire > best.Fire) best = st;
+            }
+            if (best != null) return best.Pos;
+            return RandomEnemyNear(12f) ?? new Vec2(Player.X + (Facing.X * 6f), Player.Y + (Facing.Y * 6f));
         }
 
         private void FireDrop(float angle, float damage, float speed, float radius, int pierce, float life, ShotKind kind)
@@ -805,14 +882,14 @@ namespace FireGame.Prototypes.Logic
                 if (s.Dead) continue;
                 s.Age += Dt;
 
-                if (s.Kind == ShotKind.Bomb)
+                if (s.Kind == ShotKind.Bomb || s.Kind == ShotKind.Heli)
                 {
                     float t = Math.Min(1f, s.Age / s.Life);
                     s.Pos = new Vec2(s.From.X + ((s.Target.X - s.From.X) * t), s.From.Y + ((s.Target.Y - s.From.Y) * t));
                     if (t >= 1f)
                     {
                         s.Dead = true;
-                        Explosions.Add(s.Target);
+                        (s.Kind == ShotKind.Heli ? HeliDrops : Explosions).Add(s.Target);
                         Douse(s.Target, s.Radius);
                         foreach (Structure st in Structures)
                         {
@@ -1140,8 +1217,38 @@ namespace FireGame.Prototypes.Logic
         /// 불난 가게 문 앞에 잠깐 서 있으면 갇힌 사람을 한 명씩 데리고 나온다.
         /// 나온 사람은 잠깐 뛰어 나가는 모습으로만 남는다(Civilians는 화면용).
         /// </summary>
+        /// <summary>동료: 갇힌 사람이 있는 가장 가까운 불난 가게 문으로 달려간다. 없으면 소방관 곁을 따른다.</summary>
+        private void MovePartner()
+        {
+            if (!Partner.HasValue) return;
+            Vec2 at = Partner.Value;
+            Vec2 goal = new Vec2(Player.X - 1.2f, Player.Y - 0.6f);
+            float best = float.MaxValue;
+            foreach (Structure s in Structures)
+            {
+                if (!s.Burning || s.Residents <= 0) continue;
+                float d = s.Door.DistanceTo(at);
+                if (d < best)
+                {
+                    best = d;
+                    goal = s.Door;
+                }
+            }
+            float dx = goal.X - at.X;
+            float dy = goal.Y - at.Y;
+            float len = (float)Math.Sqrt((dx * dx) + (dy * dy));
+            float step = PartnerSpeed * Dt;
+            if (len > 0.2f)
+            {
+                at.X += dx / len * Math.Min(step, len);
+                at.Y += dy / len * Math.Min(step, len);
+            }
+            Partner = ClampToArena(at);
+        }
+
         private void TickRescue()
         {
+            MovePartner();
             foreach (Structure s in Structures)
             {
                 // 큰 불 속에 오래 갇혀 있으면 연기에 한 명씩 잃는다: 멀리서 끄기만 할 게 아니라 빨리 가야 한다.
@@ -1157,7 +1264,8 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
 
-                if (!s.Burning || s.Residents <= 0 || s.Door.DistanceTo(Player) > RescueRange)
+                bool atDoor = s.Door.DistanceTo(Player) <= RescueRange || (Partner.HasValue && s.Door.DistanceTo(Partner.Value) <= RescueRange);
+                if (!s.Burning || s.Residents <= 0 || !atDoor)
                 {
                     s.RescueHold = 0f;
                     continue;

@@ -124,7 +124,7 @@ namespace FireGame.Prototypes.Tests
             var rng = new Rng(7);
             for (int i = 0; i < 1000; i++)
             {
-                Assert.DoesNotContain(UpgradeId.Hose, SurvivorUpgrades.Roll(l, ref rng));
+                Assert.DoesNotContain(UpgradeId.Hose, SurvivorUpgrades.Roll(l, 2, ref rng));
             }
         }
 
@@ -137,14 +137,14 @@ namespace FireGame.Prototypes.Tests
             l.Add(UpgradeId.Tank);
 
             var rng = new Rng(3);
-            for (int i = 0; i < 200; i++) Assert.Contains(UpgradeId.Cannon, SurvivorUpgrades.Roll(l, ref rng));
+            for (int i = 0; i < 200; i++) Assert.Contains(UpgradeId.Cannon, SurvivorUpgrades.Roll(l, 2, ref rng));
 
             l.Add(UpgradeId.Cannon);
             Assert.Equal(0, l.Level(UpgradeId.Hose));
             Assert.Equal(1, l.Level(UpgradeId.Cannon));
             for (int i = 0; i < 200; i++)
             {
-                List<UpgradeId> cards = SurvivorUpgrades.Roll(l, ref rng);
+                List<UpgradeId> cards = SurvivorUpgrades.Roll(l, 2, ref rng);
                 Assert.DoesNotContain(UpgradeId.Cannon, cards);
                 Assert.DoesNotContain(UpgradeId.Hose, cards);
             }
@@ -160,9 +160,12 @@ namespace FireGame.Prototypes.Tests
                 while (sim.Build.Level(id) < Loadout.MaxLevel) sim.Build.Add(id);
             }
             sim.Build.Add(UpgradeId.Cannon);
+            sim.Build.Add(UpgradeId.Heli);
+            sim.Build.Add(UpgradeId.Curtain);
+            sim.Build.Add(UpgradeId.Partner);
 
             var rng = new Rng(5);
-            Assert.Equal(new List<UpgradeId> { UpgradeId.Heal }, SurvivorUpgrades.Roll(sim.Build, ref rng));
+            Assert.Equal(new List<UpgradeId> { UpgradeId.Heal }, SurvivorUpgrades.Roll(sim.Build, 2, ref rng));
 
             sim.Hp = sim.MaxHp - 10f;
             sim.DropGem(sim.Player, sim.XpToNext);
@@ -185,7 +188,7 @@ namespace FireGame.Prototypes.Tests
 
             var rng = new Rng(11);
             var seen = new HashSet<UpgradeId>();
-            for (int i = 0; i < 500; i++) foreach (UpgradeId id in SurvivorUpgrades.Roll(l, ref rng)) seen.Add(id);
+            for (int i = 0; i < 500; i++) foreach (UpgradeId id in SurvivorUpgrades.Roll(l, 2, ref rng)) seen.Add(id);
             Assert.DoesNotContain(UpgradeId.Cannon, seen);
             Assert.Contains(UpgradeId.Tank, seen);
             Assert.Contains(UpgradeId.Hose, seen);
@@ -836,6 +839,137 @@ namespace FireGame.Prototypes.Tests
             Assert.True(jet, "방수포 제트가 나가지 않았다");
             Assert.True(bomb, "물폭탄이 나가지 않았다");
             Assert.Equal(5, sim.Drones.Count);
+        }
+
+        // --- 노란 특수 장비·펌프·한 줄기 물대포 ---
+
+        /// <summary>플레이어가 레벨업 카드에서 이 장비를 골랐을 때(Choose 경로).</summary>
+        private static void Take(SurvivorSim sim, UpgradeId id)
+        {
+            sim.PendingChoices = new List<UpgradeId> { id };
+            sim.Choose(0);
+        }
+
+        /// <summary>이번 틱에 새로 나간 물대포 물방울.</summary>
+        private static List<Shot> FreshDrops(SurvivorSim sim)
+        {
+            return sim.Shots.FindAll(s => s.Kind == ShotKind.Drop && s.Age <= SurvivorSim.Dt);
+        }
+
+        [Fact]
+        public void ReachingLevel5_AlwaysOffersAYellowCard()
+        {
+            for (int seed = 1; seed <= 10; seed++)
+            {
+                SurvivorSim sim = Quiet(seed);
+                while (sim.Level < 5)
+                {
+                    sim.DropGem(sim.Player, sim.XpToNext);
+                    for (int i = 0; i < 3 && sim.PendingChoices == null; i++) sim.Step(0f, 0f);
+                    Assert.NotNull(sim.PendingChoices);
+                    if (sim.Level == 5) Assert.Contains(sim.PendingChoices, Loadout.IsSpecial);
+                    sim.Choose(0);
+                }
+            }
+        }
+
+        [Fact]
+        public void Heli_DousesAFullyBurningShop()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 8f, 0f, 0);
+            sim.Ignite(shop, 1f);
+            Take(sim, UpgradeId.Heli);
+            bool doused = false;
+            bool dropped = false;
+            for (int i = 0; i < 60 * 10 && !doused; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                if (sim.HeliDrops.Count > 0) dropped = true;
+                if (sim.Doused.Contains(shop)) doused = true;
+            }
+            Assert.True(dropped, "10초 동안 헬기가 물을 안 쏟았다");
+            Assert.True(doused, "헬기 물이 다 탄 가게를 못 껐다");
+            Assert.True(shop.Wet > 0f);
+        }
+
+        [Fact]
+        public void Curtain_PushesFiresAway()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Curtain);
+            var embers = new List<Enemy>();
+            var blazes = new List<Enemy>();
+            for (int k = 0; k < 6; k++)
+            {
+                double a = System.Math.PI * 2 * k / 6;
+                float dx = (float)System.Math.Cos(a) * 3f;
+                float dy = (float)System.Math.Sin(a) * 3f;
+                embers.Add(Dummy(sim, EnemyKind.Ember, dx, dy, 2f));
+                blazes.Add(Dummy(sim, EnemyKind.Blaze, dx * 0.8f, dy * 0.8f, 999f));
+            }
+            bool burst = false;
+            for (int i = 0; i < 60 * 2 && !burst; i++)
+            {
+                sim.Step(0f, 0f);
+                burst |= sim.JustCurtain;
+            }
+            Assert.True(burst, "장막이 2초 안에 안 터졌다");
+            Run(sim, 0.5f);
+            Assert.True(embers.TrueForAll(e => e.Dead), "장막 안 불씨가 남았다");
+            Assert.True(blazes.TrueForAll(e => e.Hp < e.MaxHp && e.Pos.DistanceTo(sim.Player) > 3f), "큰 불이 밀려나지 않았다");
+        }
+
+        [Fact]
+        public void Partner_RescuesWhileYouStandFar()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 12f, 0f, 2);
+            sim.Ignite(shop, 0.3f);
+            Take(sim, UpgradeId.Partner);
+            Assert.NotNull(sim.Partner);
+            for (int i = 0; i < 60 * 10 && sim.Rescued == 0; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+            }
+            Assert.True(sim.Rescued >= 1, "동료가 10초 안에 한 명도 못 구했다");
+            Assert.True(shop.Door.DistanceTo(sim.Player) > SurvivorSim.RescueRange, "소방관이 문 앞에 간 게 아니어야 한다");
+        }
+
+        [Fact]
+        public void Hose_StaysOneStream_ButGrowsThickerAndStronger()
+        {
+            SurvivorSim sim = Quiet();
+            var ahead = new Vec2(sim.Player.X + 10f, sim.Player.Y);
+            Spray(sim, ahead, 1);
+            List<Shot> lv1 = FreshDrops(sim);
+            Assert.Single(lv1);
+
+            SurvivorSim big = Quiet();
+            for (int i = 1; i < Loadout.MaxLevel; i++) Take(big, UpgradeId.Hose);
+            Spray(big, ahead, 1);
+            List<Shot> lv5 = FreshDrops(big);
+            Assert.Single(lv5);
+            Assert.True(lv5[0].Radius > lv1[0].Radius * 2f, "Lv5 물줄기가 충분히 굵지 않다");
+            Assert.True(lv5[0].Damage > lv1[0].Damage * 2.5f, "Lv5 물줄기가 충분히 세지 않다");
+            Assert.True(lv5[0].Life > lv1[0].Life, "Lv5 물줄기가 더 멀리 가지 않는다");
+        }
+
+        [Fact]
+        public void Pump_ShootsFartherAndHarder()
+        {
+            SurvivorSim plain = Quiet();
+            SurvivorSim pumped = Quiet();
+            for (int i = 0; i < 3; i++) Take(pumped, UpgradeId.Tank);
+            var ahead = new Vec2(plain.Player.X + 10f, plain.Player.Y);
+            Spray(plain, ahead, 1);
+            Spray(pumped, ahead, 1);
+            Shot a = FreshDrops(plain)[0];
+            Shot b = FreshDrops(pumped)[0];
+            Assert.Equal(1.45f, b.Life / a.Life, 2);
+            Assert.Equal(1.45f, b.Damage / a.Damage, 2);
         }
     }
 }
