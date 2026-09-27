@@ -971,5 +971,25 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(1.45f, b.Life / a.Life, 2);
             Assert.Equal(1.45f, b.Damage / a.Damage, 2);
         }
+
+        [Fact]
+        public void HoseShots_AreMarked_SweepJetsAreNot()
+        {
+            SurvivorSim sim = Quiet();
+            var ahead = new Vec2(sim.Player.X + 10f, sim.Player.Y);
+            Spray(sim, ahead, 1);
+            Assert.True(FreshDrops(sim)[0].Hose, "물대포 물방울이 호스 물로 표시되지 않았다");
+
+            // 방수포 진화(카드 경로): 쥔 호스 제트는 호스 물, 사방으로 도는 제트는 아니다.
+            SurvivorSim big = Quiet();
+            for (int i = 1; i < Loadout.MaxLevel; i++) Take(big, UpgradeId.Hose);
+            Take(big, UpgradeId.Tank);
+            Take(big, UpgradeId.Cannon);
+            Spray(big, ahead, 10);
+            List<Shot> jets = big.Shots.FindAll(s => s.Kind == ShotKind.Jet);
+            Assert.Contains(jets, s => s.Hose);
+            Assert.Contains(jets, s => !s.Hose);
+            Assert.All(jets.FindAll(s => !s.Hose), s => Assert.Equal(0.8f, s.Life));
+        }
     }
 }

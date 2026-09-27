@@ -67,6 +67,12 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c9_result", view => view.Sim.Outcome != SOutcome.Playing, 90);
             // 특수 장비 셋(풀장비): 헬기가 목표 위에서 물을 쏟기 직전, 동료, 물의 장막.
             failures += SurvivorShot(dir, "c10_specials", view => view.Sim.Time >= 20f && view.Sim.PendingChoices == null && view.Sim.Shots.Exists(s => s.Kind == ShotKind.Heli && s.Age > s.Life * 0.7f), 3, true);
+            // 호스를 쥔 손과 물줄기를 확대: 노즐이 옆구리에 있고 물이 끝까지 한 줄로 이어지는지 본다.
+            failures += SurvivorShot(dir, "c11_hose_closeup", view => view.Sim.Time >= 12f && view.Sim.Spraying && view.Sim.PendingChoices == null && view.Sim.Shots.FindAll(s => s.Hose).Count >= 6, 2, false, camera =>
+            {
+                camera.transform.position = new Vector3(camera.transform.position.x, camera.transform.position.y, -10f);
+                camera.orthographicSize = 4.5f;
+            });
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);

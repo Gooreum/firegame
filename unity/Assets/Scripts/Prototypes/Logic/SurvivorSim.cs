@@ -85,6 +85,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>방수포 제트가 이미 적신 구조물(한 줄기에 한 번씩).</summary>
         public List<Structure> Soaked;
+
+        /// <summary>호스(손에 든 노즐)에서 나간 물. 뷰가 이것들을 한 줄기로 이어 그린다.</summary>
+        public bool Hose;
     }
 
     public sealed class Puddle
@@ -718,13 +721,13 @@ namespace FireGame.Prototypes.Logic
                 if (cannon)
                 {
                     // 진화 후: 한 줄기로 모든 불을 꿰뚫는 고압 제트.
-                    FireDrop(baseAngle, 13.2f * (HoseInterval / 0.4f), 18f, 0.55f, 999, 0.6f, ShotKind.Jet);
+                    FireDrop(baseAngle, 13.2f * (HoseInterval / 0.4f), 18f, 0.55f, 999, 0.6f, ShotKind.Jet, true);
                 }
                 else
                 {
                     // 늘 한 줄기. 레벨이 오를수록 굵고(반경) 세고(피해) 멀리(수명) 나가며 더 많이 꿰뚫는다.
                     float damage = 3f * (HoseInterval / 0.32f) * HosePower(hose) * Build.HosePower;
-                    FireDrop(baseAngle, damage, 16f, HoseRadius(hose), 1 + hose, 0.6f * (1f + (0.1f * (hose - 1))) * Build.HoseRange, ShotKind.Drop);
+                    FireDrop(baseAngle, damage, 16f, HoseRadius(hose), 1 + hose, 0.6f * (1f + (0.1f * (hose - 1))) * Build.HoseRange, ShotKind.Drop, true);
                 }
             }
 
@@ -857,7 +860,7 @@ namespace FireGame.Prototypes.Logic
             return RandomEnemyNear(12f) ?? new Vec2(Player.X + (Facing.X * 6f), Player.Y + (Facing.Y * 6f));
         }
 
-        private void FireDrop(float angle, float damage, float speed, float radius, int pierce, float life, ShotKind kind)
+        private void FireDrop(float angle, float damage, float speed, float radius, int pierce, float life, ShotKind kind, bool hose = false)
         {
             var vel = new Vec2((float)Math.Cos(angle) * speed, (float)Math.Sin(angle) * speed);
             Shots.Add(new Shot
@@ -871,6 +874,7 @@ namespace FireGame.Prototypes.Logic
                 Radius = radius,
                 Pierce = pierce,
                 Struck = pierce > 1 ? new List<Enemy>() : null,
+                Hose = hose,
             });
             ShotsFired++;
         }
