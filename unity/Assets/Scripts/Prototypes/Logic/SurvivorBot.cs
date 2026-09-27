@@ -45,24 +45,56 @@ namespace FireGame.Prototypes.Logic
             return 0;
         }
 
-        /// <summary>가장 가까운 불(10칸 안)을 겨누고 쏜다. 없으면 손을 뗀다.</summary>
+        /// <summary>
+        /// 코앞(4칸)의 불 → 10칸 안에서 타는 건물 → 10칸 안의 불 순서로 겨누고 쏜다. 없으면 손을 뗀다.
+        /// </summary>
         public void AimHose()
         {
             Vec2 p = _sim.Player;
-            Enemy target = null;
-            float best = 10f;
+            Vec2? target = NearestEnemy(p, 4f);
+            if (!target.HasValue)
+            {
+                Structure fire = NearestBurning(p, 10f);
+                if (fire != null) target = fire.Pos;
+            }
+            if (!target.HasValue) target = NearestEnemy(p, 10f);
+
+            _sim.Spraying = target.HasValue;
+            if (target.HasValue) _sim.Aim = new Vec2(target.Value.X - p.X, target.Value.Y - p.Y);
+        }
+
+        private Vec2? NearestEnemy(Vec2 p, float range)
+        {
+            Vec2? best = null;
+            float bestD = range;
             foreach (Enemy e in _sim.Enemies)
             {
                 if (e.Dead) continue;
                 float d = e.Pos.DistanceTo(p);
-                if (d < best)
+                if (d < bestD)
                 {
-                    best = d;
-                    target = e;
+                    bestD = d;
+                    best = e.Pos;
                 }
             }
-            _sim.Spraying = target != null;
-            if (target != null) _sim.Aim = new Vec2(target.Pos.X - p.X, target.Pos.Y - p.Y);
+            return best;
+        }
+
+        private Structure NearestBurning(Vec2 p, float range)
+        {
+            Structure best = null;
+            float bestD = range;
+            foreach (Structure s in _sim.Structures)
+            {
+                if (!s.Burning) continue;
+                float d = s.DistanceTo(p);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = s;
+                }
+            }
+            return best;
         }
 
         public Vec2 Move()
@@ -101,24 +133,78 @@ namespace FireGame.Prototypes.Logic
             if (p.Y < margin) fy += (margin - p.Y) * 0.15f;
             if (p.Y > size - margin) fy -= (p.Y - (size - margin)) * 0.15f;
 
-            // 위험이 적으면 구슬·시민 쪽으로.
-            float danger = (float)Math.Sqrt((fx * fx) + (fy * fy));
-            Vec2? loot = NearestLoot(p, 8f);
-            if (loot.HasValue && danger < 0.6f)
+            // 벽에 붙지 않게 건물·차에서 떨어진다.
+            foreach (Structure s in _sim.Structures)
             {
-                float dx = loot.Value.X - p.X;
-                float dy = loot.Value.Y - p.Y;
+                if (s.Collapsed || s.Kind == StructureKind.Tree || !s.Within(p, 1.2f)) continue;
+                float dx = p.X - Clamp(p.X, s.Pos.X - s.Half.X, s.Pos.X + s.Half.X);
+                float dy = p.Y - Clamp(p.Y, s.Pos.Y - s.Half.Y, s.Pos.Y + s.Half.Y);
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
-                if (d > 0.01f)
+                if (d < 0.01f) continue;
+                fx += dx / d * 0.5f;
+                fy += dy / d * 0.5f;
+            }
+
+            // 위험이 적으면: 갇힌 사람이 있는 불난 가게 문 → 타는 건물(5칸까지) → 구슬.
+            float danger = (float)Math.Sqrt((fx * fx) + (fy * fy));
+            if (danger < 0.6f)
+            {
+                Vec2? goal = null;
+                float stop = 0f;
+                Structure fire = FireToFight(p);
+                if (fire != null && fire.Residents > 0)
                 {
-                    fx += dx / d * 0.7f;
-                    fy += dy / d * 0.7f;
+                    goal = fire.Door;
+                }
+                else if (fire != null && fire.DistanceTo(p) > 5f)
+                {
+                    goal = fire.Pos;
+                    stop = 5f;
+                }
+                else
+                {
+                    goal = NearestLoot(p, 8f);
+                }
+
+                if (goal.HasValue)
+                {
+                    float dx = goal.Value.X - p.X;
+                    float dy = goal.Value.Y - p.Y;
+                    float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
+                    if (d > 0.3f && (stop <= 0f || fire.DistanceTo(p) > stop))
+                    {
+                        fx += dx / d * 0.7f;
+                        fy += dy / d * 0.7f;
+                    }
                 }
             }
 
             float len = (float)Math.Sqrt((fx * fx) + (fy * fy));
             if (len < 0.05f) return default;
             return new Vec2(fx / len, fy / len);
+        }
+
+        /// <summary>갈 불: 갇힌 사람이 있는 불난 가게가 먼저, 없으면 가장 가까운 타는 건물.</summary>
+        private Structure FireToFight(Vec2 p)
+        {
+            Structure best = null;
+            float bestD = float.MaxValue;
+            foreach (Structure s in _sim.Structures)
+            {
+                if (!s.Burning) continue;
+                float d = s.DistanceTo(p) - (s.Residents > 0 ? 15f : 0f) - (s.IsBuilding ? 5f : 0f);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = s;
+                }
+            }
+            return best;
+        }
+
+        private static float Clamp(float v, float lo, float hi)
+        {
+            return v < lo ? lo : v > hi ? hi : v;
         }
 
         private Vec2? NearestLoot(Vec2 p, float range)

@@ -44,6 +44,16 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>마지막으로 발밑에 불을 남긴 뒤 걸어온 거리(큰 불만).</summary>
         public float Trail;
+
+        /// <summary>불씨가 노리는 탈 것(없으면 소방관을 쫓는다).</summary>
+        public Structure Goal;
+        public float GoalClock;
+
+        /// <summary>건물에서 튀어나온 불씨: 탈 것을 노린다. 가장자리에서 오는 불씨는 소방관을 쫓는다.</summary>
+        public bool Seeker;
+
+        /// <summary>노릴 탈 것 없이 떠돈 시간. 오래되면 사그라든다.</summary>
+        public float Idle;
         public bool Dead;
     }
 
@@ -69,6 +79,9 @@ namespace FireGame.Prototypes.Logic
         public int Pierce;
         public bool Dead;
         public List<Enemy> Struck;
+
+        /// <summary>방수포 제트가 이미 적신 구조물(한 줄기에 한 번씩).</summary>
+        public List<Structure> Soaked;
     }
 
     public sealed class Puddle
@@ -125,6 +138,9 @@ namespace FireGame.Prototypes.Logic
         public readonly List<Puddle> BurningGround = new List<Puddle>();
         public readonly List<Civilian> Civilians = new List<Civilian>();
         public readonly List<Vec2> Drones = new List<Vec2>();
+
+        /// <summary>지켜야 하는 동네. 생성자에서 고정 배치로 깐다.</summary>
+        public readonly List<Structure> Structures = SurvivorTown.Build();
         public readonly Loadout Build = new Loadout();
 
         public Vec2 Player = new Vec2(ArenaSize / 2f, ArenaSize / 2f);
@@ -166,6 +182,31 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>끄지 않은 바닥 불이 수명을 다했을 때 불씨로 다시 일어날 확률.</summary>
         public const float ReigniteChance = 0.5f;
+
+        /// <summary>물 1 피해가 건물 불 세기를 줄이는 양. 물대포 Lv1이면 다 탄 가게를 약 3초에 끈다.</summary>
+        public const float WaterPerDamage = 0.035f;
+        public const float FireGrowth = 0.05f;
+        public const float WetTime = 10f;
+
+        /// <summary>불 세기 1로 이만큼 타면 건물이 무너진다(초). 나무·차는 BurnSmall.</summary>
+        public const float BurnBuilding = 35f;
+        public const float BurnSmall = 20f;
+        public const float EmberSight = 9f;
+        public const float SpreadAt = 0.4f;
+
+        /// <summary>false면 신고(가게 점화)를 하지 않는다. 테스트가 끈다.</summary>
+        public bool Reports = true;
+        public int HousesLost;
+        public int CiviliansLost;
+
+        /// <summary>이번 틱에 새로 불붙은 구조물.</summary>
+        public readonly List<Structure> Ignited = new List<Structure>();
+
+        /// <summary>이번 틱에 무너진 구조물.</summary>
+        public readonly List<Structure> Fell = new List<Structure>();
+
+        /// <summary>이번 틱에 물로 완전히 꺼진 구조물.</summary>
+        public readonly List<Structure> Doused = new List<Structure>();
         public bool JustLeveled;
         public bool JustEvolved;
         public bool JustBossArrived;
@@ -214,6 +255,17 @@ namespace FireGame.Prototypes.Logic
             Hp = MaxHp;
         }
 
+        /// <summary>가게 + 창고 수.</summary>
+        public int HousesTotal
+        {
+            get
+            {
+                int n = 0;
+                foreach (Structure s in Structures) if (s.IsBuilding) n++;
+                return n;
+            }
+        }
+
         public float Magnet
         {
             get { return BaseMagnet * Build.MagnetScale; }
@@ -230,12 +282,14 @@ namespace FireGame.Prototypes.Logic
 
             Time += Dt;
             MovePlayer(moveX, moveY);
+            BlockPlayer();
             Direct();
             RebuildHash();
             MoveEnemies();
             FireWeapons();
             MoveShots();
             TickPuddles();
+            TickStructures();
             TouchPlayer();
             CollectGems();
             TickCivilians();
@@ -325,6 +379,9 @@ namespace FireGame.Prototypes.Logic
             Explosions.Clear();
             Extinguished.Clear();
             Reignited.Clear();
+            Ignited.Clear();
+            Fell.Clear();
+            Doused.Clear();
             JustLeveled = false;
             JustEvolved = false;
             JustBossArrived = false;
@@ -357,7 +414,8 @@ namespace FireGame.Prototypes.Logic
         /// <summary>스폰 감독: 시간이 갈수록 많이, 1·2·3분엔 포위, 4분엔 보스.</summary>
         private void Direct()
         {
-            float rate = Time < BossAt ? 3f + (32f * (float)Math.Pow(Time / BossAt, 1.5)) : 14f;
+            // 불은 이제 주로 건물에서 나온다. 가장자리에서 몰려오는 불은 예전(3→35)보다 훨씬 적다.
+            float rate = Time < BossAt ? 1f + (7f * (float)Math.Pow(Time / BossAt, 1.5)) : 6f;
             _spawnDebt += rate * Dt;
             while (_spawnDebt >= 1f)
             {
@@ -370,7 +428,7 @@ namespace FireGame.Prototypes.Logic
             {
                 _wavesDone++;
                 JustWave = true;
-                int n = 20 + (_wavesDone * 10);
+                int n = 10 + (_wavesDone * 5);
                 for (int i = 0; i < n && Enemies.Count < MaxEnemies; i++)
                 {
                     double a = (Math.PI * 2 * i) / n;
@@ -381,6 +439,12 @@ namespace FireGame.Prototypes.Logic
 
             if (Boss == null && Time >= BossAt)
             {
+                // 상한이 꽉 찼어도 거인은 나온다: 불씨 하나를 조용히 치운다.
+                if (Enemies.Count >= MaxEnemies)
+                {
+                    Enemy spare = Enemies.Find(e => e.Kind == EnemyKind.Ember && !e.Dead);
+                    if (spare != null) Enemies.Remove(spare);
+                }
                 Boss = Spawn(EnemyKind.Boss, SpawnPoint(12f));
                 JustBossArrived = true;
                 _bossBurstClock = 3f;
@@ -462,8 +526,31 @@ namespace FireGame.Prototypes.Logic
                 if (e.DroneCooldown > 0f) e.DroneCooldown -= Dt;
                 if (e.Slowed > 0f) e.Slowed -= Dt;
 
-                float dx = Player.X - e.Pos.X;
-                float dy = Player.Y - e.Pos.Y;
+                Vec2 chase = Player;
+                if (e.Seeker)
+                {
+                    // 건물에서 나온 불씨는 가까운 탈 것을 노린다. 없으면 소방관을 쫓는다.
+                    e.GoalClock -= Dt;
+                    if (e.Goal != null && !e.Goal.Flammable) e.Goal = null;
+                    if (e.Goal == null && e.GoalClock <= 0f)
+                    {
+                        e.GoalClock = 0.5f;
+                        e.Goal = NearestFlammable(e.Pos, EmberSight);
+                    }
+                    if (e.Goal != null) chase = e.Goal.Pos;
+                    else
+                    {
+                        // 탈 것을 못 찾은 불씨는 소방관 쪽으로 굴러가다 4초 뒤 사그라든다(구슬 없음).
+                        e.Idle += Dt;
+                        if (e.Idle >= 4f)
+                        {
+                            e.Dead = true;
+                            continue;
+                        }
+                    }
+                }
+                float dx = chase.X - e.Pos.X;
+                float dy = chase.Y - e.Pos.Y;
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
                 float speed = e.Speed * (e.Slowed > 0f ? 0.5f : 1f);
                 float vx = d > 0.01f ? dx / d * speed : 0f;
@@ -520,6 +607,8 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
                 e.Pos = ClampToArena(e.Pos);
+                // 건물에서 나온 불씨와 큰 불만 옮겨붙인다. 가장자리에서 오는 불씨는 소방관만 쫓는다.
+                if (e.Seeker || e.Kind == EnemyKind.Blaze || e.Kind == EnemyKind.Boss) TouchStructures(e);
                 e.Knock.X *= knockDecay;
                 e.Knock.Y *= knockDecay;
             }
@@ -654,6 +743,10 @@ namespace FireGame.Prototypes.Logic
                         s.Dead = true;
                         Explosions.Add(s.Target);
                         Douse(s.Target, s.Radius);
+                        foreach (Structure st in Structures)
+                        {
+                            if (st.Within(s.Target, s.Radius)) Soak(st, s.Damage * WaterPerDamage);
+                        }
                         Near(s.Target, s.Radius, _near);
                         foreach (Enemy e in _near) Damage(e, s.Damage, Knockback(s.Target, e.Pos, 7f), true);
                     }
@@ -669,6 +762,7 @@ namespace FireGame.Prototypes.Logic
                 }
 
                 Douse(s.Pos, s.Radius);
+                if (SoakStructures(s)) continue;
                 Near(s.Pos, s.Radius, _near);
                 foreach (Enemy e in _near)
                 {
@@ -695,6 +789,10 @@ namespace FireGame.Prototypes.Logic
             {
                 p.Life -= Dt;
                 Douse(p.Pos, p.Radius);
+                foreach (Structure st in Structures)
+                {
+                    if (st.Within(p.Pos, p.Radius)) Soak(st, 0.15f * Dt);
+                }
                 Near(p.Pos, p.Radius, _near);
                 foreach (Enemy e in _near)
                 {
@@ -713,6 +811,184 @@ namespace FireGame.Prototypes.Logic
                 p.Life -= Dt;
                 if (p.Pos.DistanceTo(Player) <= p.Radius + PlayerRadius) Hurt(10f * Dt);
             }
+        }
+
+        // ------------------------------------------------------------------
+        // 동네
+        // ------------------------------------------------------------------
+
+        /// <summary>구조물에 불을 붙인다(젖었거나 무너졌으면 안 붙는다). 새로 붙었으면 true.</summary>
+        public bool Ignite(Structure s, float amount)
+        {
+            if (s.Collapsed || s.Wet > 0f) return false;
+            bool fresh = s.Fire <= 0f;
+            s.Fire = Math.Min(1f, Math.Max(s.Fire, amount));
+            if (fresh)
+            {
+                Ignited.Add(s);
+                s.SpitClock = 2f;
+                s.BlazeClock = 6f;
+            }
+            return fresh;
+        }
+
+        /// <summary>물을 붓는다: 타면 불 세기를 줄이고, 다 꺼지거나 안 타면 한동안 젖는다.</summary>
+        private void Soak(Structure s, float water)
+        {
+            if (s.Collapsed) return;
+            if (s.Burning)
+            {
+                s.Fire -= water;
+                if (s.Fire > 0f) return;
+                s.Fire = 0f;
+                s.Fuse = -1f;
+                Doused.Add(s);
+            }
+            s.Wet = WetTime;
+        }
+
+        /// <summary>물줄기가 구조물에 닿았는지. 물대포 물방울은 막혀서 사라지면 true, 제트는 뚫고 간다.</summary>
+        private bool SoakStructures(Shot s)
+        {
+            foreach (Structure st in Structures)
+            {
+                if (st.Collapsed || !st.Within(s.Pos, s.Radius * 0.5f)) continue;
+                // 제트는 뚫고 가고, 나무는 물이 잎 사이로 빠진다(나무 밑에서 쏴도 막히지 않게).
+                if (s.Kind == ShotKind.Jet || st.Kind == StructureKind.Tree)
+                {
+                    if (s.Soaked == null) s.Soaked = new List<Structure>();
+                    if (s.Soaked.Contains(st)) continue;
+                    s.Soaked.Add(st);
+                    Soak(st, s.Damage * WaterPerDamage);
+                    continue;
+                }
+                Soak(st, s.Damage * WaterPerDamage);
+                s.Dead = true;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>불이 탈 것에 닿으면 옮겨붙는다. 불씨는 불을 옮기고 사라진다(젖은 곳에 닿아도 꺼진다).</summary>
+        private void TouchStructures(Enemy e)
+        {
+            foreach (Structure st in Structures)
+            {
+                if (st.Collapsed || st.Burning) continue;
+                if (!st.Within(e.Pos, e.Radius)) continue;
+                Ignite(st, 0.15f);
+                if (e.Kind == EnemyKind.Ember)
+                {
+                    e.Dead = true;
+                    return;
+                }
+            }
+        }
+
+        private Structure NearestFlammable(Vec2 p, float range)
+        {
+            Structure best = null;
+            float bestD = range;
+            foreach (Structure s in Structures)
+            {
+                if (!s.Flammable) continue;
+                float d = s.DistanceTo(p);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = s;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>건물·차·가스통은 소방관이 지나갈 수 없다(나무 밑은 지나간다).</summary>
+        private void BlockPlayer()
+        {
+            foreach (Structure s in Structures)
+            {
+                if (s.Collapsed || s.Kind == StructureKind.Tree) continue;
+                float dx = Player.X - s.Pos.X;
+                float dy = Player.Y - s.Pos.Y;
+                float ox = s.Half.X + PlayerRadius - Math.Abs(dx);
+                float oy = s.Half.Y + PlayerRadius - Math.Abs(dy);
+                if (ox <= 0f || oy <= 0f) continue;
+                if (ox < oy) Player.X += dx >= 0f ? ox : -ox;
+                else Player.Y += dy >= 0f ? oy : -oy;
+            }
+        }
+
+        /// <summary>타는 구조물이 커지고, 불씨·큰 불을 뱉고, 다 타면 무너진다.</summary>
+        private void TickStructures()
+        {
+            foreach (Structure s in Structures)
+            {
+                if (s.Collapsed) continue;
+                if (s.Wet > 0f) s.Wet -= Dt;
+                if (!s.Burning) continue;
+
+                s.Fire = Math.Min(1f, s.Fire + (FireGrowth * Dt));
+                s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding : BurnSmall);
+                if (s.Integrity <= 0f)
+                {
+                    Fall(s);
+                    continue;
+                }
+
+                // 막 붙은 작은 불은 아직 번지지 않는다(0.4까지 약 5초) — 일찍 잡으면 막을 수 있다.
+                if (s.Fire >= SpreadAt) s.SpitClock -= Dt;
+                if (s.SpitClock <= 0f)
+                {
+                    s.SpitClock = (9f - (5f * s.Fire)) * (s.IsBuilding ? 1f : 2f);
+                    SpitEmber(s, 3f);
+                }
+                if (s.IsBuilding && s.Fire >= 0.8f)
+                {
+                    s.BlazeClock -= Dt;
+                    if (s.BlazeClock <= 0f && Enemies.Count < MaxEnemies)
+                    {
+                        s.BlazeClock = 12f;
+                        Spawn(EnemyKind.Blaze, EdgePoint(s, 0.8f));
+                    }
+                }
+            }
+        }
+
+        private void Fall(Structure s)
+        {
+            s.Collapsed = true;
+            s.Fire = 0f;
+            s.Integrity = 0f;
+            s.Fuse = -1f;
+            Fell.Add(s);
+            if (s.IsBuilding)
+            {
+                HousesLost++;
+                CiviliansLost += s.Residents;
+                s.Residents = 0;
+            }
+            for (int k = 0; k < 6; k++) SpitEmber(s, 6f);
+        }
+
+        /// <summary>구조물 가장자리 바깥에서 불씨 하나를 튕겨 낸다.</summary>
+        private void SpitEmber(Structure s, float kick)
+        {
+            if (Enemies.Count >= MaxEnemies) return;
+            Vec2 at = EdgePoint(s, 0.5f);
+            Enemy e = Spawn(EnemyKind.Ember, at);
+            Vec2 k = Knockback(s.Pos, at, kick);
+            e.Knock = k;
+            e.GoalClock = 0.4f;
+            e.Seeker = true;
+        }
+
+        private Vec2 EdgePoint(Structure s, float margin)
+        {
+            double a = Rand() * Math.PI * 2;
+            float cx = (float)Math.Cos(a);
+            float cy = (float)Math.Sin(a);
+            float scale = Math.Min((s.Half.X + margin) / Math.Max(Math.Abs(cx), 0.001f), (s.Half.Y + margin) / Math.Max(Math.Abs(cy), 0.001f));
+            return ClampToArena(new Vec2(s.Pos.X + (cx * scale), s.Pos.Y + (cy * scale)));
         }
 
         private void TouchPlayer()
