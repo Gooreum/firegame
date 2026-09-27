@@ -30,6 +30,9 @@ namespace FireGame.Prototypes
         public bool Key3;
         public bool Cancel;
 
+        /// <summary>G: 시험판 C 풀장비로 다시 시작(누를 때마다 풀장비/일반 전환).</summary>
+        public bool MaxGear;
+
         public static ProtoInput Read()
         {
             var input = new ProtoInput();
@@ -50,6 +53,7 @@ namespace FireGame.Prototypes
                 input.Key2 = keyboard.digit2Key.wasPressedThisFrame;
                 input.Key3 = keyboard.digit3Key.wasPressedThisFrame;
                 input.Cancel = keyboard.escapeKey.wasPressedThisFrame;
+                input.MaxGear = keyboard.gKey.wasPressedThisFrame;
             }
             if (mouse != null)
             {
@@ -71,6 +75,7 @@ namespace FireGame.Prototypes
             input.Key2 = Input.GetKeyDown(KeyCode.Alpha2);
             input.Key3 = Input.GetKeyDown(KeyCode.Alpha3);
             input.Cancel = Input.GetKeyDown(KeyCode.Escape);
+            input.MaxGear = Input.GetKeyDown(KeyCode.G);
             input.Mouse = Input.mousePosition;
             input.MouseHeld = Input.GetMouseButton(0);
             input.MouseClicked = Input.GetMouseButtonDown(0);

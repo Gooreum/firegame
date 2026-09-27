@@ -1483,7 +1483,7 @@ namespace FireGame.Prototypes
             _bossBandText = UiKit.OutlinedLabel(_bossBand.transform, "Text", "대형 화재 접근!", 84, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
             UiKit.Stretch(_bossBandText.rectTransform);
 
-            Text help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + "WASD 이동 · 무기는 자동 발사 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 초록 원 시민에게 가면 구조      R 다시  Tab 시험판 전환", 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
+            Text help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + "WASD 이동 · 무기는 자동 발사 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 초록 원 시민에게 가면 구조      R 다시  G " + (_maxGear ? "일반" : "풀장비") + "  Tab 시험판 전환", 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
             UiKit.Place(help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 20f), new Vector2(1850f, 40f));
 
             _flashImage = UiKit.Image(_hud, "Flash", Art.White, Color.clear);

@@ -39,6 +39,15 @@ namespace FireGame.Prototypes
                 return;
             }
 
+            if (input.MaxGear)
+            {
+                // 풀장비 ↔ 일반 시험판 C. 다음 Play에도 이어지게 골라 둔다.
+                _mode = _mode == "C+" ? "C" : "C+";
+                PrototypeLauncher.Selected = _mode;
+                Launch();
+                return;
+            }
+
             if (input.Restart)
             {
                 Launch();

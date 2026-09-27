@@ -53,7 +53,7 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c5_levelup_burst", view => view.Sim.Time >= 30f && view.Sim.JustLeveled, 8);
             failures += SurvivorShot(dir, "c6_arsenal", view => view.Sim.Time >= 150f && view.Sim.PendingChoices == null);
             // 보는 용도: 봇이 잘 안 고르는 아이템까지 전부 최대 레벨로 쥐여 주고 레벨별 연출을 한 화면에서 본다.
-            failures += SurvivorShot(dir, "c7_gear_maxed", view => view.Sim.Time >= 25f && view.Sim.PendingChoices == null, 20, sim => sim.GiveMaxGear());
+            failures += SurvivorShot(dir, "c7_gear_maxed", view => view.Sim.Time >= 25f && view.Sim.PendingChoices == null, 20, true);
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
@@ -127,7 +127,7 @@ namespace FireGame.Prototypes.EditorTools
             return string.Join(" · ", parts);
         }
 
-        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, Action<SurvivorSim> setup = null)
+        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false)
         {
             try
             {
@@ -137,8 +137,7 @@ namespace FireGame.Prototypes.EditorTools
                 camera.aspect = (float)Width / Height;
                 Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
 
-                var view = new SurvivorView(root.transform, camera, canvas);
-                setup?.Invoke(view.Sim);
+                var view = new SurvivorView(root.transform, camera, canvas, maxGear);
                 var bot = new SurvivorBot(view.Sim);
                 int guard = 0;
                 while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400)
