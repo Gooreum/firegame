@@ -86,6 +86,7 @@ namespace FireGame.Prototypes.Logic
         public float Regen { get { return 0.5f * Level(UpgradeId.Suit); } }
         public float SpeedScale { get { return 1f + (0.1f * Level(UpgradeId.Boots)); } }
         public float MagnetScale { get { return 1f + (0.3f * Level(UpgradeId.Radio)); } }
+        public float BombRadius { get { return 1.5f * (1f + (0.15f * (Level(UpgradeId.WaterBomb) - 1))); } }
 
         /// <summary>이 카드를 지금 뽑을 수 있나(최대 레벨·빈 슬롯).</summary>
         public bool CanTake(UpgradeId id)

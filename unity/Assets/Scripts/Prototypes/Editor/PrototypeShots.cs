@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using FireGame.Core.Grid;
 using FireGame.Prototypes.Logic;
@@ -50,6 +51,9 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c3_boss", view => view.Sim.Boss != null && view.Sim.Time >= SurvivorSim.BossAt + 5f);
             failures += SurvivorShot(dir, "c4_evolved", view => view.Sim.JustEvolved, 9);
             failures += SurvivorShot(dir, "c5_levelup_burst", view => view.Sim.Time >= 30f && view.Sim.JustLeveled, 8);
+            failures += SurvivorShot(dir, "c6_arsenal", view => view.Sim.Time >= 150f && view.Sim.PendingChoices == null);
+            // 보는 용도: 봇이 잘 안 고르는 아이템까지 전부 최대 레벨로 쥐여 주고 레벨별 연출을 한 화면에서 본다.
+            failures += SurvivorShot(dir, "c7_gear_maxed", view => view.Sim.Time >= 25f && view.Sim.PendingChoices == null, 20, MaxGear);
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
@@ -116,7 +120,23 @@ namespace FireGame.Prototypes.EditorTools
 
         /// <summary>봇에게 판을 맡겨 조건이 될 때까지 굴린 뒤 찍는다. 카드 장면은 카드를 고르지 않고 멈춘다.</summary>
         /// <param name="settle">조건에 닿은 뒤 효과를 흘려 보낼 프레임 수(60 = 1초).</param>
-        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20)
+        private static string GearOf(SurvivorSim sim)
+        {
+            var parts = new List<string>();
+            foreach (UpgradeId id in sim.Build.Owned()) parts.Add(id + " " + sim.Build.Level(id));
+            return string.Join(" · ", parts);
+        }
+
+        private static void MaxGear(SurvivorSim sim)
+        {
+            UpgradeId[] all = { UpgradeId.Hose, UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Foam, UpgradeId.Tank, UpgradeId.Suit, UpgradeId.Boots, UpgradeId.Radio };
+            foreach (UpgradeId id in all)
+            {
+                while (sim.Build.Level(id) < Loadout.MaxLevel) sim.Build.Add(id);
+            }
+        }
+
+        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, Action<SurvivorSim> setup = null)
         {
             try
             {
@@ -127,6 +147,7 @@ namespace FireGame.Prototypes.EditorTools
                 Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
 
                 var view = new SurvivorView(root.transform, camera, canvas);
+                setup?.Invoke(view.Sim);
                 var bot = new SurvivorBot(view.Sim);
                 int guard = 0;
                 while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400)
@@ -145,7 +166,7 @@ namespace FireGame.Prototypes.EditorTools
 
                 Canvas.ForceUpdateCanvases();
                 Capture(camera, Path.Combine(dir, name + ".png"));
-                Debug.Log("[ProtoShots] " + name + " (t=" + (int)view.Sim.Time + ", Lv " + view.Sim.Level + ", 적 " + view.Sim.Enemies.Count + ", 카드 " + (view.Sim.PendingChoices != null) + ")");
+                Debug.Log("[ProtoShots] " + name + " (t=" + (int)view.Sim.Time + ", Lv " + view.Sim.Level + ", 적 " + view.Sim.Enemies.Count + ", 카드 " + (view.Sim.PendingChoices != null) + ", " + GearOf(view.Sim) + ")");
                 return 0;
             }
             catch (Exception e)

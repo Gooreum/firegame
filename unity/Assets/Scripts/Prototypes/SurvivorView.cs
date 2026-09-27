@@ -58,6 +58,9 @@ namespace FireGame.Prototypes
         private float _waveAge = 99f;
         private float _hurtClock;
         private int _comboShown;
+        private Vector3 _lastPlayer;
+        private float _stepClock;
+        private float _regenClock;
         private readonly List<RectTransform> _rays = new List<RectTransform>();
         private SOutcome _lastOutcome;
         private Vector3 _cameraAt;
@@ -77,6 +80,8 @@ namespace FireGame.Prototypes
         private Pool _beams;
         private Pool _beamCores;
         private Pool _bubbles;
+        private Pool _auras;
+        private Pool _tank;
         private Pool _bombs;
         private Pool _bombShadows;
         private Pool _drones;
@@ -213,6 +218,9 @@ namespace FireGame.Prototypes
             _waveAge = 99f;
             _hurtClock = 0f;
             _comboShown = 0;
+            _lastPlayer = new Vector3(_sim.Player.X, _sim.Player.Y, 0f);
+            _stepClock = 0f;
+            _regenClock = 0f;
             _lastOutcome = SOutcome.Playing;
             _cameraAt = new Vector3(_sim.Player.X, _sim.Player.Y, -10f);
             ClearEffects();
@@ -341,7 +349,7 @@ namespace FireGame.Prototypes
 
             foreach (Vec2 e in _sim.Explosions)
             {
-                WaterBlast(W(e));
+                WaterBlast(W(e), _sim.Build.BombRadius, _sim.Build.Level(UpgradeId.WaterBomb));
                 _trauma = Mathf.Min(1f, _trauma + 0.12f);
                 HitStop(0.02f);
                 GameAudio.Play(Cue.SprayFoam);
@@ -509,6 +517,7 @@ namespace FireGame.Prototypes
             DrawEnemies();
             DrawShots();
             DrawPlayer();
+            DrawGear(dt);
             foreach (Pool p in _pools) p.End();
 
             AdvanceParticles(dt);
@@ -600,11 +609,21 @@ namespace FireGame.Prototypes
 
         private void DrawPuddles()
         {
+            int foamLevel = _sim.Build.Level(UpgradeId.Foam);
             for (int i = 0; i < _sim.Foam.Count; i++)
             {
                 Puddle p = _sim.Foam[i];
                 float t = Mathf.Clamp01(p.Life / p.MaxLife);
                 _foam.Put(W(p.Pos), p.Radius * 2.2f * (0.8f + (0.2f * t)), i * 37f, new Color(0.85f, 0.95f, 1f, 0.5f * t), Art.Get(Smokes[i % Smokes.Length]));
+                // 레벨만큼 거품이 떠서 꿈틀거리고, 수명이 끝나갈수록 작아진다.
+                for (int b = 0; b <= foamLevel; b++)
+                {
+                    float a = (i * 2.4f) + (b * 2.1f);
+                    float r = 0.25f + (0.45f * Mathf.Repeat((b * 0.37f) + (i * 0.11f), 1f));
+                    Vector3 o = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * r;
+                    Vector3 wob = new Vector3(Mathf.Sin((_time * 3f) + b + i), Mathf.Cos((_time * 2.5f) + b), 0f) * 0.06f;
+                    _bubbles.Put(W(p.Pos) + o + wob, (0.22f + (0.05f * (b % 3))) * (0.4f + (0.6f * t)), 0f, new Color(0.9f, 0.98f, 1f, 0.7f * t));
+                }
             }
 
             for (int i = 0; i < _sim.BurningGround.Count; i++)
@@ -625,6 +644,9 @@ namespace FireGame.Prototypes
 
         private void DrawShots()
         {
+            int hose = _sim.Build.Level(UpgradeId.Hose);
+            int tank = _sim.Build.Level(UpgradeId.Tank);
+            int bombLevel = _sim.Build.Level(UpgradeId.WaterBomb);
             foreach (Shot s in _sim.Shots)
             {
                 Vector3 at = W(s.Pos);
@@ -639,7 +661,9 @@ namespace FireGame.Prototypes
                         float len = Mathf.Min(s.Pos.DistanceTo(s.From), jet ? 3f : 4.5f);
                         float seed = (s.From.X * 1.7f) + (s.Vel.Y * 0.9f);
                         Vector3 tail = at - (dir * len);
-                        if (len > 0.05f) DrawStream(tail, at, dir, seed, jet ? 1.1f : 0.62f, jet ? 6 : 8, jet ? 4 : 5);
+                        // 물대포 레벨·탱크 레벨만큼 줄기가 굵어지고, 물대포 최대 레벨이면 거품이 늘어난다.
+                        float thick = (1f + (0.08f * Mathf.Max(0, hose - 1))) * (1f + (0.06f * tank));
+                        if (len > 0.05f) DrawStream(tail, at, dir, seed, (jet ? 1.1f : 0.62f) * thick, jet ? 6 : 8, jet ? 4 : hose >= Loadout.MaxLevel ? 8 : 5);
                         _dropGlow.Put(at, jet ? 2f : 1.3f, 0f, new Color(0.35f, 0.75f, 1f, jet ? 0.5f : 0.45f));
                         if (!jet) _drops.Put(at, 0.7f, (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f, new Color(0.7f, 0.93f, 1f));
                         // 머리 둘레에서 빙글 도는 거품 뭉치
@@ -661,17 +685,42 @@ namespace FireGame.Prototypes
                     case ShotKind.Bomb:
                         float t = Mathf.Clamp01(s.Age / s.Life);
                         float lift = Mathf.Sin(t * Mathf.PI) * 2f;
-                        _bombShadows.Put(at, 0.6f, 0f, new Color(0f, 0f, 0f, 0.35f));
-                        _bombs.Put(at + new Vector3(0f, lift, 0f), 0.95f, t * 540f, new Color(0.45f, 0.78f, 1f));
+                        float bombSize = 0.8f + (0.08f * bombLevel);
+                        _bombShadows.Put(at, 0.6f * bombSize, 0f, new Color(0f, 0f, 0f, 0.35f));
+                        _bombs.Put(at + new Vector3(0f, lift, 0f), bombSize, t * 540f, new Color(0.45f, 0.78f, 1f));
+                        _dropGlow.Put(at + new Vector3(0f, lift, 0f), bombSize * (1.2f + (0.15f * bombLevel)), 0f, new Color(0.35f, 0.75f, 1f, 0.3f + (0.05f * bombLevel)));
+                        // 날아가며 물방울 꼬리를 흘린다.
+                        if (Random.value < 0.4f)
+                        {
+                            Emit("Effects/water_drop", at + new Vector3(0f, lift, 0f), new Vector3(Random.Range(-0.8f, 0.8f), Random.Range(-1.5f, 0f), 0f), 3f, 0.3f,
+                                0.25f * bombSize, 0.05f, new Color(0.7f, 0.93f, 1f, 0.9f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
+                        }
                         break;
                 }
             }
 
+            int droneLevel = _sim.Build.Level(UpgradeId.Drone);
+            Vector3 center = W(_sim.Player);
+            if (droneLevel >= 3)
+            {
+                // 드론 궤도(반지름 2.3)를 잇는 물 고리. 최대 레벨이면 밝게 맥동한다.
+                float pulse = droneLevel >= Loadout.MaxLevel ? 0.3f + (0.15f * Mathf.Sin(_time * 8f)) : 0.16f;
+                _auras.Put(center, 2.3f * 2f / 0.85f, 0f, new Color(0.4f, 0.8f, 1f, pulse));
+            }
+            float droneScale = droneLevel >= Loadout.MaxLevel ? 1.3f : 1f;
             for (int i = 0; i < _sim.Drones.Count; i++)
             {
                 Vector3 at = W(_sim.Drones[i]);
-                _droneGlow.Put(at, 1.8f, 0f, new Color(0.3f, 0.7f, 1f, 0.6f));
-                _drones.Put(at, 0.65f, _time * 720f, Color.white);
+                // 지나온 궤도를 따라 옅어지는 물 꼬리
+                float a = Mathf.Atan2(at.y - center.y, at.x - center.x);
+                for (int j = 1; j <= 6; j++)
+                {
+                    float b = a - (j * 0.13f);
+                    Vector3 trail = center + (new Vector3(Mathf.Cos(b), Mathf.Sin(b), 0f) * 2.3f);
+                    _droneGlow.Put(trail, (0.9f - (j * 0.1f)) * droneScale, 0f, new Color(0.35f, 0.75f, 1f, 0.5f - (j * 0.07f)));
+                }
+                _droneGlow.Put(at, 1.8f * droneScale, 0f, new Color(0.3f, 0.7f, 1f, 0.6f));
+                _drones.Put(at, 0.65f * droneScale, _time * 720f, Color.white);
                 if (Random.value < 0.25f) Splash(at, 1, 0.15f);
             }
         }
@@ -724,6 +773,71 @@ namespace FireGame.Prototypes
             _playerGlow.transform.localPosition = at;
             float r = 2f * _sim.Magnet * 0.5f;
             _playerGlow.transform.localScale = Vector3.one * Art.FitWidth(_playerGlow.sprite, r * 2f);
+        }
+
+        /// <summary>
+        /// 보조템이 몸에 드러나게 한다: 탱크는 등 뒤 물빛, 방화복은 금빛 보호막, 장화는 발밑 물 튀김,
+        /// 무전기는 흡수 반경에서 퍼지는 레이더 고리. 모두 레벨이 오를수록 진해진다.
+        /// </summary>
+        private void DrawGear(float dt)
+        {
+            Loadout build = _sim.Build;
+            Vector3 at = W(_sim.Player);
+            var facing = new Vector3(_sim.Facing.X, _sim.Facing.Y, 0f);
+            Vector3 moved = at - _lastPlayer;
+            _lastPlayer = at;
+            if (_sim.Outcome != SOutcome.Playing) return;
+
+            int tank = build.Level(UpgradeId.Tank);
+            if (tank > 0)
+            {
+                float slosh = 1f + (0.08f * Mathf.Sin(_time * 6f));
+                _tank.Put(at - (facing * 0.35f), (0.8f + (0.15f * tank)) * slosh, 0f, new Color(0.3f, 0.65f, 1f, 0.35f + (0.07f * tank)));
+            }
+
+            int suit = build.Level(UpgradeId.Suit);
+            if (suit > 0)
+            {
+                float alpha = (0.15f + (0.1f * suit)) * (0.8f + (0.2f * Mathf.Sin(_time * 3f)));
+                _auras.Put(at, 0.7f * 2f / 0.85f, 0f, new Color(1f, 0.8f, 0.35f, alpha));
+                _regenClock -= dt;
+                if (_sim.Hp < _sim.MaxHp && _regenClock <= 0f)
+                {
+                    _regenClock = 1f;
+                    Sparkle(at, 2 + suit, new Color(0.45f, 1f, 0.5f));
+                }
+            }
+
+            int radio = build.Level(UpgradeId.Radio);
+            if (radio > 0)
+            {
+                float phase = Mathf.Repeat(_time / 1.6f, 1f);
+                float width = _sim.Magnet * 2f / 0.85f * Mathf.Lerp(0.2f, 1f, phase);
+                _auras.Put(at, width, 0f, new Color(0.45f, 1f, 0.55f, (1f - phase) * (0.15f + (0.07f * radio))));
+            }
+
+            int boots = build.Level(UpgradeId.Boots);
+            if (boots > 0 && dt > 0f && moved.magnitude / dt > 0.5f)
+            {
+                _stepClock -= dt;
+                if (_stepClock <= 0f)
+                {
+                    _stepClock = 0.28f / (1f + (0.15f * boots));
+                    Vector3 back = -moved.normalized;
+                    for (int i = 0; i < 1 + (boots / 2); i++)
+                    {
+                        var v = (back * Random.Range(1f, 2.5f)) + new Vector3(Random.Range(-1.2f, 1.2f), Random.Range(-1.2f, 1.2f), 0f);
+                        Emit("Effects/water_drop", at + (back * 0.3f), v, 5f, 0.3f, 0.26f, 0.05f, new Color(0.7f, 0.93f, 1f, 0.9f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
+                    }
+                    if (boots >= 3)
+                    {
+                        float deg = (Mathf.Atan2(back.y, back.x) * Mathf.Rad2Deg) - 90f;
+                        Vector3 sideways = new Vector3(-back.y, back.x, 0f) * Random.Range(-0.3f, 0.3f);
+                        EmitSprite(BeamSprite(), at + (back * 0.9f) + sideways, back * 2f, 2f, 0.18f, 0.18f, 0.08f,
+                            new Color(0.75f, 0.92f, 1f, 0.6f), new Color(0.75f, 0.92f, 1f, 0f), 0f, true, 0f, 6f, deg);
+                    }
+                }
+            }
         }
 
         // ------------------------------------------------------------------
@@ -781,11 +895,19 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>물폭탄: 퍼지는 물 고리 + 위로 솟았다 떨어지는 물기둥 + 김.</summary>
-        private void WaterBlast(Vector3 at)
+        private void WaterBlast(Vector3 at, float radius, int level)
         {
-            Shockwave(at, new Color(0.55f, 0.85f, 1f, 1f), 4.2f, 0.35f);
-            Emit("Effects/glow", at, Vector3.zero, 0f, 0.12f, 2.5f, 3.5f, new Color(0.9f, 0.97f, 1f, 0.9f), new Color(0.5f, 0.85f, 1f, 0f), 0f, true);
-            for (int i = 0; i < 16; i++)
+            // 고리 크기 = 실제 피해 범위. 레벨 3부터 고리 2겹, 최대 레벨은 물기둥이 굵어지고 물웅덩이 빛이 남는다.
+            float ring = radius * 2.4f;
+            Shockwave(at, new Color(0.55f, 0.85f, 1f, 1f), ring, 0.35f);
+            if (level >= 3) Shockwave(at, new Color(0.8f, 0.95f, 1f, 0.9f), ring * 1.25f, 0.35f, 0.1f);
+            if (level >= Loadout.MaxLevel)
+            {
+                Emit("Effects/glow", at, Vector3.zero, 0f, 0.8f, radius * 2.2f, radius * 2.4f, new Color(0.3f, 0.7f, 1f, 0.45f), new Color(0.3f, 0.7f, 1f, 0f), 0f, true);
+            }
+            Emit("Effects/glow", at, Vector3.zero, 0f, 0.12f, radius * 1.7f, radius * 2.3f, new Color(0.9f, 0.97f, 1f, 0.9f), new Color(0.5f, 0.85f, 1f, 0f), 0f, true);
+            int column = level >= Loadout.MaxLevel ? 28 : 16;
+            for (int i = 0; i < column; i++)
             {
                 float a = Random.value * Mathf.PI * 2f;
                 var v = new Vector3(Mathf.Cos(a) * Random.Range(1.5f, 4.5f), Random.Range(3f, 7f), 0f);
@@ -1180,6 +1302,9 @@ namespace FireGame.Prototypes
             _pools.Add(_beamCores);
             _bubbles = new Pool(_world, "Bubble", BubbleSprite(), 14, Additive);
             _pools.Add(_bubbles);
+            _auras = new Pool(_world, "Aura", RingSprite(), 10, Additive);
+            _pools.Add(_auras);
+            _tank = AddPool("Tank", "Effects/glow", 10, true);
             _dropGlow = AddPool("DropGlow", "Effects/glow", 12, true);
             _drops = AddPool("Drop", "Effects/water_drop", 13);
             _bombs = AddPool("Bomb", "Effects/water_drop", 13);

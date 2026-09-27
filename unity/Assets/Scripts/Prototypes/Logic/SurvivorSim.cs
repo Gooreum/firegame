@@ -521,7 +521,7 @@ namespace FireGame.Prototypes.Logic
                 if (_bombClock <= 0f)
                 {
                     _bombClock = 2.2f * cd;
-                    float radius = 1.5f * (1f + (0.15f * (bomb - 1)));
+                    float radius = Build.BombRadius;
                     for (int k = 0; k < bomb; k++)
                     {
                         Vec2 target = RandomEnemyNear(10f) ?? new Vec2(Player.X + ((Rand() - 0.5f) * 8f), Player.Y + ((Rand() - 0.5f) * 8f));
