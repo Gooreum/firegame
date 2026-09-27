@@ -64,6 +64,7 @@ namespace FireGame.Prototypes
         private float _regenClock;
         private Vector3 _aim = Vector3.right;
         private float _aimAge = 99f;
+        private int _suitShown = -1;
         private readonly List<Vector3> _trail = new List<Vector3>();
         private readonly List<RectTransform> _rays = new List<RectTransform>();
         private SOutcome _lastOutcome;
@@ -234,6 +235,7 @@ namespace FireGame.Prototypes
             _aim = Vector3.right;
             _aimAge = 99f;
             _trail.Clear();
+            _suitShown = -1;
             _lastOutcome = SOutcome.Playing;
             _cameraAt = new Vector3(_sim.Player.X, _sim.Player.Y, -10f);
             ClearEffects();
@@ -699,7 +701,7 @@ namespace FireGame.Prototypes
                         // 가장 최근에 쏜 줄기는 지금 노즐 끝에 붙어 있어서, 움직여도 물이 손에서 나온다.
                         bool jet = s.Kind == ShotKind.Jet;
                         Vector3 dir = new Vector3(s.Vel.X, s.Vel.Y, 0f).normalized;
-                        bool attached = s.Age <= (jet ? newestJet : newestDrop) + 0.001f;
+                        bool attached = _aimAge < AimHold && s.Age <= (jet ? newestJet : newestDrop) + 0.001f;
                         Vector3 tail;
                         if (attached)
                         {
@@ -774,10 +776,22 @@ namespace FireGame.Prototypes
             }
         }
 
+        /// <summary>방화복을 갈아입는 순간: 금빛 고리 + 반짝이 + 글자.</summary>
+        private void SuitUp(Vector3 at)
+        {
+            var gold = new Color(1f, 0.85f, 0.35f);
+            Shockwave(at, gold, 2.5f, 0.35f);
+            Sparkle(at, 12, gold);
+            SpawnText(at + new Vector3(0f, 1.1f, 0f), "방화복 강화!", gold, 1.4f);
+        }
+
+        /// <summary>마지막 발사 뒤 이만큼은 조준 방향을 유지한다(연사 사이에 몸이 돌아가지 않게).</summary>
+        private const float AimHold = 0.8f;
+
         /// <summary>몸이 보는 방향: 방금 쐈으면 조준 방향, 아니면 이동 방향.</summary>
         private Vector3 Look()
         {
-            return _aimAge < 0.4f ? _aim : new Vector3(_sim.Facing.X, _sim.Facing.Y, 0f);
+            return _aimAge < AimHold ? _aim : new Vector3(_sim.Facing.X, _sim.Facing.Y, 0f);
         }
 
         /// <summary>소방관이 걸어온 길을 따라 뒤로 끌리는 캔버스 호스. 서 있으면 등 뒤로 곧게 뻗는다.</summary>
@@ -838,7 +852,19 @@ namespace FireGame.Prototypes
             _nozzle.Put(at + kick + (look * 0.45f), 0.16f, lookDeg - 90f, new Color(0.22f, 0.22f, 0.25f), null, 0.5f / 0.16f);
             _nozzle.Put(at + kick + (look * 0.72f), 0.2f, lookDeg - 90f, new Color(0.85f, 0.65f, 0.25f), null, 0.7f);
             DrawHoseLine(at, look);
-            _player.color = Color.Lerp(Color.white, new Color(1f, 0.35f, 0.3f), Mathf.Clamp01(_hurt * 2f));
+            // 방화복 레벨만큼 옷을 갈아입는다: 파랑 → 노란 헬멧 → 빨간 헬멧 → 빨간 방화복 → 은색 방열복.
+            int suit = _sim.Build.Level(UpgradeId.Suit);
+            int outfit = Mathf.Min(suit, 4);
+            if (outfit != _suitShown)
+            {
+                _player.sprite = Art.Get("TopDown/player_suit_" + outfit);
+                _player.transform.localScale = Vector3.one * Art.FitWidth(_player.sprite, 0.95f);
+                if (_suitShown >= 0 && outfit > _suitShown) SuitUp(at);
+                _suitShown = outfit;
+            }
+            // 최대 레벨이면 은색 방열복이 금빛으로 일렁인다.
+            Color baseColor = suit >= Loadout.MaxLevel ? Color.Lerp(Color.white, new Color(1f, 0.85f, 0.4f), 0.25f + (0.15f * Mathf.Sin(_time * 4f))) : Color.white;
+            _player.color = Color.Lerp(baseColor, new Color(1f, 0.35f, 0.3f), Mathf.Clamp01(_hurt * 2f));
             _playerGlow.transform.localPosition = at;
             float r = 2f * _sim.Magnet * 0.5f;
             _playerGlow.transform.localScale = Vector3.one * Art.FitWidth(_playerGlow.sprite, r * 2f);
@@ -1369,7 +1395,7 @@ namespace FireGame.Prototypes
             _hoseTube = new Pool(_world, "HoseTube", Art.White, 10, null);
             _hoseBody = new Pool(_world, "HoseStream", HoseSprite(), 12, null);
             _hoseCore = new Pool(_world, "HoseCore", HoseSprite(), 13, Additive);
-            _nozzle = new Pool(_world, "Nozzle", Art.White, 12, null);
+            _nozzle = new Pool(_world, "Nozzle", Art.White, 16, null);
             _pools.Add(_hoseTubeEdge);
             _pools.Add(_hoseTube);
             _pools.Add(_hoseBody);
@@ -1385,7 +1411,7 @@ namespace FireGame.Prototypes
 
             _playerGlow = NewSprite(_root, "Magnet", Art.Get("Effects/glow"), 5);
             _playerGlow.color = new Color(0.4f, 0.7f, 1f, 0.08f);
-            _player = NewSprite(_root, "Player", Art.Get("TopDown/player_suit_0"), 11);
+            _player = NewSprite(_root, "Player", Art.Get("TopDown/player_suit_0"), 15);
             _player.transform.localScale = Vector3.one * Art.FitWidth(_player.sprite, 0.95f);
         }
 
