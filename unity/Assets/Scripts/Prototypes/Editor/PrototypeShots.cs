@@ -47,7 +47,8 @@ namespace FireGame.Prototypes.EditorTools
             failures += ActionShot(dir, "a2_action_later", 16f);
 
             failures += SurvivorShot(dir, "c1_early", view => view.Sim.Time >= 40f);
-            failures += SurvivorShot(dir, "c2_levelup_cards", view => view.Sim.Time >= 60f && view.Sim.PendingChoices != null, 45);
+            // 레벨 5로 오르는 카드: 노란 특수 장비가 반드시 한 장 있다.
+            failures += SurvivorShot(dir, "c2_levelup_cards", view => view.Sim.Level == 5 && view.Sim.PendingChoices != null, 45);
             failures += SurvivorShot(dir, "c3_boss", view => view.Sim.Boss != null && view.Sim.Time >= SurvivorSim.BossAt + 5f);
             failures += SurvivorShot(dir, "c4_evolved", view => view.Sim.JustEvolved, 9);
             failures += SurvivorShot(dir, "c5_levelup_burst", view => view.Sim.Time >= 30f && view.Sim.JustLeveled, 8);
@@ -58,6 +59,8 @@ namespace FireGame.Prototypes.EditorTools
             // 동네: 불난 가게에 사람이 갇혀 있고 소방관이 가까이 있는 장면, 그리고 판이 끝난 결과창.
             failures += SurvivorShot(dir, "c8_house_fire", view => view.Sim.Structures.Exists(s => s.IsBuilding && s.Burning && s.Residents > 0 && s.DistanceTo(view.Sim.Player) < 6f), 30);
             failures += SurvivorShot(dir, "c9_result", view => view.Sim.Outcome != SOutcome.Playing, 90);
+            // 특수 장비 셋(풀장비): 헬기가 목표 위에서 물을 쏟기 직전, 동료, 물의 장막.
+            failures += SurvivorShot(dir, "c10_specials", view => view.Sim.Time >= 20f && view.Sim.PendingChoices == null && view.Sim.Shots.Exists(s => s.Kind == ShotKind.Heli && s.Age > s.Life * 0.7f), 3, true);
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
