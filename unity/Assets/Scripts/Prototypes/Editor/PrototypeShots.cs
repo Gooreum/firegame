@@ -45,6 +45,10 @@ namespace FireGame.Prototypes.EditorTools
             failures += ActionShot(dir, "a1_action_fight", 7f);
             failures += ActionShot(dir, "a2_action_later", 16f);
 
+            failures += SurvivorShot(dir, "c1_early", view => view.Sim.Time >= 40f);
+            failures += SurvivorShot(dir, "c2_levelup_cards", view => view.Sim.Time >= 60f && view.Sim.PendingChoices != null);
+            failures += SurvivorShot(dir, "c3_boss", view => view.Sim.Boss != null && view.Sim.Time >= SurvivorSim.BossAt + 5f);
+
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
         }
@@ -99,6 +103,46 @@ namespace FireGame.Prototypes.EditorTools
                 Canvas.ForceUpdateCanvases();
                 Capture(camera, Path.Combine(dir, name + ".png"));
                 Debug.Log("[ProtoShots] " + name + " (" + view.Sim.Outcome + ", 구조 " + view.Sim.Rescued + ")");
+                return 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[ProtoShots] 실패: " + name + " — " + e);
+                return 1;
+            }
+        }
+
+        /// <summary>봇에게 판을 맡겨 조건이 될 때까지 굴린 뒤 찍는다. 카드 장면은 카드를 고르지 않고 멈춘다.</summary>
+        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until)
+        {
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var root = new GameObject("Prototype");
+                Camera camera = PrototypeHost.SetUpCamera();
+                camera.aspect = (float)Width / Height;
+                Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
+
+                var view = new SurvivorView(root.transform, camera, canvas);
+                var bot = new SurvivorBot(view.Sim);
+                int guard = 0;
+                while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400)
+                {
+                    if (view.Sim.PendingChoices != null)
+                    {
+                        view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices));
+                        continue;
+                    }
+                    view.Step(bot.Move());
+                    view.Refresh(SurvivorSim.Dt);
+                }
+                if (!until(view)) throw new Exception("조건에 닿기 전에 판이 끝났다: " + view.Sim.Outcome + " t=" + view.Sim.Time);
+                // 카드는 튀어 오르는 중이니 다 뜬 뒤를 찍는다. 효과도 조금 흐르게 둔다.
+                for (int i = 0; i < 20; i++) view.Refresh(SurvivorSim.Dt);
+
+                Canvas.ForceUpdateCanvases();
+                Capture(camera, Path.Combine(dir, name + ".png"));
+                Debug.Log("[ProtoShots] " + name + " (t=" + (int)view.Sim.Time + ", Lv " + view.Sim.Level + ", 적 " + view.Sim.Enemies.Count + ", 카드 " + (view.Sim.PendingChoices != null) + ")");
                 return 0;
             }
             catch (Exception e)

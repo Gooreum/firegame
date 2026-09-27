@@ -172,7 +172,7 @@ namespace FireGame.Prototypes.Logic
 
         public int XpToNext
         {
-            get { return 4 + (Level * 3) + (Level * Level / 8); }
+            get { return 6 + (Level * 5) + (Level * Level / 4); }
         }
 
         public float MaxHp
@@ -260,10 +260,10 @@ namespace FireGame.Prototypes.Logic
             float scale = 1f + ((Time / 120f) * (Time / 120f));
             switch (kind)
             {
-                case EnemyKind.Ember: e.MaxHp = 3f * scale; e.Speed = 2.4f; e.Radius = 0.35f; e.Touch = 5f; e.Xp = 1; break;
+                case EnemyKind.Ember: e.MaxHp = 2f * scale; e.Speed = 2.4f; e.Radius = 0.35f; e.Touch = 3f; e.Xp = 1; break;
                 case EnemyKind.Blaze: e.MaxHp = 14f * scale; e.Speed = 1.5f; e.Radius = 0.6f; e.Touch = 10f; e.Xp = 5; break;
-                case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 5f; e.Xp = 1; break;
-                case EnemyKind.Boss: e.MaxHp = 1500f; e.Speed = 1.1f; e.Radius = 1.4f; e.Touch = 35f; e.Xp = 0; break;
+                case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
+                case EnemyKind.Boss: e.MaxHp = 1100f; e.Speed = 1.1f; e.Radius = 1.4f; e.Touch = 35f; e.Xp = 0; break;
             }
             e.Hp = e.MaxHp;
             Enemies.Add(e);
@@ -321,7 +321,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>스폰 감독: 시간이 갈수록 많이, 1·2·3분엔 포위, 4분엔 보스.</summary>
         private void Direct()
         {
-            float rate = Time < BossAt ? 1f + (15f * (float)Math.Pow(Time / BossAt, 1.5)) : 6f;
+            float rate = Time < BossAt ? 3f + (32f * (float)Math.Pow(Time / BossAt, 1.5)) : 14f;
             _spawnDebt += rate * Dt;
             while (_spawnDebt >= 1f)
             {
@@ -485,13 +485,13 @@ namespace FireGame.Prototypes.Logic
                     Enemy target = Nearest(Player, 9f);
                     if (target != null)
                     {
-                        _hoseClock = 0.45f * cd;
+                        _hoseClock = 0.32f * cd;
                         float baseAngle = (float)Math.Atan2(target.Pos.Y - Player.Y, target.Pos.X - Player.X);
                         float damage = 3f * (1f + (0.25f * (hose - 1)));
                         for (int k = 0; k < hose; k++)
                         {
                             float spread = (k - ((hose - 1) / 2f)) * 0.16f;
-                            FireDrop(baseAngle + spread, damage, 14f, 0.25f, 1, 0.75f, ShotKind.Drop);
+                            FireDrop(baseAngle + spread, damage, 14f, 0.3f, 2, 0.75f, ShotKind.Drop);
                         }
                     }
                 }

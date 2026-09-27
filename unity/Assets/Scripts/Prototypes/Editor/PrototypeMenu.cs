@@ -5,6 +5,12 @@ namespace FireGame.Prototypes.EditorTools
     /// <summary>에디터 메뉴에서 시험판 또는 본 게임을 골라 바로 Play 모드로 들어간다.</summary>
     public static class PrototypeMenu
     {
+        [MenuItem("FireGame/시험판 C (뱀서)", false, 0)]
+        private static void PlaySurvivorPrototype()
+        {
+            Play("C");
+        }
+
         [MenuItem("FireGame/시험판 A (액션)", false, 1)]
         private static void PlayActionPrototype()
         {
