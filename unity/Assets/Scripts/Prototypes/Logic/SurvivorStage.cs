@@ -68,7 +68,7 @@ namespace FireGame.Prototypes.Logic
             Name = "마을",
             Map = SurvivorTown.Build,
             ReportTimes = SurvivorSim.ReportTimes,
-            Specials = new[] { UpgradeId.Heli, UpgradeId.Curtain, UpgradeId.Partner, UpgradeId.Truck, UpgradeId.Sprinkler },
+            Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Truck, UpgradeId.Sprinkler },
         };
 
         private static readonly StageRules Forest = new StageRules
@@ -91,7 +91,7 @@ namespace FireGame.Prototypes.Logic
             Wind = true,
             // 나무 수십 그루가 보통(×2) 간격으로 뱉으면 불씨 떼가 동네를 덮는다.
             TreeSpit = 4f,
-            Specials = new[] { UpgradeId.Heli, UpgradeId.Curtain, UpgradeId.Partner, UpgradeId.Rain, UpgradeId.Retardant },
+            Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Rain, UpgradeId.Retardant },
         };
 
         /// <summary>n번 스테이지(1부터). 범위를 벗어나면 1스테이지.</summary>

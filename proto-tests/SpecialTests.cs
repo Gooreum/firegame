@@ -126,10 +126,14 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void StagePools_HaveFiveYellowCardsEach()
+        public void StagePools_HaveFourYellowCardsEach_WithoutEvolutions()
         {
-            Assert.Equal(5, SurvivorStages.Get(1).Specials.Length);
-            Assert.Equal(5, SurvivorStages.Get(2).Specials.Length);
+            // 구조대원·물의 장막은 일반 무기로 내려왔다: 노란 카드는 판을 바꾸는 보너스 네 장.
+            Assert.Equal(4, SurvivorStages.Get(1).Specials.Length);
+            Assert.Equal(4, SurvivorStages.Get(2).Specials.Length);
+            Assert.Contains(UpgradeId.Ambulance, SurvivorStages.Get(1).Specials);
+            Assert.DoesNotContain(UpgradeId.Partner, SurvivorStages.Get(1).Specials);
+            foreach (UpgradeId id in SurvivorStages.Get(1).Specials) Assert.False(Loadout.IsEvolution(id));
             Assert.Contains(UpgradeId.Truck, SurvivorStages.Get(1).Specials);
             Assert.DoesNotContain(UpgradeId.Truck, SurvivorStages.Get(2).Specials);
             Assert.Contains(UpgradeId.Rain, SurvivorStages.Get(2).Specials);

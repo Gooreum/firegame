@@ -157,14 +157,9 @@ namespace FireGame.Prototypes.Tests
         public void NothingLeft_OffersOnlyHeal_ThatCapsAtMaxHp()
         {
             SurvivorSim sim = Quiet();
-            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Foam, UpgradeId.Tank, UpgradeId.Suit, UpgradeId.Boots, UpgradeId.Radio })
-            {
-                while (sim.Build.Level(id) < Loadout.MaxLevel) sim.Build.Add(id);
-            }
-            sim.Build.Add(UpgradeId.Cannon);
-            sim.Build.Add(UpgradeId.Heli);
-            sim.Build.Add(UpgradeId.Curtain);
-            sim.Build.Add(UpgradeId.Partner);
+            // 여섯 무기를 모두 진화시키고(보조도 최대) 노란 특수도 전부 쥔다.
+            sim.Build.EvolveAll();
+            foreach (UpgradeId id in new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Truck, UpgradeId.Sprinkler, UpgradeId.Rain, UpgradeId.Retardant }) sim.Build.Add(id);
 
             var rng = new Rng(5);
             Assert.Equal(new List<UpgradeId> { UpgradeId.Heal }, SurvivorUpgrades.Roll(sim.Build, 2, ref rng));
@@ -185,7 +180,7 @@ namespace FireGame.Prototypes.Tests
             l.Add(UpgradeId.Hose);
             l.Add(UpgradeId.WaterBomb);
             l.Add(UpgradeId.Drone);
-            l.Add(UpgradeId.Foam);
+            l.Add(UpgradeId.Turret);
             Assert.Equal(4, l.WeaponCount);
 
             var rng = new Rng(11);
@@ -203,9 +198,12 @@ namespace FireGame.Prototypes.Tests
             full.Add(UpgradeId.Hose);
             full.Add(UpgradeId.WaterBomb);
             full.Add(UpgradeId.Drone);
-            Assert.True(full.CanTake(UpgradeId.Foam), "무기 3개일 땐 네 번째 무기를 얻을 수 있어야 한다");
-            full.Add(UpgradeId.Foam);
-            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Foam }) Assert.True(full.CanTake(id));
+            Assert.True(full.CanTake(UpgradeId.Turret), "무기 3개일 땐 네 번째 무기를 얻을 수 있어야 한다");
+            full.Add(UpgradeId.Turret);
+            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Turret }) Assert.True(full.CanTake(id));
+            // 칸보다 종류가 많다: 무기 4칸이 차면 구조대원·물의 장막은 못 얻는다.
+            Assert.False(full.CanTake(UpgradeId.Partner));
+            Assert.False(full.CanTake(UpgradeId.Curtain));
         }
 
         // --- TC-8 ---
@@ -289,26 +287,6 @@ namespace FireGame.Prototypes.Tests
             Assert.True(struck, "3초 동안 드론이 궤도 위 적을 한 번도 안 맞혔다");
         }
 
-        // --- S2 TC-3 ---
-        [Fact]
-        public void Foam_LeavesPuddlesThatSlowAndHurt()
-        {
-            SurvivorSim sim = Quiet();
-            sim.Build.Add(UpgradeId.Foam);
-            Run(sim, 1f, 1f, 0f);
-            Assert.True(sim.Foam.Count >= 2, "움직였는데 거품이 안 남았다");
-
-            Puddle p = sim.Foam[0];
-            Enemy e = Dummy(sim, EnemyKind.Blaze, 0f, 0f);
-            e.Pos = p.Pos;
-            e.Speed = 1f;
-            sim.Player = new Vec2(sim.Player.X + 12f, sim.Player.Y);   // 물대포 사거리 밖
-            Run(sim, 0.8f);
-            Assert.True(e.Slowed > 0f, "거품 위 적이 느려지지 않았다");
-            Assert.True(e.Hp < e.MaxHp, "거품 위 적이 피해를 안 입었다");
-        }
-
-        // --- S2 TC-4 ---
         [Fact]
         public void Cannon_PiercesALineOfFires()
         {
@@ -836,11 +814,11 @@ namespace FireGame.Prototypes.Tests
             var sim = new SurvivorSim(1);
             sim.GiveMaxGear();
 
-            UpgradeId[] maxed = { UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Foam, UpgradeId.Tank, UpgradeId.Suit, UpgradeId.Boots, UpgradeId.Radio };
+            UpgradeId[] maxed = { UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Turret, UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Radio, UpgradeId.Axe, UpgradeId.Oxygen, UpgradeId.Suit };
             foreach (UpgradeId id in maxed) Assert.Equal(Loadout.MaxLevel, sim.Build.Level(id));
             Assert.Equal(1, sim.Build.Level(UpgradeId.Cannon));
             Assert.Equal(0, sim.Build.Level(UpgradeId.Hose));
-            Assert.Equal(200f, sim.MaxHp);
+            Assert.Equal(150f, sim.MaxHp);
             Assert.Equal(sim.MaxHp, sim.Hp);
         }
 
@@ -954,7 +932,8 @@ namespace FireGame.Prototypes.Tests
             Structure shop = Shop(sim, 12f, 0f, 2);
             sim.Ignite(shop, 0.3f);
             Take(sim, UpgradeId.Partner);
-            Assert.NotNull(sim.Partner);
+            sim.Step(0f, 0f);
+            Assert.Single(sim.Partners);
             for (int i = 0; i < 60 * 10 && sim.Rescued == 0; i++)
             {
                 sim.Hp = sim.MaxHp;

@@ -154,8 +154,8 @@ namespace FireGame.Prototypes
         private Pool _rotor;
         private Pool _partner;
         private TextMesh _partnerTag;
-        private Vector3 _partnerLast;
-        private float _partnerDeg;
+        private readonly Vector3[] _partnerLast = new Vector3[4];
+        private readonly float[] _partnerDeg = new float[4];
         private Vector3 _heliExitFrom;
         private Vector3 _heliExitDir;
         private float _heliExitAge = 99f;
@@ -547,17 +547,17 @@ namespace FireGame.Prototypes
             {
                 GameAudio.Play(Cue.PickUp);
             }
-            if (_lastPick == UpgradeId.Heli || _lastPick == UpgradeId.Curtain || _lastPick == UpgradeId.Partner)
+            bool joined = _lastPick == UpgradeId.Partner && _sim.Build.Level(UpgradeId.Partner) is 1 or 3 or 5;
+            if ((Loadout.IsSpecial(_lastPick) && !Loadout.IsEvolution(_lastPick)) || joined)
             {
-                // 특수 장비: 금빛 기둥과 알림. 동료는 곁에서 번쩍이며 나타난다.
+                // 특수 장비: 금빛 기둥과 알림. 구조대원은 한 명 늘 때마다 곁에서 번쩍이며 나타난다.
                 var gold = new Color(1f, 0.85f, 0.3f);
-                Vector3 at = _sim.Partner.HasValue && _lastPick == UpgradeId.Partner ? W(_sim.Partner.Value) : W(_sim.Player);
+                Vector3 at = W(_sim.Player);
                 Pillar(at, gold);
                 Shockwave(at, gold, 6f, 0.4f);
                 Flash(gold, 0.35f);
                 _zoomKick = Mathf.Max(_zoomKick, 0.5f);
-                ShowAlert(SurvivorUpgrades.Name(_lastPick) + (_lastPick == UpgradeId.Partner ? " 합류!" : " 출동!"), gold);
-                if (_lastPick == UpgradeId.Partner) _partnerLast = at;
+                ShowAlert(joined ? "구조대원 합류!" : SurvivorUpgrades.Name(_lastPick) + " 출동!", gold);
             }
         }
 
@@ -684,7 +684,7 @@ namespace FireGame.Prototypes
             if (_sim.JustCurtain)
             {
                 Vector3 at = W(_sim.Player);
-                float ring = SurvivorSim.CurtainRadius * 2.4f;
+                float ring = _sim.CurtainRadiusNow * 2.4f;
                 Shockwave(at, new Color(0.45f, 0.8f, 1f, 1f), ring, 0.4f);
                 Shockwave(at, new Color(0.85f, 0.97f, 1f, 0.9f), ring * 0.8f, 0.35f, 0.1f);
                 for (int i = 0; i < 36; i++)
@@ -1309,25 +1309,6 @@ namespace FireGame.Prototypes
 
         private void DrawPuddles()
         {
-            int foamLevel = _sim.Build.Level(UpgradeId.Foam);
-            for (int i = 0; i < _sim.Foam.Count; i++)
-            {
-                Puddle p = _sim.Foam[i];
-                float t = Mathf.Clamp01(p.Life / p.MaxLife);
-                _foam.Put(W(p.Pos), p.Radius * 2.2f * (0.8f + (0.2f * t)), i * 37f, new Color(0.85f, 0.95f, 1f, 0.5f * t), Art.Get(Smokes[i % Smokes.Length]));
-                // 레벨만큼 거품이 떠서 꿈틀거리고, 수명이 끝나갈수록 작아진다.
-                for (int b = 0; b <= foamLevel; b++)
-                {
-                    float a = (i * 2.4f) + (b * 2.1f);
-                    float r = 0.25f + (0.45f * Mathf.Repeat((b * 0.37f) + (i * 0.11f), 1f));
-                    Vector3 o = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * r;
-                    Vector3 wob = new Vector3(Mathf.Sin((_time * 3f) + b + i), Mathf.Cos((_time * 2.5f) + b), 0f) * 0.06f;
-                    // 거품 MAX: 비눗방울처럼 무지갯빛으로 반짝인다.
-                    Color tint = foamLevel >= Loadout.MaxLevel ? Color.HSVToRGB(Mathf.Repeat((_time * 0.4f) + (b * 0.17f) + (i * 0.05f), 1f), 0.35f, 1f) : new Color(0.9f, 0.98f, 1f);
-                    _bubbles.Put(W(p.Pos) + o + wob, (0.22f + (0.05f * (b % 3))) * (0.4f + (0.6f * t)), 0f, new Color(tint.r, tint.g, tint.b, 0.7f * t));
-                }
-            }
-
             for (int i = 0; i < _sim.BurningGround.Count; i++)
             {
                 Puddle p = _sim.BurningGround[i];
@@ -1423,13 +1404,16 @@ namespace FireGame.Prototypes
             DrawHeliExit();
             DrawPartner();
 
-            int droneLevel = _sim.Build.Level(UpgradeId.Drone);
-            Vector3 center = W(_sim.Player);
+            int droneLevel = _sim.Build.PowerOf(UpgradeId.Drone);
+            // 순찰 드론은 불난 건물 위를 돌고, 없으면 소방관 곁을 돈다.
+            Vector3 center = W(_sim.DroneCenter);
+            Structure patrol = _sim.DroneTarget;
+            float orbit = patrol != null ? Mathf.Max(patrol.Half.X, patrol.Half.Y) + 0.6f : 2.3f;
             if (droneLevel >= 3)
             {
-                // 드론 궤도(반지름 2.3)를 잇는 물 고리. 최대 레벨이면 밝게 맥동한다.
+                // 드론 궤도를 잇는 물 고리. 최대 레벨이면 밝게 맥동한다.
                 float pulse = droneLevel >= Loadout.MaxLevel ? 0.3f + (0.15f * Mathf.Sin(_time * 8f)) : 0.16f;
-                _auras.Put(center, 2.3f * 2f / 0.85f, 0f, new Color(0.4f, 0.8f, 1f, pulse));
+                _auras.Put(center, orbit * 2f / 0.85f, 0f, new Color(0.4f, 0.8f, 1f, pulse));
             }
             float droneScale = droneLevel >= Loadout.MaxLevel ? 1.3f : 1f;
             for (int i = 0; i < _sim.Drones.Count; i++)
@@ -1899,20 +1883,22 @@ namespace FireGame.Prototypes
             _rotor.Put(ground + HeliLift + (dir * 0.25f), 4.4f, (_time * 1400f) + 45f, new Color(1f, 1f, 1f, 0.3f * alpha));
         }
 
-        /// <summary>구조대원 동료: 노란 헬멧 소방관이 움직이는 쪽을 보고 달린다. 머리 위 "동료" 이름표.</summary>
+        /// <summary>구조대원들: 노란 헬멧 소방관이 움직이는 쪽을 보고 달린다. 첫 대원 머리 위에 "구조대" 이름표.</summary>
         private void DrawPartner()
         {
-            bool has = _sim.Partner.HasValue;
+            bool has = _sim.Partners.Count > 0;
             if (_partnerTag != null) _partnerTag.gameObject.SetActive(has);
-            if (!has) return;
-            Vector3 at = W(_sim.Partner.Value);
-            Vector3 moved = at - _partnerLast;
-            _partnerLast = at;
-            if (moved.sqrMagnitude > 0.0001f) _partnerDeg = Mathf.Atan2(moved.y, moved.x) * Mathf.Rad2Deg;
-            float bob = moved.sqrMagnitude > 0.0001f ? 0.05f * Mathf.Abs(Mathf.Sin(_time * 14f)) : 0f;
-            _shadows.Put(at + new Vector3(0.05f, -0.15f, 0f), 0.9f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.55f);
-            _partner.Put(at + new Vector3(0f, bob, 0f), 0.85f, _partnerDeg, Color.white);
-            if (_partnerTag != null) _partnerTag.transform.localPosition = at + new Vector3(0f, 0.85f, -0.2f);
+            for (int i = 0; i < _sim.Partners.Count; i++)
+            {
+                Vector3 at = W(_sim.Partners[i]);
+                Vector3 moved = at - _partnerLast[i];
+                _partnerLast[i] = at;
+                if (moved.sqrMagnitude > 0.0001f && moved.sqrMagnitude < 4f) _partnerDeg[i] = Mathf.Atan2(moved.y, moved.x) * Mathf.Rad2Deg;
+                float bob = moved.sqrMagnitude > 0.0001f ? 0.05f * Mathf.Abs(Mathf.Sin((_time * 14f) + i)) : 0f;
+                _shadows.Put(at + new Vector3(0.05f, -0.15f, 0f), 0.9f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.55f);
+                _partner.Put(at + new Vector3(0f, bob, 0f), 0.85f, _partnerDeg[i], Color.white);
+                if (i == 0 && _partnerTag != null) _partnerTag.transform.localPosition = at + new Vector3(0f, 0.85f, -0.2f);
+            }
         }
 
         /// <summary>위에서 본 소방 헬기: 빨간 동체, 파란 유리 조종석, 흰 띠, 꼬리. 위쪽이 앞.</summary>
@@ -2597,7 +2583,7 @@ namespace FireGame.Prototypes
             _partnerTag = NewText();
             _partnerTag.transform.SetParent(_root, false);
             _partnerTag.GetComponent<MeshRenderer>().sortingOrder = 18;
-            _partnerTag.text = "동료";
+            _partnerTag.text = "구조대";
             _partnerTag.characterSize = 0.04f;
             _partnerTag.color = new Color(1f, 0.9f, 0.35f);
             _partnerTag.gameObject.SetActive(false);
@@ -3276,7 +3262,11 @@ namespace FireGame.Prototypes
 
         private bool HasSpecialLeft()
         {
-            return _sim.Build.CanTake(UpgradeId.Heli) || _sim.Build.CanTake(UpgradeId.Curtain) || _sim.Build.CanTake(UpgradeId.Partner);
+            foreach (UpgradeId id in _sim.Stage.Specials)
+            {
+                if (_sim.Build.CanTake(id)) return true;
+            }
+            return false;
         }
 
         private void RefreshHud(float dt)
