@@ -55,7 +55,8 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c1_early", view => view.Sim.Time >= 40f);
             // 레벨 5로 오르는 카드: 노란 특수 장비가 반드시 한 장 있다.
             failures += SurvivorShot(dir, "c2_levelup_cards", view => view.Sim.Level == 5 && view.Sim.PendingChoices != null, 45);
-            failures += SurvivorShot(dir, "c4_evolved", view => view.Sim.JustEvolved, 9);
+            // 진화·MAX 순간은 판 흐름에 따라 안 올 수 있어, 물대포 Lv4 + 고압 펌프로 시작한다(카드 고르기 경로).
+            failures += SurvivorShot(dir, "c4_evolved", view => view.Sim.JustEvolved, 9, false, null, 1, view => Pick(view, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Tank));
             failures += SurvivorShot(dir, "c5_levelup_burst", view => view.Sim.Time >= 30f && view.Sim.JustLeveled, 8);
             failures += SurvivorShot(dir, "c6_arsenal", view => view.Sim.Time >= 150f && view.Sim.PendingChoices == null);
             // 보는 용도: 봇이 잘 안 고르는 아이템까지 전부 최대 레벨로 쥐여 주고 레벨별 연출을 한 화면에서 본다.
@@ -76,7 +77,7 @@ namespace FireGame.Prototypes.EditorTools
             failures += TouchShot(dir, "c12_touch_sticks");
             failures += AimShot(dir, "c13_aim_assist");
             // 무기·보조가 Lv5가 되는 순간(금빛 기둥, "○○ MAX!").
-            failures += SurvivorShot(dir, "c14_max_burst", view => view.Sim.JustMaxed.HasValue, 8);
+            failures += SurvivorShot(dir, "c14_max_burst", view => view.Sim.JustMaxed.HasValue, 8, false, null, 1, view => Pick(view, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose));
             failures += NextStageShot(dir, "c14b_next_stage");
             // 공구상자를 주워 건물을 고치는 순간(초록 빛줄기·"수리!").
             failures += SurvivorShot(dir, "c15_toolbox", view => view.Sim.Toolboxes.Exists(b => b.Pos.DistanceTo(view.Sim.Player) < 5f), 5);
@@ -196,6 +197,16 @@ namespace FireGame.Prototypes.EditorTools
         /// 캡처는 화면을 보는 용도라 판이 중간에 끝나지 않게 붙잡는다: 체력은 채우고, 건물은 튼튼함 0.3 밑으로 안 내려간다
         /// (밸런스는 proto-tests의 봇 측정이 본다. 규칙이 바뀔 때마다 시드가 지는 판이 되어 뒷장면을 못 찍었다).
         /// </summary>
+        /// <summary>판 시작에 카드를 차례로 고른다(플레이어 경로: Choose).</summary>
+        private static void Pick(SurvivorView view, params UpgradeId[] cards)
+        {
+            foreach (UpgradeId id in cards)
+            {
+                view.Sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { id };
+                view.Sim.Choose(0);
+            }
+        }
+
         private static void KeepAlive(SurvivorSim sim)
         {
             sim.Hp = sim.MaxHp;
