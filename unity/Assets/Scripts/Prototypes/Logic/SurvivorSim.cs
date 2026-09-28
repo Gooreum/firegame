@@ -144,6 +144,30 @@ namespace FireGame.Prototypes.Logic
         public EnemyKind Kind;
     }
 
+    /// <summary>재미 밀도 계측: 봇 판을 스테이지끼리 비교한다(docs/prototype-c-balance.md).</summary>
+    public sealed class RunStats
+    {
+        /// <summary>레벨업한 시각들.</summary>
+        public readonly List<float> LevelTimes = new List<float>();
+
+        /// <summary>7칸 안에 불 몹도, 8칸 안에 타는 구조물도 없던 시간(걷기만 한 시간).</summary>
+        public float IdleTime;
+
+        /// <summary>건물이 하나라도 타던 시간.</summary>
+        public float BuildingFire;
+
+        /// <summary>나무·차만 타고 건물은 안 타던 시간.</summary>
+        public float TreeFireOnly;
+
+        /// <summary>신고 + 구조(+ 대형 신고·상자).</summary>
+        public int Events;
+        public float DamageTaken;
+
+        /// <summary>구조로 찬 체력.</summary>
+        public float HealRescue;
+        public float MinHpRatio = 1f;
+    }
+
     /// <summary>
     /// 시험판 C(뱀서라이크) 규칙. 60Hz 고정 스텝, 시드 Rng로 결정적이다.
     /// 소방관은 움직이기만 하고 무기는 알아서 쏜다. 불 괴물을 끄면 구슬이 떨어지고, 구슬이 모이면 카드 3장 중 하나를 고른다.
@@ -182,6 +206,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>지켜야 하는 동네. 생성자에서 스테이지 맵대로 깐다.</summary>
         public readonly List<Structure> Structures;
         public readonly Loadout Build = new Loadout();
+        public readonly RunStats Stats = new RunStats();
 
         public Vec2 Player = new Vec2(ArenaSize / 2f, ArenaSize / 2f);
         public Vec2 Facing = new Vec2(1f, 0f);
@@ -455,6 +480,8 @@ namespace FireGame.Prototypes.Logic
             TickToolboxes();
             TickRescue();
             TickBoss();
+            // Sweep 전에 잰다: 죽은 적을 치우면 해시 번호가 어긋난다.
+            Measure();
             Sweep();
 
             Hp = Math.Min(MaxHp, Hp + (Build.Regen * Dt));
@@ -484,6 +511,7 @@ namespace FireGame.Prototypes.Logic
             {
                 Xp -= XpToNext;
                 Level++;
+                Stats.LevelTimes.Add(Time);
                 PendingChoices = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials);
                 JustLeveled = true;
                 PushAway(Player, 4f, 3f);
@@ -660,6 +688,7 @@ namespace FireGame.Prototypes.Logic
             while (Reports && _reportsDone < Stage.ReportTimes.Length && Time >= Stage.ReportTimes[_reportsDone])
             {
                 _reportsDone++;
+                Stats.Events++;
                 Report();
             }
 
@@ -1597,6 +1626,33 @@ namespace FireGame.Prototypes.Logic
         {
             Hp -= amount;
             PlayerHurt += amount;
+            Stats.DamageTaken += amount;
+        }
+
+        /// <summary>한 틱의 재미 밀도 통계를 쌓는다.</summary>
+        private void Measure()
+        {
+            Stats.MinHpRatio = Math.Min(Stats.MinHpRatio, Math.Max(0f, Hp) / MaxHp);
+            bool building = false;
+            bool other = false;
+            bool fireNear = false;
+            foreach (Structure s in Structures)
+            {
+                if (!s.Burning) continue;
+                if (s.IsBuilding) building = true;
+                else other = true;
+                if (!fireNear && s.DistanceTo(Player) <= 8f) fireNear = true;
+            }
+            if (building) Stats.BuildingFire += Dt;
+            else if (other) Stats.TreeFireOnly += Dt;
+            if (fireNear) return;
+            // 해시(이번 틱 이동 전 칸)로 가까운 적만 본다: 350마리를 매 틱 다 재지 않는다.
+            Near(Player, 7f, _near);
+            foreach (Enemy e in _near)
+            {
+                if (!e.Dead) return;
+            }
+            Stats.IdleTime += Dt;
         }
 
         private float _toolboxClock = ToolboxEvery;
@@ -1760,8 +1816,10 @@ namespace FireGame.Prototypes.Logic
                 s.Residents--;
                 Rescued++;
                 Xp += 20;
+                Stats.HealRescue += Math.Min(MaxHp, Hp + 20f) - Hp;
                 Hp = Math.Min(MaxHp, Hp + 20f);
                 JustRescued = true;
+                Stats.Events++;
                 RescuedFrom.Add(s);
                 Civilians.Add(new Civilian { Pos = s.Door, Life = 1.5f });
             }

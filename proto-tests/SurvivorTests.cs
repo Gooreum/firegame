@@ -6,6 +6,7 @@ using Xunit;
 namespace FireGame.Prototypes.Tests
 {
     /// <summary>시험판 C(뱀서라이크) 규칙. 무기가 맞히고, 구슬이 레벨을 올리고, 카드 뽑기가 규칙대로 나온다.</summary>
+    [Collection("Heavy")]
     public class SurvivorTests
     {
         private static void Run(SurvivorSim sim, float seconds, float mx = 0f, float my = 0f)

@@ -8,6 +8,7 @@ using Xunit.Abstractions;
 namespace FireGame.Prototypes.Tests
 {
     /// <summary>스테이지 표: 1스테이지는 예전 그대로, 뒤 스테이지는 세계 쪽 수치로만 어려워진다.</summary>
+    [Collection("Heavy")]
     public class StageTests
     {
         private readonly ITestOutputHelper _out;
