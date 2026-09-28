@@ -17,6 +17,12 @@ namespace FireGame.Prototypes.Logic
         Blaze,
         Dart,
         Boss,
+
+        /// <summary>산불 숲: 나무를 노려 달려가 불을 붙이는 불다람쥐.</summary>
+        Squirrel,
+
+        /// <summary>산불 숲: 무리 지어 날아와 소방관을 쫓는 재 박쥐.</summary>
+        Bat,
     }
 
     public enum ShotKind
@@ -57,6 +63,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>노릴 탈 것 없이 떠돈 시간. 오래되면 사그라든다.</summary>
         public float Idle;
+
+        /// <summary>지그재그·출렁임 위상(다람쥐·박쥐).</summary>
+        public float Phase;
         public bool Dead;
     }
 
@@ -318,6 +327,22 @@ namespace FireGame.Prototypes.Logic
         public bool JustBossArrived;
         public bool JustRescued;
         public bool JustWave;
+
+        /// <summary>산불 숲: 바람 방향(단위 벡터). 바람이 없는 스테이지는 (0,0).</summary>
+        public Vec2 Wind;
+
+        /// <summary>이 간격마다 바람 방향이 바뀐다(초).</summary>
+        public const float WindShiftEvery = 60f;
+
+        /// <summary>타는 나무가 바람 쪽 이웃에 불을 옮기는 간격·거리.</summary>
+        public const float WindSpreadEvery = 5f;
+        public const float WindSpreadRange = 4f;
+
+        /// <summary>이번 틱에 바람이 바뀌었다.</summary>
+        public bool JustWindShift;
+
+        /// <summary>이번 틱에 재 박쥐 무리가 왔다.</summary>
+        public bool JustBats;
         public int GemsCollected;
         public int ShotsFired;
         public float PlayerHurt;
@@ -336,6 +361,9 @@ namespace FireGame.Prototypes.Logic
         private int _reportsDone;
         private float _bossBurstClock;
         private int _wavesDone;
+        private float _nextWind;
+        private int _windIndex;
+        private float _nextBats = 20f;
 
         private readonly int[] _head = new int[Cells * Cells];
         private int[] _next = new int[MaxEnemies * 2];
@@ -492,6 +520,8 @@ namespace FireGame.Prototypes.Logic
                 case EnemyKind.Ember: e.MaxHp = 2f * scale; e.Speed = 2.4f; e.Radius = 0.35f; e.Touch = 3f; e.Xp = 1; break;
                 case EnemyKind.Blaze: e.MaxHp = 14f * scale; e.Speed = 1.5f; e.Radius = 0.6f; e.Touch = 10f; e.Xp = 5; break;
                 case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
+                case EnemyKind.Squirrel: e.MaxHp = 3f * scale; e.Speed = 3.6f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; e.Seeker = true; break;
+                case EnemyKind.Bat: e.MaxHp = 1.5f * scale; e.Speed = 3.2f; e.Radius = 0.3f; e.Touch = 4f; e.Xp = 1; break;
                 case EnemyKind.Boss: e.MaxHp = Stage.BossHp; e.Speed = 1.1f; e.Radius = 1.4f; e.Touch = 35f; e.Xp = 0; break;
             }
             e.Hp = e.MaxHp;
@@ -539,6 +569,8 @@ namespace FireGame.Prototypes.Logic
             JustBossArrived = false;
             JustRescued = false;
             JustWave = false;
+            JustWindShift = false;
+            JustBats = false;
             GemsCollected = 0;
             ShotsFired = 0;
             PlayerHurt = 0f;
@@ -587,6 +619,31 @@ namespace FireGame.Prototypes.Logic
                     var at = new Vec2(Player.X + (float)(Math.Cos(a) * 11.5), Player.Y + (float)(Math.Sin(a) * 11.5));
                     Spawn(_wavesDone == 3 ? EnemyKind.Blaze : EnemyKind.Ember, ClampToArena(at));
                 }
+            }
+
+            if (Stage.BatFlockEvery > 0f && Time >= _nextBats)
+            {
+                // 재 박쥐 무리: 가장자리 한 곳에서 여섯 마리가 뭉쳐 날아온다.
+                _nextBats += Stage.BatFlockEvery;
+                JustBats = true;
+                Vec2 from = SpawnPoint(SpawnDistance);
+                for (int i = 0; i < 6 && Enemies.Count < MaxEnemies; i++)
+                {
+                    Enemy bat = Spawn(EnemyKind.Bat, ClampToArena(new Vec2(from.X + ((Rand() - 0.5f) * 2.5f), from.Y + ((Rand() - 0.5f) * 2.5f))));
+                    bat.Phase = i * 1.1f;
+                }
+            }
+
+            if (Stage.Wind && Time >= _nextWind)
+            {
+                // 바람: 판 시작에 한 번 정하고 60초마다 여덟 방향 중 하나로 바뀐다.
+                bool first = _nextWind <= 0f;
+                _nextWind += WindShiftEvery;
+                // 바뀔 때는 늘 다른 방향으로(여덟 방향 중 지금 것 빼고).
+                _windIndex = first ? _rng.Next(8) : (_windIndex + 1 + _rng.Next(7)) % 8;
+                double a = _windIndex * Math.PI / 4;
+                Wind = new Vec2((float)Math.Cos(a), (float)Math.Sin(a));
+                if (!first) JustWindShift = true;
             }
 
             while (Reports && _reportsDone < Stage.ReportTimes.Length && Time >= Stage.ReportTimes[_reportsDone])
@@ -642,6 +699,7 @@ namespace FireGame.Prototypes.Logic
             float dart = Time < 60f ? 0f : Stage.DartShare;
             if (r < blaze) return EnemyKind.Blaze;
             if (r < blaze + dart) return EnemyKind.Dart;
+            if (r < blaze + dart + Stage.SquirrelShare) return EnemyKind.Squirrel;
             return EnemyKind.Ember;
         }
 
@@ -711,7 +769,19 @@ namespace FireGame.Prototypes.Logic
                 if (e.Slowed > 0f) e.Slowed -= Dt;
 
                 Vec2 chase = Player;
-                if (e.Seeker)
+                if (e.Kind == EnemyKind.Squirrel)
+                {
+                    // 불다람쥐: 가까운 안 탄 나무로 달려간다. 나무가 없으면 소방관을 쫓는다(사그라들지 않는다).
+                    e.GoalClock -= Dt;
+                    if (e.Goal != null && !e.Goal.Flammable) e.Goal = null;
+                    if (e.Goal == null && e.GoalClock <= 0f)
+                    {
+                        e.GoalClock = 0.5f;
+                        e.Goal = NearestTree(e.Pos, 20f);
+                    }
+                    if (e.Goal != null) chase = e.Goal.Pos;
+                }
+                else if (e.Seeker)
                 {
                     // 건물에서 나온 불씨는 가까운 탈 것을 노린다. 없으면 소방관을 쫓는다.
                     e.GoalClock -= Dt;
@@ -739,6 +809,16 @@ namespace FireGame.Prototypes.Logic
                 float speed = e.Speed * (e.Slowed > 0f ? 0.5f : 1f);
                 float vx = d > 0.01f ? dx / d * speed : 0f;
                 float vy = d > 0.01f ? dy / d * speed : 0f;
+                if (e.Kind == EnemyKind.Squirrel || e.Kind == EnemyKind.Bat)
+                {
+                    // 다람쥐는 지그재그로, 박쥐는 크게 출렁이며 온다(진행 방향에 수직으로 흔든다).
+                    e.Phase += Dt * (e.Kind == EnemyKind.Squirrel ? 9f : 5f);
+                    float sway = (float)Math.Sin(e.Phase) * (e.Kind == EnemyKind.Squirrel ? 0.9f : 1.3f);
+                    float px = -vy;
+                    float py = vx;
+                    vx += px * sway;
+                    vy += py * sway;
+                }
 
                 // 서로 겹치지 않게 살짝 민다(떼가 덩어리가 아니라 무리로 보이게).
                 float sx = 0f;
@@ -1301,6 +1381,45 @@ namespace FireGame.Prototypes.Logic
             }
         }
 
+        /// <summary>s에서 바람이 부는 쪽(내적 &gt; 0.3) 4칸 안의 가장 가까운 탈 것.</summary>
+        private Structure Downwind(Structure s)
+        {
+            Structure best = null;
+            float bestD = WindSpreadRange;
+            foreach (Structure t in Structures)
+            {
+                if (t == s || !t.Flammable) continue;
+                float dx = t.Pos.X - s.Pos.X;
+                float dy = t.Pos.Y - s.Pos.Y;
+                float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
+                if (d < 0.01f || ((dx * Wind.X) + (dy * Wind.Y)) / d <= 0.3f) continue;
+                float gap = t.DistanceTo(s.Pos) - Math.Max(s.Half.X, s.Half.Y);
+                if (gap < bestD)
+                {
+                    bestD = gap;
+                    best = t;
+                }
+            }
+            return best;
+        }
+
+        private Structure NearestTree(Vec2 p, float range)
+        {
+            Structure best = null;
+            float bestD = range;
+            foreach (Structure s in Structures)
+            {
+                if (s.Kind != StructureKind.Tree || !s.Flammable) continue;
+                float d = s.DistanceTo(p);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = s;
+                }
+            }
+            return best;
+        }
+
         private Structure NearestFlammable(Vec2 p, float range)
         {
             Structure best = null;
@@ -1359,6 +1478,17 @@ namespace FireGame.Prototypes.Logic
                 {
                     Fall(s);
                     continue;
+                }
+
+                if (Stage.Wind && s.Kind == StructureKind.Tree && s.Fire >= SpreadAt)
+                {
+                    s.WindClock -= Dt;
+                    if (s.WindClock <= 0f)
+                    {
+                        s.WindClock = WindSpreadEvery;
+                        Structure next = Downwind(s);
+                        if (next != null) Ignite(next, 0.3f);
+                    }
                 }
 
                 // 막 붙은 작은 불은 아직 번지지 않는다(0.4까지 약 5초) — 일찍 잡으면 막을 수 있다.
@@ -1422,7 +1552,8 @@ namespace FireGame.Prototypes.Logic
             Vec2 at = EdgePoint(s, 0.5f);
             Enemy e = Spawn(EnemyKind.Ember, at);
             Vec2 k = Knockback(s.Pos, at, kick);
-            e.Knock = k;
+            // 산불: 튀는 불씨가 바람에 밀린다.
+            e.Knock = new Vec2(k.X + (Wind.X * kick * 0.6f), k.Y + (Wind.Y * kick * 0.6f));
             e.GoalClock = 0.4f;
             e.Seeker = true;
         }

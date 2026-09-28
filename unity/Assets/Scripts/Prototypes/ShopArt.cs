@@ -53,7 +53,7 @@ namespace FireGame.Prototypes
 
         private static void Paint(Canvas c, string name, Look look)
         {
-            if (name == "물류창고")
+            if (name == "물류창고" || name == "제재소")
             {
                 Depot(c, look);
                 return;
@@ -192,6 +192,28 @@ namespace FireGame.Prototypes
                     // 문 옆 빨강·흰·파랑 사선 이발소 기둥.
                     BarberPole(c, (c.W / 2) + 26, 3, sign0 - 3);
                     BarberPole(c, (c.W / 2) - 26, 3, sign0 - 3);
+                    break;
+
+                // 산불 숲: 통나무 벽에 기와 지붕. 지붕 색으로 서로 구분한다.
+                case "산장":
+                case "캠핑 매점":
+                case "관리사무소":
+                case "통나무 카페":
+                case "전망대":
+                case "목공소":
+                    Color32 roof = name == "산장" ? Rgb(0.55f, 0.2f, 0.15f) : name == "캠핑 매점" ? Rgb(0.2f, 0.45f, 0.3f) : name == "관리사무소" ? Rgb(0.25f, 0.35f, 0.55f)
+                        : name == "통나무 카페" ? Rgb(0.6f, 0.4f, 0.2f) : name == "전망대" ? Rgb(0.35f, 0.35f, 0.4f) : Rgb(0.45f, 0.3f, 0.2f);
+                    TileRoof(c, front, roof);
+                    for (int y = 0; y < front; y++)
+                    {
+                        // 통나무: 6픽셀마다 한 줄, 줄 사이는 어두운 틈.
+                        float k = (y % 6) == 0 ? 0.6f : (y % 6) == 1 ? 0.8f : 1f;
+                        for (int x = 0; x < c.W; x++) c.Set(x, y, Scale(Rgb(0.58f, 0.4f, 0.24f), k));
+                    }
+                    c.Fill(0, sign0, c.W, front, Rgb(0.3f, 0.2f, 0.12f));
+                    windows.Add(Glass(c, 8, 8, (c.W / 2) - 24, sign0 - 5, false));
+                    windows.Add(Glass(c, (c.W / 2) + 24, 8, c.W - 8, sign0 - 5, false));
+                    WoodDoor(c, c.W / 2, 30, sign0 - 4, Rgb(0.35f, 0.22f, 0.12f));
                     break;
 
                 default:

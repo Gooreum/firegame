@@ -105,6 +105,12 @@ namespace FireGame.Prototypes
         private Pool _embers;
         private Pool _blazes;
         private Pool _darts;
+        private Pool _bats;
+        private static Sprite _batSprite;
+        private readonly List<GameObject> _ground = new List<GameObject>();
+        private int _groundStage;
+        private Image _windArrow;
+        private Text _windLabel;
         private Pool _bossBody;
         private Pool _bossTongues;
         private Pool _gems;
@@ -290,7 +296,6 @@ namespace FireGame.Prototypes
             _hud = UiKit.Node(canvas.transform, "SurvivorHud");
             UiKit.Stretch(_hud);
 
-            BuildGround();
             BuildPools();
             BuildHud();
             // 조이스틱은 HUD 맨 위에(카드·결과창은 따로 켜고 끈다).
@@ -309,6 +314,12 @@ namespace FireGame.Prototypes
             _seed = seed;
             _sim = new SurvivorSim(seed, _stage);
             if (_maxGear) _sim.GiveMaxGear();
+            if (_groundStage != _sim.Stage.Number)
+            {
+                // 스테이지가 바뀌면 바닥(마을 돌길·숲 흙길)을 새로 깐다.
+                BuildGround();
+                _groundStage = _sim.Stage.Number;
+            }
             _accumulator = 0f;
             _trauma = 0f;
             _flash = 0f;
@@ -752,6 +763,12 @@ namespace FireGame.Prototypes
 
             ReactTown();
 
+            if (_sim.JustWindShift) ShowAlert("바람이 " + WindName(_sim.Wind) + "쪽으로!", new Color(0.8f, 0.9f, 1f));
+            if (_sim.JustBats)
+            {
+                ShowAlert("재 박쥐 떼가 날아온다!", new Color(1f, 0.55f, 0.4f));
+                GameAudio.Play(Cue.SecondIgnition);
+            }
             if (_sim.JustWave)
             {
                 ShowAlert("불길이 사방에서 몰려온다!", new Color(1f, 0.6f, 0.3f));
@@ -1054,6 +1071,35 @@ namespace FireGame.Prototypes
                         _blazes.Put(at + new Vector3(0f, 0.25f, 0f), 3.1f * flicker * punch, 0f, hit ? water : new Color(0.95f, 0.28f, 0.06f));
                         if (!hit) _enemyCore.Put(at + new Vector3(0f, 0.12f, 0f), 1.8f * flicker * life, 0f, new Color(1f, 0.7f, 0.25f, 0.9f));
                         break;
+                    case EnemyKind.Squirrel:
+                    {
+                        // 불다람쥐: 작은 불 몸통 + 뒤로 길게 흔들리는 불꼬리.
+                        Vec2 goal = e.Goal != null ? e.Goal.Pos : _sim.Player;
+                        float head = Mathf.Atan2(goal.Y - e.Pos.Y, goal.X - e.Pos.X);
+                        var back = new Vector3(-Mathf.Cos(head), -Mathf.Sin(head), 0f);
+                        var side = new Vector3(-back.y, back.x, 0f);
+                        float wag = Mathf.Sin((_time * 14f) + i) * 0.25f;
+                        _enemyGlow.Put(at, 1.5f * life, 0f, new Color(1f, 0.45f, 0.1f, 0.35f));
+                        _darts.Put(at + (back * 0.55f) + (side * wag), 1.2f * flicker * punch, (Mathf.Atan2(back.y + (side.y * wag), back.x + (side.x * wag)) * Mathf.Rad2Deg) - 90f,
+                            hit ? water : new Color(1f, 0.55f, 0.15f));
+                        _embers.Put(at + new Vector3(0f, 0.05f, 0f), 1.15f * flicker * punch, 0f, hit ? water : new Color(0.95f, 0.4f, 0.1f));
+                        if (!hit) _enemyCore.Put(at + (new Vector3(Mathf.Cos(head), Mathf.Sin(head), 0f) * 0.15f), 0.6f * life, 0f, new Color(1f, 0.85f, 0.4f, 0.9f));
+                        break;
+                    }
+                    case EnemyKind.Bat:
+                    {
+                        // 재 박쥐: 검붉은 날개가 퍼덕이고 재 가루가 떨어진다.
+                        float head = Mathf.Atan2(_sim.Player.Y - e.Pos.Y, _sim.Player.X - e.Pos.X) * Mathf.Rad2Deg;
+                        float flap = 0.35f + (0.65f * Mathf.Abs(Mathf.Sin((_time * 16f) + e.Phase)));
+                        _enemyGlow.Put(at, 1.3f, 0f, new Color(1f, 0.3f, 0.05f, 0.3f));
+                        _bats.Put(at, 1.3f * punch, head, hit ? water : new Color(0.55f, 0.2f, 0.15f), null, flap);
+                        if (!hit) _enemyCore.Put(at, 0.45f, 0f, new Color(1f, 0.6f, 0.2f, 0.9f));
+                        if (Random.value < 0.04f)
+                        {
+                            EmitFalling("Effects/smoke_01", at, new Vector3(Random.Range(-0.5f, 0.5f), 0.5f, 0f), 0.6f, 0.25f, new Color(0.25f, 0.22f, 0.22f, 0.7f));
+                        }
+                        break;
+                    }
                     case EnemyKind.Dart:
                         float toward = Mathf.Atan2(_sim.Player.Y - e.Pos.Y, _sim.Player.X - e.Pos.X) * Mathf.Rad2Deg;
                         _enemyGlow.Put(at, 1.5f, 0f, new Color(1f, 0.8f, 0.2f, 0.45f));
@@ -1063,9 +1109,29 @@ namespace FireGame.Prototypes
             }
         }
 
+        /// <summary>바람 방향 이름(여덟 방향, 화면 위가 북).</summary>
+        private static string WindName(Vec2 wind)
+        {
+            string[] names = { "동", "북동", "북", "북서", "서", "남서", "남", "남동" };
+            int k = Mathf.RoundToInt(Mathf.Atan2(wind.Y, wind.X) / (Mathf.PI / 4f));
+            return names[((k % 8) + 8) % 8];
+        }
+
         /// <summary>특수 장비 모습: 달리는 소방차, 먹구름과 빗줄기, 붉은 방염제 띠와 지나가는 비행기.</summary>
         private void DrawSpecials(float dt)
         {
+            if ((_sim.Wind.X != 0f || _sim.Wind.Y != 0f) && _sim.Outcome == SOutcome.Playing && Random.value < 0.6f)
+            {
+                // 산불 숲: 화면 곳곳에서 재와 불티가 바람 쪽으로 날린다.
+                float halfH = _camera.orthographicSize;
+                float halfW = halfH * _camera.aspect;
+                var at = new Vector3(_cameraAt.x + Random.Range(-halfW, halfW), _cameraAt.y + Random.Range(-halfH, halfH), 0f);
+                var wind = new Vector3(_sim.Wind.X, _sim.Wind.Y, 0f) * Random.Range(3f, 5f);
+                bool spark = Random.value < 0.3f;
+                Emit(spark ? Sparks[Random.Range(0, Sparks.Length)] : "Effects/smoke_01", at, wind + new Vector3(0f, 0.3f, 0f), 0f, Random.Range(1f, 1.6f), spark ? 0.2f : 0.35f, 0.05f,
+                    spark ? new Color(1f, 0.6f, 0.2f, 0.8f) : new Color(0.3f, 0.28f, 0.27f, 0.45f), new Color(0.3f, 0.28f, 0.27f, 0f), Random.Range(-200f, 200f), spark);
+            }
+
             if (_sim.Truck.HasValue)
             {
                 Vector3 at = W(_sim.Truck.Value);
@@ -1834,6 +1900,37 @@ namespace FireGame.Prototypes
             return _toolboxSprite;
         }
 
+        /// <summary>재 박쥐: 머리가 +x, 날개가 위아래(y)로 펼쳐진다. 세로로 눌러 퍼덕임을 낸다.</summary>
+        private static Sprite BatSprite()
+        {
+            if (_batSprite != null) return _batSprite;
+            const int n = 64;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            var wing = new Color32(255, 255, 255, 255);
+            var body = new Color32(200, 200, 200, 255);
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = ((x + 0.5f) / n) - 0.5f;
+                    float v = ((y + 0.5f) / n) - 0.5f;
+                    Color32 c = new Color32(0, 0, 0, 0);
+                    // 날개: 몸에서 위아래로 뻗고 끝이 뒤로 휜 삼각형, 가장자리는 톱니.
+                    float span = Mathf.Abs(v);
+                    float lead = 0.12f - (span * 0.25f);
+                    float trail = -0.1f - (span * 0.35f) + (0.05f * Mathf.Abs(Mathf.Sin(span * 30f)));
+                    if (span < 0.46f && u < lead && u > trail) c = wing;
+                    if (((u * u) / (0.14f * 0.14f)) + ((v * v) / (0.08f * 0.08f)) <= 1f) c = body;
+                    pixels[(y * n) + x] = c;
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _batSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _batSprite;
+        }
+
         /// <summary>소방 항공기(위에서 본 모습): 흰 동체, 빨간 날개와 꼬리.</summary>
         private static Sprite PlaneSprite()
         {
@@ -2319,22 +2416,57 @@ namespace FireGame.Prototypes
 
         private void BuildGround()
         {
+            foreach (GameObject g in _ground) UiKit.Discard(g);
+            _ground.Clear();
+            bool forest = _sim.Stage.Number == 2;
             int size = (int)SurvivorSim.ArenaSize;
             float mid = size / 2f;
             for (int y = 0; y < size; y += 2)
             {
                 for (int x = 0; x < size; x += 2)
                 {
-                    // 가운데 광장과 가게 앞 길은 돌바닥, 나머지는 풀밭.
-                    bool plaza = Mathf.Abs(x + 1f - mid) < 8f && Mathf.Abs(y + 1f - mid) < 8f;
-                    bool street = Mathf.Abs(y + 1f - 25f) < 1.5f || Mathf.Abs(y + 1f - 37f) < 1.5f || Mathf.Abs(x + 1f - 23f) < 1.5f || Mathf.Abs(x + 1f - 37f) < 1.5f;
-                    bool alt = ((x * 7) + (y * 13)) % 5 == 0;
-                    string art = plaza || street ? (alt ? "TopDown/floor_stone_b" : "TopDown/floor_stone_a") : (alt ? "TopDown/grass_b" : "TopDown/grass_a");
-                    SpriteRenderer r = NewSprite(_root, "Ground", Art.Get(art), 0);
+                    string art;
+                    Color color;
+                    if (forest)
+                    {
+                        // 숲: 짙은 풀밭에 가운데 십자 흙길.
+                        bool path = Mathf.Abs(x + 1f - mid) < SurvivorForest.PathHalf + 0.5f || Mathf.Abs(y + 1f - mid) < SurvivorForest.PathHalf + 0.5f;
+                        bool alt = ((x * 7) + (y * 13)) % 5 == 0;
+                        art = path ? (alt ? "TopDown/dirt_b" : "TopDown/dirt") : (alt ? "TopDown/grass_b" : "TopDown/grass_a");
+                        float shade = (path ? 0.55f : 0.3f) + (0.05f * (((x * 3) + (y * 5)) % 4) / 3f);
+                        color = path ? new Color(shade * 1.05f, shade * 0.85f, shade * 0.65f) : new Color(shade * 0.85f, shade * 1.05f, shade * 0.7f);
+                    }
+                    else
+                    {
+                        // 가운데 광장과 가게 앞 길은 돌바닥, 나머지는 풀밭.
+                        bool plaza = Mathf.Abs(x + 1f - mid) < 8f && Mathf.Abs(y + 1f - mid) < 8f;
+                        bool street = Mathf.Abs(y + 1f - 25f) < 1.5f || Mathf.Abs(y + 1f - 37f) < 1.5f || Mathf.Abs(x + 1f - 23f) < 1.5f || Mathf.Abs(x + 1f - 37f) < 1.5f;
+                        bool alt = ((x * 7) + (y * 13)) % 5 == 0;
+                        art = plaza || street ? (alt ? "TopDown/floor_stone_b" : "TopDown/floor_stone_a") : (alt ? "TopDown/grass_b" : "TopDown/grass_a");
+                        float shade = (plaza || street ? 0.42f : 0.36f) + (0.05f * (((x * 3) + (y * 5)) % 4) / 3f);
+                        color = plaza || street ? new Color(shade, shade, shade * 1.05f) : new Color(shade * 1.1f, shade, shade * 0.8f);
+                    }
+                    SpriteRenderer r = GroundSprite("Ground", art, 0);
                     r.transform.localPosition = new Vector3(x + 1f, y + 1f, 0.1f);
                     r.transform.localScale = Vector3.one * Art.FitWidth(r.sprite, 2f);
-                    float shade = (plaza || street ? 0.42f : 0.36f) + (0.05f * (((x * 3) + (y * 5)) % 4) / 3f);
-                    r.color = plaza || street ? new Color(shade, shade, shade * 1.05f) : new Color(shade * 1.1f, shade, shade * 0.8f);
+                    r.color = color;
+                }
+            }
+
+            if (forest)
+            {
+                // 덤불과 바위(판정 없음): 길과 구조물을 피해 흩어 둔다.
+                for (int i = 0; i < 70; i++)
+                {
+                    var at = new Vector3(1f + (Hash01(i * 3) * (size - 2f)), 1f + (Hash01((i * 3) + 1) * (size - 2f)), 0.08f);
+                    var p = new Vec2(at.x, at.y);
+                    if (Mathf.Abs(at.x - mid) < SurvivorForest.PathHalf + 1f || Mathf.Abs(at.y - mid) < SurvivorForest.PathHalf + 1f) continue;
+                    if (_sim.Structures.Exists(st => st.Within(p, 0.9f))) continue;
+                    bool rock = Hash01((i * 3) + 2) < 0.3f;
+                    SpriteRenderer r = GroundSprite("Decor", rock ? "Map/rock" : "Map/bush", 1);
+                    r.transform.localPosition = at;
+                    r.transform.localScale = Vector3.one * Art.FitWidth(r.sprite, rock ? 0.8f : 1.2f);
+                    r.color = rock ? new Color(0.6f, 0.6f, 0.62f) : new Color(0.55f, 0.75f, 0.5f);
                 }
             }
 
@@ -2347,10 +2479,18 @@ namespace FireGame.Prototypes
             }
 
             // 출동해 온 소방차(장식, 판정 없음).
-            SpriteRenderer truck = NewSprite(_root, "FireTruck", Art.Get("Vehicles/firetruck"), 2);
+            SpriteRenderer truck = GroundSprite("FireTruck", "Vehicles/firetruck", 2);
             truck.transform.localPosition = new Vector3(mid - 3.5f, mid - 2.5f, 0.05f);
             truck.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
             truck.transform.localScale = Vector3.one * Art.FitWidth(truck.sprite, 1.3f);
+        }
+
+        /// <summary>바닥·벽·장식 스프라이트. 스테이지가 바뀌면 한꺼번에 지운다.</summary>
+        private SpriteRenderer GroundSprite(string name, string art, int order)
+        {
+            SpriteRenderer r = NewSprite(_root, name, Art.Get(art), order);
+            _ground.Add(r.gameObject);
+            return r;
         }
 
         /// <summary>가게·창고 이름표. 판마다 동네를 새로 깔므로 다시 만든다.</summary>
@@ -2430,7 +2570,9 @@ namespace FireGame.Prototypes
                 {
                     case StructureKind.Tree:
                         _shadows.Put(at + new Vector3(0.3f, -0.4f, 0f), 2f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.6f);
-                        _props.Put(at, 1.8f, 0f, tint, Art.Get("Props/tree_large"));
+                        // 숲은 소나무·둥근 나무를 섞어 심는다.
+                        string treeArt = _sim.Stage.Number == 2 ? (i % 3 == 0 ? "Map/tree_pine" : "Map/tree_round") : "Props/tree_large";
+                        _props.Put(at, 1.8f, 0f, tint, Art.Get(treeArt));
                         break;
                     case StructureKind.Car:
                         _shadows.Put(at + new Vector3(0.15f, -0.3f, 0f), 2.3f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.5f);
@@ -2594,7 +2736,7 @@ namespace FireGame.Prototypes
 
         private void Wall(int x, int y)
         {
-            SpriteRenderer r = NewSprite(_root, "Wall", Art.Get(((x + y) & 1) == 0 ? "TopDown/brick_a" : "TopDown/brick_b"), 2);
+            SpriteRenderer r = GroundSprite("Wall", ((x + y) & 1) == 0 ? "TopDown/brick_a" : "TopDown/brick_b", 2);
             r.transform.localPosition = new Vector3(x + 0.5f, y + 0.5f, 0.05f);
             r.transform.localScale = Vector3.one * Art.FitWidth(r.sprite, 1f);
             r.color = new Color(0.32f, 0.26f, 0.25f);
@@ -2644,6 +2786,8 @@ namespace FireGame.Prototypes
             _embers = AddPool("Ember", "Effects/fire_01", 9);
             _blazes = AddPool("Blaze", "Effects/fire_02", 9);
             _darts = AddPool("Dart", "Effects/flame_05", 9, true);
+            _bats = new Pool(_world, "Bat", BatSprite(), 9, null);
+            _pools.Add(_bats);
             _bossBody = AddPool("Boss", "Effects/fire_02", 9);
             _enemyCore = AddPool("EnemyCore", "Effects/fire_01", 10, true);
             _bossTongues = AddPool("BossTongue", "Effects/flame_05", 10, true);
@@ -2957,6 +3101,13 @@ namespace FireGame.Prototypes
             _hpFill.rectTransform.offsetMin = new Vector2(3f, 3f);
             _hpFill.rectTransform.offsetMax = new Vector2(-3f, -3f);
             _hpText = UiKit.OutlinedLabel(hpBack.transform, "HpText", "", 24, Color.white, TextAnchor.MiddleCenter);
+
+            // 산불 숲: 체력 아래 바람 화살표.
+            _windLabel = UiKit.OutlinedLabel(_hud, "WindLabel", "바람", 28, new Color(0.85f, 0.92f, 1f), TextAnchor.MiddleLeft);
+            UiKit.Place(_windLabel.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -168f), new Vector2(120f, 50f));
+            _windArrow = UiKit.Image(_hud, "WindArrow", ArrowSprite(), new Color(0.85f, 0.92f, 1f));
+            _windArrow.raycastTarget = false;
+            UiKit.Place(_windArrow.rectTransform, new Vector2(0f, 1f), new Vector2(160f, -168f), new Vector2(56f, 56f));
             UiKit.Stretch(_hpText.rectTransform);
 
             _build = UiKit.OutlinedLabel(_hud, "Build", "", 26, new Color(0.85f, 0.92f, 1f), TextAnchor.UpperRight);
@@ -3020,6 +3171,15 @@ namespace FireGame.Prototypes
 
         private void RefreshHud(float dt)
         {
+            bool windy = _sim.Wind.X != 0f || _sim.Wind.Y != 0f;
+            _windLabel.gameObject.SetActive(windy);
+            _windArrow.gameObject.SetActive(windy);
+            if (windy)
+            {
+                _windArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, Mathf.Atan2(_sim.Wind.Y, _sim.Wind.X) * Mathf.Rad2Deg);
+                _windArrow.rectTransform.localScale = Vector3.one * (1f + (0.08f * Mathf.Sin(_time * 5f)));
+            }
+
             int seconds = Mathf.FloorToInt(_sim.Time);
             _timer.text = (seconds / 60).ToString("00") + ":" + (seconds % 60).ToString("00");
             _timer.color = _sim.Time >= SurvivorSim.BossAt - 10f && _sim.Boss == null && Mathf.Sin(_time * 12f) > 0f ? new Color(1f, 0.4f, 0.3f) : Color.white;

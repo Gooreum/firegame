@@ -100,6 +100,7 @@ namespace FireGame.Prototypes.Tests
             for (int stage = 1; stage <= SurvivorStages.Count; stage++)
             {
                 int won = 0;
+                int town = 0;
                 float time = 0f;
                 for (int seed = 1; seed <= 10; seed++)
                 {
@@ -109,10 +110,11 @@ namespace FireGame.Prototypes.Tests
                     while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) bot.Play();
                     if (sim.Outcome == SOutcome.Won) won++;
                     else lost[stage]++;
+                    if (sim.LostTown) town++;
                     housesLost[stage] += sim.HousesLost;
                     time += sim.Time;
                 }
-                _out.WriteLine("스테이지 " + stage + " " + SurvivorStages.Get(stage).Name + ": 승 " + won + "/10, 평균 " + (int)(time / 10f) + "초, 잃은 건물 평균 " + (housesLost[stage] / 10f).ToString("0.0"));
+                _out.WriteLine("스테이지 " + stage + " " + SurvivorStages.Get(stage).Name + ": 승 " + won + "/10 (동네 잃음 " + town + ", 쓰러짐 " + (lost[stage] - town) + "), 평균 " + (int)(time / 10f) + "초, 잃은 건물 평균 " + (housesLost[stage] / 10f).ToString("0.0"));
             }
             Assert.True(lost[2] > lost[1] || housesLost[2] > housesLost[1], "2스테이지가 1스테이지보다 쉽다");
         }

@@ -38,6 +38,15 @@ namespace FireGame.Prototypes.Logic
         /// <summary>1분 뒤부터 가장자리 스폰에서 다트 비율.</summary>
         public float DartShare = 0.2f;
 
+        /// <summary>가장자리 스폰에서 불다람쥐 비율(나무를 노린다).</summary>
+        public float SquirrelShare;
+
+        /// <summary>이 간격마다 재 박쥐 무리가 가장자리에서 날아온다(0이면 안 온다).</summary>
+        public float BatFlockEvery;
+
+        /// <summary>산불: 바람이 불어 타는 나무가 바람 쪽 이웃에 불을 옮긴다.</summary>
+        public bool Wind;
+
         /// <summary>이 스테이지 레벨업에서 나오는 노란 특수 카드들.</summary>
         public UpgradeId[] Specials;
     }
@@ -63,12 +72,17 @@ namespace FireGame.Prototypes.Logic
         {
             Number = 2,
             Name = "산불 숲",
-            Map = SurvivorTown.Build,
+            Map = SurvivorForest.Build,
             ReportTimes = SurvivorSim.ReportTimes,
             EnemyHp = 1.3f,
             SpawnRate = 1.2f,
             FireGrowth = SurvivorSim.FireGrowth * 1.1f,
             BossHp = 1100f * 1.4f,
+            BlazeMax = 0.25f,
+            DartShare = 0f,
+            SquirrelShare = 0.2f,
+            BatFlockEvery = 20f,
+            Wind = true,
             Specials = new[] { UpgradeId.Heli, UpgradeId.Curtain, UpgradeId.Partner, UpgradeId.Rain, UpgradeId.Retardant },
         };
 

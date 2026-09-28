@@ -84,6 +84,8 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c15b_toolbox_repair", view => view.Sim.Repaired.Count > 0 || view.Sim.JustPickedToolbox, 12);
             // 마을 전용 노란 카드(풀장비): 소방차가 줄을 가로지르고 스프링클러가 터진다.
             failures += SurvivorShot(dir, "c16_town_specials", view => view.Sim.Truck.HasValue && System.Math.Abs(view.Sim.Truck.Value.X - view.Sim.Player.X) < 5f, 3, true);
+            // 2스테이지 산불 숲: 흙길·소나무, 불다람쥐, 막 날아온 재 박쥐 떼, 바람 화살표.
+            failures += SurvivorShot(dir, "c17_forest", view => view.Sim.Time >= 40.5f && view.Sim.Enemies.Exists(e => (e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Squirrel) && e.Pos.DistanceTo(view.Sim.Player) < 6f), 10, false, null, 2);
             // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
             failures += SurvivorShot(dir, "c19_forest_specials", view => view.Sim.RainAt.HasValue && view.Sim.Retardants.Count > 0, 45, true, null, 2);
 
