@@ -82,6 +82,10 @@ namespace FireGame.Prototypes.EditorTools
             // 공구상자를 주워 건물을 고치는 순간(초록 빛줄기·"수리!").
             failures += SurvivorShot(dir, "c15_toolbox", view => view.Sim.Toolboxes.Exists(b => b.Pos.DistanceTo(view.Sim.Player) < 5f), 5);
             failures += SurvivorShot(dir, "c15b_toolbox_repair", view => view.Sim.Repaired.Count > 0 || view.Sim.JustPickedToolbox, 12);
+            // 마을 전용 노란 카드(풀장비): 소방차가 줄을 가로지르고 스프링클러가 터진다.
+            failures += SurvivorShot(dir, "c16_town_specials", view => view.Sim.Truck.HasValue && System.Math.Abs(view.Sim.Truck.Value.X - view.Sim.Player.X) < 5f, 3, true);
+            // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
+            failures += SurvivorShot(dir, "c19_forest_specials", view => view.Sim.RainAt.HasValue && view.Sim.Retardants.Count > 0, 45, true, null, 2);
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
@@ -156,7 +160,7 @@ namespace FireGame.Prototypes.EditorTools
         }
 
         /// <param name="frame">찍기 직전에 카메라를 옮긴다(동네 전체 보기 등).</param>
-        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<Camera> frame = null)
+        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<Camera> frame = null, int stage = 1)
         {
             try
             {
@@ -166,7 +170,7 @@ namespace FireGame.Prototypes.EditorTools
                 camera.aspect = (float)Width / Height;
                 Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
 
-                var view = new SurvivorView(root.transform, camera, canvas, maxGear);
+                var view = new SurvivorView(root.transform, camera, canvas, maxGear, stage);
                 var bot = new SurvivorBot(view.Sim);
                 int guard = 0;
                 while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400)

@@ -11,7 +11,7 @@ namespace FireGame.Prototypes.Logic
     {
         private static readonly UpgradeId[] Priority =
         {
-            UpgradeId.Cannon, UpgradeId.Heli, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Hose, UpgradeId.Tank, UpgradeId.Drone, UpgradeId.WaterBomb,
+            UpgradeId.Cannon, UpgradeId.Heli, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Sprinkler, UpgradeId.Rain, UpgradeId.Truck, UpgradeId.Retardant, UpgradeId.Hose, UpgradeId.Tank, UpgradeId.Drone, UpgradeId.WaterBomb,
             UpgradeId.Suit, UpgradeId.Foam, UpgradeId.Boots, UpgradeId.Radio, UpgradeId.Heal,
         };
 

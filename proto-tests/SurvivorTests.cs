@@ -354,8 +354,22 @@ namespace FireGame.Prototypes.Tests
             Assert.All(before, q => Assert.DoesNotContain(q, sim.BurningGround));
         }
 
-        /// <summary>봇이 보스까지 가는 시드(보스·성능 테스트용). 규칙이 난수 순서를 바꾸면 다시 고른다.</summary>
-        private const int BossSeed = 3;
+        /// <summary>
+        /// 봇이 보스까지 가는 첫 시드(보스·성능 테스트용). 규칙이 난수 순서를 바꿔도 테스트가 깨지지 않게 매번 찾는다.
+        /// </summary>
+        private static readonly int BossSeed = FindBossSeed();
+
+        private static int FindBossSeed()
+        {
+            for (int seed = 1; seed <= 20; seed++)
+            {
+                var sim = new SurvivorSim(seed);
+                var bot = new SurvivorBot(sim);
+                while (sim.Outcome == SOutcome.Playing && sim.Time < SurvivorSim.BossAt + 1f) bot.Play();
+                if (sim.Outcome == SOutcome.Playing) return seed;
+            }
+            return 1;
+        }
 
         // --- S2 TC-6 ---
         [Fact]
@@ -421,8 +435,9 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void AFullRun_IsCheapToSimulate()
         {
+            int seed = BossSeed;
             var watch = System.Diagnostics.Stopwatch.StartNew();
-            var sim = new SurvivorSim(BossSeed);
+            var sim = new SurvivorSim(seed);
             var bot = new SurvivorBot(sim);
             int guard = 0;
             while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) bot.Play();

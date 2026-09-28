@@ -108,6 +108,17 @@ namespace FireGame.Prototypes
         private Pool _bossBody;
         private Pool _bossTongues;
         private Pool _gems;
+        private Pool _truck;
+        private Pool _siren;
+        private Pool _cloud;
+        private Pool _rainShade;
+        private Pool _band;
+        private Pool _plane;
+        private static Sprite _planeSprite;
+        private bool _truckShown;
+        private float _planeAge = 99f;
+        private Vector3 _planeFrom;
+        private Vector3 _planeTo;
         private Pool _toolbox;
         private Pool _toolboxGlow;
         private int _toolboxesShown;
@@ -317,6 +328,8 @@ namespace FireGame.Prototypes
             _hurtClock = 0f;
             _comboShown = 0;
             _toolboxesShown = 0;
+            _planeAge = 99f;
+            _truckShown = false;
             _lastPlayer = new Vector3(_sim.Player.X, _sim.Player.Y, 0f);
             _stepClock = 0f;
             _regenClock = 0f;
@@ -612,6 +625,41 @@ namespace FireGame.Prototypes
                 _heliExitFrom = at + HeliLift;
                 _heliExitDir = (new Vector3(1.4f, -1f, 0f)).normalized;
                 _heliExitAge = 0f;
+            }
+            foreach (Structure st in _sim.Sprinkled)
+            {
+                // 스프링클러: 지붕에서 물 고리가 터지고 물방울이 사방으로 흩날린다.
+                Vector3 at = W(st.Pos) + new Vector3(0f, 0.4f, 0f);
+                Shockwave(at, new Color(0.6f, 0.9f, 1f, 0.95f), 6f, 0.45f);
+                Splash(at, 16, 1.4f);
+                Steam(at, 4, 1.4f);
+                for (int i = 0; i < 12; i++)
+                {
+                    float a = i * Mathf.PI * 2f / 12f;
+                    EmitFalling("Effects/water_drop", at, new Vector3(Mathf.Cos(a) * 3.5f, 4f + Mathf.Sin(a), 0f), 0.6f, 0.3f, new Color(0.75f, 0.95f, 1f, 1f));
+                }
+            }
+            if (_sim.Sprinkled.Count > 0) GameAudio.Play(Cue.SprayFoam);
+            if (_sim.JustRain)
+            {
+                // 먹구름이 오면 번개가 한 번 번쩍한다.
+                Flash(new Color(0.9f, 0.95f, 1f), 0.3f);
+                _trauma = Mathf.Min(1f, _trauma + 0.2f);
+                GameAudio.Play(Cue.Backfire);
+                if (_sim.RainAt.HasValue) SpawnText(W(_sim.RainAt.Value) + new Vector3(0f, 2.5f, 0f), "비구름!", new Color(0.7f, 0.85f, 1f), 1.4f);
+            }
+            if (_sim.JustRetardant && _sim.Retardants.Count > 0)
+            {
+                // 비행기가 띠를 따라 한 번 지나가며 뿌린다(띠보다 조금 더 길게 날아온다).
+                Band b = _sim.Retardants[_sim.Retardants.Count - 1];
+                Vector3 a = W(b.A);
+                Vector3 c = W(b.B);
+                Vector3 dir = (c - a).normalized;
+                _planeFrom = a - (dir * 10f);
+                _planeTo = c + (dir * 10f);
+                _planeAge = 0f;
+                ShowAlert("방염제 살포!", new Color(1f, 0.45f, 0.45f));
+                GameAudio.Play(Cue.SprayFoam);
             }
             if (_sim.JustCurtain)
             {
@@ -933,6 +981,7 @@ namespace FireGame.Prototypes
             DrawShots();
             DrawPlayer();
             DrawGear(dt);
+            DrawSpecials(dt);
             DrawEdgeArrows();
             foreach (Pool p in _pools) p.End();
             foreach (RibbonPool r in _ribbons) r.End();
@@ -1010,6 +1059,87 @@ namespace FireGame.Prototypes
                         _enemyGlow.Put(at, 1.5f, 0f, new Color(1f, 0.8f, 0.2f, 0.45f));
                         _darts.Put(at, 0.9f * flicker * punch, toward + 90f, hit ? water : new Color(1f, 0.9f, 0.35f));
                         break;
+                }
+            }
+        }
+
+        /// <summary>특수 장비 모습: 달리는 소방차, 먹구름과 빗줄기, 붉은 방염제 띠와 지나가는 비행기.</summary>
+        private void DrawSpecials(float dt)
+        {
+            if (_sim.Truck.HasValue)
+            {
+                Vector3 at = W(_sim.Truck.Value);
+                float dir = _sim.TruckDir;
+                if (!_truckShown) GameAudio.Play(Cue.Critical);
+                _shadows.Put(at + new Vector3(0f, -0.45f, 0f), 5f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.4f);
+                _truck.Put(at, 2.3f, dir > 0f ? -90f : 90f, new Color(1f, 0.55f, 0.5f));
+                // 사이렌: 지붕 앞뒤가 빨강·파랑으로 번갈아 번쩍인다.
+                bool flip = Mathf.Repeat(_time * 6f, 1f) < 0.5f;
+                _siren.Put(at + new Vector3(dir * 0.7f, 0.15f, 0f), 2.2f, 0f, flip ? new Color(1f, 0.15f, 0.1f, 0.95f) : new Color(0.2f, 0.4f, 1f, 0.95f));
+                _siren.Put(at + new Vector3(-dir * 0.1f, 0.15f, 0f), 1.7f, 0f, flip ? new Color(0.2f, 0.4f, 1f, 0.85f) : new Color(1f, 0.15f, 0.1f, 0.85f));
+                // 양옆 물대포: 위아래로 물줄기가 뻗는다.
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    for (int k = 0; k < 2; k++)
+                    {
+                        var v = new Vector3((-dir * Random.Range(0.5f, 2f)) + Random.Range(-1f, 1f), side * Random.Range(7f, 10f), 0f);
+                        Emit("Effects/water_drop", at + new Vector3(0f, side * 0.4f, 0f), v, 3f, 0.3f, 0.4f, 0.12f, new Color(0.75f, 0.95f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
+                    }
+                }
+                if (Random.value < 0.4f) Splash(at - new Vector3(dir * 1.4f, 0f, 0f), 1, 0.4f);
+            }
+            _truckShown = _sim.Truck.HasValue;
+
+            if (_sim.RainAt.HasValue)
+            {
+                Vector3 at = W(_sim.RainAt.Value);
+                float r = SurvivorSim.RainRadius;
+                float fade = Mathf.Clamp01(_sim.RainLeft / 0.4f) * Mathf.Clamp01((SurvivorSim.RainTime - _sim.RainLeft) / 0.3f);
+                _rainShade.Put(at, r * 2.6f, 0f, new Color(0.05f, 0.1f, 0.2f, 0.45f * fade));
+                // 먹구름: 연기 덩어리 여섯이 천천히 꿈틀거린다(위로 조금 떠 있다).
+                for (int k = 0; k < 6; k++)
+                {
+                    float a = (k * 1.05f) + (_time * 0.3f);
+                    Vector3 o = new Vector3(Mathf.Cos(a) * r * 0.45f, (Mathf.Sin(a) * r * 0.2f) + 3.2f, 0f);
+                    _cloud.Put(at + o, r * 1.1f, (k * 60f) + (_time * 8f), new Color(0.3f, 0.33f, 0.4f, 0.85f * fade));
+                }
+                // 빗줄기: 구름에서 비스듬히 떨어지는 짧은 선.
+                for (int k = 0; k < 6; k++)
+                {
+                    var p = at + new Vector3(Random.Range(-r, r), Random.Range(-r * 0.6f, r * 0.6f) + 3f, 0f);
+                    EmitSprite(BeamSprite(), p, new Vector3(-2f, -16f, 0f), 0f, 0.22f, 0.08f, 0.08f, new Color(0.75f, 0.88f, 1f, 0.8f), new Color(0.75f, 0.88f, 1f, 0f), 0f, true, 0f, 8f, 7f);
+                }
+                if (Random.value < 0.5f) Splash(at + new Vector3(Random.Range(-r, r) * 0.8f, Random.Range(-r, r) * 0.6f, 0f), 2, 0.3f);
+            }
+
+            foreach (Band b in _sim.Retardants)
+            {
+                Vector3 a = W(b.A);
+                Vector3 c = W(b.B);
+                float len = Vector3.Distance(a, c);
+                float deg = Mathf.Atan2(c.y - a.y, c.x - a.x) * Mathf.Rad2Deg;
+                float t = Mathf.Clamp01(b.Life / b.MaxLife);
+                // 비행기가 지나간 만큼만 띠가 칠해진다.
+                float laid = _planeAge < 1.2f && b == _sim.Retardants[_sim.Retardants.Count - 1] ? Mathf.Clamp01(((_planeAge / 1.2f) * (len + 20f) - 10f) / len) : 1f;
+                if (laid <= 0f) continue;
+                Vector3 start = a;
+                Vector3 end = Vector3.Lerp(a, c, laid);
+                _band.Put((start + end) * 0.5f, SurvivorSim.RetardantWidth, deg - 90f, new Color(0.9f, 0.25f, 0.3f, 0.35f * (0.3f + (0.7f * t))), null, len * laid / SurvivorSim.RetardantWidth);
+                _band.Put((start + end) * 0.5f, SurvivorSim.RetardantWidth * 0.6f, deg - 90f, new Color(1f, 0.4f, 0.45f, 0.25f * (0.3f + (0.7f * t))), null, len * laid / (SurvivorSim.RetardantWidth * 0.6f));
+            }
+            if (_planeAge < 1.2f)
+            {
+                _planeAge += dt;
+                float f = Mathf.Clamp01(_planeAge / 1.2f);
+                Vector3 at = Vector3.Lerp(_planeFrom, _planeTo, f);
+                Vector3 dir = (_planeTo - _planeFrom).normalized;
+                float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
+                _shadows.Put(at + new Vector3(0.8f, -1.2f, 0f), 3.2f, deg, new Color(0f, 0f, 0f, 0.3f), null, 0.6f);
+                _plane.Put(at + new Vector3(0f, 2.2f, 0f), 3.4f, deg, Color.white);
+                if (Random.value < 0.8f)
+                {
+                    Emit("Effects/glow", at + new Vector3(0f, 1.6f, 0f), new Vector3(Random.Range(-0.5f, 0.5f), -3f, 0f), 2f, 0.5f, 0.8f, 1.6f,
+                        new Color(1f, 0.35f, 0.4f, 0.7f), new Color(1f, 0.35f, 0.4f, 0f), 0f);
                 }
             }
         }
@@ -1702,6 +1832,37 @@ namespace FireGame.Prototypes
             texture.Apply();
             _toolboxSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
             return _toolboxSprite;
+        }
+
+        /// <summary>소방 항공기(위에서 본 모습): 흰 동체, 빨간 날개와 꼬리.</summary>
+        private static Sprite PlaneSprite()
+        {
+            if (_planeSprite != null) return _planeSprite;
+            const int n = 96;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            var red = new Color32(210, 45, 40, 255);
+            var white = new Color32(240, 240, 240, 255);
+            var glass = new Color32(120, 200, 245, 255);
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = ((x + 0.5f) / n) - 0.5f;
+                    float v = ((y + 0.5f) / n) - 0.5f;
+                    Color32 c = new Color32(0, 0, 0, 0);
+                    bool body = ((u * u) / (0.07f * 0.07f)) + ((v * v) / (0.46f * 0.46f)) <= 1f;
+                    bool wing = Mathf.Abs(v - 0.05f) < 0.07f - (Mathf.Abs(u) * 0.08f) && Mathf.Abs(u) < 0.47f;
+                    bool tail = Mathf.Abs(v + 0.38f) < 0.04f && Mathf.Abs(u) < 0.17f;
+                    if (wing || tail) c = red;
+                    if (body) c = v > 0.3f ? glass : white;
+                    pixels[(y * n) + x] = c;
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _planeSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _planeSprite;
         }
 
         private static Sprite HeliSprite()
@@ -2464,6 +2625,16 @@ namespace FireGame.Prototypes
             _gems = new Pool(_world, "Gem", Art.White, 6, null);
             _gemCores = new Pool(_world, "GemCore", Art.White, 7, null);
             _toolboxGlow = AddPool("ToolboxGlow", "Effects/glow", 7, true);
+            // 방염제 띠는 땅바닥(구슬 아래), 비구름 그림자도 땅, 소방차·먹구름·비행기는 건물 위.
+            _band = new Pool(_world, "Retardant", Art.White, 3, null);
+            _pools.Add(_band);
+            _rainShade = AddPool("RainShade", "Effects/glow", 3);
+            _truck = new Pool(_world, "Truck", Art.Get("Vehicles/firetruck"), 20, null);
+            _pools.Add(_truck);
+            _siren = AddPool("Siren", "Effects/glow", 21, true);
+            _cloud = AddPool("Cloud", "Effects/smoke_03", 25);
+            _plane = new Pool(_world, "Plane", PlaneSprite(), 26, null);
+            _pools.Add(_plane);
             _toolbox = new Pool(_world, "Toolbox", ToolboxSprite(), 8, null);
             _pools.Add(_toolbox);
             _pools.Add(_gems);

@@ -3,7 +3,7 @@ using FireGame.Core.Sim;
 
 namespace FireGame.Prototypes.Logic
 {
-    /// <summary>레벨업 카드. 무기 4 + 보조 4 + 진화 1 + 뽑을 게 없을 때의 회복.</summary>
+    /// <summary>레벨업 카드. 무기 4 + 보조 4 + 진화 1 + 노란 특수 7(스테이지별 풀) + 뽑을 게 없을 때의 회복.</summary>
     public enum UpgradeId
     {
         Hose,
@@ -18,6 +18,18 @@ namespace FireGame.Prototypes.Logic
         Heli,
         Curtain,
         Partner,
+
+        /// <summary>1스테이지 전용: 소방차가 소방관 줄을 가로지르며 양옆으로 물을 뿜는다.</summary>
+        Truck,
+
+        /// <summary>1스테이지 전용: 모든 건물 지붕 스프링클러가 타는 건물을 적신다.</summary>
+        Sprinkler,
+
+        /// <summary>2스테이지 전용: 불이 몰린 곳에 먹구름이 비를 뿌린다.</summary>
+        Rain,
+
+        /// <summary>2스테이지 전용: 비행기가 붉은 방염제 띠를 뿌려 그 안은 한동안 불이 안 붙는다.</summary>
+        Retardant,
         Heal,
     }
 
@@ -43,7 +55,8 @@ namespace FireGame.Prototypes.Logic
         /// <summary>노란 카드: 진화와 특수 장비. 레벨 1짜리이고 무기·보조 칸을 쓰지 않는다.</summary>
         public static bool IsSpecial(UpgradeId id)
         {
-            return id == UpgradeId.Cannon || id == UpgradeId.Heli || id == UpgradeId.Curtain || id == UpgradeId.Partner;
+            return id == UpgradeId.Cannon || id == UpgradeId.Heli || id == UpgradeId.Curtain || id == UpgradeId.Partner
+                || id == UpgradeId.Truck || id == UpgradeId.Sprinkler || id == UpgradeId.Rain || id == UpgradeId.Retardant;
         }
 
         public static bool IsWeapon(UpgradeId id)
@@ -193,6 +206,10 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Heli: return "소방 헬기";
                 case UpgradeId.Curtain: return "물의 장막";
                 case UpgradeId.Partner: return "구조대원 동료";
+                case UpgradeId.Truck: return "소방차 출동";
+                case UpgradeId.Sprinkler: return "스프링클러";
+                case UpgradeId.Rain: return "비구름";
+                case UpgradeId.Retardant: return "방염제 살포";
                 default: return "응급 처치";
             }
         }
@@ -215,6 +232,10 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Heli: return "9초마다 헬기가 가장 큰 불에 물을 쏟는다";
                 case UpgradeId.Curtain: return "5초마다 몸 주위로 물 고리가 터져 불을 밀어낸다";
                 case UpgradeId.Partner: return "동료가 불난 가게로 달려가 사람을 구한다";
+                case UpgradeId.Truck: return "12초마다 소방차가 내 줄을 가로지르며 양옆 불을 쓸어낸다";
+                case UpgradeId.Sprinkler: return "6초마다 모든 건물 지붕에서 물이 터져 불을 줄인다";
+                case UpgradeId.Rain: return "12초마다 불이 몰린 곳에 먹구름이 3초 동안 비를 뿌린다";
+                case UpgradeId.Retardant: return "15초마다 비행기가 방염제 띠를 뿌린다. 띠 안은 20초 동안 불이 안 붙는다";
                 default: return "체력 30 회복";
             }
         }

@@ -56,7 +56,7 @@ namespace FireGame.Prototypes.Logic
             Name = "마을",
             Map = SurvivorTown.Build,
             ReportTimes = SurvivorSim.ReportTimes,
-            Specials = new[] { UpgradeId.Heli, UpgradeId.Curtain, UpgradeId.Partner },
+            Specials = new[] { UpgradeId.Heli, UpgradeId.Curtain, UpgradeId.Partner, UpgradeId.Truck, UpgradeId.Sprinkler },
         };
 
         private static readonly StageRules Forest = new StageRules
@@ -69,7 +69,7 @@ namespace FireGame.Prototypes.Logic
             SpawnRate = 1.2f,
             FireGrowth = SurvivorSim.FireGrowth * 1.1f,
             BossHp = 1100f * 1.4f,
-            Specials = new[] { UpgradeId.Heli, UpgradeId.Curtain, UpgradeId.Partner },
+            Specials = new[] { UpgradeId.Heli, UpgradeId.Curtain, UpgradeId.Partner, UpgradeId.Rain, UpgradeId.Retardant },
         };
 
         /// <summary>n번 스테이지(1부터). 범위를 벗어나면 1스테이지.</summary>
