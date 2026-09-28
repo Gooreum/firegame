@@ -76,6 +76,8 @@ namespace FireGame.Prototypes.EditorTools
 
             failures += TouchShot(dir, "c12_touch_sticks");
             failures += AimShot(dir, "c13_aim_assist");
+            // 무기·보조가 Lv5가 되는 순간(금빛 기둥, "○○ MAX!").
+            failures += SurvivorShot(dir, "c14_max_burst", view => view.Sim.JustMaxed.HasValue, 8);
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);

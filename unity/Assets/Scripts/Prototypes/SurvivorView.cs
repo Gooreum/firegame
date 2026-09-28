@@ -116,6 +116,7 @@ namespace FireGame.Prototypes
         private Pool _bubbles;
         private Pool _auras;
         private Pool _tank;
+        private Pool _radar;
         private Pool _bombs;
 
         // 노란 특수 장비: 헬기(그림자·몸통·로터), 동료.
@@ -464,6 +465,10 @@ namespace FireGame.Prototypes
                 GameAudio.Play(Cue.Won);
                 ShowAlert("진화! 고압 방수포", gold);
             }
+            else if (_sim.JustMaxed.HasValue)
+            {
+                MaxBurst(_sim.JustMaxed.Value);
+            }
             else
             {
                 GameAudio.Play(Cue.PickUp);
@@ -483,6 +488,24 @@ namespace FireGame.Prototypes
         }
 
         private UpgradeId _lastPick;
+
+        /// <summary>무기·보조가 Lv5가 된 순간: 금빛 기둥, 두 겹 충격파, 불똥, 슬로모션, "○○ MAX!".</summary>
+        private void MaxBurst(UpgradeId id)
+        {
+            var gold = new Color(1f, 0.85f, 0.3f);
+            Vector3 at = W(_sim.Player);
+            Pillar(at, gold);
+            Shockwave(at, gold, 9f, 0.55f);
+            Shockwave(at, new Color(1f, 0.97f, 0.8f), 14f, 0.65f, 0.12f);
+            Burst(at, 30, gold, 11f);
+            Sparkle(at, 14, new Color(1f, 0.95f, 0.6f));
+            _trauma = Mathf.Min(1f, _trauma + 0.5f);
+            _slowmo = Mathf.Max(_slowmo, 0.5f);
+            _zoomKick = Mathf.Max(_zoomKick, 0.7f);
+            Flash(gold, 0.45f);
+            GameAudio.Play(Cue.Won);
+            ShowAlert(SurvivorUpgrades.Name(id) + " MAX!", gold);
+        }
 
         private void React()
         {
@@ -958,7 +981,9 @@ namespace FireGame.Prototypes
                     float r = 0.25f + (0.45f * Mathf.Repeat((b * 0.37f) + (i * 0.11f), 1f));
                     Vector3 o = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * r;
                     Vector3 wob = new Vector3(Mathf.Sin((_time * 3f) + b + i), Mathf.Cos((_time * 2.5f) + b), 0f) * 0.06f;
-                    _bubbles.Put(W(p.Pos) + o + wob, (0.22f + (0.05f * (b % 3))) * (0.4f + (0.6f * t)), 0f, new Color(0.9f, 0.98f, 1f, 0.7f * t));
+                    // 거품 MAX: 비눗방울처럼 무지갯빛으로 반짝인다.
+                    Color tint = foamLevel >= Loadout.MaxLevel ? Color.HSVToRGB(Mathf.Repeat((_time * 0.4f) + (b * 0.17f) + (i * 0.05f), 1f), 0.35f, 1f) : new Color(0.9f, 0.98f, 1f);
+                    _bubbles.Put(W(p.Pos) + o + wob, (0.22f + (0.05f * (b % 3))) * (0.4f + (0.6f * t)), 0f, new Color(tint.r, tint.g, tint.b, 0.7f * t));
                 }
             }
 
@@ -1078,8 +1103,10 @@ namespace FireGame.Prototypes
                     _droneGlow.Put(trail, (0.9f - (j * 0.1f)) * droneScale, 0f, new Color(0.55f, 0.8f, 1f, 0.45f - (j * 0.06f)));
                 }
                 _shadows.Put(at + new Vector3(0f, -0.35f, 0f), 0.6f * droneScale, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
-                _droneGlow.Put(at, 1.6f * droneScale, 0f, new Color(0.55f, 0.8f, 1f, 0.45f));
+                bool goldDrone = droneLevel >= Loadout.MaxLevel;
+                _droneGlow.Put(at, 1.6f * droneScale, 0f, goldDrone ? new Color(1f, 0.8f, 0.3f, 0.55f) : new Color(0.55f, 0.8f, 1f, 0.45f));
                 _drones.Put(at, 0.65f * droneScale, _time * 720f, Color.white);
+                if (goldDrone) _auras.Put(at, 1.1f, 0f, new Color(1f, 0.85f, 0.35f, 0.85f));
                 if (Random.value < 0.25f) Splash(at, 1, 0.15f);
             }
         }
@@ -1137,6 +1164,13 @@ namespace FireGame.Prototypes
             _waterBody.Put(_ribbon, 1f, 0f, new Color(0.55f, 0.8f, 1f, jet ? 0.8f : 0.92f), 8f);
             // 빛은 왼쪽 위에서 온다: 하이라이트를 진행 방향 왼쪽으로 치우친다.
             _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f);
+            if (!jet && _sim.Build.Level(UpgradeId.Hose) >= Loadout.MaxLevel)
+            {
+                // 물대포 MAX: 줄기 한가운데 금빛-흰 심지가 흐르고 끝에서 금빛 반짝이가 튄다.
+                _waterShine.Put(_ribbon, 0.16f, 0f, new Color(1f, 0.88f, 0.45f, 0.75f), 22f);
+                WaterRibbon.Point tipPt = _ribbon[_ribbon.Count - 1];
+                if (Random.value < 0.35f) Sparkle(new Vector3(tipPt.Pos.X, tipPt.Pos.Y, 0f), 1, new Color(1f, 0.9f, 0.5f));
+            }
             // 끝 물덩어리: 작은 물 알갱이 + 빛 쪽 반짝임. 크게 그리면 풍선처럼 보인다.
             foreach (WaterRibbon.Blob b in _blobs)
             {
@@ -1349,7 +1383,14 @@ namespace FireGame.Prototypes
             if (tank > 0)
             {
                 float slosh = 1f + (0.08f * Mathf.Sin(_time * 6f));
-                _tank.Put(at - (facing * 0.35f), (0.8f + (0.15f * tank)) * slosh, 0f, new Color(0.3f, 0.65f, 1f, 0.35f + (0.07f * tank)));
+                bool goldTank = tank >= Loadout.MaxLevel;
+                _tank.Put(at - (facing * 0.35f), (0.8f + (0.15f * tank)) * slosh, 0f, goldTank ? new Color(1f, 0.78f, 0.3f, 0.6f) : new Color(0.3f, 0.65f, 1f, 0.35f + (0.07f * tank)));
+                if (goldTank && Random.value < 0.08f)
+                {
+                    // 펌프 MAX: 등 뒤 탱크에서 김이 칙칙 뿜어 나온다.
+                    Emit(Smokes[Random.Range(0, Smokes.Length)], at - (facing * 0.5f), (-facing * 1.2f) + new Vector3(0f, 1.2f, 0f), 1f, 0.6f, 0.3f, 0.9f,
+                        new Color(1f, 1f, 1f, 0.5f), new Color(1f, 1f, 1f, 0f), Random.Range(-90f, 90f));
+                }
             }
 
             int suit = build.Level(UpgradeId.Suit);
@@ -1357,6 +1398,12 @@ namespace FireGame.Prototypes
             {
                 float alpha = (0.15f + (0.1f * suit)) * (0.8f + (0.2f * Mathf.Sin(_time * 3f)));
                 _auras.Put(at, 0.7f * 2f / 0.85f, 0f, new Color(1f, 0.8f, 0.35f, alpha));
+                if (suit >= Loadout.MaxLevel)
+                {
+                    // 방화복 MAX: 금빛 갑옷 오라가 두 겹, 바깥 겹은 숨 쉬듯 커졌다 작아진다.
+                    float breathe = 1f + (0.12f * Mathf.Sin(_time * 4f));
+                    _auras.Put(at, 2.4f * breathe, 0f, new Color(1f, 0.88f, 0.45f, 0.4f));
+                }
                 _regenClock -= dt;
                 if (_sim.Hp < _sim.MaxHp && _regenClock <= 0f)
                 {
@@ -1371,6 +1418,17 @@ namespace FireGame.Prototypes
                 float phase = Mathf.Repeat(_time / 1.6f, 1f);
                 float width = _sim.Magnet * 2f / 0.85f * Mathf.Lerp(0.2f, 1f, phase);
                 _auras.Put(at, width, 0f, new Color(0.45f, 1f, 0.55f, (1f - phase) * (0.15f + (0.07f * radio))));
+                if (radio >= Loadout.MaxLevel)
+                {
+                    // 무전기 MAX: 끌어오는 범위를 레이더 빛살이 빙빙 훑는다.
+                    float sweep = _time * 180f;
+                    for (int k = 0; k < 4; k++)
+                    {
+                        float deg = sweep - (k * 6f);
+                        Vector3 dir = new Vector3(Mathf.Cos(deg * Mathf.Deg2Rad), Mathf.Sin(deg * Mathf.Deg2Rad), 0f);
+                        _radar.Put(at + (dir * _sim.Magnet * 0.5f), 0.12f, deg - 90f, new Color(0.45f, 1f, 0.55f, 0.45f - (k * 0.1f)), null, _sim.Magnet / 0.12f);
+                    }
+                }
             }
 
             int boots = build.Level(UpgradeId.Boots);
@@ -1385,6 +1443,11 @@ namespace FireGame.Prototypes
                     {
                         var v = (back * Random.Range(1f, 2.5f)) + new Vector3(Random.Range(-1.2f, 1.2f), Random.Range(-1.2f, 1.2f), 0f);
                         Emit("Effects/water_drop", at + (back * 0.3f), v, 5f, 0.3f, 0.26f, 0.05f, new Color(0.7f, 0.93f, 1f, 0.9f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
+                    }
+                    if (boots >= Loadout.MaxLevel)
+                    {
+                        // 장화 MAX: 발자국마다 물결 고리가 남는다.
+                        Shockwave(at + (back * 0.3f), new Color(0.6f, 0.9f, 1f, 0.55f), 1.6f, 0.45f);
                     }
                     if (boots >= 3)
                     {
@@ -1588,9 +1651,11 @@ namespace FireGame.Prototypes
             if (level >= Loadout.MaxLevel)
             {
                 Emit("Effects/glow", at, Vector3.zero, 0f, 0.8f, radius * 2.2f, radius * 2.4f, new Color(0.3f, 0.7f, 1f, 0.45f), new Color(0.3f, 0.7f, 1f, 0f), 0f, true);
+                // MAX: 금빛 충격파 고리가 한 겹 더 퍼진다.
+                Shockwave(at, new Color(1f, 0.85f, 0.35f, 0.95f), ring * 1.45f, 0.45f, 0.06f);
             }
             Emit("Effects/glow", at, Vector3.zero, 0f, 0.12f, radius * 1.7f, radius * 2.3f, new Color(0.9f, 0.97f, 1f, 0.9f), new Color(0.5f, 0.85f, 1f, 0f), 0f, true);
-            int column = level >= Loadout.MaxLevel ? 28 : 16;
+            int column = level >= Loadout.MaxLevel ? 34 : 16;
             for (int i = 0; i < column; i++)
             {
                 float a = Random.value * Mathf.PI * 2f;
@@ -2316,6 +2381,8 @@ namespace FireGame.Prototypes
             _auras = new Pool(_world, "Aura", RingSprite(), 10, Additive);
             _pools.Add(_auras);
             _tank = AddPool("Tank", "Effects/glow", 10, true);
+            _radar = new Pool(_world, "Radar", BeamSprite(), 10, Additive);
+            _pools.Add(_radar);
             _dropGlow = AddPool("DropGlow", "Effects/glow", 12, true);
             _bombs = AddPool("Bomb", "Effects/water_drop", 13);
 
@@ -2686,7 +2753,8 @@ namespace FireGame.Prototypes
                     build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append(id == UpgradeId.Cannon ? "  진화" : "  특수").Append("</color>\n");
                     continue;
                 }
-                build.Append(SurvivorUpgrades.Name(id)).Append(lv >= Loadout.MaxLevel ? "  MAX" : "  Lv" + lv).Append('\n');
+                if (lv >= Loadout.MaxLevel) build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append("  ★MAX</color>\n");
+                else build.Append(SurvivorUpgrades.Name(id)).Append("  Lv").Append(lv).Append('\n');
             }
             _build.text = build.ToString();
 
@@ -2850,7 +2918,8 @@ namespace FireGame.Prototypes
                 int index = i;
                 UpgradeId id = choices[i];
                 int next = _sim.Build.Level(id) + 1;
-                if (Loadout.IsSpecial(id))
+                bool toMax = !Loadout.IsSpecial(id) && id != UpgradeId.Heal && next == Loadout.MaxLevel;
+                if (Loadout.IsSpecial(id) || toMax)
                 {
                     Image glow = UiKit.Image(_cardLayer, "YellowGlow" + i, Art.Get("Effects/glow"), new Color(1f, 0.8f, 0.2f, 0.8f));
                     glow.raycastTarget = false;
@@ -2867,7 +2936,7 @@ namespace FireGame.Prototypes
                 UiKit.Place(rect, new Vector2(0.5f, 0.5f), new Vector2(x, -20f), new Vector2(430f, 520f));
 
                 string kind = id == UpgradeId.Cannon ? "진화" : Loadout.IsSpecial(id) ? "특수" : id == UpgradeId.Heal ? "회복" : Loadout.IsWeapon(id) ? "무기" : "보조";
-                string tag = id == UpgradeId.Cannon || id == UpgradeId.Heal ? "" : Loadout.IsSpecial(id) ? "★ 특수 장비 ★" : next <= 1 ? "새로 얻음!" : "Lv " + next;
+                string tag = id == UpgradeId.Cannon || id == UpgradeId.Heal ? "" : Loadout.IsSpecial(id) ? "★ 특수 장비 ★" : next <= 1 ? "새로 얻음!" : toMax ? "Lv 5 · MAX!" : "Lv " + next;
 
                 Text key = UiKit.OutlinedLabel(rect, "Key", (i + 1).ToString(), 44, Color.white, TextAnchor.UpperLeft);
                 UiKit.Place(key.rectTransform, new Vector2(0f, 1f), new Vector2(26f, -18f), new Vector2(80f, 60f));

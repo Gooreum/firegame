@@ -250,6 +250,9 @@ namespace FireGame.Prototypes.Logic
         public bool JustCurtain;
         public bool JustLeveled;
         public bool JustEvolved;
+
+        /// <summary>방금 고른 카드로 최대 레벨(Lv5)이 된 무기·보조. 다음 Step까지 남는다(진화 신호와 같다).</summary>
+        public UpgradeId? JustMaxed;
         public bool JustBossArrived;
         public bool JustRescued;
         public bool JustWave;
@@ -400,8 +403,10 @@ namespace FireGame.Prototypes.Logic
             }
 
             float before = MaxHp;
+            int had = Build.Level(id);
             Build.Add(id);
             Hp += MaxHp - before;
+            if (!Loadout.IsSpecial(id) && had < Loadout.MaxLevel && Build.Level(id) == Loadout.MaxLevel) JustMaxed = id;
             if (id == UpgradeId.Cannon)
             {
                 JustEvolved = true;
@@ -460,6 +465,7 @@ namespace FireGame.Prototypes.Logic
             PeopleLost.Clear();
             JustLeveled = false;
             JustEvolved = false;
+            JustMaxed = null;
             JustBossArrived = false;
             JustRescued = false;
             JustWave = false;
