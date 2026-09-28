@@ -86,6 +86,18 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c16_town_specials", view => view.Sim.Truck.HasValue && System.Math.Abs(view.Sim.Truck.Value.X - view.Sim.Player.X) < 5f, 3, true);
             // 2스테이지 산불 숲: 흙길·소나무, 불다람쥐, 막 날아온 재 박쥐 떼, 바람 화살표.
             failures += SurvivorShot(dir, "c17_forest", view => view.Sim.Time >= 40.5f && view.Sim.Enemies.Exists(e => (e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Squirrel) && e.Pos.DistanceTo(view.Sim.Player) < 6f), 10, false, null, 2);
+            // 화염 멧돼지: 보스 시각으로 건너뛰어 돌진 길 경고와 돌진을 찍는다.
+            SurvivorView boarView = null;
+            Action<Camera> onBoar = camera =>
+            {
+                // 소방관과 멧돼지가 함께 보이게 가운데를 잡고 넓게 본다.
+                Vec2 p = boarView.Sim.Player;
+                Vec2 b = boarView.Sim.Boss.Pos;
+                camera.transform.position = new Vector3((p.X + b.X) * 0.5f, (p.Y + b.Y) * 0.5f, -10f);
+                camera.orthographicSize = Mathf.Max(7f, (Mathf.Abs(p.Y - b.Y) * 0.5f) + 3f);
+            };
+            failures += SurvivorShot(dir, "c18_boar_warning", view => (boarView = view) != null && SkipToBoss(view) && view.Sim.BoarWindup > 0f && view.Sim.BoarWindup < 0.6f, 4, false, onBoar, 2);
+            failures += SurvivorShot(dir, "c18b_boar_charge", view => (boarView = view) != null && SkipToBoss(view) && view.Sim.BoarCharge > 0f && view.Sim.BoarCharge < 0.5f, 2, false, onBoar, 2);
             // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
             failures += SurvivorShot(dir, "c19_forest_specials", view => view.Sim.RainAt.HasValue && view.Sim.Retardants.Count > 0, 45, true, null, 2);
 
@@ -332,6 +344,13 @@ namespace FireGame.Prototypes.EditorTools
             {
                 if (screen != null) UnityEngine.Object.DestroyImmediate(screen);
             }
+        }
+
+        /// <summary>판 첫 틱에 보스 2초 전으로 건너뛴다(보스 장면만 빨리 찍는다). 늘 true.</summary>
+        private static bool SkipToBoss(SurvivorView view)
+        {
+            if (view.Sim.Time > 0.5f && view.Sim.Time < SurvivorSim.BossAt - 5f) view.Sim.Time = SurvivorSim.BossAt - 2f;
+            return true;
         }
 
         /// <summary>1스테이지를 이긴 결과창에서 탭하면 2스테이지가 "STAGE 2" 띠와 함께 열린다(플레이어 경로: Tick에 클릭).</summary>

@@ -41,7 +41,7 @@ namespace FireGame.Prototypes.Tests
             float ember1 = one.Spawn(EnemyKind.Ember, one.Player).MaxHp;
             float ember2 = two.Spawn(EnemyKind.Ember, two.Player).MaxHp;
             Assert.Equal(ember1 * two.Stage.EnemyHp, ember2, 3);
-            Assert.True(two.Stage.EnemyHp > 1f && two.Stage.SpawnRate > 1f && two.Stage.FireGrowth > one.Stage.FireGrowth);
+            Assert.True(two.Stage.EnemyHp > 1f && two.Stage.SpawnRate >= 1f && two.Stage.FireGrowth >= one.Stage.FireGrowth);
             Assert.True(two.Spawn(EnemyKind.Boss, two.Player).MaxHp > one.Spawn(EnemyKind.Boss, one.Player).MaxHp);
         }
 

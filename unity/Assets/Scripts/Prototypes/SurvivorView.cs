@@ -106,6 +106,7 @@ namespace FireGame.Prototypes
         private Pool _blazes;
         private Pool _darts;
         private Pool _bats;
+        private Pool _boarBody;
         private static Sprite _batSprite;
         private readonly List<GameObject> _ground = new List<GameObject>();
         private int _groundStage;
@@ -246,6 +247,7 @@ namespace FireGame.Prototypes
         private Text _build;
         private Text _alert;
         private Image _bossBack;
+        private Text _bossName;
         private Image _bossFill;
         private Image _bossBand;
         private Text _bossBandText;
@@ -752,7 +754,7 @@ namespace FireGame.Prototypes
                 }
                 Burst(at, 30, new Color(1f, 0.5f, 0.1f), 12f);
                 _zoomKick = -0.8f;
-                _bossBandText.text = "대형 화재 접근!";
+                _bossBandText.text = _sim.Boss != null && _sim.Boss.Kind == EnemyKind.Boar ? "화염 멧돼지 출현!" : "대형 화재 접근!";
                 _bandTint = new Color(0.6f, 0f, 0f);
                 _bossBannerAge = 0f;
                 _trauma = 1f;
@@ -763,6 +765,19 @@ namespace FireGame.Prototypes
 
             ReactTown();
 
+            if (_sim.JustBoarWindup) GameAudio.Play(Cue.Critical);
+            if (_sim.JustBoarCharge && _sim.Boss != null)
+            {
+                _trauma = Mathf.Min(1f, _trauma + 0.5f);
+                GameAudio.Play(Cue.Backfire);
+                Shockwave(W(_sim.Boss.Pos), new Color(1f, 0.4f, 0.1f, 0.9f), 6f, 0.35f);
+            }
+            if (_sim.JustBoarTired && _sim.Boss != null)
+            {
+                SpawnText(W(_sim.Boss.Pos) + new Vector3(0f, 4f, 0f), "지쳤다! 지금 쏴라", new Color(1f, 0.9f, 0.3f), 1.5f);
+                Shockwave(W(_sim.Boss.Pos), new Color(0.7f, 0.6f, 0.5f, 0.8f), 7f, 0.5f);
+                _trauma = Mathf.Min(1f, _trauma + 0.3f);
+            }
             if (_sim.JustWindShift) ShowAlert("바람이 " + WindName(_sim.Wind) + "쪽으로!", new Color(0.8f, 0.9f, 1f));
             if (_sim.JustBats)
             {
@@ -1026,13 +1041,19 @@ namespace FireGame.Prototypes
                 Vector3 at = W(e.Pos);
                 float flicker = 1f + (0.09f * Mathf.Sin((_time * 14f) + (i * 1.7f)));
                 bool hit = e.HitFlash > 0f;
-                float foot = e.Kind == EnemyKind.Boss ? 5f : e.Kind == EnemyKind.Blaze ? 1.8f : 1f;
+                float foot = SurvivorSim.IsBoss(e.Kind) ? 5f : e.Kind == EnemyKind.Blaze ? 1.8f : 1f;
                 _shadows.Put(at + new Vector3(0f, -0.1f, 0f), foot, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
                 // 물을 먹을수록 불이 쪼그라든다(체력 비례).
                 float life = 0.55f + (0.45f * Mathf.Clamp01(e.Hp / Mathf.Max(0.01f, e.MaxHp)));
                 float punch = (hit ? 1.35f : 1f) * life;
                 if (hit && Random.value < 0.12f) Steam(at, 1, 0.45f * life);
                 var water = new Color(0.7f, 0.95f, 1f);
+
+                if (e.Kind == EnemyKind.Boar)
+                {
+                    DrawBoar(e, at, flicker, life, punch, hit);
+                    continue;
+                }
 
                 if (e.Kind == EnemyKind.Boss)
                 {
@@ -1222,6 +1243,77 @@ namespace FireGame.Prototypes
                 _shadows.Put(at + new Vector3(0f, -0.35f, 0f), 1f - (bob * 0.8f), 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
                 _toolboxGlow.Put(at, 3f + (0.4f * Mathf.Sin(_time * 6f)), 0f, new Color(1f, 0.6f, 0.2f, 0.55f * a));
                 _toolbox.Put(at + new Vector3(0f, bob, 0f), 1.5f, 0f, new Color(1f, 1f, 1f, a));
+            }
+        }
+
+        /// <summary>
+        /// 화염 멧돼지: 진행 방향으로 길쭉한 불 몸통, 앞쪽 흰 엄니 둘, 등을 따라 선 불갈기.
+        /// 경고 중엔 바닥에 붉은 돌진 길이 깜빡이고, 돌진 중엔 뒤로 불꼬리가 남고, 지치면 머리 위에 "!"가 뜬다.
+        /// </summary>
+        private void DrawBoar(Enemy e, Vector3 at, float flicker, float life, float punch, bool hit)
+        {
+            bool winding = _sim.BoarWindup > 0f;
+            bool charging = _sim.BoarCharge > 0f;
+            bool tired = _sim.BoarTired > 0f;
+            Vec2 face = winding || charging ? _sim.BoarAim : new Vec2(_sim.Player.X - e.Pos.X, _sim.Player.Y - e.Pos.Y);
+            float head = Mathf.Atan2(face.Y, face.X) * Mathf.Rad2Deg;
+            var fwd = new Vector3(Mathf.Cos(head * Mathf.Deg2Rad), Mathf.Sin(head * Mathf.Deg2Rad), 0f);
+            var side = new Vector3(-fwd.y, fwd.x, 0f);
+            var water = new Color(0.7f, 0.95f, 1f);
+
+            if (winding)
+            {
+                // 돌진 길 경고: 폭 2.4, 길이 = 돌진 거리. 끝나갈수록 빨리 깜빡인다.
+                float len = SurvivorSim.BoarChargeSpeed * SurvivorSim.BoarChargeTime;
+                float urgency = 1f - (_sim.BoarWindup / SurvivorSim.BoarWindupTime);
+                float blink = 0.5f + (0.5f * Mathf.Sin(_time * (10f + (25f * urgency))));
+                _band.Put(at + (fwd * (len * 0.5f)), 2.4f, head - 90f, new Color(1f, 0.15f, 0.1f, 0.25f + (0.25f * blink)), null, len / 2.4f);
+                _band.Put(at + (fwd * (len * 0.5f)), 0.5f, head - 90f, new Color(1f, 0.6f, 0.3f, 0.5f * blink), null, len / 0.5f);
+                // 앞발로 땅을 긁는다: 흙먼지.
+                if (Random.value < 0.3f) Emit(Smokes[Random.Range(0, Smokes.Length)], at - (fwd * 1.2f), (-fwd * 2f) + new Vector3(0f, 1f, 0f), 2f, 0.6f, 0.6f, 1.4f,
+                    new Color(0.4f, 0.32f, 0.25f, 0.6f), new Color(0.4f, 0.32f, 0.25f, 0f), 0f);
+            }
+
+            float pulse = 1f + (0.05f * Mathf.Sin(_time * (charging ? 20f : 5f)));
+            Color body = hit ? water : tired ? Color.Lerp(new Color(0.95f, 0.3f, 0.08f), new Color(0.6f, 0.5f, 0.45f), 0.4f + (0.2f * Mathf.Sin(_time * 10f))) : new Color(0.95f, 0.3f, 0.08f);
+            _enemyGlow.Put(at, 10f * pulse * life, 0f, new Color(1f, 0.3f, 0.05f, charging ? 0.9f : 0.65f));
+            // 몸 실루엣: 숯처럼 짙은 붉은 몸통, 앞쪽 머리, 노란 눈 둘. 그 위로 불이 탄다.
+            Color hide = hit ? water : tired ? new Color(0.35f, 0.3f, 0.28f) : new Color(0.32f, 0.07f, 0.03f);
+            _boarBody.Put(at, 3f * punch, head - 90f, hide, null, 1.6f);
+            _boarBody.Put(at + (fwd * 1.9f), 2f * punch, head - 90f, hide, null, 1.1f);
+            _boarBody.Put(at + (fwd * 0.2f), 2.1f * punch, head - 90f, new Color(0.75f, 0.2f, 0.05f, 0.9f), null, 1.5f);
+            for (int s = -1; s <= 1; s += 2)
+            {
+                _boarBody.Put(at + (fwd * 2.3f) + (side * (0.4f * s)), 0.3f, 0f, tired ? new Color(0.6f, 0.6f, 0.6f) : new Color(1f, 0.9f, 0.2f));
+            }
+            _bossBody.Put(at, 3.6f * pulse * punch, head - 90f, new Color(body.r, body.g, body.b, 0.8f), null, 1.55f);
+            _enemyCore.Put(at + (fwd * 0.3f), 2.4f * flicker * life, head - 90f, new Color(1f, 0.8f, 0.3f, 0.95f), null, 1.4f);
+            // 엄니: 앞쪽 양옆으로 흰 초승달.
+            for (int s = -1; s <= 1; s += 2)
+            {
+                Vector3 tusk = at + (fwd * 2.4f) + (side * (0.55f * s));
+                _gemCores.Put(tusk, 0.22f, head - 90f + (s * 25f), new Color(1f, 0.97f, 0.9f), null, 4f);
+            }
+            // 불갈기: 머리에서 꼬리까지 등을 따라 여덟 줄기.
+            for (int k = 0; k < 8; k++)
+            {
+                float f = (k / 7f) - 0.5f;
+                Vector3 o = (fwd * (f * 3.6f)) + (side * (0.25f * Mathf.Sin((_time * 9f) + k)));
+                _bossTongues.Put(at + o, (1.3f + (0.4f * Mathf.Sin((_time * 12f) + (k * 1.3f)))) * flicker, head + 90f + (8f * Mathf.Sin((_time * 7f) + k)), new Color(1f, 0.5f, 0.1f, 0.9f));
+            }
+            if (charging)
+            {
+                // 돌진 불꼬리.
+                for (int k = 0; k < 3; k++)
+                {
+                    Emit(Flames[Random.Range(0, Flames.Length)], at - (fwd * 2f) + (side * Random.Range(-1f, 1f)), -fwd * Random.Range(2f, 5f), 3f, 0.5f, 1.4f, 0.3f,
+                        new Color(1f, 0.55f, 0.15f, 0.9f), new Color(1f, 0.2f, 0.05f, 0f), Random.Range(-90f, 90f), true);
+                }
+            }
+            if (tired && Mathf.Repeat(_time * 3f, 1f) < 0.7f)
+            {
+                _gemCores.Put(at + new Vector3(0f, 3.2f, 0f), 0.35f, 0f, new Color(1f, 0.9f, 0.3f), null, 3f);
+                _gemCores.Put(at + new Vector3(0f, 2.5f, 0f), 0.35f, 0f, new Color(1f, 0.9f, 0.3f));
             }
         }
 
@@ -1754,7 +1846,7 @@ namespace FireGame.Prototypes
         /// <summary>불이 꺼지는 순간: 흰 번쩍 + 하얀 수증기 + 불똥. 큰 불은 충격파와 짧은 멈춤까지.</summary>
         private void DeathBurst(Vector3 at, EnemyKind kind, bool crowded)
         {
-            bool big = kind == EnemyKind.Blaze || kind == EnemyKind.Boss;
+            bool big = kind == EnemyKind.Blaze || SurvivorSim.IsBoss(kind);
             Emit("Effects/glow", at, Vector3.zero, 0f, 0.1f, big ? 2.4f : 1.3f, big ? 3f : 1.7f, new Color(1f, 1f, 1f, 0.9f), new Color(0.7f, 0.9f, 1f, 0f), 0f, true);
             int sparks = big ? 13 : crowded ? 4 : 8;
             for (int i = 0; i < sparks; i++)
@@ -2787,6 +2879,8 @@ namespace FireGame.Prototypes
             _blazes = AddPool("Blaze", "Effects/fire_02", 9);
             _darts = AddPool("Dart", "Effects/flame_05", 9, true);
             _bats = new Pool(_world, "Bat", BatSprite(), 9, null);
+            _boarBody = new Pool(_world, "BoarBody", DiscSprite(), 8, null);
+            _pools.Add(_boarBody);
             _pools.Add(_bats);
             _bossBody = AddPool("Boss", "Effects/fire_02", 9);
             _enemyCore = AddPool("EnemyCore", "Effects/fire_01", 10, true);
@@ -3108,6 +3202,9 @@ namespace FireGame.Prototypes
             _windArrow = UiKit.Image(_hud, "WindArrow", ArrowSprite(), new Color(0.85f, 0.92f, 1f));
             _windArrow.raycastTarget = false;
             UiKit.Place(_windArrow.rectTransform, new Vector2(0f, 1f), new Vector2(160f, -168f), new Vector2(56f, 56f));
+            // 가운데를 축으로 돌게(모서리 축이면 돌 때 체력 막대로 올라간다).
+            _windArrow.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            _windArrow.rectTransform.anchoredPosition = new Vector2(160f, -193f);
             UiKit.Stretch(_hpText.rectTransform);
 
             _build = UiKit.OutlinedLabel(_hud, "Build", "", 26, new Color(0.85f, 0.92f, 1f), TextAnchor.UpperRight);
@@ -3125,6 +3222,7 @@ namespace FireGame.Prototypes
             _bossFill.rectTransform.offsetMin = new Vector2(3f, 3f);
             _bossFill.rectTransform.offsetMax = new Vector2(-3f, -3f);
             Text bossName = UiKit.OutlinedLabel(_bossBack.transform, "BossName", "화염 거인", 26, Color.white, TextAnchor.MiddleCenter);
+            _bossName = bossName;
             UiKit.Stretch(bossName.rectTransform);
 
             _bossBand = UiKit.Image(_hud, "BossBand", Art.White, new Color(0.6f, 0f, 0f, 0.75f));
@@ -3246,6 +3344,7 @@ namespace FireGame.Prototypes
 
             bool bossAlive = _sim.Boss != null && !_sim.Boss.Dead;
             _bossBack.gameObject.SetActive(bossAlive);
+            if (bossAlive) _bossName.text = _sim.Boss.Kind == EnemyKind.Boar ? "화염 멧돼지" : "화염 거인";
             if (bossAlive) _bossFill.rectTransform.localScale = new Vector3(Mathf.Clamp01(_sim.Boss.Hp / _sim.Boss.MaxHp), 1f, 1f);
 
             bool band = _bossBannerAge < 2.8f;

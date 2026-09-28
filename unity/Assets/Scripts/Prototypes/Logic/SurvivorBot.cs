@@ -110,9 +110,24 @@ namespace FireGame.Prototypes.Logic
                 float dy = p.Y - e.Pos.Y;
                 float d2 = (dx * dx) + (dy * dy);
                 if (d2 > 49f || d2 < 0.0001f) continue;
-                float w = (e.Kind == EnemyKind.Boss ? 6f : 1f) / d2;
+                float w = (SurvivorSim.IsBoss(e.Kind) ? 6f : 1f) / d2;
                 fx += dx * w;
                 fy += dy * w;
+            }
+
+            if (_sim.Boss != null && !_sim.Boss.Dead && (_sim.BoarWindup > 0f || _sim.BoarCharge > 0f))
+            {
+                // 멧돼지 돌진 길에서 옆으로 비킨다.
+                Vec2 a = _sim.BoarAim;
+                float rx = p.X - _sim.Boss.Pos.X;
+                float ry = p.Y - _sim.Boss.Pos.Y;
+                float across = (rx * -a.Y) + (ry * a.X);
+                float away = across >= 0f ? 1f : -1f;
+                if (Math.Abs(across) < 3f)
+                {
+                    fx += -a.Y * away * 4f;
+                    fy += a.X * away * 4f;
+                }
             }
 
             foreach (Puddle b in _sim.BurningGround)

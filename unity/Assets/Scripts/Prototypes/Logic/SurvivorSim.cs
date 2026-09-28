@@ -23,6 +23,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>산불 숲: 무리 지어 날아와 소방관을 쫓는 재 박쥐.</summary>
         Bat,
+
+        /// <summary>산불 숲 보스: 경고한 뒤 일직선으로 돌진하는 화염 멧돼지.</summary>
+        Boar,
     }
 
     public enum ShotKind
@@ -335,8 +338,9 @@ namespace FireGame.Prototypes.Logic
         public const float WindShiftEvery = 60f;
 
         /// <summary>타는 나무가 바람 쪽 이웃에 불을 옮기는 간격·거리.</summary>
-        public const float WindSpreadEvery = 5f;
+        public const float WindSpreadEvery = 7f;
         public const float WindSpreadRange = 4f;
+        public const float WindSpreadChance = 0.3f;
 
         /// <summary>이번 틱에 바람이 바뀌었다.</summary>
         public bool JustWindShift;
@@ -363,7 +367,10 @@ namespace FireGame.Prototypes.Logic
         private int _wavesDone;
         private float _nextWind;
         private int _windIndex;
-        private float _nextBats = 20f;
+        private float _nextBats = FirstBats;
+
+        /// <summary>첫 재 박쥐 무리가 오는 시각.</summary>
+        public const float FirstBats = 30f;
 
         private readonly int[] _head = new int[Cells * Cells];
         private int[] _next = new int[MaxEnemies * 2];
@@ -521,8 +528,9 @@ namespace FireGame.Prototypes.Logic
                 case EnemyKind.Blaze: e.MaxHp = 14f * scale; e.Speed = 1.5f; e.Radius = 0.6f; e.Touch = 10f; e.Xp = 5; break;
                 case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
                 case EnemyKind.Squirrel: e.MaxHp = 3f * scale; e.Speed = 3.6f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; e.Seeker = true; break;
-                case EnemyKind.Bat: e.MaxHp = 1.5f * scale; e.Speed = 3.2f; e.Radius = 0.3f; e.Touch = 4f; e.Xp = 1; break;
+                case EnemyKind.Bat: e.MaxHp = 1.5f * scale; e.Speed = 3.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
                 case EnemyKind.Boss: e.MaxHp = Stage.BossHp; e.Speed = 1.1f; e.Radius = 1.4f; e.Touch = 35f; e.Xp = 0; break;
+                case EnemyKind.Boar: e.MaxHp = Stage.BossHp; e.Speed = 1.4f; e.Radius = 1.5f; e.Touch = 30f; e.Xp = 0; break;
             }
             e.Hp = e.MaxHp;
             Enemies.Add(e);
@@ -570,6 +578,9 @@ namespace FireGame.Prototypes.Logic
             JustRescued = false;
             JustWave = false;
             JustWindShift = false;
+            JustBoarWindup = false;
+            JustBoarCharge = false;
+            JustBoarTired = false;
             JustBats = false;
             GemsCollected = 0;
             ShotsFired = 0;
@@ -624,7 +635,7 @@ namespace FireGame.Prototypes.Logic
             if (Stage.BatFlockEvery > 0f && Time >= _nextBats)
             {
                 // 재 박쥐 무리: 가장자리 한 곳에서 여섯 마리가 뭉쳐 날아온다.
-                _nextBats += Stage.BatFlockEvery;
+                _nextBats = Time + Stage.BatFlockEvery;
                 JustBats = true;
                 Vec2 from = SpawnPoint(SpawnDistance);
                 for (int i = 0; i < 6 && Enemies.Count < MaxEnemies; i++)
@@ -638,7 +649,7 @@ namespace FireGame.Prototypes.Logic
             {
                 // 바람: 판 시작에 한 번 정하고 60초마다 여덟 방향 중 하나로 바뀐다.
                 bool first = _nextWind <= 0f;
-                _nextWind += WindShiftEvery;
+                _nextWind = (first ? 0f : Time) + WindShiftEvery;
                 // 바뀔 때는 늘 다른 방향으로(여덟 방향 중 지금 것 빼고).
                 _windIndex = first ? _rng.Next(8) : (_windIndex + 1 + _rng.Next(7)) % 8;
                 double a = _windIndex * Math.PI / 4;
@@ -850,14 +861,20 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
 
-                float heavy = e.Kind == EnemyKind.Boss ? 0.1f : 1f;
+                if (e.Kind == EnemyKind.Boar && (BoarWindup > 0f || BoarCharge > 0f || BoarTired > 0f))
+                {
+                    // 멧돼지: 경고·돌진·지친 동안은 스스로 걷지 않는다(돌진은 TickBoar가 옮긴다).
+                    vx = 0f;
+                    vy = 0f;
+                }
+                float heavy = IsBoss(e.Kind) ? 0.1f : 1f;
                 float stepX = (vx + (sx * 3f) + (e.Knock.X * heavy)) * Dt;
                 float stepY = (vy + (sy * 3f) + (e.Knock.Y * heavy)) * Dt;
                 e.Pos.X += stepX;
                 e.Pos.Y += stepY;
 
                 // 큰 불은 걸어온 자리에 불을 흘린다.
-                if (e.Kind == EnemyKind.Blaze || e.Kind == EnemyKind.Boss)
+                if (e.Kind == EnemyKind.Blaze || IsBoss(e.Kind))
                 {
                     e.Trail += (float)Math.Sqrt((stepX * stepX) + (stepY * stepY));
                     if (e.Trail >= TrailStep)
@@ -865,14 +882,14 @@ namespace FireGame.Prototypes.Logic
                         e.Trail = 0f;
                         if (BurningGround.Count < MaxBurningGround)
                         {
-                            float r = e.Kind == EnemyKind.Boss ? 1.1f : 0.6f;
+                            float r = IsBoss(e.Kind) ? 1.1f : 0.6f;
                             BurningGround.Add(new Puddle { Pos = e.Pos, Radius = r, Life = 4f, MaxLife = 4f });
                         }
                     }
                 }
                 e.Pos = ClampToArena(e.Pos);
                 // 건물에서 나온 불씨와 거인만 옮겨붙인다. 소방관을 쫓는 불(가장자리 불씨·큰 불)은 발밑에 불을 흘릴 뿐이다.
-                if (e.Seeker || e.Kind == EnemyKind.Boss) TouchStructures(e);
+                if (e.Seeker || IsBoss(e.Kind)) TouchStructures(e);
                 e.Knock.X *= knockDecay;
                 e.Knock.Y *= knockDecay;
             }
@@ -1373,7 +1390,8 @@ namespace FireGame.Prototypes.Logic
                 if (st.Collapsed || st.Burning) continue;
                 if (!st.Within(e.Pos, e.Radius)) continue;
                 Ignite(st, 0.15f);
-                if (e.Kind == EnemyKind.Ember)
+                // 불씨와 다람쥐는 불을 붙이며 그 속으로 사라진다(다람쥐가 살아남으면 한 마리가 숲을 다 태운다).
+                if (e.Kind == EnemyKind.Ember || e.Kind == EnemyKind.Squirrel)
                 {
                     e.Dead = true;
                     return;
@@ -1381,14 +1399,14 @@ namespace FireGame.Prototypes.Logic
             }
         }
 
-        /// <summary>s에서 바람이 부는 쪽(내적 &gt; 0.3) 4칸 안의 가장 가까운 탈 것.</summary>
+        /// <summary>s에서 바람이 부는 쪽(내적 &gt; 0.3) 4칸 안의 가장 가까운 안 탄 나무(건물은 바람으로 옮지 않는다).</summary>
         private Structure Downwind(Structure s)
         {
             Structure best = null;
             float bestD = WindSpreadRange;
             foreach (Structure t in Structures)
             {
-                if (t == s || !t.Flammable) continue;
+                if (t == s || t.Kind != StructureKind.Tree || !t.Flammable) continue;
                 float dx = t.Pos.X - s.Pos.X;
                 float dy = t.Pos.Y - s.Pos.Y;
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
@@ -1486,13 +1504,15 @@ namespace FireGame.Prototypes.Logic
                     if (s.WindClock <= 0f)
                     {
                         s.WindClock = WindSpreadEvery;
+                        // 반쯤만 옮는다: 늘 옮기면 한 그루가 두세 그루를 태워 숲 전체가 순식간에 탄다.
                         Structure next = Downwind(s);
-                        if (next != null) Ignite(next, 0.3f);
+                        if (next != null && Rand() < WindSpreadChance) Ignite(next, 0.3f);
                     }
                 }
 
                 // 막 붙은 작은 불은 아직 번지지 않는다(0.4까지 약 5초) — 일찍 잡으면 막을 수 있다.
-                if (s.Fire >= SpreadAt) s.SpitClock -= Dt;
+                // 산불 숲의 나무는 불씨를 뱉지 않고 바람으로만 번진다(수십 그루가 뱉으면 불씨 떼가 동네를 덮는다).
+                if (s.Fire >= SpreadAt && !(Stage.Wind && s.Kind == StructureKind.Tree)) s.SpitClock -= Dt;
                 if (s.SpitClock <= 0f)
                 {
                     s.SpitClock = (9f - (5f * s.Fire)) * (s.IsBuilding ? 1f : 2f);
@@ -1749,9 +1769,108 @@ namespace FireGame.Prototypes.Logic
             foreach (Civilian c in Civilians) c.Life -= Dt;
         }
 
+        /// <summary>판 끝 보스(화염 거인·화염 멧돼지).</summary>
+        public static bool IsBoss(EnemyKind kind)
+        {
+            return kind == EnemyKind.Boss || kind == EnemyKind.Boar;
+        }
+
+        public const float BoarEvery = 7f;
+        public const float BoarWindupTime = 1.2f;
+        public const float BoarChargeTime = 0.9f;
+        public const float BoarChargeSpeed = 13f;
+        public const float BoarTiredTime = 1.5f;
+        public const float BoarTiredDamage = 1.5f;
+        public const float BoarHit = 30f;
+
+        /// <summary>멧돼지 돌진 경고가 남은 시간(0보다 크면 바닥에 돌진 길이 깜빡인다).</summary>
+        public float BoarWindup;
+
+        /// <summary>돌진 남은 시간.</summary>
+        public float BoarCharge;
+
+        /// <summary>돌진 뒤 지친 남은 시간. 이때 물 피해가 1.5배.</summary>
+        public float BoarTired;
+
+        /// <summary>돌진 방향(단위 벡터). 경고 시작 때 소방관 쪽으로 정한다.</summary>
+        public Vec2 BoarAim;
+        public bool JustBoarWindup;
+        public bool JustBoarCharge;
+        public bool JustBoarTired;
+        private float _boarClock = 4f;
+        private bool _boarHitPlayer;
+
+        /// <summary>
+        /// 화염 멧돼지: 7초마다 1.2초 멈춰 소방관 쪽으로 돌진 길을 경고하고, 0.9초 동안 초속 13으로 돌진한다.
+        /// 지나간 자리에 불을 남기고 닿는 나무·건물에 불을 붙이며, 소방관이 맞으면 30 피해. 돌진 뒤 1.5초는 지친다.
+        /// </summary>
+        private void TickBoar(Enemy boar)
+        {
+            if (BoarCharge > 0f)
+            {
+                float step = BoarChargeSpeed * Dt;
+                boar.Pos = new Vec2(boar.Pos.X + (BoarAim.X * step), boar.Pos.Y + (BoarAim.Y * step));
+                boar.Trail += step;
+                if (boar.Trail >= 1f && BurningGround.Count < MaxBurningGround)
+                {
+                    boar.Trail = 0f;
+                    BurningGround.Add(new Puddle { Pos = boar.Pos, Radius = 0.9f, Life = 5f, MaxLife = 5f });
+                }
+                foreach (Structure st in Structures)
+                {
+                    if (!st.Burning && st.Within(boar.Pos, boar.Radius)) Ignite(st, 0.4f);
+                }
+                if (!_boarHitPlayer && Player.DistanceTo(boar.Pos) <= boar.Radius + PlayerRadius)
+                {
+                    _boarHitPlayer = true;
+                    Hurt(BoarHit);
+                }
+                BoarCharge -= Dt;
+                bool wall = boar.Pos.X <= 1f || boar.Pos.Y <= 1f || boar.Pos.X >= ArenaSize - 1f || boar.Pos.Y >= ArenaSize - 1f;
+                boar.Pos = ClampToArena(boar.Pos);
+                if (BoarCharge <= 0f || wall)
+                {
+                    BoarCharge = 0f;
+                    BoarTired = BoarTiredTime;
+                    JustBoarTired = true;
+                }
+                return;
+            }
+            if (BoarWindup > 0f)
+            {
+                BoarWindup -= Dt;
+                if (BoarWindup <= 0f)
+                {
+                    BoarCharge = BoarChargeTime;
+                    _boarHitPlayer = false;
+                    JustBoarCharge = true;
+                }
+                return;
+            }
+            if (BoarTired > 0f)
+            {
+                BoarTired -= Dt;
+                return;
+            }
+            _boarClock -= Dt;
+            if (_boarClock > 0f) return;
+            _boarClock = BoarEvery - BoarWindupTime - BoarChargeTime - BoarTiredTime;
+            float dx = Player.X - boar.Pos.X;
+            float dy = Player.Y - boar.Pos.Y;
+            float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
+            BoarAim = d > 0.01f ? new Vec2(dx / d, dy / d) : new Vec2(1f, 0f);
+            BoarWindup = BoarWindupTime;
+            JustBoarWindup = true;
+        }
+
         private void TickBoss()
         {
             if (Boss == null || Boss.Dead) return;
+            if (Boss.Kind == EnemyKind.Boar)
+            {
+                TickBoar(Boss);
+                return;
+            }
             _bossBurstClock -= Dt;
             if (_bossBurstClock > 0f) return;
             _bossBurstClock = 3f;
@@ -1767,6 +1886,7 @@ namespace FireGame.Prototypes.Logic
         private void Damage(Enemy e, float amount, Vec2 knock, bool show)
         {
             if (e.Dead) return;
+            if (e.Kind == EnemyKind.Boar && BoarTired > 0f) amount *= BoarTiredDamage;
             bool crit = Rand() < 0.1f;
             if (crit) amount *= 2f;
             e.Hp -= amount;
@@ -1783,7 +1903,7 @@ namespace FireGame.Prototypes.Logic
         {
             e.Dead = true;
             Kills++;
-            if (e.Kind == EnemyKind.Boss) return;
+            if (IsBoss(e.Kind)) return;
             DropGem(e.Pos, e.Xp);
             if (e.Kind == EnemyKind.Blaze)
             {
@@ -1817,7 +1937,7 @@ namespace FireGame.Prototypes.Logic
         {
             foreach (Enemy e in Enemies)
             {
-                if (e.Dead || e.Kind == EnemyKind.Boss) continue;
+                if (e.Dead || IsBoss(e.Kind)) continue;
                 float d = e.Pos.DistanceTo(from);
                 if (d > radius) continue;
                 Vec2 k = Knockback(from, e.Pos, strength * 4f);
