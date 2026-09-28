@@ -42,7 +42,8 @@ namespace FireGame.Prototypes.Tests
             float ember1 = one.Spawn(EnemyKind.Ember, one.Player).MaxHp;
             float ember2 = two.Spawn(EnemyKind.Ember, two.Player).MaxHp;
             Assert.Equal(ember1 * two.Stage.EnemyHp, ember2, 3);
-            Assert.True(two.Stage.EnemyHp > 1f && two.Stage.SpawnRate >= 1f && two.Stage.FireGrowth >= one.Stage.FireGrowth);
+            // 숲은 배율을 올리지 않는다: 난이도는 새 규칙(바람·다람쥐·박쥐)에서 온다(재미 밀도 측정).
+            Assert.True(two.Stage.EnemyHp >= 1f && two.Stage.SpawnRate >= 1f && two.Stage.FireGrowth >= one.Stage.FireGrowth);
             Assert.True(two.Spawn(EnemyKind.Boss, two.Player).MaxHp > one.Spawn(EnemyKind.Boss, one.Player).MaxHp);
         }
 

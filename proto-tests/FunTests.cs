@@ -174,6 +174,10 @@ namespace FireGame.Prototypes.Tests
             {
                 FunRow row = Measure(stage, 10);
                 _out.WriteLine(row.ToString());
+                // 1스테이지만큼 할 일이 자주 온다(docs/prototype-c-balance.md §5).
+                Assert.True(row.LevelGap <= town.LevelGap * 1.2f, row.Stage + "스테이지 레벨업이 느리다: " + row.LevelGap + "초 (마을 " + town.LevelGap + ")");
+                Assert.True(row.IdleShare <= town.IdleShare + 0.05f, row.Stage + "스테이지 걷기만 하는 시간이 길다: " + row.IdleShare + " (마을 " + town.IdleShare + ")");
+                Assert.True(row.EventsPerMin >= town.EventsPerMin * 0.8f, row.Stage + "스테이지 사건이 적다: " + row.EventsPerMin + " (마을 " + town.EventsPerMin + ")");
             }
         }
     }

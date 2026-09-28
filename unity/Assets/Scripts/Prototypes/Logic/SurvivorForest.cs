@@ -31,19 +31,20 @@ namespace FireGame.Prototypes.Logic
         {
             var list = new List<Structure>();
 
-            House(list, "산장", 15f, 44f, 2);
-            House(list, "캠핑 매점", 30f, 46f, 1);
-            House(list, "관리사무소", 45f, 44f, 2);
-            House(list, "통나무 카페", 47f, 30f, 1);
-            House(list, "전망대", 44f, 16f, 1);
-            House(list, "목공소", 15f, 16f, 2);
-            list.Add(new Structure { Kind = StructureKind.Depot, Name = "제재소", Pos = new Vec2(30f, 12f), Half = new Vec2(3.5f, 2.5f) });
+            // 건물은 마을과 같은 고리(중심에서 13~16칸)에 둔다: 멀리 흩어 두면 걷기만 하는 시간이 늘어 지루하다.
+            House(list, "산장", 19f, 41f, 2);
+            House(list, "캠핑 매점", 30f, 43f, 1);
+            House(list, "관리사무소", 41f, 41f, 2);
+            House(list, "통나무 카페", 43f, 30f, 1);
+            House(list, "전망대", 41f, 19f, 1);
+            House(list, "목공소", 19f, 19f, 2);
+            list.Add(new Structure { Kind = StructureKind.Depot, Name = "제재소", Pos = new Vec2(30f, 16f), Half = new Vec2(3.5f, 2.5f) });
 
-            Add(list, StructureKind.Gas, "캠핑 가스통", 25f, 42f, 0.4f, 0.4f);
-            Add(list, StructureKind.Gas, "캠핑 가스통", 36f, 17f, 0.4f, 0.4f);
-            Add(list, StructureKind.Gas, "캠핑 가스통", 12f, 34f, 0.4f, 0.4f);
-            Add(list, StructureKind.Car, "캠핑카", 13f, 29f, 1f, 0.55f);
-            Add(list, StructureKind.Car, "캠핑카", 50f, 37f, 1f, 0.55f);
+            Add(list, StructureKind.Gas, "캠핑 가스통", 24.5f, 41.5f, 0.4f, 0.4f);
+            Add(list, StructureKind.Gas, "캠핑 가스통", 35.5f, 18.5f, 0.4f, 0.4f);
+            Add(list, StructureKind.Gas, "캠핑 가스통", 16f, 33f, 0.4f, 0.4f);
+            Add(list, StructureKind.Car, "캠핑카", 14f, 36f, 1f, 0.55f);
+            Add(list, StructureKind.Car, "캠핑카", 46f, 36f, 1f, 0.55f);
 
             var mid = new Vec2(SurvivorSim.ArenaSize / 2f, SurvivorSim.ArenaSize / 2f);
             for (int c = 0; c < Clumps.Length; c += 2)

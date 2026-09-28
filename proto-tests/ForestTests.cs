@@ -65,6 +65,61 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void BurningTree_SpreadsDownwind_IntoABuilding()
+        {
+            SurvivorSim sim = Quiet();
+            RunClear(sim, 0.1f);
+            sim.Wind = new Vec2(1f, 0f);
+            // 나무 불은 지킬 건물을 위협한다: 바람 쪽 건물로도 옮는다(30%라 여섯 쌍).
+            var shops = new System.Collections.Generic.List<Structure>();
+            for (int k = 0; k < 6; k++)
+            {
+                float dy = -25f + (k * 10f);
+                // 가장자리 스폰(17칸)이 닿지 않게 22칸 밖에 둔다.
+                Structure fire = Tree(sim, -26f, dy);
+                var shop = new Structure { Kind = StructureKind.House, Name = "산장", Pos = new Vec2(sim.Player.X - 22f, sim.Player.Y + dy), Half = new Vec2(2f, 1.5f) };
+                sim.Structures.Add(shop);
+                shops.Add(shop);
+                sim.Ignite(fire, 0.5f);
+            }
+            RunClear(sim, 30f);
+            Assert.Contains(shops, s => s.Burning || s.Collapsed);
+        }
+
+        [Fact]
+        public void BurningTree_DoesNotSpreadUpwind_IntoABuilding()
+        {
+            SurvivorSim sim = Quiet();
+            RunClear(sim, 0.1f);
+            sim.Wind = new Vec2(1f, 0f);
+            var shops = new System.Collections.Generic.List<Structure>();
+            for (int k = 0; k < 6; k++)
+            {
+                float dy = -25f + (k * 10f);
+                Structure fire = Tree(sim, 26f, dy);
+                var shop = new Structure { Kind = StructureKind.House, Name = "산장", Pos = new Vec2(sim.Player.X + 22f, sim.Player.Y + dy), Half = new Vec2(2f, 1.5f) };
+                sim.Structures.Add(shop);
+                shops.Add(shop);
+                sim.Ignite(fire, 0.5f);
+            }
+            RunClear(sim, 30f);
+            Assert.DoesNotContain(shops, s => s.Burning || s.Collapsed);
+        }
+
+        [Fact]
+        public void ForestBuildings_SitOnTheTownRing()
+        {
+            var sim = new SurvivorSim(1, 2);
+            foreach (Structure s in sim.Structures)
+            {
+                if (!s.IsBuilding) continue;
+                float d = s.Pos.DistanceTo(sim.Player);
+                Assert.True(d >= 12f && d <= 16f, s.Name + " 거리 " + d);
+            }
+            Assert.Equal(SurvivorSim.ReportTimes.Length, sim.Stage.ReportTimes.Length);
+        }
+
+        [Fact]
         public void BurningTree_DoesNotSpreadUpwind()
         {
             SurvivorSim sim = Quiet();

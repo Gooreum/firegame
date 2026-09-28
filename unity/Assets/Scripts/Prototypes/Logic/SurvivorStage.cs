@@ -73,9 +73,10 @@ namespace FireGame.Prototypes.Logic
             Number = 2,
             Name = "산불 숲",
             Map = SurvivorForest.Build,
-            // 숲은 건물이 멀리 흩어져 있고 다람쥐·바람이 나무에 불을 내므로 건물 신고는 마을(15번)보다 적다.
-            ReportTimes = new[] { 15f, 45f, 70f, 95f, 120f, 145f, 170f, 195f, 220f },
-            EnemyHp = 1.15f,
+            // 신고는 마을과 같은 15번: 9번으로 줄였더니 할 일이 적어 지루했다(재미 밀도 측정, 분당 사건 2.9 대 3.8).
+            ReportTimes = SurvivorSim.ReportTimes,
+            // 숲의 난이도는 배율이 아니라 새 규칙(바람·다람쥐·박쥐)에서 온다.
+            EnemyHp = 1f,
             SpawnRate = 1f,
             BossHp = 1100f * 1.3f,
             BossKind = EnemyKind.Boar,

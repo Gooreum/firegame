@@ -1428,14 +1428,15 @@ namespace FireGame.Prototypes.Logic
             }
         }
 
-        /// <summary>s에서 바람이 부는 쪽(내적 &gt; 0.3) 4칸 안의 가장 가까운 안 탄 나무(건물은 바람으로 옮지 않는다).</summary>
+        /// <summary>s에서 바람이 부는 쪽(내적 &gt; 0.3) 4칸 안의 가장 가까운 안 탄 나무나 건물.</summary>
         private Structure Downwind(Structure s)
         {
             Structure best = null;
             float bestD = WindSpreadRange;
             foreach (Structure t in Structures)
             {
-                if (t == s || t.Kind != StructureKind.Tree || !t.Flammable) continue;
+                // 나무와 건물로 옮는다: 나무에만 번지면 지킬 것 없는 불이라 끌 이유가 없다(차·가스통은 제외).
+                if (t == s || !(t.Kind == StructureKind.Tree || t.IsBuilding) || !t.Flammable) continue;
                 float dx = t.Pos.X - s.Pos.X;
                 float dy = t.Pos.Y - s.Pos.Y;
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
@@ -1540,11 +1541,12 @@ namespace FireGame.Prototypes.Logic
                 }
 
                 // 막 붙은 작은 불은 아직 번지지 않는다(0.4까지 약 5초) — 일찍 잡으면 막을 수 있다.
-                // 산불 숲의 나무는 불씨를 뱉지 않고 바람으로만 번진다(수십 그루가 뱉으면 불씨 떼가 동네를 덮는다).
-                if (s.Fire >= SpreadAt && !(Stage.Wind && s.Kind == StructureKind.Tree)) s.SpitClock -= Dt;
+                // 산불 숲의 나무는 불씨를 느리게(네 배 간격) 뱉는다: 수십 그루가 보통 속도로 뱉으면 불씨 떼가 동네를 덮고,
+                // 아예 안 뱉으면 경험치가 안 흘러 레벨업이 느려진다(재미 밀도 측정).
+                if (s.Fire >= SpreadAt) s.SpitClock -= Dt;
                 if (s.SpitClock <= 0f)
                 {
-                    s.SpitClock = (9f - (5f * s.Fire)) * (s.IsBuilding ? 1f : 2f);
+                    s.SpitClock = (9f - (5f * s.Fire)) * (s.IsBuilding ? 1f : Stage.Wind && s.Kind == StructureKind.Tree ? 4f : 2f);
                     SpitEmber(s, 3f);
                 }
                 if (s.IsBuilding && s.Fire >= 0.8f)
