@@ -241,7 +241,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>방화복: 최대 체력 +10/레벨.</summary>
         public float MaxHpBonus { get { return 10f * Level(UpgradeId.Suit); } }
 
-        /// <summary>방화복: 열기·바닥 불 피해 배율(레벨마다 −15%).</summary>
+        /// <summary>방화복: 불에 받는 피해 배율(열기·바닥 불·불 몹 접촉, 레벨마다 −15%).</summary>
         public float HeatScale { get { return 1f - (0.15f * Level(UpgradeId.Suit)); } }
 
         /// <summary>장화: 이동 +12%/레벨.</summary>
@@ -253,8 +253,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>무전기: 신고를 이만큼 먼저 알려 준다(초). 없으면 0.</summary>
         public float Forecast { get { return Level(UpgradeId.Radio) > 0 ? 1f + Level(UpgradeId.Radio) : 0f; } }
 
-        /// <summary>구조 도끼: 구조 시간 배율(레벨마다 −15%).</summary>
-        public float RescueScale { get { return 1f - (0.15f * Level(UpgradeId.Axe)); } }
+        /// <summary>구조 도끼: 구조 시간 배율(레벨마다 ×0.82: Lv1 −18%, Lv5 −63%). −15%씩 빼는 식은 아이템 측정에서 가장 약했다.</summary>
+        /// 장화도 레벨마다 ×0.95: 빨리 뛰어 들어가 빨리 데리고 나온다(장화만 들면 구조가 줄어 쓰레기템이었다).
+        public float RescueScale { get { return (float)(Math.Pow(0.82, Level(UpgradeId.Axe)) * Math.Pow(0.95, Level(UpgradeId.Boots))); } }
 
         /// <summary>산소통: 갇힌 사람이 연기를 버티는 시간 배율(레벨마다 +20%).</summary>
         public float SmokeScale { get { return 1f + (0.2f * Level(UpgradeId.Oxygen)); } }
@@ -376,11 +377,11 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Curtain: return fresh ? "몇 초마다 몸 주위로 물 고리가 터져 불을 밀어낸다" : "고리 범위 +0.5칸, 간격 −0.4초";
                 case UpgradeId.Turret: return fresh ? "7초마다 선 자리에 포탑을 세운다. 곁 불을 쏜다" : nextLevel == 3 || nextLevel == 5 ? "포탑 +1" : "포탑 지속 +1초";
                 case UpgradeId.Tank: return "물줄기가 더 멀리, 더 세게 (+15%)";
-                case UpgradeId.Boots: return "이동 속도 +12%";
+                case UpgradeId.Boots: return "이동 속도 +12%, 구조 시간 −5%";
                 case UpgradeId.Radio: return fresh ? "다음 신고를 2초 먼저 알려 준다. 구슬 범위 +20%" : "신고 예고 +1초, 구슬 범위 +20%";
-                case UpgradeId.Axe: return "구조 시간 −15%";
+                case UpgradeId.Axe: return "구조 시간 −18%";
                 case UpgradeId.Oxygen: return "갇힌 사람이 연기를 20% 더 오래 버틴다";
-                case UpgradeId.Suit: return "불 곁 열기·바닥 불 피해 −15%, 최대 체력 +10";
+                case UpgradeId.Suit: return "불에 받는 피해(열기·불 몹) −15%, 최대 체력 +10";
                 case UpgradeId.Cannon: return "진화! 관통하는 물줄기가 사방을 휩쓴다";
                 case UpgradeId.Squad: return "진화! 대원 4명이 흩어져 여러 건물을 동시에 구한다";
                 case UpgradeId.AirBomb: return "진화! 맵 어디든 불난 건물마다 소화탄이 떨어진다";

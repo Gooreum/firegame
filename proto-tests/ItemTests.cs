@@ -235,7 +235,7 @@ namespace FireGame.Prototypes.Tests
         {
             float plain = TimeToRescue(0);
             float axe = TimeToRescue(2);
-            Assert.InRange(axe / plain, 0.65f, 0.75f);
+            Assert.InRange(axe / plain, 0.62f, 0.72f);
         }
 
         /// <summary>큰 불 속에 갇힌 한 명을 연기로 잃기까지 걸린 초.</summary>

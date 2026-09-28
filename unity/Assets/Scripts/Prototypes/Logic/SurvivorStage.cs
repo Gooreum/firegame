@@ -86,8 +86,8 @@ namespace FireGame.Prototypes.Logic
             FinaleWindChance = 0.4f,
             BlazeMax = 0.25f,
             DartShare = 0f,
-            SquirrelShare = 0.05f,
-            BatFlockEvery = 25f,
+            SquirrelShare = 0.03f,
+            BatFlockEvery = 15f,
             Wind = true,
             // 나무 수십 그루가 보통(×2) 간격으로 뱉으면 불씨 떼가 동네를 덮는다.
             TreeSpit = 4f,

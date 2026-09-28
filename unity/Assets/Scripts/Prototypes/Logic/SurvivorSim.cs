@@ -529,6 +529,7 @@ namespace FireGame.Prototypes.Logic
             TickPuddles();
             TickStructures();
             TouchPlayer();
+            TickHeat();
             CollectGems();
             TickToolboxes();
             TickRescue();
@@ -680,6 +681,7 @@ namespace FireGame.Prototypes.Logic
             GemsCollected = 0;
             ShotsFired = 0;
             PlayerHurt = 0f;
+            HeatHurt = 0f;
         }
 
         private float Rand()
@@ -1526,8 +1528,13 @@ namespace FireGame.Prototypes.Logic
         public const float AmbulanceEvery = 20f;
         public const float AmbulanceHeal = 10f;
 
-        /// <summary>한 명 구할 때 차는 체력.</summary>
-        public const float RescueHeal = 20f;
+        /// <summary>한 명 구할 때 차는 체력(예전 20: 구조만 하면 체력이 늘 차서 방화복이 쓸모없었다).</summary>
+        public const float RescueHeal = 5f;
+
+        /// <summary>열기: 타는 건물 가장자리 이 칸 안에서 불 세기만큼 초당 피해를 받는다(방화복이 줄인다).</summary>
+        public const float HeatRange = 2.5f;
+        public const float HeatDps = 5f;
+        public const float TreeHeatRange = 1.5f;
 
         /// <summary>12칸 안에서 가장 크게 타는 건물 → 불이 몰린 곳 → 소방관 앞.</summary>
         private Vec2 HeliTarget()
@@ -1622,7 +1629,7 @@ namespace FireGame.Prototypes.Logic
             foreach (Puddle p in BurningGround)
             {
                 p.Life -= Dt;
-                if (p.Pos.DistanceTo(Player) <= p.Radius + PlayerRadius) Hurt(10f * Dt);
+                if (p.Pos.DistanceTo(Player) <= p.Radius + PlayerRadius) Hurt(10f * Build.HeatScale * Dt);
             }
         }
 
@@ -1901,7 +1908,32 @@ namespace FireGame.Prototypes.Logic
         private void TouchPlayer()
         {
             Near(Player, PlayerRadius, _near);
-            foreach (Enemy e in _near) Hurt(e.Touch * Dt);
+            // 적은 전부 불이다: 방화복이 닿는 피해도 줄인다.
+            foreach (Enemy e in _near) Hurt(e.Touch * Build.HeatScale * Dt);
+        }
+
+        /// <summary>이번 틱 열기로 받은 피해(그림용).</summary>
+        public float HeatHurt;
+
+        /// <summary>
+        /// 열기: 타는 건물 곁(가장자리 2.5칸)에 서 있으면 가장 센 불 하나만큼 초당 피해. 방화복이 줄이고, 물의 방벽 안에선 절반.
+        /// 활활 타는 건물에 갇힌 사람은 "먼저 끄고 들어갈지, 몸으로 버티며 바로 들어갈지" 고르게 된다.
+        /// </summary>
+        private void TickHeat()
+        {
+            float worst = 0f;
+            foreach (Structure s in Structures)
+            {
+                // 타는 건물은 2.5칸, 타는 나무(산불)는 1.5칸까지 뜨겁다.
+                if (!s.Burning || s.Fire <= worst) continue;
+                float range = s.IsBuilding ? HeatRange : s.Kind == StructureKind.Tree ? TreeHeatRange : -1f;
+                if (range > 0f && s.DistanceTo(Player) <= range) worst = s.Fire;
+            }
+            HeatHurt = 0f;
+            if (worst <= 0f) return;
+            float wall = Build.Level(UpgradeId.WaterWall) > 0 ? 0.5f : 1f;
+            HeatHurt = HeatDps * worst * Build.HeatScale * wall * Dt;
+            Hurt(HeatHurt);
         }
 
         private void Hurt(float amount)

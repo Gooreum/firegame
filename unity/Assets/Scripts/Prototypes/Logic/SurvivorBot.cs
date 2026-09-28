@@ -19,6 +19,9 @@ namespace FireGame.Prototypes.Logic
 
         private readonly SurvivorSim _sim;
 
+        /// <summary>측정용: 이 카드가 나오면 Lv3까지 무엇보다 먼저 고른다(아이템 하나의 힘을 잴 때).</summary>
+        public UpgradeId? Favorite;
+
         public SurvivorBot(SurvivorSim sim)
         {
             _sim = sim;
@@ -29,7 +32,12 @@ namespace FireGame.Prototypes.Logic
         {
             if (_sim.PendingChoices != null)
             {
-                _sim.Choose(PickCard(_sim.PendingChoices));
+                // 좋아하는 카드는 Lv3까지만 먼저 챙기고, 그 뒤엔 평소 순서대로(보조만 계속 고르면 초반 무기가 빈다).
+                int fav = Favorite.HasValue && _sim.Build.Level(Favorite.Value) < 3 ? _sim.PendingChoices.IndexOf(Favorite.Value) : -1;
+                // 좋아하는 무기의 진화도 먼저 고른다.
+                UpgradeId? evo = Favorite.HasValue ? Loadout.EvolutionOf(Favorite.Value) : null;
+                int evoAt = evo.HasValue ? _sim.PendingChoices.IndexOf(evo.Value) : -1;
+                _sim.Choose(evoAt >= 0 ? evoAt : fav >= 0 ? fav : PickCard(_sim.PendingChoices));
                 return;
             }
             Vec2 move = Move();
@@ -159,7 +167,9 @@ namespace FireGame.Prototypes.Logic
             }
             else if (fire != null && fire.Residents > 0 && danger < 1.5f)
             {
-                goal = fire.Door;
+                // 활활 타는데 체력이 모자라면(열기) 문 앞 대신 4칸 밖에서 먼저 끈다(AimHose가 건물을 겨눈다).
+                bool hot = fire.Fire >= 0.6f && _sim.Hp < _sim.MaxHp * 0.5f;
+                goal = hot ? StandOff(fire, p, 4f) : fire.Door;
             }
             else if (_sim.Toolboxes.Count > 0 && danger < 1f)
             {
@@ -190,6 +200,17 @@ namespace FireGame.Prototypes.Logic
             float len = (float)Math.Sqrt((fx * fx) + (fy * fy));
             if (len < 0.05f) return default;
             return new Vec2(fx / len, fy / len);
+        }
+
+        /// <summary>건물 가장자리에서 d칸 떨어진, 소방관 쪽 자리.</summary>
+        private static Vec2 StandOff(Structure s, Vec2 p, float d)
+        {
+            float dx = p.X - s.Pos.X;
+            float dy = p.Y - s.Pos.Y;
+            float len = (float)Math.Sqrt((dx * dx) + (dy * dy));
+            if (len < 0.01f) return s.Door;
+            float reach = Math.Max(s.Half.X, s.Half.Y) + d;
+            return new Vec2(s.Pos.X + (dx / len * reach), s.Pos.Y + (dy / len * reach));
         }
 
         /// <summary>갈 불: 갇힌 사람이 있는 불난 가게가 먼저, 없으면 가장 가까운 타는 건물.</summary>

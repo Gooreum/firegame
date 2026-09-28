@@ -124,13 +124,13 @@ namespace FireGame.Prototypes.Tests
             }
         }
 
-        public static FunRow Measure(int stage, int seeds)
+        public static FunRow Measure(int stage, int seeds, UpgradeId? favorite = null)
         {
             var row = new FunRow { Stage = stage };
             for (int seed = 1; seed <= seeds; seed++)
             {
                 var sim = new SurvivorSim(seed, stage);
-                var bot = new SurvivorBot(sim);
+                var bot = new SurvivorBot(sim) { Favorite = favorite };
                 int guard = 0;
                 while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) bot.Play();
                 if (sim.Outcome == SOutcome.Won) row.Won++;
@@ -178,7 +178,70 @@ namespace FireGame.Prototypes.Tests
                 Assert.True(row.LevelGap <= town.LevelGap * 1.2f, row.Stage + "스테이지 레벨업이 느리다: " + row.LevelGap + "초 (마을 " + town.LevelGap + ")");
                 Assert.True(row.IdleShare <= town.IdleShare + 0.05f, row.Stage + "스테이지 걷기만 하는 시간이 길다: " + row.IdleShare + " (마을 " + town.IdleShare + ")");
                 Assert.True(row.EventsPerMin >= town.EventsPerMin * 0.8f, row.Stage + "스테이지 사건이 적다: " + row.EventsPerMin + " (마을 " + town.EventsPerMin + ")");
+                Assert.InRange(row.MinHp, 0.3f, 0.6f);
             }
+            // 몸 압박: 한 판에서 가장 낮았던 체력이 평균 30~60%(없으면 방화복이 쓸모없고, 넘치면 구조보다 생존이 먼저다).
+            Assert.InRange(town.MinHp, 0.3f, 0.6f);
+        }
+
+        /// <summary>
+        /// 아이템 공정성: 아이템 하나를 첫 카드로 강제한 봇이 스테이지 1·2를 시드 5개씩 돈다.
+        /// 쓰레기템(구한 사람이 강제 아이템 평균의 70% 미만)도, 필수템(승이 평균의 2배 넘음)도 없어야 한다.
+        /// dotnet test proto-tests --filter ItemReport --logger "console;verbosity=detailed"
+        /// </summary>
+        [Fact]
+        public void ItemReport_NoDeadOrMustHaveItem()
+        {
+            UpgradeId[] items =
+            {
+                UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Turret,
+                UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Radio, UpgradeId.Axe, UpgradeId.Oxygen, UpgradeId.Suit,
+            };
+            (int won, float saved, float lost, float minHp) Both(UpgradeId? fav)
+            {
+                FunRow one = Measure(1, 5, fav);
+                FunRow two = Measure(2, 5, fav);
+                return (one.Won + two.Won, (one.Rescued + two.Rescued) / 2f, (one.PeopleLost + two.PeopleLost) / 2f, (one.MinHp + two.MinHp) / 2f);
+            }
+            var basic = Both(null);
+            _out.WriteLine("기본 봇: 승 " + basic.won + "/10, 구조 " + basic.saved.ToString("0.0") + ", 잃음 " + basic.lost.ToString("0.0") + ", 최저 체력 " + (basic.minHp * 100f).ToString("0") + "%");
+            var rows = new System.Collections.Generic.List<(UpgradeId id, int won, float saved, float lost, float minHp)>();
+            foreach (UpgradeId id in items)
+            {
+                var r = Both(id);
+                rows.Add((id, r.won, r.saved, r.lost, r.minHp));
+                _out.WriteLine(SurvivorUpgrades.Name(id) + ": 승 " + r.won + "/10, 구조 " + r.saved.ToString("0.0") + ", 잃음 " + r.lost.ToString("0.0") + ", 최저 체력 " + (r.minHp * 100f).ToString("0") + "%");
+            }
+            // 아이템 하나를 강제로 들면 그만큼 다른 카드를 포기하므로, 기본 봇이 아니라 강제한 아이템들의 평균과 비교한다.
+            float avgWon = 0f;
+            float avgSaved = 0f;
+            foreach (var r in rows)
+            {
+                avgWon += r.won;
+                avgSaved += r.saved;
+            }
+            avgWon /= rows.Count;
+            avgSaved /= rows.Count;
+            foreach (var r in rows)
+            {
+                Assert.True(r.saved >= avgSaved * 0.7f, SurvivorUpgrades.Name(r.id) + "를 들면 구한 사람이 너무 적다: " + r.saved + " (평균 " + avgSaved + ")");
+                Assert.True(r.won <= Math.Max(avgWon * 2f, avgWon + 2f), SurvivorUpgrades.Name(r.id) + "만 너무 잘 이긴다: " + r.won + " (평균 " + avgWon + ")");
+            }
+            // 방화복 없이도(기본 봇은 방화복을 거의 안 고른다) 이길 수 있고, 방화복을 들면 몸 압박이 준다.
+            // (잃은 사람 수는 10판으론 판마다 1~5명씩 흔들려 판정에 못 쓴다.)
+            Assert.True(basic.won >= 3, "기본 봇이 너무 못 이긴다: " + basic.won);
+            // 같은 보조끼리 비교한다: 보조를 먼저 챙기면 무기가 늦게 차서 몸 압박이 커진다(무기 강제와 섞으면 불공정).
+            float passiveHp = 0f;
+            int passives = 0;
+            foreach (var r in rows)
+            {
+                if (!Loadout.IsPassive(r.id)) continue;
+                passiveHp += r.minHp;
+                passives++;
+            }
+            passiveHp /= passives;
+            var suit = rows.Find(r => r.id == UpgradeId.Suit);
+            Assert.True(suit.minHp >= passiveHp, "방화복을 들어도 체력이 더 깎인다: " + suit.minHp + " (보조 평균 " + passiveHp + ")");
         }
     }
 }
