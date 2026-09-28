@@ -158,8 +158,9 @@ namespace FireGame.Prototypes.Logic
         /// 카드 3장을 뽑는다. 진화할 수 있으면 방수포를 반드시 넣는다.
         /// 아니면 <paramref name="level"/>(새 레벨)이 5의 배수일 때 노란 특수 장비를 반드시 한 장 넣는다.
         /// 뽑을 게 모자라면 회복으로 채운다. <paramref name="specialPool"/>가 있으면 노란 카드는 그 안에서만 나온다.
+        /// <paramref name="forceSpecial"/>이면(보물상자 첫 장) 노란 카드를 반드시 넣는다.
         /// </summary>
-        public static List<UpgradeId> Roll(Loadout loadout, int level, ref Rng rng, IList<UpgradeId> specialPool = null)
+        public static List<UpgradeId> Roll(Loadout loadout, int level, ref Rng rng, IList<UpgradeId> specialPool = null, bool forceSpecial = false)
         {
             var pool = new List<UpgradeId>();
             var specials = new List<UpgradeId>();
@@ -173,7 +174,7 @@ namespace FireGame.Prototypes.Logic
 
             var picks = new List<UpgradeId>(3);
             if (loadout.EvolutionReady) picks.Add(UpgradeId.Cannon);
-            else if (specials.Count > 0 && (SpecialDue(level) || rng.Next(100) < SpecialChance)) picks.Add(specials[rng.Next(specials.Count)]);
+            else if (specials.Count > 0 && (forceSpecial || SpecialDue(level) || rng.Next(100) < SpecialChance)) picks.Add(specials[rng.Next(specials.Count)]);
             while (picks.Count < 3 && pool.Count > 0)
             {
                 int k = rng.Next(pool.Count);

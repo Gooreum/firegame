@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FireGame.Core.Sim;
 using FireGame.Prototypes.Logic;
@@ -356,17 +357,17 @@ namespace FireGame.Prototypes.Tests
         }
 
         /// <summary>
-        /// 봇이 보스까지 가는 첫 시드(보스·성능 테스트용). 규칙이 난수 순서를 바꿔도 테스트가 깨지지 않게 매번 찾는다.
+        /// 봇이 대화재(3:00)까지 가는 첫 시드(성능·끝까지 가는 테스트용). 규칙이 난수 순서를 바꿔도 깨지지 않게 매번 찾는다.
         /// </summary>
-        private static readonly int BossSeed = FindBossSeed();
+        private static readonly int LongSeed = FindLongSeed();
 
-        private static int FindBossSeed()
+        private static int FindLongSeed()
         {
             for (int seed = 1; seed <= 20; seed++)
             {
                 var sim = new SurvivorSim(seed);
                 var bot = new SurvivorBot(sim);
-                while (sim.Outcome == SOutcome.Playing && sim.Time < SurvivorSim.BossAt + 1f) bot.Play();
+                while (sim.Outcome == SOutcome.Playing && sim.Time < SurvivorSim.FinaleAt + 1f) bot.Play();
                 if (sim.Outcome == SOutcome.Playing) return seed;
             }
             return 1;
@@ -374,24 +375,29 @@ namespace FireGame.Prototypes.Tests
 
         // --- S2 TC-6 ---
         [Fact]
-        public void Boss_ArrivesAtFourMinutes_AndPuttingItOutWins()
+        public void Finale_AtThreeMinutes_ThenSurvivingToFourWins()
         {
-            var sim = new SurvivorSim(BossSeed);
+            var sim = new SurvivorSim(LongSeed);
             var bot = new SurvivorBot(sim);
-            bool arrived = false;
-            while (sim.Outcome == SOutcome.Playing && sim.Time < SurvivorSim.BossAt + 1f)
+            bool finale = false;
+            while (sim.Outcome == SOutcome.Playing && sim.Time < SurvivorSim.FinaleAt + 1f)
             {
                 bot.Play();
-                if (sim.JustBossArrived) arrived = true;
+                if (sim.JustFinale) finale = true;
             }
             Assert.Equal(SOutcome.Playing, sim.Outcome);
-            Assert.True(arrived);
-            Assert.NotNull(sim.Boss);
-            Assert.InRange(sim.Time, SurvivorSim.BossAt, SurvivorSim.BossAt + 1.1f);
+            Assert.True(finale);
+            Assert.NotNull(sim.Landmark);
 
-            sim.Boss.Hp = 0.1f;
-            for (int i = 0; i < 600 && sim.Outcome == SOutcome.Playing; i++) bot.Play();
+            // 끝까지 버틴다: 불은 치우고 체력은 채워 규칙(4:00 승리)만 본다.
+            while (sim.Outcome == SOutcome.Playing)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                bot.Play();
+            }
             Assert.Equal(SOutcome.Won, sim.Outcome);
+            Assert.InRange(sim.Time, SurvivorSim.RunTime, SurvivorSim.RunTime + 0.1f);
         }
 
         // --- S2 TC-7 ---
@@ -409,7 +415,7 @@ namespace FireGame.Prototypes.Tests
 
         // --- S2 TC-8, TC-9 ---
         [Fact]
-        public void Bot_ReachesTheBossOften_WinsSometimes_AndTheCrowdIsCapped()
+        public void Bot_ReachesTheFinaleOften_WinsSometimes_AndTheCrowdIsCapped()
         {
             int reached = 0;
             int won = 0;
@@ -424,11 +430,11 @@ namespace FireGame.Prototypes.Tests
                     bot.Play();
                     Assert.True(sim.Enemies.Count <= SurvivorSim.MaxEnemies, "적이 상한을 넘었다");
                 }
-                if (sim.Boss != null) reached++;
+                if (sim.Finale) reached++;
                 if (sim.Outcome == SOutcome.Won) won++;
                 log.AppendLine("seed " + seed + ": " + sim.Outcome + " t=" + (int)sim.Time + " lv=" + sim.Level);
             }
-            Assert.True(reached >= 6, "보스까지 간 판이 " + reached + "개\n" + log);
+            Assert.True(reached >= 6, "대화재까지 간 판이 " + reached + "개\n" + log);
             Assert.InRange(won, 3, 9);
         }
 
@@ -436,14 +442,14 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void AFullRun_IsCheapToSimulate()
         {
-            int seed = BossSeed;
+            int seed = LongSeed;
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var sim = new SurvivorSim(seed);
             var bot = new SurvivorBot(sim);
             int guard = 0;
             while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) bot.Play();
             watch.Stop();
-            Assert.True(sim.Time > SurvivorSim.BossAt, "시드 " + BossSeed + "가 보스까지 못 가 성능 측정이 짧아졌다");
+            Assert.True(sim.Time > SurvivorSim.FinaleAt, "시드 " + LongSeed + "가 대화재까지 못 가 성능 측정이 짧아졌다");
             Assert.True(watch.Elapsed.TotalSeconds < 3.0, "한 판에 " + watch.Elapsed.TotalSeconds + "초");
         }
 
@@ -730,20 +736,23 @@ namespace FireGame.Prototypes.Tests
             var sim = new SurvivorSim(1);
             var times = new List<float>();
             int pairs = 0;
-            while (sim.Time < SurvivorSim.ReportTimes[SurvivorSim.ReportTimes.Length - 1] + 0.5f)
+            // 대형 신고와 대화재(3:00~)는 따로 본다(FinaleTests): 여기선 3:00 전 신고 표만.
+            float until = SurvivorSim.FinaleAt - 0.5f;
+            while (sim.Time < until)
             {
                 // 신고로 난 불만 보려고 매 틱 다른 불을 치운다.
                 sim.Enemies.Clear();
                 foreach (Structure s in sim.Structures) s.Fire = 0f;
                 sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
                 sim.Step(0f, 0f);
-                int shops = sim.Ignited.FindAll(s => s.Kind == StructureKind.House).Count;
+                int shops = sim.Ignited.FindAll(s => s.Kind == StructureKind.House && !(sim.JustBigReport && s == sim.BigReport)).Count;
                 for (int k = 0; k < shops; k++) times.Add(sim.Time);
                 if (shops >= 2) pairs++;
             }
-            Assert.Equal(SurvivorSim.ReportTimes.Length, times.Count);
+            Assert.Equal(Array.FindAll(SurvivorSim.ReportTimes, r => r < until).Length, times.Count);
             Assert.InRange(times[0], SurvivorSim.ReportTimes[0], SurvivorSim.ReportTimes[0] + 0.05f);
-            Assert.Equal(2, pairs);
+            Assert.Equal(1, pairs);
         }
 
         [Fact]
@@ -769,34 +778,35 @@ namespace FireGame.Prototypes.Tests
             Assert.True(sim.CiviliansLost > 0);
         }
 
-        /// <summary>4:00까지 건너뛰고 창고에서 나온 거인을 끈다.</summary>
-        private static void BeatTheBoss(SurvivorSim sim)
+        /// <summary>불은 치우고 체력은 채우며 4:00까지 버틴다.</summary>
+        private static void SurviveToTheEnd(SurvivorSim sim)
         {
-            while (sim.Boss == null)
+            while (sim.Outcome == SOutcome.Playing)
             {
                 sim.Enemies.Clear();
                 sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
                 sim.Step(0f, 0f);
             }
-            Enemy boss = sim.Boss;
-            boss.Hp = 0.1f;
-            sim.Player = new Vec2(boss.Pos.X, boss.Pos.Y - 4f);
-            for (int i = 0; i < 300 && sim.Outcome == SOutcome.Playing; i++) Spray(sim, boss.Pos, 1);
         }
 
         [Fact]
-        public void Boss_ComesOutOfTheBurningDepot()
+        public void Finale_SetsTheDepotAblaze_WithPeopleInside()
         {
             var sim = new SurvivorSim(1);
-            sim.Reports = false;
-            while (sim.Boss == null)
+            while (!sim.Finale && sim.Outcome == SOutcome.Playing)
             {
                 sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                // 신고된 가게는 바로 끈다(대화재 규칙만 본다).
+                foreach (Structure s in sim.Structures) if (s.Burning) s.Fire = 0f;
                 sim.Step(0f, 0f);
             }
             Structure depot = sim.Structures.Find(s => s.Kind == StructureKind.Depot);
+            Assert.Same(depot, sim.Landmark);
             Assert.True(depot.Burning);
-            Assert.True(sim.Boss.Pos.DistanceTo(depot.Door) < 0.5f);
+            Assert.True(depot.Residents >= SurvivorSim.FinalePeople);
         }
 
         [Fact]
@@ -804,7 +814,7 @@ namespace FireGame.Prototypes.Tests
         {
             var perfect = new SurvivorSim(1);
             perfect.Reports = false;
-            BeatTheBoss(perfect);
+            SurviveToTheEnd(perfect);
             Assert.Equal(SOutcome.Won, perfect.Outcome);
             Assert.Equal(3, perfect.Stars);
 
@@ -813,7 +823,7 @@ namespace FireGame.Prototypes.Tests
             Structure shop = oneLost.Structures.Find(s => s.Kind == StructureKind.House && s.Residents > 0);
             oneLost.Ignite(shop, 1f);
             shop.Integrity = 0.0001f;
-            BeatTheBoss(oneLost);
+            SurviveToTheEnd(oneLost);
             Assert.Equal(SOutcome.Won, oneLost.Outcome);
             Assert.Equal(1, oneLost.HousesLost);
             Assert.Equal(2, oneLost.Stars);

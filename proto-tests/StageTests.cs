@@ -30,11 +30,10 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(SurvivorTown.Build().Count, sim.Structures.Count);
             sim.Enemies.Clear();
             Assert.Equal(2f, sim.Spawn(EnemyKind.Ember, sim.Player).MaxHp);
-            Assert.Equal(1100f, sim.Spawn(EnemyKind.Boss, sim.Player).MaxHp);
         }
 
         [Fact]
-        public void Stage2_ScalesEnemiesAndBoss()
+        public void Stage2_KeepsBaseStats_AndWindsUpTheFinale()
         {
             var one = new SurvivorSim(1, 1);
             var two = new SurvivorSim(1, 2);
@@ -44,7 +43,7 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(ember1 * two.Stage.EnemyHp, ember2, 3);
             // 숲은 배율을 올리지 않는다: 난이도는 새 규칙(바람·다람쥐·박쥐)에서 온다(재미 밀도 측정).
             Assert.True(two.Stage.EnemyHp >= 1f && two.Stage.SpawnRate >= 1f && two.Stage.FireGrowth >= one.Stage.FireGrowth);
-            Assert.True(two.Spawn(EnemyKind.Boss, two.Player).MaxHp > one.Spawn(EnemyKind.Boss, one.Player).MaxHp);
+            Assert.True(two.Stage.FinaleWindChance > SurvivorSim.WindSpreadChance);
         }
 
         [Fact]

@@ -29,8 +29,8 @@ namespace FireGame.Prototypes.Logic
         /// <summary>건물 불이 초당 커지는 양.</summary>
         public float FireGrowth = SurvivorSim.FireGrowth;
 
-        public EnemyKind BossKind = EnemyKind.Boss;
-        public float BossHp = 1100f;
+        /// <summary>대화재(3:00~) 동안 바람 번짐 확률. 바람이 없는 스테이지에선 쓰지 않는다.</summary>
+        public float FinaleWindChance = SurvivorSim.WindSpreadChance;
 
         /// <summary>가장자리 스폰에서 큰 불 비율의 상한(시간이 갈수록 이만큼까지 오른다).</summary>
         public float BlazeMax = 0.3f;
@@ -40,6 +40,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>가장자리 스폰에서 불다람쥐 비율(나무를 노린다).</summary>
         public float SquirrelShare;
+
+        /// <summary>타는 나무가 불씨를 뱉는 간격 배율(건물 기준). 0이면 안 뱉는다(바람으로만 번진다).</summary>
+        public float TreeSpit = 2f;
 
         /// <summary>이 간격마다 재 박쥐 무리가 가장자리에서 날아온다(0이면 안 온다).</summary>
         public float BatFlockEvery;
@@ -52,8 +55,8 @@ namespace FireGame.Prototypes.Logic
     }
 
     /// <summary>
-    /// 스테이지 표. 스테이지마다 기본 압력(적 체력·스폰·불 속도·보스 체력)을 25~35% 올리고,
-    /// 새 위협 하나와 그 대응책(레어 아이템)을 함께 넣는다.
+    /// 스테이지 표. 1스테이지의 재미 밀도(레벨업·사건 빈도)를 기준으로 맞추고,
+    /// 스테이지마다 새 위협 하나와 그 대응책(레어 아이템)을 넣는다(docs/prototype-c-balance.md).
     /// </summary>
     public static class SurvivorStages
     {
@@ -73,18 +76,21 @@ namespace FireGame.Prototypes.Logic
             Number = 2,
             Name = "산불 숲",
             Map = SurvivorForest.Build,
-            // 신고는 마을과 같은 15번: 9번으로 줄였더니 할 일이 적어 지루했다(재미 밀도 측정, 분당 사건 2.9 대 3.8).
-            ReportTimes = SurvivorSim.ReportTimes,
+            // 신고는 건물 수에 맞춰 12번(마을 9채에 15번, 숲 7채): 9번은 할 일이 적어 지루했고(분당 사건 2.9 대 3.8),
+            // 15번은 건물 한 채에 불이 너무 자주 나 동네를 늘 잃었다(재미 밀도 측정).
+            ReportTimes = new[] { 10f, 30f, 50f, 70f, 90f, 110f, 120f, 140f, 160f, 180f, 200f, 230f },
             // 숲의 난이도는 배율이 아니라 새 규칙(바람·다람쥐·박쥐)에서 온다.
             EnemyHp = 1f,
             SpawnRate = 1f,
-            BossHp = 1100f * 1.3f,
-            BossKind = EnemyKind.Boar,
+            // 대화재 동안 바람이 거세져 산불이 캠프를 덮친다.
+            FinaleWindChance = 0.4f,
             BlazeMax = 0.25f,
             DartShare = 0f,
-            SquirrelShare = 0.1f,
+            SquirrelShare = 0.05f,
             BatFlockEvery = 25f,
             Wind = true,
+            // 나무 수십 그루가 보통(×2) 간격으로 뱉으면 불씨 떼가 동네를 덮는다.
+            TreeSpit = 4f,
             Specials = new[] { UpgradeId.Heli, UpgradeId.Curtain, UpgradeId.Partner, UpgradeId.Rain, UpgradeId.Retardant },
         };
 

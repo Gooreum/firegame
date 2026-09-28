@@ -16,16 +16,12 @@ namespace FireGame.Prototypes.Logic
         Ember,
         Blaze,
         Dart,
-        Boss,
 
         /// <summary>산불 숲: 나무를 노려 달려가 불을 붙이는 불다람쥐.</summary>
         Squirrel,
 
         /// <summary>산불 숲: 무리 지어 날아와 소방관을 쫓는 재 박쥐.</summary>
         Bat,
-
-        /// <summary>산불 숲 보스: 경고한 뒤 일직선으로 돌진하는 화염 멧돼지.</summary>
-        Boar,
     }
 
     public enum ShotKind
@@ -171,13 +167,28 @@ namespace FireGame.Prototypes.Logic
     /// <summary>
     /// 시험판 C(뱀서라이크) 규칙. 60Hz 고정 스텝, 시드 Rng로 결정적이다.
     /// 소방관은 움직이기만 하고 무기는 알아서 쏜다. 불 괴물을 끄면 구슬이 떨어지고, 구슬이 모이면 카드 3장 중 하나를 고른다.
-    /// 4:00에 나오는 화염 거인을 끄면 이기고, 체력이 0이 되면 진다.
+    /// 1:20·2:40에 대형 신고, 3:00부터 대화재. 4:00까지 동네를 절반 넘게 지키면 이기고, 체력이 0이 되거나 동네를 잃으면 진다.
     /// </summary>
     public sealed class SurvivorSim
     {
         public const float Dt = 1f / 60f;
         public const float ArenaSize = 60f;
-        public const float BossAt = 240f;
+        /// <summary>한 판 길이. 이때까지 동네를 지키면 이긴다(보스는 없다: 목표는 건물과 사람).</summary>
+        public const float RunTime = 240f;
+
+        /// <summary>이때부터 끝까지 대화재: 랜드마크가 크게 타고 신고가 몰린다.</summary>
+        public const float FinaleAt = 180f;
+        public const float FinaleReportEvery = 8f;
+        public const int FinalePeople = 5;
+
+        /// <summary>대형 신고: 큰 불에 여럿이 갇힌다. 다 구하면 보물상자.</summary>
+        public static readonly float[] BigReportTimes = { 80f, 160f };
+        public const float BigReportFire = 0.7f;
+        public const int BigReportPeople = 3;
+        public const float ChestLife = 30f;
+
+        /// <summary>보물상자 하나로 고르는 카드 수(첫 장은 노란 카드).</summary>
+        public const int ChestPicks = 2;
         public const int MaxEnemies = 350;
         public const int MaxGems = 400;
         public const float PlayerRadius = 0.4f;
@@ -248,7 +259,21 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이번 틱에 공구상자를 주웠다(고칠 건물이 없어 체력을 채운 경우도).</summary>
         public bool JustPickedToolbox;
-        public Enemy Boss;
+        /// <summary>지금 진행 중인 대형 신고 건물(없으면 null).</summary>
+        public Structure BigReport;
+
+        /// <summary>대화재 건물(물류창고·제재소). 3:00 전에는 null.</summary>
+        public Structure Landmark;
+        public bool Finale;
+
+        /// <summary>대형 신고를 다 구하면 문 앞에 떨어지는 보물상자.</summary>
+        public readonly List<Pickup> Chests = new List<Pickup>();
+        public bool JustBigReport;
+        public bool JustFinale;
+        public bool JustChest;
+
+        /// <summary>지금 고르는 카드가 보물상자 카드인가(레벨업 카드가 아니라). 화면 제목용.</summary>
+        public bool ChoosingChest;
         public SOutcome Outcome;
 
         /// <summary>null이 아니면 레벨업 카드를 고르는 중이다. 이때 Step은 시간을 멈춘다.</summary>
@@ -352,7 +377,6 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>방금 고른 카드로 최대 레벨(Lv5)이 된 무기·보조. 다음 Step까지 남는다(진화 신호와 같다).</summary>
         public UpgradeId? JustMaxed;
-        public bool JustBossArrived;
         public bool JustRescued;
         public bool JustWave;
 
@@ -388,7 +412,10 @@ namespace FireGame.Prototypes.Logic
         private float _jetAngle;
         private float _droneAngle;
         private int _reportsDone;
-        private float _bossBurstClock;
+        private int _bigDone;
+        private bool _bigFailed;
+        private float _finaleClock;
+        private int _bonusPicks;
         private int _wavesDone;
         private float _nextWind;
         private int _windIndex;
@@ -479,7 +506,7 @@ namespace FireGame.Prototypes.Logic
             CollectGems();
             TickToolboxes();
             TickRescue();
-            TickBoss();
+            TickChests();
             // Sweep 전에 잰다: 죽은 적을 치우면 해시 번호가 어긋난다.
             Measure();
             Sweep();
@@ -498,7 +525,7 @@ namespace FireGame.Prototypes.Logic
                 Outcome = SOutcome.Lost;
                 return;
             }
-            if (Boss != null && Boss.Dead)
+            if (Time >= RunTime)
             {
                 Outcome = SOutcome.Won;
                 // 별: 이기면 1, 건물 75% 이상 지키면 +1, 한 명도 안 잃으면 +1.
@@ -507,12 +534,13 @@ namespace FireGame.Prototypes.Logic
                 return;
             }
 
-            if (Xp >= XpToNext)
+            if (PendingChoices == null && Xp >= XpToNext)
             {
                 Xp -= XpToNext;
                 Level++;
                 Stats.LevelTimes.Add(Time);
                 PendingChoices = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials);
+                ChoosingChest = false;
                 JustLeveled = true;
                 PushAway(Player, 4f, 3f);
             }
@@ -523,6 +551,22 @@ namespace FireGame.Prototypes.Logic
             if (PendingChoices == null || index < 0 || index >= PendingChoices.Count) return;
             UpgradeId id = PendingChoices[index];
             PendingChoices = null;
+            Take(id);
+            // 보물상자: 남은 고르기가 있으면 바로 다음 카드.
+            if (_bonusPicks > 0) OpenBonusPick();
+        }
+
+        /// <summary>보물상자 카드 한 번. 상자의 첫 장은 노란 카드를 보장한다.</summary>
+        private void OpenBonusPick()
+        {
+            bool special = _bonusPicks == ChestPicks;
+            _bonusPicks--;
+            ChoosingChest = true;
+            PendingChoices = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials, special);
+        }
+
+        private void Take(UpgradeId id)
+        {
 
             if (id == UpgradeId.Heal)
             {
@@ -557,8 +601,6 @@ namespace FireGame.Prototypes.Logic
                 case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
                 case EnemyKind.Squirrel: e.MaxHp = 3f * scale; e.Speed = 3.6f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; e.Seeker = true; break;
                 case EnemyKind.Bat: e.MaxHp = 1.5f * scale; e.Speed = 3.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
-                case EnemyKind.Boss: e.MaxHp = Stage.BossHp; e.Speed = 1.1f; e.Radius = 1.4f; e.Touch = 35f; e.Xp = 0; break;
-                case EnemyKind.Boar: e.MaxHp = Stage.BossHp; e.Speed = 1.4f; e.Radius = 1.5f; e.Touch = 30f; e.Xp = 0; break;
             }
             e.Hp = e.MaxHp;
             Enemies.Add(e);
@@ -602,13 +644,12 @@ namespace FireGame.Prototypes.Logic
             JustMaxed = null;
             Repaired.Clear();
             JustPickedToolbox = false;
-            JustBossArrived = false;
+            JustBigReport = false;
+            JustFinale = false;
+            JustChest = false;
             JustRescued = false;
             JustWave = false;
             JustWindShift = false;
-            JustBoarWindup = false;
-            JustBoarCharge = false;
-            JustBoarTired = false;
             JustBats = false;
             GemsCollected = 0;
             ShotsFired = 0;
@@ -638,7 +679,7 @@ namespace FireGame.Prototypes.Logic
         private void Direct()
         {
             // 불은 이제 주로 건물에서 나온다. 가장자리에서 몰려오는 불은 예전(3→35)보다 훨씬 적다.
-            float rate = Stage.SpawnRate * (Time < BossAt ? 1f + (7f * (float)Math.Pow(Time / BossAt, 1.5)) : 6f);
+            float rate = Stage.SpawnRate * (1f + (7f * (float)Math.Pow(Math.Min(Time / RunTime, 1f), 1.5)));
             _spawnDebt += rate * Dt;
             while (_spawnDebt >= 1f)
             {
@@ -692,44 +733,74 @@ namespace FireGame.Prototypes.Logic
                 Report();
             }
 
-            if (Boss == null && Time >= BossAt)
+            while (Reports && _bigDone < BigReportTimes.Length && Time >= BigReportTimes[_bigDone])
             {
-                // 상한이 꽉 찼어도 거인은 나온다: 불씨 하나를 조용히 치운다.
-                if (Enemies.Count >= MaxEnemies)
+                _bigDone++;
+                StartBigReport();
+            }
+
+            if (Reports && !Finale && Time >= FinaleAt) StartFinale();
+            if (Finale)
+            {
+                // 대화재: 8초마다 신고가 들어오고, 그 가게엔 한 명이 더 갇힌다.
+                _finaleClock -= Dt;
+                if (_finaleClock <= 0f)
                 {
-                    Enemy spare = Enemies.Find(e => e.Kind == EnemyKind.Ember && !e.Dead);
-                    if (spare != null) Enemies.Remove(spare);
+                    _finaleClock = FinaleReportEvery;
+                    Structure hit = Report();
+                    if (hit != null) hit.Residents++;
+                    Stats.Events++;
                 }
-                // 물류창고가 확 타오르고 그 문 앞에서 거인이 나온다(창고가 없으면 가까운 곳에서).
-                Structure depot = Structures.Find(x => x.Kind == StructureKind.Depot);
-                Vec2 at = SpawnPoint(12f);
-                if (depot != null)
-                {
-                    at = depot.Door;
-                    if (!depot.Collapsed)
-                    {
-                        depot.Wet = 0f;
-                        Ignite(depot, 1f);
-                    }
-                }
-                Boss = Spawn(Stage.BossKind, at);
-                JustBossArrived = true;
-                _bossBurstClock = 3f;
             }
         }
 
-        /// <summary>신고: 안 타고 안 무너진 가게 하나에 불을 낸다(젖어 있어도 난다).</summary>
-        private void Report()
+        /// <summary>대형 신고: 안 탄 가게 하나에 큰 불, 셋이 더 갇힌다. 모두 구하면 보물상자.</summary>
+        private void StartBigReport()
+        {
+            Structure pick = PickUnburntHouse();
+            if (pick == null) return;
+            pick.Wet = 0f;
+            Ignite(pick, BigReportFire);
+            pick.Residents += BigReportPeople;
+            BigReport = pick;
+            _bigFailed = false;
+            JustBigReport = true;
+            Stats.Events++;
+        }
+
+        /// <summary>대화재: 랜드마크(물류창고·제재소)가 크게 타고 다섯이 갇힌다. 없으면 안 탄 가게 하나.</summary>
+        private void StartFinale()
+        {
+            Finale = true;
+            JustFinale = true;
+            _finaleClock = FinaleReportEvery;
+            Stats.Events++;
+            Structure mark = Structures.Find(x => x.Kind == StructureKind.Depot && !x.Collapsed) ?? PickUnburntHouse();
+            if (mark == null) return;
+            Landmark = mark;
+            mark.Wet = 0f;
+            Ignite(mark, 1f);
+            mark.Residents += FinalePeople;
+        }
+
+        private Structure PickUnburntHouse()
         {
             var pool = new List<Structure>();
             foreach (Structure s in Structures)
             {
                 if (s.Kind == StructureKind.House && !s.Collapsed && !s.Burning) pool.Add(s);
             }
-            if (pool.Count == 0) return;
-            Structure pick = pool[_rng.Next(pool.Count)];
+            return pool.Count == 0 ? null : pool[_rng.Next(pool.Count)];
+        }
+
+        /// <summary>신고: 안 타고 안 무너진 가게 하나에 불을 낸다(젖어 있어도 난다). 불낸 가게를 돌려준다.</summary>
+        private Structure Report()
+        {
+            Structure pick = PickUnburntHouse();
+            if (pick == null) return null;
             pick.Wet = 0f;
             Ignite(pick, 0.35f);
+            return pick;
         }
 
         private EnemyKind PickKind()
@@ -890,20 +961,13 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
 
-                if (e.Kind == EnemyKind.Boar && (BoarWindup > 0f || BoarCharge > 0f || BoarTired > 0f))
-                {
-                    // 멧돼지: 경고·돌진·지친 동안은 스스로 걷지 않는다(돌진은 TickBoar가 옮긴다).
-                    vx = 0f;
-                    vy = 0f;
-                }
-                float heavy = IsBoss(e.Kind) ? 0.1f : 1f;
-                float stepX = (vx + (sx * 3f) + (e.Knock.X * heavy)) * Dt;
-                float stepY = (vy + (sy * 3f) + (e.Knock.Y * heavy)) * Dt;
+                float stepX = (vx + (sx * 3f) + e.Knock.X) * Dt;
+                float stepY = (vy + (sy * 3f) + e.Knock.Y) * Dt;
                 e.Pos.X += stepX;
                 e.Pos.Y += stepY;
 
                 // 큰 불은 걸어온 자리에 불을 흘린다.
-                if (e.Kind == EnemyKind.Blaze || IsBoss(e.Kind))
+                if (e.Kind == EnemyKind.Blaze)
                 {
                     e.Trail += (float)Math.Sqrt((stepX * stepX) + (stepY * stepY));
                     if (e.Trail >= TrailStep)
@@ -911,14 +975,13 @@ namespace FireGame.Prototypes.Logic
                         e.Trail = 0f;
                         if (BurningGround.Count < MaxBurningGround)
                         {
-                            float r = IsBoss(e.Kind) ? 1.1f : 0.6f;
-                            BurningGround.Add(new Puddle { Pos = e.Pos, Radius = r, Life = 4f, MaxLife = 4f });
+                            BurningGround.Add(new Puddle { Pos = e.Pos, Radius = 0.6f, Life = 4f, MaxLife = 4f });
                         }
                     }
                 }
                 e.Pos = ClampToArena(e.Pos);
-                // 건물에서 나온 불씨와 거인만 옮겨붙인다. 소방관을 쫓는 불(가장자리 불씨·큰 불)은 발밑에 불을 흘릴 뿐이다.
-                if (e.Seeker || IsBoss(e.Kind)) TouchStructures(e);
+                // 건물에서 나온 불씨와 다람쥐만 옮겨붙인다. 소방관을 쫓는 불(가장자리 불씨·큰 불)은 발밑에 불을 흘릴 뿐이다.
+                if (e.Seeker) TouchStructures(e);
                 e.Knock.X *= knockDecay;
                 e.Knock.Y *= knockDecay;
             }
@@ -1417,6 +1480,9 @@ namespace FireGame.Prototypes.Logic
             foreach (Structure st in Structures)
             {
                 if (st.Collapsed || st.Burning) continue;
+                // 다람쥐는 나무에만 불을 붙인다: 가는 길의 건물까지 태우면 건물당 불이 마을의 1.5배라 동네를 늘 잃었다.
+                // 나무 불은 바람을 타고 건물을 위협하므로 숲다운 압박은 남는다.
+                if (e.Kind == EnemyKind.Squirrel && st.Kind != StructureKind.Tree) continue;
                 if (!st.Within(e.Pos, e.Radius)) continue;
                 Ignite(st, 0.15f);
                 // 불씨와 다람쥐는 불을 붙이며 그 속으로 사라진다(다람쥐가 살아남으면 한 마리가 숲을 다 태운다).
@@ -1536,17 +1602,19 @@ namespace FireGame.Prototypes.Logic
                         s.WindClock = WindSpreadEvery;
                         // 반쯤만 옮는다: 늘 옮기면 한 그루가 두세 그루를 태워 숲 전체가 순식간에 탄다.
                         Structure next = Downwind(s);
-                        if (next != null && Rand() < WindSpreadChance) Ignite(next, 0.3f);
+                        // 대화재 동안 숲은 바람이 거세진다(캠프를 덮치는 산불).
+                        float chance = Finale ? Stage.FinaleWindChance : WindSpreadChance;
+                        if (next != null && Rand() < chance) Ignite(next, 0.3f);
                     }
                 }
 
                 // 막 붙은 작은 불은 아직 번지지 않는다(0.4까지 약 5초) — 일찍 잡으면 막을 수 있다.
-                // 산불 숲의 나무는 불씨를 느리게(네 배 간격) 뱉는다: 수십 그루가 보통 속도로 뱉으면 불씨 떼가 동네를 덮고,
-                // 아예 안 뱉으면 경험치가 안 흘러 레벨업이 느려진다(재미 밀도 측정).
-                if (s.Fire >= SpreadAt) s.SpitClock -= Dt;
+                // 나무가 불씨를 뱉는 간격은 스테이지가 정한다(숲은 느리게: 수십 그루가 보통 속도로 뱉으면 불씨 떼가 동네를 덮는다).
+                float spit = s.IsBuilding ? 1f : s.Kind == StructureKind.Tree ? Stage.TreeSpit : 2f;
+                if (s.Fire >= SpreadAt && spit > 0f) s.SpitClock -= Dt;
                 if (s.SpitClock <= 0f)
                 {
-                    s.SpitClock = (9f - (5f * s.Fire)) * (s.IsBuilding ? 1f : Stage.Wind && s.Kind == StructureKind.Tree ? 4f : 2f);
+                    s.SpitClock = (9f - (5f * s.Fire)) * spit;
                     SpitEmber(s, 3f);
                 }
                 if (s.IsBuilding && s.Fire >= 0.8f)
@@ -1687,6 +1755,43 @@ namespace FireGame.Prototypes.Logic
             }
         }
 
+        /// <summary>
+        /// 대형 신고가 끝났는지 보고(모두 구했으면 문 앞에 상자), 상자를 줍게 한다.
+        /// 연기로 한 명이라도 잃었거나 건물이 무너지면 상자는 없다.
+        /// </summary>
+        private void TickChests()
+        {
+            if (BigReport != null)
+            {
+                if (BigReport.Collapsed)
+                {
+                    BigReport = null;
+                }
+                else if (BigReport.Residents <= 0)
+                {
+                    if (!_bigFailed) Chests.Add(new Pickup { Pos = BigReport.Door, Life = ChestLife });
+                    BigReport = null;
+                }
+            }
+
+            for (int i = Chests.Count - 1; i >= 0; i--)
+            {
+                Pickup chest = Chests[i];
+                chest.Life -= Dt;
+                if (Player.DistanceTo(chest.Pos) <= PickupRange + PlayerRadius)
+                {
+                    Chests.RemoveAt(i);
+                    JustChest = true;
+                    Stats.Events++;
+                    _bonusPicks = ChestPicks;
+                    // 레벨업 카드를 고르는 중이면 그걸 고른 뒤에 이어서 연다(Choose).
+                    if (PendingChoices == null) OpenBonusPick();
+                    continue;
+                }
+                if (chest.Life <= 0f) Chests.RemoveAt(i);
+            }
+        }
+
         /// <summary>가장 많이 부서진 건물(타는 곳 먼저)을 고치고 불을 줄이고 적신다. 고칠 곳이 없으면 체력을 채운다.</summary>
         private void UseToolbox()
         {
@@ -1803,6 +1908,7 @@ namespace FireGame.Prototypes.Logic
                         s.Residents--;
                         CiviliansLost++;
                         PeopleLost.Add(s);
+                        if (s == BigReport) _bigFailed = true;
                     }
                 }
 
@@ -1829,124 +1935,9 @@ namespace FireGame.Prototypes.Logic
             foreach (Civilian c in Civilians) c.Life -= Dt;
         }
 
-        /// <summary>판 끝 보스(화염 거인·화염 멧돼지).</summary>
-        public static bool IsBoss(EnemyKind kind)
-        {
-            return kind == EnemyKind.Boss || kind == EnemyKind.Boar;
-        }
-
-        public const float BoarEvery = 7f;
-        public const float BoarWindupTime = 1.2f;
-        public const float BoarChargeTime = 0.9f;
-        public const float BoarChargeSpeed = 13f;
-        public const float BoarTiredTime = 1.5f;
-        public const float BoarTiredDamage = 1.5f;
-        public const float BoarHit = 30f;
-
-        /// <summary>멧돼지 돌진 경고가 남은 시간(0보다 크면 바닥에 돌진 길이 깜빡인다).</summary>
-        public float BoarWindup;
-
-        /// <summary>돌진 남은 시간.</summary>
-        public float BoarCharge;
-
-        /// <summary>돌진 뒤 지친 남은 시간. 이때 물 피해가 1.5배.</summary>
-        public float BoarTired;
-
-        /// <summary>돌진 방향(단위 벡터). 경고 시작 때 소방관 쪽으로 정한다.</summary>
-        public Vec2 BoarAim;
-        public bool JustBoarWindup;
-        public bool JustBoarCharge;
-        public bool JustBoarTired;
-        private float _boarClock = 4f;
-        private bool _boarHitPlayer;
-
-        /// <summary>
-        /// 화염 멧돼지: 7초마다 1.2초 멈춰 소방관 쪽으로 돌진 길을 경고하고, 0.9초 동안 초속 13으로 돌진한다.
-        /// 지나간 자리에 불을 남기고 닿는 나무·건물에 불을 붙이며, 소방관이 맞으면 30 피해. 돌진 뒤 1.5초는 지친다.
-        /// </summary>
-        private void TickBoar(Enemy boar)
-        {
-            if (BoarCharge > 0f)
-            {
-                float step = BoarChargeSpeed * Dt;
-                boar.Pos = new Vec2(boar.Pos.X + (BoarAim.X * step), boar.Pos.Y + (BoarAim.Y * step));
-                boar.Trail += step;
-                if (boar.Trail >= 1f && BurningGround.Count < MaxBurningGround)
-                {
-                    boar.Trail = 0f;
-                    BurningGround.Add(new Puddle { Pos = boar.Pos, Radius = 0.9f, Life = 5f, MaxLife = 5f });
-                }
-                foreach (Structure st in Structures)
-                {
-                    if (!st.Burning && st.Within(boar.Pos, boar.Radius)) Ignite(st, 0.4f);
-                }
-                if (!_boarHitPlayer && Player.DistanceTo(boar.Pos) <= boar.Radius + PlayerRadius)
-                {
-                    _boarHitPlayer = true;
-                    Hurt(BoarHit);
-                }
-                BoarCharge -= Dt;
-                bool wall = boar.Pos.X <= 1f || boar.Pos.Y <= 1f || boar.Pos.X >= ArenaSize - 1f || boar.Pos.Y >= ArenaSize - 1f;
-                boar.Pos = ClampToArena(boar.Pos);
-                if (BoarCharge <= 0f || wall)
-                {
-                    BoarCharge = 0f;
-                    BoarTired = BoarTiredTime;
-                    JustBoarTired = true;
-                }
-                return;
-            }
-            if (BoarWindup > 0f)
-            {
-                BoarWindup -= Dt;
-                if (BoarWindup <= 0f)
-                {
-                    BoarCharge = BoarChargeTime;
-                    _boarHitPlayer = false;
-                    JustBoarCharge = true;
-                }
-                return;
-            }
-            if (BoarTired > 0f)
-            {
-                BoarTired -= Dt;
-                return;
-            }
-            _boarClock -= Dt;
-            if (_boarClock > 0f) return;
-            _boarClock = BoarEvery - BoarWindupTime - BoarChargeTime - BoarTiredTime;
-            float dx = Player.X - boar.Pos.X;
-            float dy = Player.Y - boar.Pos.Y;
-            float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
-            BoarAim = d > 0.01f ? new Vec2(dx / d, dy / d) : new Vec2(1f, 0f);
-            BoarWindup = BoarWindupTime;
-            JustBoarWindup = true;
-        }
-
-        private void TickBoss()
-        {
-            if (Boss == null || Boss.Dead) return;
-            if (Boss.Kind == EnemyKind.Boar)
-            {
-                TickBoar(Boss);
-                return;
-            }
-            _bossBurstClock -= Dt;
-            if (_bossBurstClock > 0f) return;
-            _bossBurstClock = 3f;
-            for (int k = 0; k < 12 && Enemies.Count < MaxEnemies; k++)
-            {
-                double a = Math.PI * 2 * k / 12;
-                var at = new Vec2(Boss.Pos.X + (float)(Math.Cos(a) * 1.8), Boss.Pos.Y + (float)(Math.Sin(a) * 1.8));
-                Enemy e = Spawn(EnemyKind.Ember, ClampToArena(at));
-                e.Knock = new Vec2((float)Math.Cos(a) * 6f, (float)Math.Sin(a) * 6f);
-            }
-        }
-
         private void Damage(Enemy e, float amount, Vec2 knock, bool show)
         {
             if (e.Dead) return;
-            if (e.Kind == EnemyKind.Boar && BoarTired > 0f) amount *= BoarTiredDamage;
             bool crit = Rand() < 0.1f;
             if (crit) amount *= 2f;
             e.Hp -= amount;
@@ -1963,7 +1954,6 @@ namespace FireGame.Prototypes.Logic
         {
             e.Dead = true;
             Kills++;
-            if (IsBoss(e.Kind)) return;
             DropGem(e.Pos, e.Xp);
             if (e.Kind == EnemyKind.Blaze)
             {
@@ -1997,7 +1987,7 @@ namespace FireGame.Prototypes.Logic
         {
             foreach (Enemy e in Enemies)
             {
-                if (e.Dead || IsBoss(e.Kind)) continue;
+                if (e.Dead) continue;
                 float d = e.Pos.DistanceTo(from);
                 if (d > radius) continue;
                 Vec2 k = Knockback(from, e.Pos, strength * 4f);

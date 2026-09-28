@@ -65,12 +65,12 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void SimTargets_IncludeBossAndBurningBuildings()
+        public void SimTargets_IncludeFiresAndBurningBuildings()
         {
             var sim = new SurvivorSim(1);
             sim.Enemies.Clear();
             sim.Reports = false;
-            Enemy boss = sim.Spawn(EnemyKind.Boss, new Vec2(10f, 10f));
+            Enemy boss = sim.Spawn(EnemyKind.Blaze, new Vec2(10f, 10f));
             Structure shop = sim.Structures.Find(s => s.IsBuilding);
             shop.Fire = 0.5f;
             var into = new List<Vec2>();
