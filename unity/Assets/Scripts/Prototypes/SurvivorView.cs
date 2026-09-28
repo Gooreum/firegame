@@ -108,6 +108,10 @@ namespace FireGame.Prototypes
         private Pool _bossBody;
         private Pool _bossTongues;
         private Pool _gems;
+        private Pool _toolbox;
+        private Pool _toolboxGlow;
+        private int _toolboxesShown;
+        private static Sprite _toolboxSprite;
         private Pool _gemCores;
         private Pool _dropGlow;
         private RibbonPool _waterSheath;
@@ -312,6 +316,7 @@ namespace FireGame.Prototypes
             _waveAge = 99f;
             _hurtClock = 0f;
             _comboShown = 0;
+            _toolboxesShown = 0;
             _lastPlayer = new Vector3(_sim.Player.X, _sim.Player.Y, 0f);
             _stepClock = 0f;
             _regenClock = 0f;
@@ -761,6 +766,38 @@ namespace FireGame.Prototypes
         /// <summary>동네 신호: 불남·꺼짐·무너짐·폭발·사람 잃음.</summary>
         private void ReactTown()
         {
+            if (_sim.Toolboxes.Count > _toolboxesShown)
+            {
+                ShowAlert("공구상자가 떨어졌다! 주우면 건물 수리", new Color(1f, 0.75f, 0.25f));
+                GameAudio.Play(Cue.PickUp);
+            }
+            _toolboxesShown = _sim.Toolboxes.Count;
+            foreach (Structure st in _sim.Repaired)
+            {
+                // 수리: 소방관에서 건물로 초록 빛이 날아가고, 건물에서 반짝이·기둥이 솟는다.
+                Vector3 from = W(_sim.Player);
+                Vector3 to = W(st.Pos);
+                var green = new Color(0.45f, 1f, 0.5f);
+                for (int i = 0; i < 14; i++)
+                {
+                    float f = i / 13f;
+                    EmitSprite(Art.Get("Effects/glow"), Vector3.Lerp(from, to, f), Vector3.zero, 0f, 0.25f + (0.35f * f), 0.9f, 0.3f, new Color(0.5f, 1f, 0.55f, 0.9f), new Color(0.5f, 1f, 0.55f, 0f),
+                        0f, true, 0f, 1f, float.NaN, f * 0.25f);
+                }
+                Pillar(to, green);
+                Sparkle(to, 16, green);
+                Shockwave(to, green, 7f, 0.5f, 0.25f);
+                SpawnText(to + new Vector3(0f, 1.8f, 0f), "수리!", green, 1.6f);
+                ShowAlert(st.Name + " 수리!", green);
+                GameAudio.Play(Cue.Rescued);
+            }
+            if (_sim.JustPickedToolbox && _sim.Repaired.Count == 0)
+            {
+                Sparkle(W(_sim.Player), 10, new Color(0.45f, 1f, 0.5f));
+                ShowAlert("고칠 건물이 없어 체력 +" + (int)SurvivorSim.ToolboxHeal, new Color(0.45f, 1f, 0.5f));
+                GameAudio.Play(Cue.PickUp);
+            }
+
             foreach (Structure st in _sim.Ignited)
             {
                 Vector3 at = W(st.Pos);
@@ -890,6 +927,7 @@ namespace FireGame.Prototypes
             DrawTown();
             DrawPuddles();
             DrawGems();
+            DrawToolboxes();
             DrawCivilians();
             DrawEnemies();
             DrawShots();
@@ -973,6 +1011,21 @@ namespace FireGame.Prototypes
                         _darts.Put(at, 0.9f * flicker * punch, toward + 90f, hit ? water : new Color(1f, 0.9f, 0.35f));
                         break;
                 }
+            }
+        }
+
+        /// <summary>공구상자: 주황빛 위에서 통통 튀고, 사라지기 5초 전부터 깜빡인다.</summary>
+        private void DrawToolboxes()
+        {
+            foreach (Pickup box in _sim.Toolboxes)
+            {
+                Vector3 at = W(box.Pos);
+                float bob = Mathf.Abs(Mathf.Sin(_time * 4f)) * 0.3f;
+                bool blink = box.Life < 5f && Mathf.Sin(_time * 18f) < 0f;
+                float a = blink ? 0.35f : 1f;
+                _shadows.Put(at + new Vector3(0f, -0.35f, 0f), 1f - (bob * 0.8f), 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
+                _toolboxGlow.Put(at, 3f + (0.4f * Mathf.Sin(_time * 6f)), 0f, new Color(1f, 0.6f, 0.2f, 0.55f * a));
+                _toolbox.Put(at + new Vector3(0f, bob, 0f), 1.5f, 0f, new Color(1f, 1f, 1f, a));
             }
         }
 
@@ -1613,6 +1666,44 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>위에서 본 소방 헬기: 빨간 동체, 파란 유리 조종석, 흰 띠, 꼬리. 위쪽이 앞.</summary>
+        /// <summary>빨간 공구상자(위에서 비스듬히 본 모습): 몸통, 짙은 뚜껑 띠, 은색 잠금쇠, 검은 손잡이.</summary>
+        private static Sprite ToolboxSprite()
+        {
+            if (_toolboxSprite != null) return _toolboxSprite;
+            const int n = 64;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            var red = new Color32(214, 52, 40, 255);
+            var dark = new Color32(120, 24, 20, 255);
+            var lid = new Color32(170, 36, 30, 255);
+            var metal = new Color32(205, 210, 215, 255);
+            var handle = new Color32(40, 40, 45, 255);
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = ((x + 0.5f) / n) - 0.5f;
+                    float v = ((y + 0.5f) / n) - 0.5f;
+                    Color32 c = new Color32(0, 0, 0, 0);
+                    bool body = Mathf.Abs(u) < 0.42f && v > -0.3f && v < 0.14f;
+                    bool edge = body && (Mathf.Abs(u) > 0.38f || v < -0.26f || v > 0.1f);
+                    // 손잡이: 뚜껑 위 아치.
+                    float ax = u / 0.2f;
+                    float ay = (v - 0.14f) / 0.18f;
+                    float arch = (ax * ax) + (ay * ay);
+                    if (v > 0.14f && arch < 1f && arch > 0.45f) c = handle;
+                    if (body) c = edge ? dark : red;
+                    if (body && !edge && v > 0.0f) c = lid;
+                    if (Mathf.Abs(u) < 0.08f && v > -0.06f && v < 0.06f) c = metal;
+                    pixels[(y * n) + x] = c;
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _toolboxSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _toolboxSprite;
+        }
+
         private static Sprite HeliSprite()
         {
             if (_heliSprite != null) return _heliSprite;
@@ -2372,6 +2463,9 @@ namespace FireGame.Prototypes
             _civilianRings = AddPool("CivilianRing", "Effects/glow", 5, true);
             _gems = new Pool(_world, "Gem", Art.White, 6, null);
             _gemCores = new Pool(_world, "GemCore", Art.White, 7, null);
+            _toolboxGlow = AddPool("ToolboxGlow", "Effects/glow", 7, true);
+            _toolbox = new Pool(_world, "Toolbox", ToolboxSprite(), 8, null);
+            _pools.Add(_toolbox);
             _pools.Add(_gems);
             _pools.Add(_gemCores);
             _civilians = AddPool("Civilian", "TopDown/civilian_man", 8);
@@ -2882,6 +2976,16 @@ namespace FireGame.Prototypes
                 float beat = 1f + ((people ? 0.25f : 0.1f) * Mathf.Abs(Mathf.Sin(_time * (people ? 8f : 5f))));
                 Color c = people ? new Color(0.45f, 1f, 0.45f) : st.Kind == StructureKind.Gas ? new Color(1f, 0.3f, 0.25f) : new Color(1f, 0.55f, 0.2f);
                 _edgeArrows.Put(spot, 1.1f * beat * (people ? 1.3f : 1f), Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, c);
+            }
+            foreach (Pickup box in _sim.Toolboxes)
+            {
+                // 화면 밖 공구상자는 주황 화살표로 가리킨다.
+                float dx = box.Pos.X - eye.x;
+                float dy = box.Pos.Y - eye.y;
+                if (Mathf.Abs(dx) < halfW * 0.96f && Mathf.Abs(dy) < halfH * 0.96f) continue;
+                float k = Mathf.Min((halfW * 0.92f) / Mathf.Max(Mathf.Abs(dx), 0.001f), (halfH * (dy > 0f ? 0.72f : 0.84f)) / Mathf.Max(Mathf.Abs(dy), 0.001f));
+                var spot = new Vector3(eye.x + (dx * k), eye.y + (dy * k), 0f);
+                _edgeArrows.Put(spot, 1.2f * (1f + (0.15f * Mathf.Abs(Mathf.Sin(_time * 6f)))), Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, new Color(1f, 0.75f, 0.2f));
             }
         }
 

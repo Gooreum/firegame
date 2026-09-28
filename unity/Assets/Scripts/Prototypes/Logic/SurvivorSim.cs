@@ -100,6 +100,13 @@ namespace FireGame.Prototypes.Logic
         public float MaxLife;
     }
 
+    /// <summary>맵에 떨어진 공구상자. 주우면 가장 약한 건물을 고친다(일회성).</summary>
+    public sealed class Pickup
+    {
+        public Vec2 Pos;
+        public float Life;
+    }
+
     public sealed class Civilian
     {
         public Vec2 Pos;
@@ -172,6 +179,29 @@ namespace FireGame.Prototypes.Logic
         public int Xp;
         public int Kills;
         public int Rescued;
+
+        /// <summary>떨어져 있는 공구상자(많아야 하나).</summary>
+        public readonly List<Pickup> Toolboxes = new List<Pickup>();
+
+        /// <summary>이 간격마다 부서진 건물이 있으면 공구상자가 하나 떨어진다(초).</summary>
+        public const float ToolboxEvery = 40f;
+        public const float ToolboxLife = 20f;
+
+        /// <summary>공구상자로 되찾는 튼튼함(과 줄어드는 불 세기).</summary>
+        public const float ToolboxRepair = 0.5f;
+
+        /// <summary>튼튼함이 이 아래인 건물이 있어야 공구상자가 떨어진다.</summary>
+        public const float DamagedBelow = 0.9f;
+
+        /// <summary>고칠 건물이 없을 때 공구상자가 대신 채우는 체력.</summary>
+        public const float ToolboxHeal = 20f;
+        public const float PickupRange = 0.9f;
+
+        /// <summary>이번 틱에 공구상자로 고친 건물.</summary>
+        public readonly List<Structure> Repaired = new List<Structure>();
+
+        /// <summary>이번 틱에 공구상자를 주웠다(고칠 건물이 없어 체력을 채운 경우도).</summary>
+        public bool JustPickedToolbox;
         public Enemy Boss;
         public SOutcome Outcome;
 
@@ -358,6 +388,7 @@ namespace FireGame.Prototypes.Logic
             TickStructures();
             TouchPlayer();
             CollectGems();
+            TickToolboxes();
             TickRescue();
             TickBoss();
             Sweep();
@@ -471,6 +502,8 @@ namespace FireGame.Prototypes.Logic
             JustLeveled = false;
             JustEvolved = false;
             JustMaxed = null;
+            Repaired.Clear();
+            JustPickedToolbox = false;
             JustBossArrived = false;
             JustRescued = false;
             JustWave = false;
@@ -1211,6 +1244,75 @@ namespace FireGame.Prototypes.Logic
         {
             Hp -= amount;
             PlayerHurt += amount;
+        }
+
+        private float _toolboxClock = ToolboxEvery;
+
+        /// <summary>공구상자: 40초마다 부서진 건물이 있고 떨어진 상자가 없으면 소방관 6~12칸 빈 땅에 떨군다. 20초 뒤 사라진다.</summary>
+        private void TickToolboxes()
+        {
+            _toolboxClock -= Dt;
+            if (_toolboxClock <= 0f)
+            {
+                _toolboxClock = ToolboxEvery;
+                if (Toolboxes.Count == 0 && Structures.Exists(st => st.IsBuilding && !st.Collapsed && st.Integrity < DamagedBelow))
+                {
+                    Vec2? at = FreeSpot(6f, 12f);
+                    if (at.HasValue) Toolboxes.Add(new Pickup { Pos = at.Value, Life = ToolboxLife });
+                }
+            }
+
+            for (int i = Toolboxes.Count - 1; i >= 0; i--)
+            {
+                Pickup box = Toolboxes[i];
+                box.Life -= Dt;
+                if (Player.DistanceTo(box.Pos) <= PickupRange + PlayerRadius)
+                {
+                    Toolboxes.RemoveAt(i);
+                    UseToolbox();
+                    continue;
+                }
+                if (box.Life <= 0f) Toolboxes.RemoveAt(i);
+            }
+        }
+
+        /// <summary>가장 많이 부서진 건물(타는 곳 먼저)을 고치고 불을 줄이고 적신다. 고칠 곳이 없으면 체력을 채운다.</summary>
+        private void UseToolbox()
+        {
+            JustPickedToolbox = true;
+            Structure worst = null;
+            foreach (Structure st in Structures)
+            {
+                if (!st.IsBuilding || st.Collapsed || st.Integrity >= 1f) continue;
+                if (worst == null || (st.Burning && !worst.Burning) || (st.Burning == worst.Burning && st.Integrity < worst.Integrity)) worst = st;
+            }
+            if (worst == null)
+            {
+                Hp = Math.Min(MaxHp, Hp + ToolboxHeal);
+                return;
+            }
+            worst.Integrity = Math.Min(1f, worst.Integrity + ToolboxRepair);
+            if (worst.Burning)
+            {
+                worst.Fire = Math.Max(0f, worst.Fire - ToolboxRepair);
+                if (worst.Fire <= 0f) Doused.Add(worst);
+            }
+            worst.Wet = Math.Max(worst.Wet, 6f);
+            Repaired.Add(worst);
+        }
+
+        /// <summary>소방관에게서 min~max칸, 구조물과 겹치지 않는 자리. 못 찾으면 null.</summary>
+        private Vec2? FreeSpot(float min, float max)
+        {
+            for (int tries = 0; tries < 24; tries++)
+            {
+                double a = Rand() * Math.PI * 2;
+                float d = min + (Rand() * (max - min));
+                Vec2 p = ClampToArena(new Vec2(Player.X + (float)(Math.Cos(a) * d), Player.Y + (float)(Math.Sin(a) * d)));
+                if (p.DistanceTo(Player) < min * 0.8f) continue;
+                if (!Structures.Exists(st => !st.Collapsed && st.Within(p, 0.8f))) return p;
+            }
+            return null;
         }
 
         private void CollectGems()

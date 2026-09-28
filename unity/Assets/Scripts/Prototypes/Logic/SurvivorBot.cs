@@ -154,6 +154,11 @@ namespace FireGame.Prototypes.Logic
             {
                 goal = fire.Door;
             }
+            else if (_sim.Toolboxes.Count > 0 && danger < 1f)
+            {
+                // 갇힌 사람이 없으면 곧 사라질 공구상자를 줍는다.
+                goal = _sim.Toolboxes[0].Pos;
+            }
             else if (fire != null && fire.DistanceTo(p) > 5f && danger < 1.5f)
             {
                 goal = fire.Pos;

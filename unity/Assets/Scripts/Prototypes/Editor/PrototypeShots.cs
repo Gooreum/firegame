@@ -79,6 +79,9 @@ namespace FireGame.Prototypes.EditorTools
             // 무기·보조가 Lv5가 되는 순간(금빛 기둥, "○○ MAX!").
             failures += SurvivorShot(dir, "c14_max_burst", view => view.Sim.JustMaxed.HasValue, 8);
             failures += NextStageShot(dir, "c14b_next_stage");
+            // 공구상자를 주워 건물을 고치는 순간(초록 빛줄기·"수리!").
+            failures += SurvivorShot(dir, "c15_toolbox", view => view.Sim.Toolboxes.Exists(b => b.Pos.DistanceTo(view.Sim.Player) < 5f), 5);
+            failures += SurvivorShot(dir, "c15b_toolbox_repair", view => view.Sim.Repaired.Count > 0 || view.Sim.JustPickedToolbox, 12);
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);

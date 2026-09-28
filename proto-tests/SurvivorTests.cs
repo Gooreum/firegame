@@ -354,8 +354,8 @@ namespace FireGame.Prototypes.Tests
             Assert.All(before, q => Assert.DoesNotContain(q, sim.BurningGround));
         }
 
-        /// <summary>봇이 보스까지 가는 시드(보스·성능 테스트용).</summary>
-        private const int BossSeed = 1;
+        /// <summary>봇이 보스까지 가는 시드(보스·성능 테스트용). 규칙이 난수 순서를 바꾸면 다시 고른다.</summary>
+        private const int BossSeed = 3;
 
         // --- S2 TC-6 ---
         [Fact]
