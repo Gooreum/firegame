@@ -55,7 +55,6 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c1_early", view => view.Sim.Time >= 40f);
             // 레벨 5로 오르는 카드: 노란 특수 장비가 반드시 한 장 있다.
             failures += SurvivorShot(dir, "c2_levelup_cards", view => view.Sim.Level == 5 && view.Sim.PendingChoices != null, 45);
-            failures += SurvivorShot(dir, "c3_boss", view => view.Sim.Boss != null && view.Sim.Time >= SurvivorSim.BossAt + 5f);
             failures += SurvivorShot(dir, "c4_evolved", view => view.Sim.JustEvolved, 9);
             failures += SurvivorShot(dir, "c5_levelup_burst", view => view.Sim.Time >= 30f && view.Sim.JustLeveled, 8);
             failures += SurvivorShot(dir, "c6_arsenal", view => view.Sim.Time >= 150f && view.Sim.PendingChoices == null);
@@ -86,18 +85,18 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c16_town_specials", view => view.Sim.Truck.HasValue && System.Math.Abs(view.Sim.Truck.Value.X - view.Sim.Player.X) < 5f, 3, true);
             // 2스테이지 산불 숲: 흙길·소나무, 불다람쥐, 막 날아온 재 박쥐 떼, 바람 화살표.
             failures += SurvivorShot(dir, "c17_forest", view => view.Sim.Time >= 40.5f && view.Sim.Enemies.Exists(e => (e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Squirrel) && e.Pos.DistanceTo(view.Sim.Player) < 6f), 10, false, null, 2);
-            // 화염 멧돼지: 보스 시각으로 건너뛰어 돌진 길 경고와 돌진을 찍는다.
-            SurvivorView boarView = null;
-            Action<Camera> onBoar = camera =>
+            // 대형 신고(1:20): 갇힌 사람 얼굴 줄, "대형 화재!" 띠, 화면 밖이면 붉은 화살표.
+            failures += SurvivorShot(dir, "c18_big_report", view => view.Sim.BigReport != null && view.Sim.Time >= SurvivorSim.BigReportTimes[0] + 0.6f, 4);
+            // 대형 신고를 다 구해 떨어진 보물상자, 그리고 상자가 열리며 카드가 뜨는 순간.
+            failures += SurvivorShot(dir, "c18b_chest", view => view.Sim.Chests.Count > 0, 10);
+            // 여는 순간만 보려고, 상자가 떨어지면 소방관을 상자 위로 옮긴다(다음 틱에 줍는다).
+            failures += SurvivorShot(dir, "c18c_chest_open", view =>
             {
-                // 소방관과 멧돼지가 함께 보이게 가운데를 잡고 넓게 본다.
-                Vec2 p = boarView.Sim.Player;
-                Vec2 b = boarView.Sim.Boss.Pos;
-                camera.transform.position = new Vector3((p.X + b.X) * 0.5f, (p.Y + b.Y) * 0.5f, -10f);
-                camera.orthographicSize = Mathf.Max(7f, (Mathf.Abs(p.Y - b.Y) * 0.5f) + 3f);
-            };
-            failures += SurvivorShot(dir, "c18_boar_warning", view => (boarView = view) != null && SkipToBoss(view) && view.Sim.BoarWindup > 0f && view.Sim.BoarWindup < 0.6f, 4, false, onBoar, 2);
-            failures += SurvivorShot(dir, "c18b_boar_charge", view => (boarView = view) != null && SkipToBoss(view) && view.Sim.BoarCharge > 0f && view.Sim.BoarCharge < 0.5f, 2, false, onBoar, 2);
+                if (view.Sim.Chests.Count > 0 && view.Sim.PendingChoices == null) view.Sim.Player = view.Sim.Chests[0].Pos;
+                return view.Sim.JustChest;
+            }, 45);
+            // 대화재(3:00~): 붉은 가장자리, 남은 시간 막대와 랜드마크 갇힌 사람 수.
+            failures += SurvivorShot(dir, "c20_finale", view => view.Sim.Finale && view.Sim.Time >= SurvivorSim.FinaleAt + 2f, 5);
             // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
             failures += SurvivorShot(dir, "c19_forest_specials", view => view.Sim.RainAt.HasValue && view.Sim.Retardants.Count > 0, 45, true, null, 2);
 
@@ -174,6 +173,12 @@ namespace FireGame.Prototypes.EditorTools
         }
 
         /// <param name="frame">찍기 직전에 카메라를 옮긴다(동네 전체 보기 등).</param>
+        /// <summary>
+        /// 캡처 판의 시드: 봇이 4:00까지 지켜 이기고, 대형 신고를 다 구해 보물상자를 열고, 진화·MAX까지 가는 판
+        /// (보스가 없어져 지는 판에선 뒤 장면을 못 찍는다).
+        /// </summary>
+        private const int ShotSeed = 5;
+
         private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<Camera> frame = null, int stage = 1)
         {
             try
@@ -185,6 +190,7 @@ namespace FireGame.Prototypes.EditorTools
                 Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
 
                 var view = new SurvivorView(root.transform, camera, canvas, maxGear, stage);
+                view.Restart(ShotSeed);
                 var bot = new SurvivorBot(view.Sim);
                 int guard = 0;
                 while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400)
@@ -346,13 +352,6 @@ namespace FireGame.Prototypes.EditorTools
             }
         }
 
-        /// <summary>판 첫 틱에 보스 2초 전으로 건너뛴다(보스 장면만 빨리 찍는다). 늘 true.</summary>
-        private static bool SkipToBoss(SurvivorView view)
-        {
-            if (view.Sim.Time > 0.5f && view.Sim.Time < SurvivorSim.BossAt - 5f) view.Sim.Time = SurvivorSim.BossAt - 2f;
-            return true;
-        }
-
         /// <summary>1스테이지를 이긴 결과창에서 탭하면 2스테이지가 "STAGE 2" 띠와 함께 열린다(플레이어 경로: Tick에 클릭).</summary>
         private static int NextStageShot(string dir, string name)
         {
@@ -365,6 +364,7 @@ namespace FireGame.Prototypes.EditorTools
                 Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
 
                 var view = new SurvivorView(root.transform, camera, canvas);
+                view.Restart(ShotSeed);
                 var bot = new SurvivorBot(view.Sim);
                 int guard = 0;
                 while (view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400)
