@@ -148,8 +148,11 @@ namespace FireGame.Prototypes.Logic
         /// <summary>구조대원 동료가 서 있는 곳. 동료가 없으면 null.</summary>
         public Vec2? Partner;
 
-        /// <summary>지켜야 하는 동네. 생성자에서 고정 배치로 깐다.</summary>
-        public readonly List<Structure> Structures = SurvivorTown.Build();
+        /// <summary>이 판의 스테이지 규칙(맵·신고·배율·보스·특수 카드 풀).</summary>
+        public readonly StageRules Stage;
+
+        /// <summary>지켜야 하는 동네. 생성자에서 스테이지 맵대로 깐다.</summary>
+        public readonly List<Structure> Structures;
         public readonly Loadout Build = new Loadout();
 
         public Vec2 Player = new Vec2(ArenaSize / 2f, ArenaSize / 2f);
@@ -278,8 +281,10 @@ namespace FireGame.Prototypes.Logic
         private readonly int[] _head = new int[Cells * Cells];
         private int[] _next = new int[MaxEnemies * 2];
 
-        public SurvivorSim(int seed)
+        public SurvivorSim(int seed, int stage = 1)
         {
+            Stage = SurvivorStages.Get(stage);
+            Structures = Stage.Map();
             _rng = new Rng(seed == 0 ? 1 : seed);
             Build.Add(UpgradeId.Hose);
         }
@@ -297,7 +302,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>풀장비로 시작한다: 모든 아이템 최대 + 체력 가득.</summary>
         public void GiveMaxGear()
         {
-            Build.MaxAll();
+            Build.MaxAll(Stage.Specials);
             Partner = new Vec2(Player.X - 1.2f, Player.Y);
             Hp = MaxHp;
         }
@@ -384,7 +389,7 @@ namespace FireGame.Prototypes.Logic
             {
                 Xp -= XpToNext;
                 Level++;
-                PendingChoices = SurvivorUpgrades.Roll(Build, Level, ref _rng);
+                PendingChoices = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials);
                 JustLeveled = true;
                 PushAway(Player, 4f, 3f);
             }
@@ -421,13 +426,13 @@ namespace FireGame.Prototypes.Logic
         public Enemy Spawn(EnemyKind kind, Vec2 at)
         {
             var e = new Enemy { Kind = kind, Pos = at };
-            float scale = 1f + ((Time / 120f) * (Time / 120f));
+            float scale = Stage.EnemyHp * (1f + ((Time / 120f) * (Time / 120f)));
             switch (kind)
             {
                 case EnemyKind.Ember: e.MaxHp = 2f * scale; e.Speed = 2.4f; e.Radius = 0.35f; e.Touch = 3f; e.Xp = 1; break;
                 case EnemyKind.Blaze: e.MaxHp = 14f * scale; e.Speed = 1.5f; e.Radius = 0.6f; e.Touch = 10f; e.Xp = 5; break;
                 case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
-                case EnemyKind.Boss: e.MaxHp = 1100f; e.Speed = 1.1f; e.Radius = 1.4f; e.Touch = 35f; e.Xp = 0; break;
+                case EnemyKind.Boss: e.MaxHp = Stage.BossHp; e.Speed = 1.1f; e.Radius = 1.4f; e.Touch = 35f; e.Xp = 0; break;
             }
             e.Hp = e.MaxHp;
             Enemies.Add(e);
@@ -497,7 +502,7 @@ namespace FireGame.Prototypes.Logic
         private void Direct()
         {
             // 불은 이제 주로 건물에서 나온다. 가장자리에서 몰려오는 불은 예전(3→35)보다 훨씬 적다.
-            float rate = Time < BossAt ? 1f + (7f * (float)Math.Pow(Time / BossAt, 1.5)) : 6f;
+            float rate = Stage.SpawnRate * (Time < BossAt ? 1f + (7f * (float)Math.Pow(Time / BossAt, 1.5)) : 6f);
             _spawnDebt += rate * Dt;
             while (_spawnDebt >= 1f)
             {
@@ -519,7 +524,7 @@ namespace FireGame.Prototypes.Logic
                 }
             }
 
-            while (Reports && _reportsDone < ReportTimes.Length && Time >= ReportTimes[_reportsDone])
+            while (Reports && _reportsDone < Stage.ReportTimes.Length && Time >= Stage.ReportTimes[_reportsDone])
             {
                 _reportsDone++;
                 Report();
@@ -545,7 +550,7 @@ namespace FireGame.Prototypes.Logic
                         Ignite(depot, 1f);
                     }
                 }
-                Boss = Spawn(EnemyKind.Boss, at);
+                Boss = Spawn(Stage.BossKind, at);
                 JustBossArrived = true;
                 _bossBurstClock = 3f;
             }
@@ -568,8 +573,8 @@ namespace FireGame.Prototypes.Logic
         private EnemyKind PickKind()
         {
             float r = Rand();
-            float blaze = Math.Min(0.3f, 0.05f + (Time / 600f));
-            float dart = Time < 60f ? 0f : 0.2f;
+            float blaze = Math.Min(Stage.BlazeMax, 0.05f + (Time / 600f));
+            float dart = Time < 60f ? 0f : Stage.DartShare;
             if (r < blaze) return EnemyKind.Blaze;
             if (r < blaze + dart) return EnemyKind.Dart;
             return EnemyKind.Ember;
@@ -1113,7 +1118,7 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
 
-                s.Fire = Math.Min(1f, s.Fire + (FireGrowth * Dt));
+                s.Fire = Math.Min(1f, s.Fire + (Stage.FireGrowth * Dt));
                 s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding : BurnSmall);
                 if (s.Integrity <= 0f)
                 {

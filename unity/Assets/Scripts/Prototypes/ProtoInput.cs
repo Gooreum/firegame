@@ -35,6 +35,9 @@ namespace FireGame.Prototypes
         /// <summary>G: 시험판 C 풀장비로 다시 시작(누를 때마다 풀장비/일반 전환).</summary>
         public bool MaxGear;
 
+        /// <summary>N: 시험판 C 다음 스테이지로.</summary>
+        public bool NextStage;
+
         /// <summary>폰: 이번 프레임 화면에 닿은 손가락들. 없으면 null이거나 비어 있다.</summary>
         public List<Finger> Fingers;
 
@@ -61,6 +64,7 @@ namespace FireGame.Prototypes
                 input.Key3 = keyboard.digit3Key.wasPressedThisFrame;
                 input.Cancel = keyboard.escapeKey.wasPressedThisFrame;
                 input.MaxGear = keyboard.gKey.wasPressedThisFrame;
+                input.NextStage = keyboard.nKey.wasPressedThisFrame;
             }
             if (mouse != null)
             {
@@ -83,6 +87,7 @@ namespace FireGame.Prototypes
             input.Key3 = Input.GetKeyDown(KeyCode.Alpha3);
             input.Cancel = Input.GetKeyDown(KeyCode.Escape);
             input.MaxGear = Input.GetKeyDown(KeyCode.G);
+            input.NextStage = Input.GetKeyDown(KeyCode.N);
             input.Mouse = Input.mousePosition;
             input.MouseHeld = Input.GetMouseButton(0);
             input.MouseClicked = Input.GetMouseButtonDown(0);

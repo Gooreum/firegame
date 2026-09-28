@@ -78,6 +78,7 @@ namespace FireGame.Prototypes.EditorTools
             failures += AimShot(dir, "c13_aim_assist");
             // 무기·보조가 Lv5가 되는 순간(금빛 기둥, "○○ MAX!").
             failures += SurvivorShot(dir, "c14_max_burst", view => view.Sim.JustMaxed.HasValue, 8);
+            failures += NextStageShot(dir, "c14b_next_stage");
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
@@ -321,6 +322,48 @@ namespace FireGame.Prototypes.EditorTools
             finally
             {
                 if (screen != null) UnityEngine.Object.DestroyImmediate(screen);
+            }
+        }
+
+        /// <summary>1스테이지를 이긴 결과창에서 탭하면 2스테이지가 "STAGE 2" 띠와 함께 열린다(플레이어 경로: Tick에 클릭).</summary>
+        private static int NextStageShot(string dir, string name)
+        {
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var root = new GameObject("Prototype");
+                Camera camera = PrototypeHost.SetUpCamera();
+                camera.aspect = (float)Width / Height;
+                Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
+
+                var view = new SurvivorView(root.transform, camera, canvas);
+                var bot = new SurvivorBot(view.Sim);
+                int guard = 0;
+                while (view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400)
+                {
+                    if (view.Sim.PendingChoices != null)
+                    {
+                        view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices));
+                        continue;
+                    }
+                    bot.AimHose();
+                    view.Step(bot.Move());
+                }
+                if (view.Sim.Outcome != SOutcome.Won) throw new Exception("1스테이지를 못 이겼다: " + view.Sim.Outcome);
+                for (int i = 0; i < 80; i++) view.Tick(SurvivorSim.Dt, new ProtoInput());
+                view.Tick(SurvivorSim.Dt, new ProtoInput { MouseClicked = true });
+                if (view.Sim.Stage.Number != 2) throw new Exception("이긴 뒤 탭했는데 스테이지 " + view.Sim.Stage.Number);
+                for (int i = 0; i < 40; i++) view.Tick(SurvivorSim.Dt, new ProtoInput());
+
+                Canvas.ForceUpdateCanvases();
+                Capture(camera, Path.Combine(dir, name + ".png"));
+                Debug.Log("[ProtoShots] " + name + " (스테이지 " + view.Sim.Stage.Number + " " + view.Sim.Stage.Name + ", t=" + view.Sim.Time.ToString("0.0") + ")");
+                return 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[ProtoShots] 실패: " + name + " — " + e);
+                return 1;
             }
         }
 

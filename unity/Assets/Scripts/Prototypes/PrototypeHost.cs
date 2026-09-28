@@ -67,8 +67,8 @@ namespace FireGame.Prototypes
         public static IPrototype Create(string mode, Transform parent, Camera camera, Canvas canvas)
         {
             if (mode == "B") return new TacticsView(parent, camera, canvas);
-            if (mode == "C") return new SurvivorView(parent, camera, canvas);
-            if (mode == "C+") return new SurvivorView(parent, camera, canvas, true);
+            if (mode == "C") return new SurvivorView(parent, camera, canvas, false, SurvivorView.SavedStage());
+            if (mode == "C+") return new SurvivorView(parent, camera, canvas, true, SurvivorView.SavedStage());
             return new ActionView(parent, camera, canvas);
         }
 

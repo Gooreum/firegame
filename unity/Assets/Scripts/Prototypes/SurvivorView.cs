@@ -34,6 +34,13 @@ namespace FireGame.Prototypes
         private SurvivorSim _sim;
         private readonly bool _maxGear;
         private int _seed = 3;
+
+        /// <summary>지금 스테이지(1부터). 깨면 다음으로 넘어가고, 폰에서도 이어지게 PlayerPrefs에 남긴다.</summary>
+        private int _stage;
+        public const string StageKey = "firegame.proto.stage";
+
+        /// <summary>가운데 띠 색: 스테이지 시작은 파랑, 보스 등장은 빨강.</summary>
+        private Color _bandTint = new Color(0.6f, 0f, 0f);
         private float _accumulator;
         private float _time;
         private float _trauma;
@@ -256,8 +263,9 @@ namespace FireGame.Prototypes
         }
 
         /// <param name="maxGear">true면 모든 아이템을 최대로 든 채 시작한다(연출 확인용).</param>
-        public SurvivorView(Transform parent, Camera camera, Canvas canvas, bool maxGear = false)
+        public SurvivorView(Transform parent, Camera camera, Canvas canvas, bool maxGear = false, int stage = 1)
         {
+            _stage = stage;
             _maxGear = maxGear;
             _camera = camera;
             _root = new GameObject("SurvivorWorld").transform;
@@ -284,7 +292,7 @@ namespace FireGame.Prototypes
         public void Restart(int seed)
         {
             _seed = seed;
-            _sim = new SurvivorSim(seed);
+            _sim = new SurvivorSim(seed, _stage);
             if (_maxGear) _sim.GiveMaxGear();
             _accumulator = 0f;
             _trauma = 0f;
@@ -319,7 +327,27 @@ namespace FireGame.Prototypes
             BuildSigns();
             HideCards();
             _resultBack.gameObject.SetActive(false);
+            // 판 시작: "STAGE 2 · 산불 숲" 띠가 파랗게 지나간다.
+            _bossBandText.text = "STAGE " + _sim.Stage.Number + " · " + _sim.Stage.Name;
+            _bandTint = new Color(0.05f, 0.25f, 0.6f);
+            _bossBannerAge = 0f;
             Refresh(0f);
+        }
+
+        /// <summary>저장해 둔 스테이지(없으면 1).</summary>
+        public static int SavedStage()
+        {
+            int n = PlayerPrefs.GetInt(StageKey, 1);
+            return n >= 1 && n <= SurvivorStages.Count ? n : 1;
+        }
+
+        /// <summary>스테이지를 바꾸고 새 판을 연다.</summary>
+        private void GoToStage(int stage)
+        {
+            _stage = stage;
+            PlayerPrefs.SetInt(StageKey, stage);
+            PlayerPrefs.Save();
+            Restart(_seed + 1);
         }
 
         public void Destroy()
@@ -340,11 +368,19 @@ namespace FireGame.Prototypes
             // 카드·결과창 중에도 손가락을 먹여서, 그 사이 뗀 손가락이 계속 눌린 채 남지 않게 한다.
             if (_touch) _stick.Feed(fingers, _camera.pixelWidth, _camera.pixelHeight / UiKit.ReferenceHeight);
 
+            if (input.NextStage)
+            {
+                GoToStage(SurvivorStages.Next(_stage));
+                return;
+            }
+
             if (_sim.Outcome != SOutcome.Playing)
             {
                 if (_overAge > 1f && input.MouseClicked)
                 {
-                    Restart(_seed + 1);
+                    // 이기면 다음 스테이지, 지면 같은 스테이지를 다시.
+                    if (_sim.Outcome == SOutcome.Won) GoToStage(SurvivorStages.Next(_stage));
+                    else Restart(_seed + 1);
                     return;
                 }
             }
@@ -652,6 +688,8 @@ namespace FireGame.Prototypes
                 }
                 Burst(at, 30, new Color(1f, 0.5f, 0.1f), 12f);
                 _zoomKick = -0.8f;
+                _bossBandText.text = "대형 화재 접근!";
+                _bandTint = new Color(0.6f, 0f, 0f);
                 _bossBannerAge = 0f;
                 _trauma = 1f;
                 Flash(new Color(1f, 0.2f, 0.1f), 0.5f);
@@ -2684,7 +2722,7 @@ namespace FireGame.Prototypes
             // 폰(터치 화면)에서는 두 엄지 조작을 알려 준다.
             string controls = Input.touchSupported
                 ? "왼손 끌어 이동 · 오른손 누르면 물(끌어서 겨누기) · 구슬을 모아 레벨업 · 카드는 탭 · 불난 가게 문 앞에 서 있으면 구조"
-                : "WASD 이동 · 마우스로 겨누고 왼쪽 버튼을 누르면 물 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 불난 가게 문 앞에 서 있으면 구조      R 다시  G " + (_maxGear ? "일반" : "풀장비") + "  Tab 시험판 전환";
+                : "WASD 이동 · 마우스로 겨누고 왼쪽 버튼을 누르면 물 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 불난 가게 문 앞에 서 있으면 구조      R 다시  N 스테이지  G " + (_maxGear ? "일반" : "풀장비") + "  Tab 시험판 전환";
             Text help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + controls, 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
             UiKit.Place(help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 20f), new Vector2(1850f, 40f));
 
@@ -2790,7 +2828,7 @@ namespace FireGame.Prototypes
             if (band)
             {
                 float a = _bossBannerAge < 2.3f ? 1f : 1f - ((_bossBannerAge - 2.3f) / 0.5f);
-                _bossBand.color = new Color(0.6f, 0f, 0f, 0.75f * a * (0.8f + (0.2f * Mathf.Sin(_time * 20f))));
+                _bossBand.color = new Color(_bandTint.r, _bandTint.g, _bandTint.b, 0.75f * a * (0.8f + (0.2f * Mathf.Sin(_time * 20f))));
                 _bossBandText.color = new Color(1f, 0.9f, 0.4f, a);
                 // 띠는 가운데서 좌우로 펼쳐지고, 글자는 왼쪽에서 미끄러져 들어온다.
                 float open = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_bossBannerAge / 0.25f));
@@ -2809,7 +2847,7 @@ namespace FireGame.Prototypes
                 string head = won ? "화재 진압 완료!" : _sim.LostTown ? "동네가 다 타 버렸다" : "쓰러졌다";
                 string stats = "지킨 건물 " + (total - _sim.HousesLost) + "/" + total + "    구조 " + _sim.Rescued + "    잃음 " + _sim.CiviliansLost;
                 string more = _timer.text + " 버팀  ·  처치 " + _sim.Kills + "  ·  Lv " + _sim.Level;
-                _result.text = head + "\n\n" + (won ? "\n\n" : "") + stats + "\n" + more + "\n\n" + (_overAge > 1f ? "클릭하면 다른 판" : "");
+                _result.text = head + "\n\n" + (won ? "\n\n" : "") + stats + "\n" + more + "\n\n" + (_overAge > 1f ? (won ? "탭하면 다음: STAGE " + SurvivorStages.Next(_stage) + " " + SurvivorStages.Get(SurvivorStages.Next(_stage)).Name : "탭하면 다시") : "");
                 for (int i = 0; i < _stars.Count; i++)
                 {
                     _stars[i].gameObject.SetActive(won);

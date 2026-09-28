@@ -81,14 +81,12 @@ namespace FireGame.Prototypes.Logic
             if (_levels[i] < MaxLevelOf(id)) _levels[i]++;
         }
 
-        /// <summary>모든 무기·보조를 최대로 올리고 물대포는 방수포로 진화시킨다(시험용 풀장비).</summary>
-        public void MaxAll()
+        /// <summary>모든 무기·보조를 최대로 올리고 물대포는 방수포로 진화시킨다. 특수 장비는 주어진 풀 전부(시험용 풀장비).</summary>
+        public void MaxAll(IEnumerable<UpgradeId> specials)
         {
             for (int i = 0; i <= (int)UpgradeId.Radio; i++) _levels[i] = MaxLevelOf((UpgradeId)i);
             Add(UpgradeId.Cannon);
-            Add(UpgradeId.Heli);
-            Add(UpgradeId.Curtain);
-            Add(UpgradeId.Partner);
+            foreach (UpgradeId id in specials) Add(id);
         }
 
         public IEnumerable<UpgradeId> Owned()
@@ -146,9 +144,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>
         /// 카드 3장을 뽑는다. 진화할 수 있으면 방수포를 반드시 넣는다.
         /// 아니면 <paramref name="level"/>(새 레벨)이 5의 배수일 때 노란 특수 장비를 반드시 한 장 넣는다.
-        /// 뽑을 게 모자라면 회복으로 채운다.
+        /// 뽑을 게 모자라면 회복으로 채운다. <paramref name="specialPool"/>가 있으면 노란 카드는 그 안에서만 나온다.
         /// </summary>
-        public static List<UpgradeId> Roll(Loadout loadout, int level, ref Rng rng)
+        public static List<UpgradeId> Roll(Loadout loadout, int level, ref Rng rng, IList<UpgradeId> specialPool = null)
         {
             var pool = new List<UpgradeId>();
             var specials = new List<UpgradeId>();
@@ -156,6 +154,7 @@ namespace FireGame.Prototypes.Logic
             {
                 var id = (UpgradeId)i;
                 if (id == UpgradeId.Cannon || !loadout.CanTake(id)) continue;
+                if (Loadout.IsSpecial(id) && specialPool != null && !specialPool.Contains(id)) continue;
                 (Loadout.IsSpecial(id) ? specials : pool).Add(id);
             }
 
