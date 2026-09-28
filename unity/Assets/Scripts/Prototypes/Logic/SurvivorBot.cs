@@ -37,12 +37,32 @@ namespace FireGame.Prototypes.Logic
                 // 좋아하는 무기의 진화도 먼저 고른다.
                 UpgradeId? evo = Favorite.HasValue ? Loadout.EvolutionOf(Favorite.Value) : null;
                 int evoAt = evo.HasValue ? _sim.PendingChoices.IndexOf(evo.Value) : -1;
-                _sim.Choose(evoAt >= 0 ? evoAt : fav >= 0 ? fav : PickCard(_sim.PendingChoices));
+                _sim.Choose(evoAt >= 0 ? evoAt : fav >= 0 ? fav : PickCard(_sim.PendingChoices, _sim.Build));
                 return;
             }
             Vec2 move = Move();
             AimHose();
             _sim.Step(move.X, move.Y);
+        }
+
+        /// <summary>
+        /// 진화를 노린다: 진화 카드가 먼저, 그다음 Lv3 넘은 무기의 짝 보조, 그다음 정해진 순서.
+        /// </summary>
+        public static int PickCard(List<UpgradeId> cards, Loadout build)
+        {
+            for (int i = 0; i < cards.Count; i++)
+            {
+                if (Loadout.IsEvolution(cards[i])) return i;
+            }
+            for (int i = 0; i < cards.Count; i++)
+            {
+                if (!Loadout.IsPassive(cards[i]) || build.Level(cards[i]) > 0) continue;
+                foreach (UpgradeId evo in build.ReadyEvolutionsFor(cards[i]))
+                {
+                    if (build.Level(Loadout.BaseOf(evo)) >= 3) return i;
+                }
+            }
+            return PickCard(cards);
         }
 
         public static int PickCard(List<UpgradeId> cards)

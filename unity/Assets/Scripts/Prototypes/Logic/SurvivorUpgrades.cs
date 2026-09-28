@@ -184,6 +184,17 @@ namespace FireGame.Prototypes.Logic
             return list;
         }
 
+        /// <summary>이 보조가 짝인 진화들(아직 안 한 것).</summary>
+        public List<UpgradeId> ReadyEvolutionsFor(UpgradeId passive)
+        {
+            var list = new List<UpgradeId>();
+            for (int i = 0; i < Evolutions.GetLength(0); i++)
+            {
+                if (Evolutions[i, 2] == passive && Level(Evolutions[i, 0]) == 0) list.Add(Evolutions[i, 0]);
+            }
+            return list;
+        }
+
         /// <summary>이 무기(또는 그 진화)를 쥐고 있나. 진화하면 원래 무기 레벨은 0이 된다.</summary>
         public bool Has(UpgradeId weapon)
         {

@@ -83,11 +83,11 @@ namespace FireGame.Prototypes.Logic
             EnemyHp = 1f,
             SpawnRate = 1f,
             // 대화재 동안 바람이 거세져 산불이 캠프를 덮친다.
-            FinaleWindChance = 0.4f,
+            FinaleWindChance = 0.35f,
             BlazeMax = 0.25f,
             DartShare = 0f,
             SquirrelShare = 0.03f,
-            BatFlockEvery = 15f,
+            BatFlockEvery = 20f,
             Wind = true,
             // 나무 수십 그루가 보통(×2) 간격으로 뱉으면 불씨 떼가 동네를 덮는다.
             TreeSpit = 4f,

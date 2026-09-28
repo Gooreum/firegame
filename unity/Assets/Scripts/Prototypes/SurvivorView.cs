@@ -154,6 +154,10 @@ namespace FireGame.Prototypes
         private Pool _rotor;
         private Pool _partner;
         private TextMesh _partnerTag;
+        private TextMesh _forecastTag;
+        private Pool _sprayLines;
+        private Pool _turretBase;
+        private float _heatTextClock;
         private readonly Vector3[] _partnerLast = new Vector3[4];
         private readonly float[] _partnerDeg = new float[4];
         private Vector3 _heliExitFrom;
@@ -700,7 +704,7 @@ namespace FireGame.Prototypes
 
             foreach (Vec2 e in _sim.Explosions)
             {
-                WaterBlast(W(e), _sim.Build.BombRadius, _sim.Build.Level(UpgradeId.WaterBomb));
+                WaterBlast(W(e), _sim.Build.BombRadius, _sim.Build.PowerOf(UpgradeId.WaterBomb));
                 _trauma = Mathf.Min(1f, _trauma + 0.12f);
                 HitStop(0.02f);
                 GameAudio.Play(Cue.SprayFoam);
@@ -784,6 +788,16 @@ namespace FireGame.Prototypes
                 GameAudio.Play(Cue.Backfire);
             }
 
+            if (_sim.JustBurst && _sim.Landmark != null)
+            {
+                // 대화재 랜드마크가 불씨를 사방으로 뿜는다: 붉은 고리 + 흔들림.
+                Vector3 at = W(_sim.Landmark.Pos);
+                Shockwave(at, new Color(1f, 0.35f, 0.08f, 0.9f), 8f, 0.45f);
+                Burst(at, 20, new Color(1f, 0.5f, 0.1f), 9f);
+                _trauma = Mathf.Min(1f, _trauma + 0.25f);
+                GameAudio.Play(Cue.Backfire);
+            }
+
             if (_sim.Chests.Count > _chestsShown)
             {
                 Pickup chest = _sim.Chests[_sim.Chests.Count - 1];
@@ -815,6 +829,25 @@ namespace FireGame.Prototypes
 
             ReactTown();
 
+            if (_sim.AmbulanceAt != null)
+            {
+                // 구급차: 흰·빨강 번쩍, 연기가 걷힌다.
+                Vector3 at = W(_sim.AmbulanceAt.Door);
+                Shockwave(at, new Color(1f, 1f, 1f, 0.9f), 5f, 0.4f);
+                Shockwave(at, new Color(1f, 0.25f, 0.25f, 0.9f), 3.5f, 0.35f, 0.1f);
+                Sparkle(at, 14, Color.white);
+                Steam(W(_sim.AmbulanceAt.Pos), 8, 1.2f);
+                SpawnText(at + new Vector3(0f, 1.8f, 0f), "구급차! 연기 걷힘", new Color(1f, 0.9f, 0.9f), 1.5f);
+                GameAudio.Play(Cue.PickUp);
+            }
+            _heatTextClock -= SurvivorSim.Dt;
+            if (_sim.HeatHurt > 0f && _heatTextClock <= 0f)
+            {
+                // 열기: 불 곁에 서 있으면 "뜨거워!"가 1.2초마다 뜬다(방화복이면 덜 붉다).
+                _heatTextClock = 1.2f;
+                bool suit = _sim.Build.Level(UpgradeId.Suit) > 0;
+                SpawnText(W(_sim.Player) + new Vector3(0f, 1.3f, 0f), suit ? "방화복이 막는다" : "뜨거워!", suit ? new Color(1f, 0.85f, 0.4f) : new Color(1f, 0.4f, 0.2f), 1f);
+            }
             if (_sim.JustWindShift) ShowAlert("바람이 " + WindName(_sim.Wind) + "쪽으로!", new Color(0.8f, 0.9f, 1f));
             if (_sim.JustBats)
             {
@@ -1424,7 +1457,7 @@ namespace FireGame.Prototypes
                 for (int j = 1; j <= 6; j++)
                 {
                     float b = a - (j * 0.13f);
-                    Vector3 trail = center + (new Vector3(Mathf.Cos(b), Mathf.Sin(b), 0f) * 2.3f);
+                    Vector3 trail = center + (new Vector3(Mathf.Cos(b), Mathf.Sin(b), 0f) * orbit);
                     _droneGlow.Put(trail, (0.9f - (j * 0.1f)) * droneScale, 0f, new Color(0.55f, 0.8f, 1f, 0.45f - (j * 0.06f)));
                 }
                 _shadows.Put(at + new Vector3(0f, -0.35f, 0f), 0.6f * droneScale, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
@@ -1433,7 +1466,82 @@ namespace FireGame.Prototypes
                 _drones.Put(at, 0.65f * droneScale, _time * 720f, Color.white);
                 if (goldDrone) _auras.Put(at, 1.1f, 0f, new Color(1f, 0.85f, 0.35f, 0.85f));
                 if (Random.value < 0.25f) Splash(at, 1, 0.15f);
+                // 불난 지붕 위: 드론마다 지붕 가운데로 물줄기를 뿌린다.
+                if (patrol != null && patrol.Burning && Vector3.Distance(center, W(patrol.Pos)) < 0.6f)
+                {
+                    SprayLine(at, Vector3.Lerp(at, center, 0.75f), 0.18f, new Color(0.6f, 0.9f, 1f, 0.8f));
+                    if (Random.value < 0.2f) Splash(Vector3.Lerp(at, center, 0.75f), 1, 0.2f);
+                }
             }
+            // 구조 드론: 갇힌 사람이 있는 지붕 위에서 노란 구조 줄을 내려 끌어올린다.
+            if (patrol != null && _sim.Build.Level(UpgradeId.RescueDrone) > 0 && patrol.DroneRescue > 0f)
+            {
+                float lift = Mathf.Clamp01(patrol.DroneRescue / SurvivorSim.DroneRescueTime);
+                Vector3 top = center + new Vector3(0f, 2.2f, 0f);
+                SprayLine(top, center, 0.08f, new Color(1f, 0.85f, 0.3f, 0.95f));
+                _civilians.Put(Vector3.Lerp(center, top, lift), 0.6f, 10f * Mathf.Sin(_time * 8f), Color.white, Art.Get(Faces[0]));
+            }
+
+            DrawTurrets();
+            DrawForecast();
+        }
+
+        /// <summary>from에서 to로 곧은 물줄기(흰 막대를 늘여 돌린다).</summary>
+        private void SprayLine(Vector3 from, Vector3 to, float width, Color color)
+        {
+            Vector3 d = to - from;
+            float len = d.magnitude;
+            if (len < 0.05f) return;
+            float deg = Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg;
+            float wob = 1f + (0.15f * Mathf.Sin(_time * 30f));
+            _sprayLines.Put((from + to) * 0.5f, len, deg, color, null, width * wob / len);
+            _sprayLines.Put((from + to) * 0.5f, len, deg, new Color(1f, 1f, 1f, color.a * 0.6f), null, width * 0.35f / len);
+        }
+
+        /// <summary>방수 포탑: 삼각대 위 노즐이 쏘는 곳을 향한다. 현장 구조소는 초록 영역과 흰 천막 십자.</summary>
+        private void DrawTurrets()
+        {
+            bool post = _sim.Build.Level(UpgradeId.RescuePost) > 0;
+            foreach (Turret tu in _sim.Turrets)
+            {
+                Vector3 at = W(tu.Pos);
+                float life = Mathf.Clamp01(tu.Life / tu.MaxLife);
+                float blink = tu.Life < 1.5f && Mathf.Sin(_time * 18f) < 0f ? 0.4f : 1f;
+                if (post)
+                {
+                    _civilianRings.Put(at, SurvivorSim.PostRange * 2f, 0f, new Color(0.4f, 1f, 0.5f, 0.18f + (0.06f * Mathf.Sin(_time * 3f))));
+                    _sprayLines.Put(at + new Vector3(0f, 0.9f, 0f), 1.4f, 0f, new Color(1f, 1f, 1f, 0.95f * blink), null, 0.9f / 1.4f);
+                    _sprayLines.Put(at + new Vector3(0f, 0.9f, 0f), 0.9f, 0f, new Color(0.9f, 0.15f, 0.15f, blink), null, 0.25f / 0.9f);
+                    _sprayLines.Put(at + new Vector3(0f, 0.9f, 0f), 0.25f, 0f, new Color(0.9f, 0.15f, 0.15f, blink), null, 0.9f / 0.25f);
+                }
+                _shadows.Put(at + new Vector3(0f, -0.2f, 0f), 0.9f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
+                // 남은 시간 고리(파랑이 줄어든다).
+                _civilianRings.Put(at, 1.6f * life + 0.4f, 0f, new Color(0.4f, 0.8f, 1f, 0.35f * blink));
+                Vector3 aim = tu.Aim.HasValue ? W(tu.Aim.Value) : at + new Vector3(1f, 0f, 0f);
+                Vector3 dir = (aim - at).normalized;
+                _turretBase.Put(at, 0.75f, 0f, new Color(0.85f, 0.2f, 0.15f, blink));
+                _sprayLines.Put(at + (dir * 0.35f), 0.7f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg, new Color(0.75f, 0.75f, 0.8f, blink), null, 0.18f / 0.7f);
+                if (tu.Aim.HasValue && tu.Clock > 0.2f)
+                {
+                    SprayLine(at + (dir * 0.7f), aim, 0.2f, new Color(0.6f, 0.9f, 1f, 0.85f));
+                    if (Random.value < 0.3f) Splash(aim, 1, 0.2f);
+                }
+            }
+        }
+
+        /// <summary>무전기: 곧 불날 건물 위에 주황 과녁과 "신고 예고 N"이 깜빡인다.</summary>
+        private void DrawForecast()
+        {
+            Structure st = _sim.ForecastAt;
+            bool show = st != null && !st.Burning && _sim.Outcome == SOutcome.Playing;
+            if (_forecastTag != null) _forecastTag.gameObject.SetActive(show);
+            if (!show) return;
+            Vector3 at = W(st.Pos);
+            float beat = 0.5f + (0.5f * Mathf.Abs(Mathf.Sin(_time * 6f)));
+            _civilianRings.Put(at, Mathf.Max(st.Half.X, st.Half.Y) * 2.8f * (1f + (0.1f * beat)), 0f, new Color(1f, 0.6f, 0.1f, 0.3f + (0.3f * beat)));
+            _forecastTag.text = "신고 예고 " + Mathf.CeilToInt(_sim.ForecastIn);
+            _forecastTag.color = Color.Lerp(new Color(1f, 0.75f, 0.2f), Color.white, beat * 0.4f);
+            _forecastTag.transform.localPosition = at + new Vector3(0f, st.Half.Y + 1.1f, -0.2f);
         }
 
         /// <summary>
@@ -1888,6 +1996,7 @@ namespace FireGame.Prototypes
         {
             bool has = _sim.Partners.Count > 0;
             if (_partnerTag != null) _partnerTag.gameObject.SetActive(has);
+            if (_partnerTag != null) _partnerTag.text = _sim.Build.Level(UpgradeId.Squad) > 0 ? "구조 분대" : "구조대";
             for (int i = 0; i < _sim.Partners.Count; i++)
             {
                 Vector3 at = W(_sim.Partners[i]);
@@ -1896,7 +2005,22 @@ namespace FireGame.Prototypes
                 if (moved.sqrMagnitude > 0.0001f && moved.sqrMagnitude < 4f) _partnerDeg[i] = Mathf.Atan2(moved.y, moved.x) * Mathf.Rad2Deg;
                 float bob = moved.sqrMagnitude > 0.0001f ? 0.05f * Mathf.Abs(Mathf.Sin((_time * 14f) + i)) : 0f;
                 _shadows.Put(at + new Vector3(0.05f, -0.15f, 0f), 0.9f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.55f);
-                _partner.Put(at + new Vector3(0f, bob, 0f), 0.85f, _partnerDeg[i], Color.white);
+                bool squad = _sim.Build.Level(UpgradeId.Squad) > 0;
+                // 곁(3칸) 불난 건물에 물줄기를 뿜는다.
+                Structure near = null;
+                foreach (Structure st in _sim.Structures)
+                {
+                    if (st.IsBuilding && st.Burning && st.DistanceTo(_sim.Partners[i]) <= 3f) near = st;
+                }
+                if (near != null)
+                {
+                    Vector3 roof = W(near.Pos);
+                    Vector3 hand = at + ((roof - at).normalized * 0.4f);
+                    SprayLine(hand, Vector3.Lerp(hand, roof, 0.8f), squad ? 0.26f : 0.18f, new Color(0.6f, 0.9f, 1f, 0.85f));
+                    if (Random.value < 0.2f) Splash(Vector3.Lerp(hand, roof, 0.8f), 1, 0.2f);
+                }
+                if (squad) _auras.Put(at, 1.3f, 0f, new Color(1f, 0.85f, 0.35f, 0.5f));
+                _partner.Put(at + new Vector3(0f, bob, 0f), 0.85f, _partnerDeg[i], squad ? new Color(1f, 0.9f, 0.5f) : Color.white);
                 if (i == 0 && _partnerTag != null) _partnerTag.transform.localPosition = at + new Vector3(0f, 0.85f, -0.2f);
             }
         }
@@ -2587,6 +2711,12 @@ namespace FireGame.Prototypes
             _partnerTag.characterSize = 0.04f;
             _partnerTag.color = new Color(1f, 0.9f, 0.35f);
             _partnerTag.gameObject.SetActive(false);
+            if (_forecastTag != null) UiKit.Discard(_forecastTag.gameObject);
+            _forecastTag = NewText();
+            _forecastTag.transform.SetParent(_root, false);
+            _forecastTag.GetComponent<MeshRenderer>().sortingOrder = 18;
+            _forecastTag.characterSize = 0.06f;
+            _forecastTag.gameObject.SetActive(false);
             foreach (Structure st in _sim.Structures)
             {
                 if (!st.IsBuilding) continue;
@@ -2888,6 +3018,10 @@ namespace FireGame.Prototypes
             _heli = new Pool(_world, "Heli", HeliSprite(), 23, null);
             _rotor = new Pool(_world, "Rotor", RotorSprite(), 24, null);
             _partner = AddPool("Partner", "TopDown/player_suit_1", 15);
+            _sprayLines = new Pool(_world, "SprayLine", Art.White, 14, null);
+            _pools.Add(_sprayLines);
+            _turretBase = new Pool(_world, "TurretBase", DiscSprite(), 13, null);
+            _pools.Add(_turretBase);
             _pools.Add(_heliShadow);
             _pools.Add(_heli);
             _pools.Add(_rotor);
@@ -3316,7 +3450,7 @@ namespace FireGame.Prototypes
                 int lv = _sim.Build.Level(id);
                 if (Loadout.IsSpecial(id))
                 {
-                    build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append(id == UpgradeId.Cannon ? "  진화" : "  특수").Append("</color>\n");
+                    build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append(Loadout.IsEvolution(id) ? "  진화" : "  특수").Append("</color>\n");
                     continue;
                 }
                 if (lv >= Loadout.MaxLevel) build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append("  ★MAX</color>\n");
@@ -3533,8 +3667,10 @@ namespace FireGame.Prototypes
                 float x = (i - ((choices.Count - 1) / 2f)) * 470f;
                 UiKit.Place(rect, new Vector2(0.5f, 0.5f), new Vector2(x, -20f), new Vector2(430f, 520f));
 
-                string kind = id == UpgradeId.Cannon ? "진화" : Loadout.IsSpecial(id) ? "특수" : id == UpgradeId.Heal ? "회복" : Loadout.IsWeapon(id) ? "무기" : "보조";
-                string tag = id == UpgradeId.Cannon || id == UpgradeId.Heal ? "" : Loadout.IsSpecial(id) ? "★ 특수 장비 ★" : next <= 1 ? "새로 얻음!" : toMax ? "Lv 5 · MAX!" : "Lv " + next;
+                string kind = Loadout.IsEvolution(id) ? "진화" : Loadout.IsSpecial(id) ? "특수" : id == UpgradeId.Heal ? "회복" : Loadout.IsWeapon(id) ? "무기" : "보조";
+                // 진화 카드는 어떤 조합으로 나왔는지 보여 준다("물폭탄 MAX + 무전기").
+                string tag = Loadout.IsEvolution(id) ? SurvivorUpgrades.Name(Loadout.BaseOf(id)) + " MAX + " + SurvivorUpgrades.Name(Loadout.PairOf(id))
+                    : id == UpgradeId.Heal ? "" : Loadout.IsSpecial(id) ? "★ 특수 장비 ★" : next <= 1 ? "새로 얻음!" : toMax ? "Lv 5 · MAX!" : "Lv " + next;
 
                 Text key = UiKit.OutlinedLabel(rect, "Key", (i + 1).ToString(), 44, Color.white, TextAnchor.UpperLeft);
                 UiKit.Place(key.rectTransform, new Vector2(0f, 1f), new Vector2(26f, -18f), new Vector2(80f, 60f));

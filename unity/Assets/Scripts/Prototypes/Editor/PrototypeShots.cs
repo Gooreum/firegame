@@ -80,7 +80,12 @@ namespace FireGame.Prototypes.EditorTools
             failures += NextStageShot(dir, "c14b_next_stage");
             // 공구상자를 주워 건물을 고치는 순간(초록 빛줄기·"수리!").
             failures += SurvivorShot(dir, "c15_toolbox", view => view.Sim.Toolboxes.Exists(b => b.Pos.DistanceTo(view.Sim.Player) < 5f), 5);
-            failures += SurvivorShot(dir, "c15b_toolbox_repair", view => view.Sim.Repaired.Count > 0 || view.Sim.JustPickedToolbox, 12);
+            // 줍는 순간만 보려고, 공구상자가 떨어지면 소방관을 그 위로 옮긴다.
+            failures += SurvivorShot(dir, "c15b_toolbox_repair", view =>
+            {
+                if (view.Sim.Toolboxes.Count > 0 && view.Sim.PendingChoices == null) view.Sim.Player = view.Sim.Toolboxes[0].Pos;
+                return view.Sim.Repaired.Count > 0 || view.Sim.JustPickedToolbox;
+            }, 12);
             // 마을 전용 노란 카드(풀장비): 소방차가 줄을 가로지르고 스프링클러가 터진다.
             failures += SurvivorShot(dir, "c16_town_specials", view => view.Sim.Truck.HasValue && System.Math.Abs(view.Sim.Truck.Value.X - view.Sim.Player.X) < 5f, 3, true);
             // 2스테이지 산불 숲: 흙길·소나무, 불다람쥐, 막 날아온 재 박쥐 떼, 바람 화살표.
@@ -97,6 +102,14 @@ namespace FireGame.Prototypes.EditorTools
             }, 45);
             // 대화재(3:00~): 붉은 가장자리, 남은 시간 막대와 랜드마크 갇힌 사람 수.
             failures += SurvivorShot(dir, "c20_finale", view => view.Sim.Finale && view.Sim.Time >= SurvivorSim.FinaleAt + 2f, 5);
+            // 새 무기(풀장비): 순찰 드론이 불난 지붕 위에서 물을 뿌리고, 구조대원 셋이 건물에 물을 뿜고, 방수 포탑이 쏜다.
+            failures += SurvivorShot(dir, "c22_new_weapons", view => view.Sim.Time >= 14f && view.Sim.DroneTarget != null && view.Sim.Turrets.Count > 0 && view.Sim.PendingChoices == null, 3, true);
+            // 여섯 진화를 모두 쥐고: 금빛 구조 분대, 하늘에서 떨어지는 공중 소화탄, 구조 드론의 구조 줄, 물의 방벽, 현장 구조소.
+            failures += SurvivorShot(dir, "c23_evolutions", view => view.Sim.Time >= 14f && view.Sim.Turrets.Count > 0 && view.Sim.Shots.Exists(s => s.Kind == ShotKind.Bomb && s.From.Y > s.Target.Y + 5f), 2, false, null, 1,
+                view => view.Sim.Build.EvolveAll());
+            // 무전기 예고 + 열기: 곧 불날 건물 위 "신고 예고", 타는 건물 곁에서 "뜨거워!".
+            failures += SurvivorShot(dir, "c24_heat_forecast", view => view.Sim.ForecastAt != null && view.Sim.Time > 25f, 2, false, null, 1,
+                view => { view.Sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { UpgradeId.Radio }; view.Sim.Choose(0); });
             // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
             failures += SurvivorShot(dir, "c19_forest_specials", view => view.Sim.RainAt.HasValue && view.Sim.Retardants.Count > 0, 45, true, null, 2);
 
@@ -179,7 +192,20 @@ namespace FireGame.Prototypes.EditorTools
         /// </summary>
         private const int ShotSeed = 5;
 
-        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<Camera> frame = null, int stage = 1)
+        /// <summary>
+        /// 캡처는 화면을 보는 용도라 판이 중간에 끝나지 않게 붙잡는다: 체력은 채우고, 건물은 튼튼함 0.3 밑으로 안 내려간다
+        /// (밸런스는 proto-tests의 봇 측정이 본다. 규칙이 바뀔 때마다 시드가 지는 판이 되어 뒷장면을 못 찍었다).
+        /// </summary>
+        private static void KeepAlive(SurvivorSim sim)
+        {
+            sim.Hp = sim.MaxHp;
+            foreach (Structure st in sim.Structures)
+            {
+                if (st.IsBuilding && !st.Collapsed && st.Integrity < 0.3f) st.Integrity = 0.3f;
+            }
+        }
+
+        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<Camera> frame = null, int stage = 1, Action<SurvivorView> setup = null)
         {
             try
             {
@@ -191,15 +217,17 @@ namespace FireGame.Prototypes.EditorTools
 
                 var view = new SurvivorView(root.transform, camera, canvas, maxGear, stage);
                 view.Restart(ShotSeed);
+                setup?.Invoke(view);
                 var bot = new SurvivorBot(view.Sim);
                 int guard = 0;
                 while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400)
                 {
                     if (view.Sim.PendingChoices != null)
                     {
-                        view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices));
+                        view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices, view.Sim.Build));
                         continue;
                     }
+                    KeepAlive(view.Sim);
                     bot.AimHose();
                     view.Step(bot.Move());
                     view.Refresh(SurvivorSim.Dt);
@@ -244,9 +272,10 @@ namespace FireGame.Prototypes.EditorTools
                 {
                     if (view.Sim.PendingChoices != null)
                     {
-                        view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices));
+                        view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices, view.Sim.Build));
                         continue;
                     }
+                    KeepAlive(view.Sim);
                     bot.AimHose();
                     view.Step(bot.Move());
                     view.Refresh(SurvivorSim.Dt);
@@ -256,7 +285,7 @@ namespace FireGame.Prototypes.EditorTools
                 var right = new Vec2(Width * 0.78f, Height * 0.35f);
                 for (int frame = 0; frame < 45; frame++)
                 {
-                    if (view.Sim.PendingChoices != null) view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices));
+                    if (view.Sim.PendingChoices != null) view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices, view.Sim.Build));
                     FingerPhase phase = frame == 0 ? FingerPhase.Down : FingerPhase.Held;
                     float t = Mathf.Clamp01(frame / 10f);
                     var input = new ProtoInput
@@ -371,9 +400,10 @@ namespace FireGame.Prototypes.EditorTools
                 {
                     if (view.Sim.PendingChoices != null)
                     {
-                        view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices));
+                        view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices, view.Sim.Build));
                         continue;
                     }
+                    KeepAlive(view.Sim);
                     bot.AimHose();
                     view.Step(bot.Move());
                 }

@@ -192,6 +192,11 @@ namespace FireGame.Prototypes.Logic
         public const float FinaleAt = 180f;
         public const float FinaleReportEvery = 8f;
         public const int FinalePeople = 5;
+        public const float FinaleBurstEvery = 4f;
+        public const int FinaleBurst = 8;
+
+        /// <summary>이번 틱에 랜드마크가 불씨를 뿜었다.</summary>
+        public bool JustBurst;
 
         /// <summary>대형 신고: 큰 불에 여럿이 갇힌다. 다 구하면 보물상자.</summary>
         public static readonly float[] BigReportTimes = { 80f, 160f };
@@ -442,6 +447,7 @@ namespace FireGame.Prototypes.Logic
         private int _bigDone;
         private bool _bigFailed;
         private float _finaleClock;
+        private float _burstClock;
         private int _bonusPicks;
         private int _wavesDone;
         private float _nextWind;
@@ -605,11 +611,8 @@ namespace FireGame.Prototypes.Logic
             Build.Add(id);
             Hp += MaxHp - before;
             if (!Loadout.IsSpecial(id) && had < Loadout.MaxLevel && Build.Level(id) == Loadout.MaxLevel) JustMaxed = id;
-            if (id == UpgradeId.Cannon)
-            {
-                JustEvolved = true;
-                _jetClock = 0f;
-            }
+            if (Loadout.IsEvolution(id)) JustEvolved = true;
+            if (id == UpgradeId.Cannon) _jetClock = 0f;
             if (id == UpgradeId.Heli) _heliClock = 1f;
             if (id == UpgradeId.Curtain || id == UpgradeId.WaterWall) _curtainClock = 0.5f;
             if (id == UpgradeId.Turret) _turretClock = 0.3f;
@@ -672,6 +675,7 @@ namespace FireGame.Prototypes.Logic
             JustPickedToolbox = false;
             JustBigReport = false;
             JustFinale = false;
+            JustBurst = false;
             JustChest = false;
             AmbulanceAt = null;
             JustRescued = false;
@@ -779,6 +783,20 @@ namespace FireGame.Prototypes.Logic
                     Structure hit = Report();
                     if (hit != null) hit.Residents++;
                     Stats.Events++;
+                }
+                // 불타는 랜드마크가 사방으로 불씨를 뿜는다(예전 보스가 하던 절정의 몸 압박).
+                _burstClock -= Dt;
+                if (_burstClock <= 0f && Landmark != null && Landmark.Burning)
+                {
+                    _burstClock = FinaleBurstEvery;
+                    for (int k = 0; k < FinaleBurst && Enemies.Count < MaxEnemies; k++)
+                    {
+                        double a = Math.PI * 2 * k / FinaleBurst;
+                        Vec2 at = EdgePoint(Landmark, 0.5f);
+                        Enemy e = Spawn(EnemyKind.Ember, at);
+                        e.Knock = new Vec2((float)Math.Cos(a) * 6f, (float)Math.Sin(a) * 6f);
+                    }
+                    JustBurst = true;
                 }
             }
         }
@@ -1505,10 +1523,10 @@ namespace FireGame.Prototypes.Logic
         public const float HeliInterval = 9f;
         public const float HeliFlight = 1.2f;
         public const float HeliRadius = 4.5f;
-        public const float CurtainInterval = 5f;
-        public const float CurtainRadius = 4f;
+        public const float CurtainInterval = 4f;
+        public const float CurtainRadius = 4.5f;
 
-        /// <summary>지금 물의 장막 고리 반경: Lv1 4칸, 레벨마다 +0.5칸, 물의 방벽 7칸.</summary>
+        /// <summary>지금 물의 장막 고리 반경: Lv1 4.5칸, 레벨마다 +0.5칸, 물의 방벽 7칸.</summary>
         public float CurtainRadiusNow
         {
             get { return Build.Level(UpgradeId.WaterWall) > 0 ? 7f : CurtainRadius + (0.5f * (Build.PowerOf(UpgradeId.Curtain) - 1)); }
