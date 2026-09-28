@@ -315,6 +315,20 @@ namespace FireGame.Prototypes.Logic
             get { return BaseMagnet * Build.MagnetScale; }
         }
 
+        /// <summary>폰 조준 보정이 노릴 불: 살아 있는 적(보스 포함)과 타는 구조물 자리.</summary>
+        public void AimTargets(List<Vec2> into)
+        {
+            into.Clear();
+            foreach (Enemy e in Enemies)
+            {
+                if (!e.Dead) into.Add(e.Pos);
+            }
+            foreach (Structure s in Structures)
+            {
+                if (s.Burning) into.Add(s.Pos);
+            }
+        }
+
         // ------------------------------------------------------------------
         // 진행
         // ------------------------------------------------------------------

@@ -70,6 +70,10 @@ namespace FireGame.Prototypes
         private Vector3 _mouseAt;
         private bool _hasMouse;
 
+        /// <summary>폰 물 방향. 조준 보정으로 부드럽게 돌고, 손을 떼도 남는다.</summary>
+        private Vec2 _touchAim = new Vec2(1f, 0f);
+        private readonly List<Vec2> _fires = new List<Vec2>();
+
         /// <summary>폰 두 엄지 조작. 손가락이 한 번이라도 닿으면 그때부터 마우스 흉내를 무시한다.</summary>
         private readonly TwinStick _stick = new TwinStick();
         private static readonly List<Finger> NoFingers = new List<Finger>();
@@ -304,6 +308,7 @@ namespace FireGame.Prototypes
             _regenClock = 0f;
             _aim = Vector3.right;
             _aimAge = 99f;
+            _touchAim = new Vec2(1f, 0f);
             _trail.Clear();
             _stick.Clear();
             _suitShown = -1;
@@ -362,9 +367,13 @@ namespace FireGame.Prototypes
                 var move = new Vec2(input.Move.x, input.Move.y);
                 if (_touch)
                 {
-                    // 폰: 왼손 스틱으로 걷고, 오른손이 닿아 있는 동안 쏜다. 끌지 않고 누르기만 하면 걷는 쪽으로 쏜다.
+                    // 폰: 왼손 스틱으로 걷고, 오른손이 닿아 있는 동안 쏜다. 끈 방향 근처 불로 당겨 주고,
+                    // 끌지 않고 누르기만 하면 가장 가까운 불을 겨눈다. 방향은 부드럽게 돌고 손을 떼도 남는다.
                     if (_stick.LeftOn) move = _stick.Move;
-                    _sim.Aim = _stick.AimFresh ? _stick.Aim : _sim.Facing;
+                    _sim.AimTargets(_fires);
+                    Vec2 want = AimAssist.Desired(_sim.Player, _touchAim, _stick.AimFresh, _stick.Aim, _fires);
+                    _touchAim = AimAssist.Turn(_touchAim, want, AimAssist.TurnRate * dt);
+                    _sim.Aim = _touchAim;
                     _sim.Spraying = _stick.Firing;
                     _hasMouse = false;
                 }
@@ -1177,6 +1186,17 @@ namespace FireGame.Prototypes
             var white = new Color(1f, 1f, 1f, 0.8f);
             _reticle.Put(spot, 0.75f * squeeze, 0f, white);
             _reticle.Put(spot, 0.16f, 0f, white, BubbleSprite());
+            if (_touch && _stick.RightOn && aim.sqrMagnitude > 0.0001f)
+            {
+                // 폰: 오른손을 누르는 동안 노즐에서 겨눈 쪽으로 옅은 점선(5칸)을 그린다.
+                Vector3 tip = NozzleTip();
+                Vector3 dir = aim.normalized;
+                for (int i = 1; i <= 8; i++)
+                {
+                    float f = i / 8f;
+                    _reticle.Put(tip + (dir * (5f * f)), 0.14f, 0f, new Color(1f, 1f, 1f, 0.45f * (1f - (0.6f * f))), BubbleSprite());
+                }
+            }
         }
 
         /// <summary>몸이 보는 방향: 방금 쐈으면 조준 방향, 아니면 이동 방향.</summary>

@@ -75,6 +75,7 @@ namespace FireGame.Prototypes.EditorTools
             });
 
             failures += TouchShot(dir, "c12_touch_sticks");
+            failures += AimShot(dir, "c13_aim_assist");
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
@@ -247,6 +248,67 @@ namespace FireGame.Prototypes.EditorTools
                 Canvas.ForceUpdateCanvases();
                 Capture(camera, Path.Combine(dir, name + ".png"));
                 Debug.Log("[ProtoShots] " + name + " (조준 " + view.Sim.Aim.X.ToString("0.00") + "," + view.Sim.Aim.Y.ToString("0.00") + ", 쏨 " + view.Sim.Spraying + ")");
+                return 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[ProtoShots] 실패: " + name + " — " + e);
+                return 1;
+            }
+            finally
+            {
+                if (screen != null) UnityEngine.Object.DestroyImmediate(screen);
+            }
+        }
+
+        /// <summary>
+        /// 폰 조준 보정: 불 하나를 소방관 오른쪽 위 20°에 두고, 가짜 오른손은 정확히 오른쪽(0°)으로 끈다.
+        /// 물줄기가 끈 쪽이 아니라 불 쪽으로 휘어 들어가는지 본다.
+        /// </summary>
+        private static int AimShot(string dir, string name)
+        {
+            RenderTexture screen = null;
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var root = new GameObject("Prototype");
+                Camera camera = PrototypeHost.SetUpCamera();
+                screen = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
+                camera.targetTexture = screen;
+                Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
+
+                var view = new SurvivorView(root.transform, camera, canvas);
+                view.Sim.Reports = false;
+                var bot = new SurvivorBot(view.Sim);
+                while (view.Sim.Time < 3f && view.Sim.Outcome == SOutcome.Playing)
+                {
+                    bot.AimHose();
+                    view.Step(bot.Move());
+                    view.Refresh(SurvivorSim.Dt);
+                }
+                view.Sim.Enemies.Clear();
+                Vec2 p = view.Sim.Player;
+                double a = 20.0 * Math.PI / 180.0;
+                Enemy fire = view.Sim.Spawn(EnemyKind.Blaze, new Vec2(p.X + (float)(Math.Cos(a) * 6.0), p.Y + (float)(Math.Sin(a) * 6.0)));
+                fire.MaxHp = fire.Hp = 9999f;
+
+                var right = new Vec2(Width * 0.78f, Height * 0.4f);
+                for (int frame = 0; frame < 40; frame++)
+                {
+                    FingerPhase phase = frame == 0 ? FingerPhase.Down : FingerPhase.Held;
+                    float t = Mathf.Clamp01(frame / 8f);
+                    var input = new ProtoInput { Fingers = new List<Finger> { new Finger { Id = 1, Phase = phase, At = new Vec2(right.X + (120f * t), right.Y) } } };
+                    view.Tick(SurvivorSim.Dt, input);
+                }
+                Vec2 me = view.Sim.Player;
+                float toFire = Mathf.Atan2(fire.Pos.Y - me.Y, fire.Pos.X - me.X) * Mathf.Rad2Deg;
+                float aimed = Mathf.Atan2(view.Sim.Aim.Y, view.Sim.Aim.X) * Mathf.Rad2Deg;
+                float miss = Mathf.Abs(Mathf.DeltaAngle(toFire, aimed));
+                if (miss > 8f) throw new Exception("조준 보정이 불 쪽으로 안 당긴다: 불 " + toFire + "° 조준 " + aimed + "°");
+
+                Canvas.ForceUpdateCanvases();
+                Capture(camera, Path.Combine(dir, name + ".png"));
+                Debug.Log("[ProtoShots] " + name + " (끈 방향 0°, 불 " + toFire.ToString("0.0") + "°, 조준 " + aimed.ToString("0.0") + "°)");
                 return 0;
             }
             catch (Exception e)
