@@ -284,7 +284,7 @@ namespace FireGame.Prototypes.Tests
             {
                 sim.Hp = sim.MaxHp;
                 sim.Step(0f, 0f);
-                hit = sim.Explosions.Exists(p => p.DistanceTo(far.Pos) < 0.1f);
+                hit = sim.AirBlasts.Exists(p => p.DistanceTo(far.Pos) < 0.1f);
             }
             Assert.True(hit, "멀리 불난 건물에 소화탄이 안 떨어졌다");
         }

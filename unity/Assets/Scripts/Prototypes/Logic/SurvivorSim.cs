@@ -96,6 +96,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>호스(손에 든 노즐)에서 나간 물. 뷰가 이것들을 한 줄기로 이어 그린다.</summary>
         public bool Hose;
+
+        /// <summary>공중 소화탄(진화): 하늘에서 떨어진다.</summary>
+        public bool Air;
     }
 
     public sealed class Puddle
@@ -142,6 +145,18 @@ namespace FireGame.Prototypes.Logic
         public float Life;
     }
 
+    /// <summary>누가 쳤는지: 화면이 무기마다 다른 탄환·번쩍임을 그린다(판정과 무관).</summary>
+    public enum HitSource : byte
+    {
+        Hose,
+        Bomb,
+        Drone,
+        Partner,
+        Curtain,
+        Turret,
+        Special,
+    }
+
     /// <summary>화면용 한 틱 기록. 피해 숫자·파편을 그린다.</summary>
     public struct Hit
     {
@@ -150,6 +165,10 @@ namespace FireGame.Prototypes.Logic
         public bool Crit;
         public bool Killed;
         public EnemyKind Kind;
+        public HitSource Source;
+
+        /// <summary>친 무기가 있던 곳(탄환이 여기서 날아간다).</summary>
+        public Vec2 From;
     }
 
     /// <summary>재미 밀도 계측: 봇 판을 스테이지끼리 비교한다(docs/prototype-c-balance.md).</summary>
@@ -380,6 +399,18 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이번 틱에 물의 장막이 터졌다(소방관 자리에서).</summary>
         public bool JustCurtain;
+
+        /// <summary>이번 틱에 방수 포탑을 세운 자리.</summary>
+        public readonly List<Vec2> TurretsPlaced = new List<Vec2>();
+
+        /// <summary>이번 틱에 공중 소화탄이 떨어진 자리(일반 물폭탄은 Explosions).</summary>
+        public readonly List<Vec2> AirBlasts = new List<Vec2>();
+
+        /// <summary>물의 장막이 다음에 터지기까지 남은 초(없으면 MaxValue). 화면이 발밑 빛을 채운다.</summary>
+        public float CurtainIn
+        {
+            get { return Build.Has(UpgradeId.Curtain) ? _curtainClock : float.MaxValue; }
+        }
 
         /// <summary>달리고 있는 소방차 자리(없으면 null)와 달리는 방향(±x).</summary>
         public Vec2? Truck;
@@ -662,6 +693,8 @@ namespace FireGame.Prototypes.Logic
             Doused.Clear();
             HeliDrops.Clear();
             JustCurtain = false;
+            TurretsPlaced.Clear();
+            AirBlasts.Clear();
             Sprinkled.Clear();
             JustRain = false;
             JustRetardant = false;
@@ -1148,7 +1181,7 @@ namespace FireGame.Prototypes.Logic
                         if (st.Within(Player, radius)) Soak(st, wall ? 0.8f : 0.5f);
                     }
                     Near(Player, radius, _near);
-                    foreach (Enemy e in _near) Damage(e, wall ? 20f : 12f, Knockback(Player, e.Pos, wall ? 12f : 8f), true);
+                    foreach (Enemy e in _near) Damage(e, wall ? 20f : 12f, Knockback(Player, e.Pos, wall ? 12f : 8f), true, HitSource.Curtain, Player);
                 }
             }
 
@@ -1226,7 +1259,7 @@ namespace FireGame.Prototypes.Logic
                 {
                     if (e.DroneCooldown > 0f) continue;
                     e.DroneCooldown = 0.5f;
-                    Damage(e, 6f, Knockback(at, e.Pos, 3f), true);
+                    Damage(e, 6f, Knockback(at, e.Pos, 3f), true, HitSource.Drone, at);
                 }
             }
             if (!over) return;
@@ -1254,7 +1287,7 @@ namespace FireGame.Prototypes.Logic
             {
                 if (!st.IsBuilding || !st.Burning) continue;
                 var from = new Vec2(st.Pos.X - 6f, st.Pos.Y + 14f);
-                Shots.Add(new Shot { Kind = ShotKind.Bomb, From = from, Pos = from, Target = st.Pos, Life = 0.9f, Damage = 10f, Radius = 2.2f });
+                Shots.Add(new Shot { Kind = ShotKind.Bomb, From = from, Pos = from, Target = st.Pos, Life = 0.9f, Damage = 10f, Radius = 2.2f, Air = true });
                 ShotsFired++;
             }
         }
@@ -1279,6 +1312,7 @@ namespace FireGame.Prototypes.Logic
                 _turretClock = TurretEvery;
                 float life = (5f + (lv - 1)) * (post ? 2f : 1f);
                 Turrets.Add(new Turret { Pos = Player, Life = life, MaxLife = life });
+                TurretsPlaced.Add(Player);
                 while (Turrets.Count > most) Turrets.RemoveAt(0);
             }
             for (int i = Turrets.Count - 1; i >= 0; i--)
@@ -1310,7 +1344,7 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
                 tu.Aim = target != null ? target.Pos : (Vec2?)null;
-                if (target != null) Damage(target, TurretHit, Knockback(tu.Pos, target.Pos, 3f), true);
+                if (target != null) Damage(target, TurretHit, Knockback(tu.Pos, target.Pos, 3f), true, HitSource.Turret, tu.Pos);
             }
         }
 
@@ -1372,7 +1406,7 @@ namespace FireGame.Prototypes.Logic
                 if (_truckHit.Contains(e) || Math.Abs(e.Pos.X - at.X) > 1.2f) continue;
                 _truckHit.Add(e);
                 // 차 옆으로 튕겨 낸다.
-                Damage(e, 20f, new Vec2(TruckDir * 3f, e.Pos.Y >= at.Y ? 8f : -8f), true);
+                Damage(e, 20f, new Vec2(TruckDir * 3f, e.Pos.Y >= at.Y ? 8f : -8f), true, HitSource.Special, at);
             }
             foreach (Structure st in Structures)
             {
@@ -1401,7 +1435,7 @@ namespace FireGame.Prototypes.Logic
                 Douse(st.Pos, Math.Max(st.Half.X, st.Half.Y) + 2.5f);
                 foreach (Enemy e in Enemies)
                 {
-                    if (!e.Dead && st.Within(e.Pos, 2.5f)) Damage(e, 8f, Knockback(st.Pos, e.Pos, 3f), true);
+                    if (!e.Dead && st.Within(e.Pos, 2.5f)) Damage(e, 8f, Knockback(st.Pos, e.Pos, 3f), true, HitSource.Special, st.Pos);
                 }
             }
         }
@@ -1420,7 +1454,7 @@ namespace FireGame.Prototypes.Logic
                     if (st.Within(at, RainRadius)) Soak(st, 0.3f * Dt);
                 }
                 Near(at, RainRadius, _near);
-                foreach (Enemy e in _near) Damage(e, 6f * Dt, default, false);
+                foreach (Enemy e in _near) Damage(e, 6f * Dt, default, false, HitSource.Special);
                 RainLeft -= Dt;
                 if (RainLeft <= 0f) RainAt = null;
                 return;
@@ -1467,7 +1501,7 @@ namespace FireGame.Prototypes.Logic
             }
             foreach (Enemy e in Enemies)
             {
-                if (!e.Dead && SegmentDistance(e.Pos, band.A, band.B) <= r + e.Radius) Damage(e, 15f, default, true);
+                if (!e.Dead && SegmentDistance(e.Pos, band.A, band.B) <= r + e.Radius) Damage(e, 15f, default, true, HitSource.Special);
             }
         }
 
@@ -1600,14 +1634,15 @@ namespace FireGame.Prototypes.Logic
                     if (t >= 1f)
                     {
                         s.Dead = true;
-                        (s.Kind == ShotKind.Heli ? HeliDrops : Explosions).Add(s.Target);
+                        (s.Kind == ShotKind.Heli ? HeliDrops : s.Air ? AirBlasts : Explosions).Add(s.Target);
                         Douse(s.Target, s.Radius);
                         foreach (Structure st in Structures)
                         {
                             if (st.Within(s.Target, s.Radius)) Soak(st, s.Damage * WaterPerDamage);
                         }
                         Near(s.Target, s.Radius, _near);
-                        foreach (Enemy e in _near) Damage(e, s.Damage, Knockback(s.Target, e.Pos, 7f), true);
+                        HitSource source = s.Kind == ShotKind.Heli ? HitSource.Special : HitSource.Bomb;
+                        foreach (Enemy e in _near) Damage(e, s.Damage, Knockback(s.Target, e.Pos, 7f), true, source, s.Target);
                     }
                     continue;
                 }
@@ -1631,7 +1666,7 @@ namespace FireGame.Prototypes.Logic
                         s.Struck.Add(e);
                     }
                     var dir = new Vec2(s.Vel.X / 14f, s.Vel.Y / 14f);
-                    Damage(e, s.Damage, new Vec2(dir.X * 2.5f, dir.Y * 2.5f), true);
+                    Damage(e, s.Damage, new Vec2(dir.X * 2.5f, dir.Y * 2.5f), true, HitSource.Hose, s.From);
                     s.Pierce--;
                     if (s.Pierce <= 0)
                     {
@@ -2231,7 +2266,7 @@ namespace FireGame.Prototypes.Logic
                             target = e;
                         }
                     }
-                    if (target != null) Damage(target, PartnerHit * (Build.Level(UpgradeId.Squad) > 0 ? 2f : 1f), Knockback(at, target.Pos, 4f), true);
+                    if (target != null) Damage(target, PartnerHit * (Build.Level(UpgradeId.Squad) > 0 ? 2f : 1f), Knockback(at, target.Pos, 4f), true, HitSource.Partner, at);
                 }
             }
         }
@@ -2287,7 +2322,7 @@ namespace FireGame.Prototypes.Logic
             Civilians.Add(new Civilian { Pos = s.Door, Life = 1.5f });
         }
 
-        private void Damage(Enemy e, float amount, Vec2 knock, bool show)
+        private void Damage(Enemy e, float amount, Vec2 knock, bool show, HitSource source = HitSource.Hose, Vec2 from = default)
         {
             if (e.Dead) return;
             bool crit = Rand() < 0.1f;
@@ -2299,7 +2334,7 @@ namespace FireGame.Prototypes.Logic
 
             bool killed = e.Hp <= 0f;
             if (killed) Kill(e);
-            if (show || killed) Hits.Add(new Hit { Pos = e.Pos, Damage = amount, Crit = crit, Killed = killed, Kind = e.Kind });
+            if (show || killed) Hits.Add(new Hit { Pos = e.Pos, Damage = amount, Crit = crit, Killed = killed, Kind = e.Kind, Source = source, From = from });
         }
 
         private void Kill(Enemy e)
