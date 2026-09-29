@@ -157,6 +157,44 @@ namespace FireGame.Prototypes
         private TextMesh _forecastTag;
         private Pool _sprayLines;
         private Pool _turretBase;
+        private Pool _turretTank;
+        private Pool _droneRotors;
+        private Pool _airBombs;
+        private Pool _wet;
+        private static Sprite _droneSprite;
+        private static Sprite _turretSprite;
+        private static Sprite _airBombSprite;
+
+        /// <summary>무기 탄환: 친 무기에서 맞은 곳으로 잠깐 뻗는 물 막대.</summary>
+        private struct Tracer
+        {
+            public Vector3 From;
+            public Vector3 To;
+            public float Age;
+            public float Life;
+            public float Width;
+            public Color Color;
+        }
+
+        /// <summary>땅에 잠깐 남는 젖은 물 자국(폭탄·장막).</summary>
+        private struct WetMark
+        {
+            public Vector3 At;
+            public float Size;
+            public float Age;
+            public float Life;
+            public bool Ring;
+        }
+
+        private const int MaxTracers = 64;
+        private const int MaxImpactsPerSource = 6;
+        private readonly List<Tracer> _tracers = new List<Tracer>();
+        private readonly List<WetMark> _wetMarks = new List<WetMark>();
+        private readonly int[] _impacts = new int[8];
+        private readonly float[] _turretKick = new float[8];
+        private readonly List<Vector3> _turretLandings = new List<Vector3>();
+        private readonly List<float> _turretLandingIn = new List<float>();
+        private float _weaponSoundClock;
         private float _heatTextClock;
         private readonly Vector3[] _partnerLast = new Vector3[4];
         private readonly float[] _partnerDeg = new float[4];
@@ -594,9 +632,11 @@ namespace FireGame.Prototypes
             }
             // 한 틱에 너무 많이 꺼지면(방수포 한 바퀴) 수증기를 줄여 화면이 하얗게 덮이지 않게 한다.
             bool crowded = kills > 12;
+            System.Array.Clear(_impacts, 0, _impacts.Length);
             foreach (Hit h in _sim.Hits)
             {
                 Vector3 at = W(h.Pos);
+                WeaponHit(h, at);
                 if (h.Killed) DeathBurst(at, h.Kind, crowded);
                 else
                 {
@@ -685,29 +725,42 @@ namespace FireGame.Prototypes
                 ShowAlert("방염제 살포!", new Color(1f, 0.45f, 0.45f));
                 GameAudio.Play(Cue.SprayFoam);
             }
-            if (_sim.JustCurtain)
-            {
-                Vector3 at = W(_sim.Player);
-                float ring = _sim.CurtainRadiusNow * 2.4f;
-                Shockwave(at, new Color(0.45f, 0.8f, 1f, 1f), ring, 0.4f);
-                Shockwave(at, new Color(0.85f, 0.97f, 1f, 0.9f), ring * 0.8f, 0.35f, 0.1f);
-                for (int i = 0; i < 36; i++)
-                {
-                    float a = i * Mathf.PI * 2f / 36f;
-                    var dir = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
-                    Emit("Effects/water_drop", at + (dir * 0.8f), dir * Random.Range(9f, 13f), 3.5f, 0.4f, 0.45f, 0.1f,
-                        new Color(0.75f, 0.95f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
-                }
-                _trauma = Mathf.Min(1f, _trauma + 0.15f);
-                GameAudio.Play(Cue.SprayFoam);
-            }
+            if (_sim.JustCurtain) CurtainBurst();
 
             foreach (Vec2 e in _sim.Explosions)
             {
-                WaterBlast(W(e), _sim.Build.BombRadius, _sim.Build.PowerOf(UpgradeId.WaterBomb));
-                _trauma = Mathf.Min(1f, _trauma + 0.12f);
-                HitStop(0.02f);
-                GameAudio.Play(Cue.SprayFoam);
+                int lv = _sim.Build.PowerOf(UpgradeId.WaterBomb);
+                Vector3 at = W(e);
+                WaterBlast(at, _sim.Build.BombRadius, lv);
+                // 착지 순간: 흰 번쩍 + 땅에 남는 물 자국 + 건물이면 지붕에서 김 기둥.
+                Emit("Effects/glow", at, Vector3.zero, 0f, 0.1f, _sim.Build.BombRadius * 2.6f, _sim.Build.BombRadius * 3.2f, new Color(1f, 1f, 1f, 0.95f), new Color(0.6f, 0.9f, 1f, 0f), 0f, true);
+                AddWet(at, _sim.Build.BombRadius * 2.2f, 1.2f, false);
+                if (RoofAt(e)) SteamPillar(at, 1f);
+                _trauma = Mathf.Min(1f, _trauma + 0.18f);
+                _zoomKick = Mathf.Max(_zoomKick, 0.12f);
+                HitStop(0.03f);
+                WeaponSound(Cue.SprayFoam);
+            }
+            foreach (Vec2 e in _sim.AirBlasts)
+            {
+                // 공중 소화탄: 물폭탄보다 크고 금빛 고리, 김 기둥 두 배.
+                Vector3 at = W(e);
+                WaterBlast(at, 2.2f * 1.5f, Loadout.MaxLevel);
+                Emit("Effects/glow", at, Vector3.zero, 0f, 0.12f, 7f, 9f, new Color(1f, 1f, 1f, 1f), new Color(1f, 0.85f, 0.4f, 0f), 0f, true);
+                Shockwave(at, new Color(1f, 0.85f, 0.35f, 1f), 12f, 0.5f, 0.05f);
+                Pillar(at, new Color(0.5f, 0.85f, 1f));
+                AddWet(at, 6f, 1.6f, false);
+                SteamPillar(at, 2f);
+                _trauma = Mathf.Min(1f, _trauma + 0.28f);
+                _zoomKick = Mathf.Max(_zoomKick, 0.2f);
+                HitStop(0.04f);
+                WeaponSound(Cue.SprayFoam);
+            }
+            foreach (Vec2 e in _sim.TurretsPlaced)
+            {
+                // 포탑은 위에서 떨어져 0.2초 뒤 "쿵" 하고 선다.
+                _turretLandings.Add(W(e));
+                _turretLandingIn.Add(TurretDropTime);
             }
 
             if (_sim.ShotsFired > 0)
@@ -1063,6 +1116,8 @@ namespace FireGame.Prototypes
                 if (_cardsIn <= 0f && _sim.PendingChoices != null) ShowCards();
             }
             _putOutClock -= dt;
+            _weaponSoundClock -= dt;
+            AdvanceWeaponFx(dt);
             _igniteClock -= dt;
             _sizzleClock -= dt;
             _gemClock -= dt;
@@ -1076,6 +1131,7 @@ namespace FireGame.Prototypes
             foreach (RibbonPool r in _ribbons) r.Begin(_time);
             DrawTown();
             DrawPuddles();
+            DrawWetMarks();
             DrawGems();
             DrawToolboxes();
             DrawChests();
@@ -1417,15 +1473,31 @@ namespace FireGame.Prototypes
                     case ShotKind.Heli:
                         DrawHeli(s);
                         break;
+                    case ShotKind.Bomb when s.Air:
+                    {
+                        // 공중 소화탄: 하늘에서 비스듬히 떨어진다. 땅 그림자는 점점 작고 짙어진다.
+                        float ft = Mathf.Clamp01(s.Age / s.Life);
+                        Vector3 ground = W(s.Target);
+                        _bombShadows.Put(ground, Mathf.Lerp(3f, 1.2f, ft), 0f, new Color(0f, 0f, 0f, Mathf.Lerp(0.1f, 0.5f, ft)));
+                        _civilianRings.Put(ground, Mathf.Lerp(6f, 3f, ft), 0f, new Color(1f, 0.4f, 0.2f, 0.25f + (0.3f * ft)));
+                        Vector3 fly = new Vector3(s.Target.X - s.From.X, s.Target.Y - s.From.Y, 0f);
+                        _airBombs.Put(at, 1.3f, (Mathf.Atan2(fly.y, fly.x) * Mathf.Rad2Deg) - 90f, Color.white);
+                        if (Random.value < 0.5f)
+                        {
+                            Emit(Smokes[Random.Range(0, Smokes.Length)], at - (fly.normalized * 0.6f), -fly.normalized, 1f, 0.35f, 0.3f, 0.8f,
+                                new Color(1f, 1f, 1f, 0.5f), new Color(1f, 1f, 1f, 0f), 0f);
+                        }
+                        break;
+                    }
                     case ShotKind.Bomb:
                         float t = Mathf.Clamp01(s.Age / s.Life);
                         float lift = Mathf.Sin(t * Mathf.PI) * 2f;
                         float bombSize = 0.8f + (0.08f * bombLevel);
                         _bombShadows.Put(at, 0.6f * bombSize, 0f, new Color(0f, 0f, 0f, 0.35f));
-                        _bombs.Put(at + new Vector3(0f, lift, 0f), bombSize, t * 540f, new Color(0.45f, 0.78f, 1f));
+                        _bombs.Put(at + new Vector3(0f, lift, 0f), bombSize * 1.2f, t * 540f, new Color(0.45f, 0.78f, 1f));
                         _dropGlow.Put(at + new Vector3(0f, lift, 0f), bombSize * (1.2f + (0.15f * bombLevel)), 0f, new Color(0.55f, 0.8f, 1f, 0.25f + (0.04f * bombLevel)));
                         // 날아가며 물방울 꼬리를 흘린다.
-                        if (Random.value < 0.4f)
+                        if (Random.value < 0.8f)
                         {
                             Emit("Effects/water_drop", at + new Vector3(0f, lift, 0f), new Vector3(Random.Range(-0.8f, 0.8f), Random.Range(-1.5f, 0f), 0f), 3f, 0.3f,
                                 0.25f * bombSize, 0.05f, new Color(0.7f, 0.93f, 1f, 0.9f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
@@ -1463,14 +1535,30 @@ namespace FireGame.Prototypes
                 _shadows.Put(at + new Vector3(0f, -0.35f, 0f), 0.6f * droneScale, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
                 bool goldDrone = droneLevel >= Loadout.MaxLevel;
                 _droneGlow.Put(at, 1.6f * droneScale, 0f, goldDrone ? new Color(1f, 0.8f, 0.3f, 0.55f) : new Color(0.55f, 0.8f, 1f, 0.45f));
-                _drones.Put(at, 0.65f * droneScale, _time * 720f, Color.white);
-                if (goldDrone) _auras.Put(at, 1.1f, 0f, new Color(1f, 0.85f, 0.35f, 0.85f));
-                if (Random.value < 0.25f) Splash(at, 1, 0.15f);
+                // 쿼드콥터: 궤도 진행 방향을 보고, 네 팔 끝 날개가 빠르게 돈다.
+                float heading = (a * Mathf.Rad2Deg) + 90f;
+                float body = 0.95f * droneScale;
+                _drones.Put(at, body, heading - 90f, goldDrone ? new Color(1f, 0.9f, 0.55f) : Color.white);
+                for (int arm = 0; arm < 4; arm++)
+                {
+                    float ad = ((heading - 90f) + 45f + (arm * 90f)) * Mathf.Deg2Rad;
+                    Vector3 tip = at + (new Vector3(Mathf.Cos(ad), Mathf.Sin(ad), 0f) * body * 0.36f);
+                    _droneRotors.Put(tip, body * 0.42f, (_time * 2200f) + (arm * 40f), new Color(1f, 1f, 1f, 0.85f));
+                }
+                if (goldDrone) _auras.Put(at, 1.3f, 0f, new Color(1f, 0.85f, 0.35f, 0.85f));
                 // 불난 지붕 위: 드론마다 지붕 가운데로 물줄기를 뿌린다.
                 if (patrol != null && patrol.Burning && Vector3.Distance(center, W(patrol.Pos)) < 0.6f)
                 {
-                    SprayLine(at, Vector3.Lerp(at, center, 0.75f), 0.18f, new Color(0.6f, 0.9f, 1f, 0.8f));
-                    if (Random.value < 0.2f) Splash(Vector3.Lerp(at, center, 0.75f), 1, 0.2f);
+                    Vector3 hitAt = Vector3.Lerp(at, center, 0.75f);
+                    SprayLine(at, hitAt, 0.26f * droneScale, new Color(0.6f, 0.9f, 1f, 0.9f));
+                    // 드론 아래로 떨어지는 물 커튼 + 지붕에서 올라오는 김.
+                    if (Random.value < 0.6f)
+                    {
+                        EmitFalling("Effects/water_drop", at + new Vector3(Random.Range(-0.3f, 0.3f), 0f, 0f), new Vector3(Random.Range(-0.5f, 0.5f), -1f, 0f), 0.35f, 0.28f,
+                            new Color(0.7f, 0.93f, 1f, 0.95f));
+                    }
+                    if (Random.value < 0.35f) Splash(hitAt, 1, 0.3f);
+                    if (Random.value < 0.06f) Steam(hitAt + new Vector3(0f, 0.3f, 0f), 1, 1.1f);
                 }
             }
             // 구조 드론: 갇힌 사람이 있는 지붕 위에서 노란 구조 줄을 내려 끌어올린다.
@@ -1483,6 +1571,8 @@ namespace FireGame.Prototypes
             }
 
             DrawTurrets();
+            DrawTracers();
+            DrawCurtainCharge();
             DrawForecast();
         }
 
@@ -1502,9 +1592,16 @@ namespace FireGame.Prototypes
         private void DrawTurrets()
         {
             bool post = _sim.Build.Level(UpgradeId.RescuePost) > 0;
-            foreach (Turret tu in _sim.Turrets)
+            for (int k = 0; k < _sim.Turrets.Count; k++)
             {
+                Turret tu = _sim.Turrets[k];
                 Vector3 at = W(tu.Pos);
+                // 세운 지 0.2초 동안은 하늘에서 떨어지는 중(그림자만 먼저 커진다).
+                float age = tu.MaxLife - tu.Life;
+                float fall = Mathf.Clamp01(1f - (age / TurretDropTime));
+                Vector3 drop = new Vector3(0f, fall * fall * 5f, 0f);
+                float kick = k < _turretKick.Length ? _turretKick[k] : 0f;
+                if (k < _turretKick.Length) _turretKick[k] = Mathf.Max(0f, _turretKick[k] - (_frameDt * 8f));
                 float life = Mathf.Clamp01(tu.Life / tu.MaxLife);
                 float blink = tu.Life < 1.5f && Mathf.Sin(_time * 18f) < 0f ? 0.4f : 1f;
                 if (post)
@@ -1514,18 +1611,35 @@ namespace FireGame.Prototypes
                     _sprayLines.Put(at + new Vector3(0f, 0.9f, 0f), 0.9f, 0f, new Color(0.9f, 0.15f, 0.15f, blink), null, 0.25f / 0.9f);
                     _sprayLines.Put(at + new Vector3(0f, 0.9f, 0f), 0.25f, 0f, new Color(0.9f, 0.15f, 0.15f, blink), null, 0.9f / 0.25f);
                 }
-                _shadows.Put(at + new Vector3(0f, -0.2f, 0f), 0.9f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
+                _shadows.Put(at + new Vector3(0f, -0.2f, 0f), 0.9f * (1f - (0.5f * fall)), 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
+                at += drop;
                 // 남은 시간 고리(파랑이 줄어든다).
                 _civilianRings.Put(at, 1.6f * life + 0.4f, 0f, new Color(0.4f, 0.8f, 1f, 0.35f * blink));
                 Vector3 aim = tu.Aim.HasValue ? W(tu.Aim.Value) : at + new Vector3(1f, 0f, 0f);
                 Vector3 dir = (aim - at).normalized;
-                _turretBase.Put(at, 0.75f, 0f, new Color(0.85f, 0.2f, 0.15f, blink));
-                _sprayLines.Put(at + (dir * 0.35f), 0.7f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg, new Color(0.75f, 0.75f, 0.8f, blink), null, 0.18f / 0.7f);
-                if (tu.Aim.HasValue && tu.Clock > 0.2f)
+                int tlv = _sim.Build.PowerOf(UpgradeId.Turret);
+                float tsize = 1.1f * LevelScale(tlv) * (post ? 1.15f : 1f);
+                _turretBase.Put(at, tsize, 0f, new Color(1f, 1f, 1f, blink));
+                // 물 탱크(레벨이 오를수록 밝게 맥동) + 포신: 쏠 때마다 뒤로 밀렸다 돌아온다.
+                _turretTank.Put(at + new Vector3(0f, 0.05f, 0f), 0.36f * tsize, 0f, new Color(0.35f, 0.7f, 1f, (0.8f + (0.2f * Mathf.Sin(_time * 6f))) * blink));
+                Vector3 barrel = at + (dir * ((0.42f * tsize) - (0.15f * kick)));
+                _sprayLines.Put(barrel, 0.75f * tsize, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg, new Color(0.8f, 0.82f, 0.86f, blink), null, 0.22f / 0.75f);
+                if (tlv >= Loadout.MaxLevel) _auras.Put(at, 1.5f * tsize, 0f, new Color(1f, 0.85f, 0.35f, 0.6f * blink));
+                // 곁에서 타는 건물: 포물선 물방울로 적신다.
+                foreach (Structure st in _sim.Structures)
                 {
-                    SprayLine(at + (dir * 0.7f), aim, 0.2f, new Color(0.6f, 0.9f, 1f, 0.85f));
-                    if (Random.value < 0.3f) Splash(aim, 1, 0.2f);
+                    if (!st.IsBuilding || !st.Burning || !st.Within(tu.Pos, SurvivorSim.TurretRange)) continue;
+                    Vector3 roof = W(st.Pos);
+                    if (Random.value < 0.35f)
+                    {
+                        Vector3 v = (roof - at) * 1.6f;
+                        v.y += 3.5f;
+                        EmitSprite(Art.Get("Effects/water_drop"), at + new Vector3(0f, 0.3f, 0f), v, 0f, 0.55f, 0.3f, 0.2f,
+                            new Color(0.7f, 0.93f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0.2f), 0f, false, 12f);
+                    }
+                    if (Random.value < 0.04f) Steam(roof, 1, 1f);
                 }
+                if (tu.Life < 0.1f) Steam(at, 2, 0.8f);
             }
         }
 
@@ -2016,8 +2130,11 @@ namespace FireGame.Prototypes
                 {
                     Vector3 roof = W(near.Pos);
                     Vector3 hand = at + ((roof - at).normalized * 0.4f);
-                    SprayLine(hand, Vector3.Lerp(hand, roof, 0.8f), squad ? 0.26f : 0.18f, new Color(0.6f, 0.9f, 1f, 0.85f));
-                    if (Random.value < 0.2f) Splash(Vector3.Lerp(hand, roof, 0.8f), 1, 0.2f);
+                    Vector3 wetAt = Vector3.Lerp(hand, roof, 0.8f);
+                    SprayLine(hand, wetAt, squad ? 0.34f : 0.24f, squad ? new Color(1f, 0.92f, 0.6f, 0.9f) : new Color(0.6f, 0.9f, 1f, 0.9f));
+                    if (Random.value < 0.4f) Splash(wetAt, 1, 0.3f);
+                    if (Random.value < 0.3f) Splash(hand, 1, 0.1f);
+                    if (Random.value < 0.05f) Steam(wetAt + new Vector3(0f, 0.3f, 0f), 1, 0.9f);
                 }
                 if (squad) _auras.Put(at, 1.3f, 0f, new Color(1f, 0.85f, 0.35f, 0.5f));
                 _partner.Put(at + new Vector3(0f, bob, 0f), 0.85f, _partnerDeg[i], squad ? new Color(1f, 0.9f, 0.5f) : Color.white);
@@ -2231,6 +2348,371 @@ namespace FireGame.Prototypes
             return _rotorSprite;
         }
 
+        /// <summary>포탑이 하늘에서 떨어져 서는 데 걸리는 초.</summary>
+        private const float TurretDropTime = 0.2f;
+
+        /// <summary>레벨이 보이게: 탄환 굵기·번쩍임 크기 배율.</summary>
+        private static float LevelScale(int level)
+        {
+            return 1f + (0.12f * Mathf.Max(0, level - 1));
+        }
+
+        /// <summary>무기마다 다른 적중: 어디서 날아왔는지(탄환·찌릿)와 맞은 자리(번쩍·고리).</summary>
+        private void WeaponHit(Hit h, Vector3 at)
+        {
+            int slot = (int)h.Source;
+            if (slot >= _impacts.Length || _impacts[slot] >= MaxImpactsPerSource) return;
+            Vector3 from = W(h.From);
+            Loadout b = _sim.Build;
+            switch (h.Source)
+            {
+                case HitSource.Partner:
+                {
+                    int lv = b.PowerOf(UpgradeId.Partner);
+                    bool squad = b.Level(UpgradeId.Squad) > 0;
+                    Color c = squad ? new Color(1f, 0.88f, 0.45f, 1f) : new Color(0.55f, 0.88f, 1f, 1f);
+                    Vector3 hand = from + ((at - from).normalized * 0.4f);
+                    AddTracer(hand, at, 0.2f * LevelScale(lv) * (squad ? 1.3f : 1f), c, 0.14f);
+                    Splash(hand, 2, 0.1f);
+                    Impact(at, c, 0.8f * (squad ? 1.3f : 1f), squad ? Loadout.MaxLevel : lv);
+                    break;
+                }
+                case HitSource.Turret:
+                {
+                    int lv = b.PowerOf(UpgradeId.Turret);
+                    Vector3 dir = (at - from).normalized;
+                    AddTracer(from + (dir * 0.8f), at, 0.24f * LevelScale(lv), new Color(0.6f, 0.92f, 1f, 1f), 0.12f);
+                    Emit("Effects/glow", from + (dir * 0.9f), Vector3.zero, 0f, 0.06f, 0.6f, 0.9f, new Color(1f, 1f, 1f, 0.9f), new Color(0.6f, 0.9f, 1f, 0f), 0f, true);
+                    for (int k = 0; k < _sim.Turrets.Count && k < _turretKick.Length; k++)
+                    {
+                        if (_sim.Turrets[k].Pos.DistanceTo(h.From) < 0.1f) _turretKick[k] = 1f;
+                    }
+                    Impact(at, new Color(0.55f, 0.85f, 1f, 1f), 0.9f, lv);
+                    break;
+                }
+                case HitSource.Drone:
+                {
+                    int lv = b.PowerOf(UpgradeId.Drone);
+                    bool gold = lv >= Loadout.MaxLevel || b.Level(UpgradeId.RescueDrone) > 0;
+                    Color c = gold ? new Color(1f, 0.9f, 0.5f, 1f) : new Color(0.45f, 1f, 0.95f, 1f);
+                    // 찌릿: 드론에서 짧은 번개 물줄기 + 별 모양 물방울.
+                    AddTracer(from, at, 0.14f, new Color(0.9f, 1f, 1f, 1f), 0.08f);
+                    for (int i = 0; i < 6; i++)
+                    {
+                        float a = (i * Mathf.PI / 3f) + Random.Range(-0.2f, 0.2f);
+                        EmitSprite(BeamSprite(), at, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 6f, 8f, 0.14f, 0.25f, 0.1f, c, new Color(c.r, c.g, c.b, 0f), 0f, true,
+                            0f, 3f, (a * Mathf.Rad2Deg) - 90f);
+                    }
+                    Impact(at, c, 0.9f, lv);
+                    break;
+                }
+                case HitSource.Curtain:
+                {
+                    // 장막에 밀려나는 물 꼬리.
+                    Vector3 away = Away(h.Pos);
+                    float deg = (Mathf.Atan2(away.y, away.x) * Mathf.Rad2Deg) - 90f;
+                    EmitSprite(BeamSprite(), at - (away * 0.4f), away * 3f, 4f, 0.25f, 0.5f, 0.2f, new Color(0.7f, 0.93f, 1f, 0.9f), new Color(0.6f, 0.9f, 1f, 0f), 0f, true, 0f, 3.5f, deg);
+                    break;
+                }
+                case HitSource.Bomb:
+                    Impact(at, new Color(0.55f, 0.85f, 1f, 1f), 0.7f, b.PowerOf(UpgradeId.WaterBomb));
+                    break;
+                default:
+                    return;
+            }
+            _impacts[slot]++;
+        }
+
+        /// <summary>맞은 자리: 흰 번쩍 + 고리 + 사방 물방울. MAX는 금빛 고리가 한 겹 더.</summary>
+        private void Impact(Vector3 at, Color c, float size, int level)
+        {
+            float s = size * LevelScale(level);
+            var clear = new Color(c.r, c.g, c.b, 0f);
+            Emit("Effects/glow", at, Vector3.zero, 0f, 0.08f, 0.9f * s, 1.5f * s, new Color(1f, 1f, 1f, 0.95f), clear, 0f, true);
+            Shockwave(at, c, 1.8f * s, 0.2f);
+            if (level >= Loadout.MaxLevel) Shockwave(at, new Color(1f, 0.85f, 0.35f, 0.95f), 2.5f * s, 0.25f, 0.04f);
+            int n = 4 + level;
+            for (int i = 0; i < n; i++)
+            {
+                float a = Random.value * Mathf.PI * 2f;
+                Emit("Effects/water_drop", at, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Random.Range(4f, 8f) * s, 7f, Random.Range(0.2f, 0.3f),
+                    0.3f * s, 0.05f, new Color(0.8f, 0.96f, 1f, 1f), clear, 0f);
+            }
+        }
+
+        private void AddTracer(Vector3 from, Vector3 to, float width, Color color, float life)
+        {
+            if (_tracers.Count >= MaxTracers) _tracers.RemoveAt(0);
+            _tracers.Add(new Tracer { From = from, To = to, Width = width, Color = color, Life = life });
+        }
+
+        private void AddWet(Vector3 at, float size, float life, bool ring)
+        {
+            if (_wetMarks.Count >= 24) _wetMarks.RemoveAt(0);
+            _wetMarks.Add(new WetMark { At = at, Size = size, Life = life, Ring = ring });
+        }
+
+        private void WeaponSound(Cue cue)
+        {
+            if (_weaponSoundClock > 0f) return;
+            GameAudio.Play(cue);
+            _weaponSoundClock = 0.08f;
+        }
+
+        /// <summary>물이 불난 지붕에 떨어졌는지(김 기둥을 세운다).</summary>
+        private bool RoofAt(Vec2 p)
+        {
+            foreach (Structure st in _sim.Structures)
+            {
+                if (st.IsBuilding && st.Within(p, 0.5f) && (st.Burning || st.Wet > 0f)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>지붕에서 하얀 김이 기둥처럼 솟는다.</summary>
+        private void SteamPillar(Vector3 at, float scale)
+        {
+            int n = Mathf.RoundToInt(6 * scale);
+            for (int i = 0; i < n; i++)
+            {
+                var v = new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(3f, 6f), 0f) * scale;
+                Emit(Smokes[Random.Range(0, Smokes.Length)], at + new Vector3(Random.Range(-0.5f, 0.5f), 0f, 0f), v, 1.5f, Random.Range(0.7f, 1.1f),
+                    1f * scale, 3.2f * scale, new Color(1f, 1f, 1f, 0.85f), new Color(0.9f, 0.95f, 1f, 0f), Random.Range(-90f, 90f));
+            }
+        }
+
+        /// <summary>물의 장막 폭발: 흰 번쩍, 발밑에서 사방으로 솟는 물벽, 물방울, 흔들림·멈칫, 땅에 젖은 고리.</summary>
+        private void CurtainBurst()
+        {
+            Vector3 at = W(_sim.Player);
+            bool wall = _sim.Build.Level(UpgradeId.WaterWall) > 0;
+            int lv = wall ? Loadout.MaxLevel : _sim.Build.PowerOf(UpgradeId.Curtain);
+            float r = _sim.CurtainRadiusNow;
+            float ring = r * 2.4f;
+            Flash(new Color(0.75f, 0.92f, 1f), wall ? 0.22f : 0.14f);
+            Shockwave(at, new Color(0.45f, 0.8f, 1f, 1f), ring, 0.4f);
+            Shockwave(at, new Color(0.85f, 0.97f, 1f, 0.9f), ring * 0.8f, 0.35f, 0.08f);
+            if (wall || lv >= Loadout.MaxLevel) Shockwave(at, new Color(1f, 0.85f, 0.35f, 1f), ring * 1.1f, 0.45f, 0.05f);
+            // 물벽: 세로로 늘인 빛기둥이 발밑에서 바깥으로 달려 나간다.
+            int beams = wall ? 36 : 24;
+            for (int i = 0; i < beams; i++)
+            {
+                float a = i * Mathf.PI * 2f / beams;
+                var dir = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
+                EmitSprite(BeamSprite(), at + (dir * 0.6f) + new Vector3(0f, 0.6f, 0f), dir * r * 2.6f, 2.5f, 0.38f, 0.7f, 0.3f,
+                    wall ? new Color(0.85f, 0.95f, 1f, 0.95f) : new Color(0.6f, 0.9f, 1f, 0.9f), new Color(0.6f, 0.9f, 1f, 0f), 0f, true, 0f, 3.5f, 0f);
+            }
+            int drops = wall ? 64 : 48;
+            for (int i = 0; i < drops; i++)
+            {
+                float a = i * Mathf.PI * 2f / drops;
+                var dir = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
+                Emit("Effects/water_drop", at + (dir * 0.8f), dir * Random.Range(9f, 14f) * (r / SurvivorSim.CurtainRadius), 3.5f, 0.45f, 0.5f, 0.1f,
+                    new Color(0.8f, 0.96f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
+            }
+            AddWet(at, r * 2.2f, 1f, true);
+            _trauma = Mathf.Min(1f, _trauma + (wall ? 0.4f : 0.3f));
+            _zoomKick = Mathf.Max(_zoomKick, 0.35f);
+            HitStop(0.04f);
+            WeaponSound(Cue.SprayFoam);
+        }
+
+        /// <summary>장막이 터지기 0.4초 전부터 발밑 빛이 모여든다.</summary>
+        private void DrawCurtainCharge()
+        {
+            float left = _sim.CurtainIn;
+            if (left > 0.4f || _sim.Outcome != SOutcome.Playing) return;
+            float t = 1f - (left / 0.4f);
+            Vector3 at = W(_sim.Player);
+            float ring = _sim.CurtainRadiusNow * 2.4f;
+            _auras.Put(at, Mathf.Lerp(ring, 1.2f, t), 0f, new Color(0.5f, 0.85f, 1f, 0.3f + (0.6f * t)));
+            _groundGlow.Put(at, 1.5f + (2f * t), 0f, new Color(0.4f, 0.8f, 1f, 0.5f * t));
+        }
+
+        /// <summary>탄환 막대: 앞머리가 먼저 뻗고 꼬리가 따라가며 사라진다.</summary>
+        private void DrawTracers()
+        {
+            foreach (Tracer tr in _tracers)
+            {
+                float t = Mathf.Clamp01(tr.Age / tr.Life);
+                Vector3 head = Vector3.Lerp(tr.From, tr.To, Mathf.Clamp01(t * 2.2f));
+                Vector3 tail = Vector3.Lerp(tr.From, tr.To, Mathf.Clamp01((t - 0.25f) * 1.6f));
+                SprayLine(tail, head, tr.Width * (1f - (0.5f * t)), new Color(tr.Color.r, tr.Color.g, tr.Color.b, tr.Color.a * (1f - (t * t))));
+                _dropGlow.Put(head, tr.Width * 4f, 0f, new Color(tr.Color.r, tr.Color.g, tr.Color.b, 0.7f * (1f - t)));
+            }
+        }
+
+        private void DrawWetMarks()
+        {
+            foreach (WetMark m in _wetMarks)
+            {
+                float t = Mathf.Clamp01(m.Age / m.Life);
+                float a = 0.35f * (1f - (t * t));
+                if (m.Ring) _civilianRings.Put(m.At, m.Size * (1f + (0.1f * t)), 0f, new Color(0.35f, 0.7f, 1f, a));
+                _wet.Put(m.At, m.Size * (m.Ring ? 0.7f : 1f), 0f, new Color(0.1f, 0.3f, 0.55f, a));
+            }
+        }
+
+        private void AdvanceWeaponFx(float dt)
+        {
+            for (int i = _tracers.Count - 1; i >= 0; i--)
+            {
+                Tracer tr = _tracers[i];
+                tr.Age += dt;
+                if (tr.Age >= tr.Life) _tracers.RemoveAt(i);
+                else _tracers[i] = tr;
+            }
+            for (int i = _wetMarks.Count - 1; i >= 0; i--)
+            {
+                WetMark m = _wetMarks[i];
+                m.Age += dt;
+                if (m.Age >= m.Life) _wetMarks.RemoveAt(i);
+                else _wetMarks[i] = m;
+            }
+            for (int i = _turretLandingIn.Count - 1; i >= 0; i--)
+            {
+                _turretLandingIn[i] -= dt;
+                if (_turretLandingIn[i] > 0f) continue;
+                // 쿵: 먼지 고리 + 물 튀김 + 살짝 흔들림.
+                Vector3 at = _turretLandings[i];
+                bool post = _sim.Build.Level(UpgradeId.RescuePost) > 0;
+                Shockwave(at, new Color(0.85f, 0.8f, 0.7f, 0.9f), 3.2f, 0.3f);
+                if (post) Shockwave(at, new Color(0.4f, 1f, 0.5f, 0.9f), SurvivorSim.PostRange * 2f, 0.5f, 0.05f);
+                for (int k = 0; k < 10; k++)
+                {
+                    float a = Random.value * Mathf.PI * 2f;
+                    Emit(Smokes[Random.Range(0, Smokes.Length)], at, new Vector3(Mathf.Cos(a), Mathf.Sin(a) * 0.5f, 0f) * Random.Range(2f, 4f), 4f, 0.45f, 0.4f, 1.2f,
+                        new Color(0.85f, 0.8f, 0.72f, 0.6f), new Color(0.85f, 0.8f, 0.72f, 0f), 0f);
+                }
+                Splash(at, 8, 0.8f);
+                _trauma = Mathf.Min(1f, _trauma + 0.12f);
+                WeaponSound(Cue.SprayFoam);
+                _turretLandings.RemoveAt(i);
+                _turretLandingIn.RemoveAt(i);
+            }
+        }
+
+        /// <summary>위에서 본 쿼드콥터: 흰 몸통에 빨간 띠, 대각선 네 팔, 팔 끝 날개 원. 위쪽이 앞.</summary>
+        private static Sprite DroneSprite()
+        {
+            if (_droneSprite != null) return _droneSprite;
+            const int n = 64;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            var white = new Color32(245, 245, 245, 255);
+            var red = new Color32(214, 48, 40, 255);
+            var arm = new Color32(70, 75, 85, 255);
+            var guard = new Color32(120, 125, 135, 255);
+            var lens = new Color32(40, 170, 240, 255);
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = ((x + 0.5f) / n) - 0.5f;
+                    float v = ((y + 0.5f) / n) - 0.5f;
+                    Color32 c = new Color32(0, 0, 0, 0);
+                    // 대각선 팔.
+                    if ((Mathf.Abs(u - v) < 0.05f || Mathf.Abs(u + v) < 0.05f) && Mathf.Abs(u) < 0.36f && Mathf.Abs(v) < 0.36f) c = arm;
+                    // 팔 끝 날개 보호 고리.
+                    for (int k = 0; k < 4; k++)
+                    {
+                        float cx = (k % 2 == 0 ? -1f : 1f) * 0.255f;
+                        float cy = (k < 2 ? -1f : 1f) * 0.255f;
+                        float d = Mathf.Sqrt(((u - cx) * (u - cx)) + ((v - cy) * (v - cy)));
+                        if (d < 0.2f && d > 0.165f) c = guard;
+                    }
+                    // 몸통: 둥근 사각형, 가운데 빨간 띠, 앞쪽 카메라.
+                    if (Mathf.Abs(u) < 0.14f && Mathf.Abs(v) < 0.17f)
+                    {
+                        c = Mathf.Abs(u) > 0.11f || Mathf.Abs(v) > 0.14f ? arm : white;
+                        if (Mathf.Abs(v) < 0.035f && Mathf.Abs(u) <= 0.11f) c = red;
+                        if (v > 0.07f && v < 0.13f && Mathf.Abs(u) < 0.04f) c = lens;
+                    }
+                    pixels[(y * n) + x] = c;
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _droneSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _droneSprite;
+        }
+
+        /// <summary>방수 포탑 받침: 빨간 삼각대 다리 세 개 + 짙은 원판 받침(물 탱크·포신은 따로 그린다).</summary>
+        private static Sprite TurretSprite()
+        {
+            if (_turretSprite != null) return _turretSprite;
+            const int n = 64;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            var red = new Color32(214, 52, 40, 255);
+            var dark = new Color32(120, 24, 20, 255);
+            var metal = new Color32(190, 195, 205, 255);
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = ((x + 0.5f) / n) - 0.5f;
+                    float v = ((y + 0.5f) / n) - 0.5f;
+                    Color32 c = new Color32(0, 0, 0, 0);
+                    float r = Mathf.Sqrt((u * u) + (v * v));
+                    float ang = Mathf.Atan2(v, u);
+                    // 다리 셋(120도 간격), 끝에 발.
+                    for (int k = 0; k < 3; k++)
+                    {
+                        float la = (Mathf.PI / 2f) + (k * Mathf.PI * 2f / 3f) + Mathf.PI;
+                        float lx = Mathf.Cos(la);
+                        float ly = Mathf.Sin(la);
+                        float along = (u * lx) + (v * ly);
+                        float side = Mathf.Abs((u * -ly) + (v * lx));
+                        if (along > 0f && along < 0.44f && side < 0.045f) c = dark;
+                        float fx = u - (lx * 0.42f);
+                        float fy = v - (ly * 0.42f);
+                        if ((fx * fx) + (fy * fy) < 0.006f) c = metal;
+                    }
+                    if (r < 0.26f) c = r > 0.21f ? dark : red;
+                    pixels[(y * n) + x] = c;
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _turretSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _turretSprite;
+        }
+
+        /// <summary>공중 소화탄: 빨간 몸통, 흰 띠 두 줄, 꼬리 날개. 위쪽이 앞(떨어지는 쪽).</summary>
+        private static Sprite AirBombSprite()
+        {
+            if (_airBombSprite != null) return _airBombSprite;
+            const int n = 64;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            var red = new Color32(220, 50, 40, 255);
+            var white = new Color32(245, 245, 245, 255);
+            var dark = new Color32(110, 25, 20, 255);
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = ((x + 0.5f) / n) - 0.5f;
+                    float v = ((y + 0.5f) / n) - 0.5f;
+                    Color32 c = new Color32(0, 0, 0, 0);
+                    bool body = ((u * u) / (0.13f * 0.13f)) + (((v - 0.04f) * (v - 0.04f)) / (0.36f * 0.36f)) <= 1f;
+                    bool fin = v < -0.2f && v > -0.44f && Mathf.Abs(u) < 0.06f + ((-0.2f - v) * 0.8f) && Mathf.Abs(u) > 0.02f;
+                    if (fin) c = dark;
+                    if (body)
+                    {
+                        c = red;
+                        if (Mathf.Abs(v - 0.12f) < 0.03f || Mathf.Abs(v + 0.05f) < 0.03f) c = white;
+                    }
+                    pixels[(y * n) + x] = c;
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _airBombSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _airBombSprite;
+        }
+
         /// <summary>물폭탄: 퍼지는 물 고리 + 위로 솟았다 떨어지는 물기둥 + 김.</summary>
         private void WaterBlast(Vector3 at, float radius, int level)
         {
@@ -2245,7 +2727,7 @@ namespace FireGame.Prototypes
                 Shockwave(at, new Color(1f, 0.85f, 0.35f, 0.95f), ring * 1.45f, 0.45f, 0.06f);
             }
             Emit("Effects/glow", at, Vector3.zero, 0f, 0.12f, radius * 1.7f, radius * 2.3f, new Color(0.9f, 0.97f, 1f, 0.9f), new Color(0.5f, 0.85f, 1f, 0f), 0f, true);
-            int column = level >= Loadout.MaxLevel ? 34 : 16;
+            int column = level >= Loadout.MaxLevel ? 40 : 20 + (4 * level);
             for (int i = 0; i < column; i++)
             {
                 float a = Random.value * Mathf.PI * 2f;
@@ -2523,6 +3005,10 @@ namespace FireGame.Prototypes
             }
             _numbers.Clear();
             foreach (SpriteRenderer s in _scorch) s.enabled = false;
+            _tracers.Clear();
+            _wetMarks.Clear();
+            _turretLandings.Clear();
+            _turretLandingIn.Clear();
         }
 
         // ------------------------------------------------------------------
@@ -3020,13 +3506,21 @@ namespace FireGame.Prototypes
             _partner = AddPool("Partner", "TopDown/player_suit_1", 15);
             _sprayLines = new Pool(_world, "SprayLine", Art.White, 14, null);
             _pools.Add(_sprayLines);
-            _turretBase = new Pool(_world, "TurretBase", DiscSprite(), 13, null);
+            _turretBase = new Pool(_world, "TurretBase", TurretSprite(), 13, null);
             _pools.Add(_turretBase);
+            _turretTank = new Pool(_world, "TurretTank", DiscSprite(), 13, null);
+            _pools.Add(_turretTank);
+            _wet = AddPool("Wet", "Effects/glow", 2);
+            _airBombs = new Pool(_world, "AirBomb", AirBombSprite(), 23, null);
+            _pools.Add(_airBombs);
             _pools.Add(_heliShadow);
             _pools.Add(_heli);
             _pools.Add(_rotor);
             _droneGlow = AddPool("DroneGlow", "Effects/glow", 11, true);
-            _drones = AddPool("Drone", "UI/button_blue_round", 12);
+            _drones = new Pool(_world, "Drone", DroneSprite(), 12, null);
+            _pools.Add(_drones);
+            _droneRotors = new Pool(_world, "DroneRotor", RotorSprite(), 13, null);
+            _pools.Add(_droneRotors);
             _hoseTubeEdge = new Pool(_world, "HoseTubeEdge", Art.White, 9, null);
             _hoseTube = new Pool(_world, "HoseTube", Art.White, 10, null);
             // 물줄기: 비치는 겉물(11) 아래, 몸통(12), 더해 그리는 하이라이트(13). 끝 물덩어리는 몸통과 같은 층.
