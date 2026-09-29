@@ -56,7 +56,7 @@ namespace FireGame.Prototypes.EditorTools
             // 레벨 5로 오르는 카드: 노란 특수 장비가 반드시 한 장 있다.
             failures += SurvivorShot(dir, "c2_levelup_cards", view => view.Sim.Level == 5 && view.Sim.PendingChoices != null, 45);
             // 진화·MAX 순간은 판 흐름에 따라 안 올 수 있어, 물대포 Lv4 + 고압 펌프로 시작한다(카드 고르기 경로).
-            failures += SurvivorShot(dir, "c4_evolved", view => view.Sim.JustEvolved, 9, false, null, 1, view => Pick(view, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Tank));
+            failures += SurvivorShot(dir, "c4_evolved", view => view.Sim.JustEvolved, 9, false, null, 1, view => Pick(view, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Tank));
             failures += SurvivorShot(dir, "c5_levelup_burst", view => view.Sim.Time >= 30f && view.Sim.JustLeveled, 8);
             failures += SurvivorShot(dir, "c6_arsenal", view => view.Sim.Time >= 150f && view.Sim.PendingChoices == null);
             // 보는 용도: 봇이 잘 안 고르는 아이템까지 전부 최대 레벨로 쥐여 주고 레벨별 연출을 한 화면에서 본다.
@@ -77,7 +77,7 @@ namespace FireGame.Prototypes.EditorTools
             failures += TouchShot(dir, "c12_touch_sticks");
             failures += AimShot(dir, "c13_aim_assist");
             // 무기·보조가 Lv5가 되는 순간(금빛 기둥, "○○ MAX!").
-            failures += SurvivorShot(dir, "c14_max_burst", view => view.Sim.JustMaxed.HasValue, 8, false, null, 1, view => Pick(view, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose));
+            failures += SurvivorShot(dir, "c14_max_burst", view => view.Sim.JustMaxed.HasValue, 8, false, null, 1, view => Pick(view, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose));
             failures += NextStageShot(dir, "c14b_next_stage");
             // 공구상자를 주워 건물을 고치는 순간(초록 빛줄기·"수리!").
             failures += SurvivorShot(dir, "c15_toolbox", view => view.Sim.Toolboxes.Exists(b => b.Pos.DistanceTo(view.Sim.Player) < 5f), 5);
@@ -111,6 +111,28 @@ namespace FireGame.Prototypes.EditorTools
             // 무전기 예고 + 열기: 곧 불날 건물 위 "신고 예고", 타는 건물 곁에서 "뜨거워!".
             failures += SurvivorShot(dir, "c24_heat_forecast", view => view.Sim.ForecastAt != null && view.Sim.Time > 25f, 2, false, null, 1,
                 view => { view.Sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { UpgradeId.Radio }; view.Sim.Choose(0); });
+            // 무기 타격감: 무기 하나를 Lv5로 쥐고 곁에 불 몹을 세워 발사·적중 순간을 찍는다.
+            failures += SurvivorShot(dir, "c25a_bomb", view => view.Sim.Time > 3f && view.Sim.Explosions.Count > 0, 2, false, null, 1,
+                view => Armed(view, UpgradeId.WaterBomb));
+            failures += SurvivorShot(dir, "c25b_curtain", view => view.Sim.Time > 3f && view.Sim.JustCurtain, 3, false, null, 1,
+                view => Armed(view, UpgradeId.Curtain));
+            failures += SurvivorShot(dir, "c25c_turret", view => view.Sim.Turrets.Count >= 2 && view.Sim.Hits.Exists(h => h.Source == HitSource.Turret), 2, false, null, 1,
+                view => Armed(view, UpgradeId.Turret));
+            failures += SurvivorShot(dir, "c25d_partner", view => view.Sim.Time > 3f && view.Sim.Hits.Exists(h => h.Source == HitSource.Partner), 2, false, null, 1,
+                view => Armed(view, UpgradeId.Partner));
+            failures += SurvivorShot(dir, "c25e_drone", view => view.Sim.Time > 3f && view.Sim.Hits.Exists(h => h.Source == HitSource.Drone), 2, false, null, 1,
+                view => Armed(view, UpgradeId.Drone));
+            failures += SurvivorShot(dir, "c25f_airbomb", view => view.Sim.Time > 3.5f && view.Sim.AirBlasts.Count > 0, 3, false, null, 1, view =>
+            {
+                Armed(view, UpgradeId.WaterBomb);
+                Pick(view, Loadout.PairOf(UpgradeId.AirBomb), UpgradeId.AirBomb);
+                Structure near = null;
+                foreach (Structure st in view.Sim.Structures)
+                {
+                    if (st.IsBuilding && (near == null || st.DistanceTo(view.Sim.Player) < near.DistanceTo(view.Sim.Player))) near = st;
+                }
+                if (near != null) view.Sim.Ignite(near, 0.8f);
+            });
             // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
             failures += SurvivorShot(dir, "c19_forest_specials", view => view.Sim.RainAt.HasValue && view.Sim.Retardants.Count > 0, 45, true, null, 2);
 
@@ -204,6 +226,21 @@ namespace FireGame.Prototypes.EditorTools
             {
                 view.Sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { id };
                 view.Sim.Choose(0);
+            }
+        }
+
+        /// <summary>무기를 Lv5까지 고르고 소방관 둘레 3~5칸에 움직이지 않는 불 몹 10마리를 세운다(타격 캡처).</summary>
+        private static void Armed(SurvivorView view, UpgradeId weapon)
+        {
+            for (int i = 0; i < Loadout.MaxLevel; i++) Pick(view, weapon);
+            SurvivorSim sim = view.Sim;
+            for (int i = 0; i < 10; i++)
+            {
+                float a = i * Mathf.PI * 2f / 10f;
+                float r = 3f + (2f * (i % 2));
+                Enemy e = sim.Spawn(EnemyKind.Blaze, new Vec2(sim.Player.X + (Mathf.Cos(a) * r), sim.Player.Y + (Mathf.Sin(a) * r)));
+                e.Speed = 0f;
+                e.MaxHp = e.Hp = 400f;
             }
         }
 
