@@ -58,7 +58,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>1스테이지 전용: 소방차가 가장 센 불난 건물의 줄을 가로지르며 양옆으로 물을 뿜는다.</summary>
         Truck,
 
-        /// <summary>1스테이지 전용: 모든 건물 지붕 스프링클러가 타는 건물을 적신다.</summary>
+        /// <summary>1·3스테이지: 모든 건물 지붕 스프링클러가 타는 건물을 적신다.</summary>
         Sprinkler,
 
         /// <summary>2스테이지 전용: 불이 몰린 곳에 먹구름이 비를 뿌린다.</summary>
@@ -66,6 +66,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>2스테이지 전용: 비행기가 붉은 방염제 띠를 뿌려 그 안은 한동안 불이 안 붙는다.</summary>
         Retardant,
+
+        /// <summary>3스테이지 전용: 바닥 불이 몰린 곳에 소화 폼을 깔아 기름 불을 덮고 한동안 막는다.</summary>
+        Foam,
         Heal,
     }
 
@@ -371,6 +374,7 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Sprinkler: return "스프링클러";
                 case UpgradeId.Rain: return "비구름";
                 case UpgradeId.Retardant: return "방염제 살포";
+                case UpgradeId.Foam: return "폼 살포";
                 default: return "응급 처치";
             }
         }
@@ -405,6 +409,7 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Sprinkler: return "6초마다 모든 건물 지붕에서 물이 터져 불을 줄인다";
                 case UpgradeId.Rain: return "12초마다 불이 몰린 곳에 먹구름이 3초 동안 비를 뿌린다";
                 case UpgradeId.Retardant: return "15초마다 비행기가 방염제 띠를 뿌린다. 띠 안은 20초 동안 불이 안 붙는다";
+                case UpgradeId.Foam: return "10초마다 바닥 불이 몰린 곳에 소화 폼을 깐다. 기름 불을 덮고 8초 동안 막는다";
                 default: return "체력 30 회복";
             }
         }

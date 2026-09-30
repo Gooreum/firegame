@@ -22,6 +22,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>산불 숲: 무리 지어 날아와 소방관을 쫓는 재 박쥐.</summary>
         Bat,
+
+        /// <summary>공단: 불붙은 폐유 덩어리. 느리고 튼튼하며, 걸어온 자리와 죽은 자리에 건물을 태우는 기름 불을 남긴다.</summary>
+        Oil,
     }
 
     public enum ShotKind
@@ -105,6 +108,9 @@ namespace FireGame.Prototypes.Logic
     {
         /// <summary>물로 꺼졌다(다시 번지지 않는다).</summary>
         public bool Out;
+
+        /// <summary>기름 불: 오래 타고, 닿은 탈 것에 옮겨붙는다.</summary>
+        public bool Oil;
         public Vec2 Pos;
         public float Radius;
         public float Life;
@@ -200,6 +206,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>건물에서 건물로 불이 옮겨붙은 횟수.</summary>
         public int Spreads;
+
+        /// <summary>기름 불이 탈 것에 옮겨붙은 횟수.</summary>
+        public int OilFires;
         public float DamageTaken;
 
         /// <summary>구조로 찬 체력.</summary>
@@ -399,6 +408,20 @@ namespace FireGame.Prototypes.Logic
         public static readonly float[] ReportTimes = { 10f, 30f, 50f, 70f, 90f, 110f, 120f, 120f, 140f, 160f, 180f, 180f, 200f, 215f, 230f };
         public const float GasFuse = 2.5f;
         public const float GasRadius = 3.5f;
+
+        /// <summary>공단 기름 방울은 이 시각부터 가장자리에서 나온다(첫 구간은 마을처럼 쉽게).</summary>
+        public const float OilFrom = 40f;
+        public const float OilLife = 8f;
+        public const float OilRadius = 0.8f;
+
+        /// <summary>기름 불이 탈 것에 붙이는 불 세기.</summary>
+        public const float OilIgnite = 0.3f;
+
+        /// <summary>기름 방울이 죽을 때 튀는 기름 불 수.</summary>
+        public const int OilDeathSpill = 3;
+
+        /// <summary>이번 틱에 기름 불이 옮겨붙은 탈 것.</summary>
+        public readonly List<Structure> OilCaught = new List<Structure>();
         public const float RescueRange = 1.3f;
         public const float RescueTime = 1.2f;
 
@@ -701,6 +724,7 @@ namespace FireGame.Prototypes.Logic
                 case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
                 case EnemyKind.Squirrel: e.MaxHp = 3f * scale; e.Speed = 3.6f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; e.Seeker = true; break;
                 case EnemyKind.Bat: e.MaxHp = 1.5f * scale; e.Speed = 3.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
+                case EnemyKind.Oil: e.MaxHp = 6f * scale; e.Speed = 1.3f; e.Radius = 0.55f; e.Touch = 6f; e.Xp = 3; break;
             }
             e.Hp = e.MaxHp;
             Enemies.Add(e);
@@ -731,6 +755,7 @@ namespace FireGame.Prototypes.Logic
             Ignited.Clear();
             Spread.Clear();
             SpreadFrom.Clear();
+            OilCaught.Clear();
             Knocked.Clear();
             Fell.Clear();
             Doused.Clear();
@@ -955,6 +980,7 @@ namespace FireGame.Prototypes.Logic
             if (r < blaze) return EnemyKind.Blaze;
             if (r < blaze + dart) return EnemyKind.Dart;
             if (r < blaze + dart + Stage.SquirrelShare) return EnemyKind.Squirrel;
+            if (Time >= OilFrom && r < blaze + dart + Stage.SquirrelShare + Stage.OilShare) return EnemyKind.Oil;
             return EnemyKind.Ember;
         }
 
@@ -1110,14 +1136,15 @@ namespace FireGame.Prototypes.Logic
                 e.Pos.X += stepX;
                 e.Pos.Y += stepY;
 
-                // 큰 불은 걸어온 자리에 불을 흘린다.
-                if (e.Kind == EnemyKind.Blaze)
+                // 큰 불은 걸어온 자리에 불을, 기름 방울은 기름 불을 흘린다.
+                if (e.Kind == EnemyKind.Blaze || e.Kind == EnemyKind.Oil)
                 {
                     e.Trail += (float)Math.Sqrt((stepX * stepX) + (stepY * stepY));
                     if (e.Trail >= TrailStep)
                     {
                         e.Trail = 0f;
-                        if (BurningGround.Count < MaxBurningGround)
+                        if (e.Kind == EnemyKind.Oil) AddOil(e.Pos);
+                        else if (BurningGround.Count < MaxBurningGround)
                         {
                             BurningGround.Add(new Puddle { Pos = e.Pos, Radius = 0.6f, Life = 4f, MaxLife = 4f });
                         }
@@ -1726,6 +1753,33 @@ namespace FireGame.Prototypes.Logic
             {
                 p.Life -= Dt;
                 if (p.Pos.DistanceTo(Player) <= p.Radius + PlayerRadius) Hurt(10f * Build.HeatScale * Dt);
+                if (!p.Oil || p.Out || p.Life <= 0f) continue;
+                // 기름 불은 닿은 탈 것에 옮겨붙는다: 건물 곁에서 기름 방울을 터뜨리면 건물이 탄다.
+                foreach (Structure st in Structures)
+                {
+                    if (st.Kind == StructureKind.Tree || !st.Flammable || !st.Within(p.Pos, p.Radius)) continue;
+                    if (!Ignite(st, OilIgnite)) continue;
+                    OilCaught.Add(st);
+                    Stats.OilFires++;
+                }
+            }
+        }
+
+        /// <summary>기름 불 하나를 놓는다(바닥 불 한도 안).</summary>
+        public void AddOil(Vec2 at)
+        {
+            if (BurningGround.Count >= MaxBurningGround) return;
+            BurningGround.Add(new Puddle { Pos = ClampToArena(at), Radius = OilRadius, Life = OilLife, MaxLife = OilLife, Oil = true });
+        }
+
+        /// <summary>at 둘레 1.5칸 안에 기름 불 n개를 흩뿌린다.</summary>
+        private void Spill(Vec2 at, int n)
+        {
+            for (int k = 0; k < n; k++)
+            {
+                double a = (Math.PI * 2 * k / n) + (Rand() * 0.8);
+                float d = 0.6f + (Rand() * 0.9f);
+                AddOil(new Vec2(at.X + (float)(Math.Cos(a) * d), at.Y + (float)(Math.Sin(a) * d)));
             }
         }
 
@@ -2004,6 +2058,8 @@ namespace FireGame.Prototypes.Logic
                 else Ignite(st, 0.5f);
             }
             for (int k = 0; k < 8; k++) SpitEmber(gas, 9f);
+            // 공단 약품 드럼은 터지며 기름을 흩뿌린다.
+            if (Stage.DrumSpill > 0) Spill(gas.Pos, Stage.DrumSpill);
             if (Player.DistanceTo(gas.Pos) <= GasRadius) Hurt(25f);
         }
 
@@ -2434,6 +2490,8 @@ namespace FireGame.Prototypes.Logic
             {
                 BurningGround.Add(new Puddle { Pos = e.Pos, Radius = 0.9f, Life = 3f, MaxLife = 3f });
             }
+            // 기름 방울은 터지며 기름을 튀긴다: 어디서 잡느냐가 중요하다.
+            if (e.Kind == EnemyKind.Oil) Spill(e.Pos, OilDeathSpill);
         }
 
         /// <summary>물이 닿은 자리의 바닥 불을 끈다(샷의 관통 수는 쓰지 않는다).</summary>

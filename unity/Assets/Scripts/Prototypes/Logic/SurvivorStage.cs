@@ -53,6 +53,12 @@ namespace FireGame.Prototypes.Logic
         /// <summary>산불: 바람이 불어 타는 나무가 바람 쪽 이웃에 불을 옮긴다.</summary>
         public bool Wind;
 
+        /// <summary>공단: 가장자리 스폰에서 기름 방울 비율(SurvivorSim.OilFrom초부터).</summary>
+        public float OilShare;
+
+        /// <summary>공단: 가스통(약품 드럼)이 터질 때 흩뿌리는 기름 불 수. 0이면 안 흩뿌린다.</summary>
+        public int DrumSpill;
+
         /// <summary>이 스테이지 레벨업에서 나오는 노란 특수 카드들.</summary>
         public UpgradeId[] Specials;
     }
@@ -63,7 +69,7 @@ namespace FireGame.Prototypes.Logic
     /// </summary>
     public static class SurvivorStages
     {
-        public const int Count = 2;
+        public const int Count = 3;
 
         private static readonly StageRules Town = new StageRules
         {
@@ -101,10 +107,26 @@ namespace FireGame.Prototypes.Logic
             Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Rain, UpgradeId.Retardant },
         };
 
+        private static readonly StageRules Factory = new StageRules
+        {
+            Number = 3,
+            Name = "공단",
+            Map = SurvivorFactory.Build,
+            // 공장 8채가 마을과 같은 고리에 있어 신고 표도 마을과 같다.
+            ReportTimes = SurvivorSim.ReportTimes,
+            // 새 위협(기름)이 있으니 기본 배율은 마을보다 낮게 둔다(docs/prototype-c-balance.md §2).
+            SpawnRate = 1.2f,
+            BlazeMax = 0.25f,
+            DartShare = 0.1f,
+            OilShare = 0.12f,
+            DrumSpill = 4,
+            Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Sprinkler, UpgradeId.Foam },
+        };
+
         /// <summary>n번 스테이지(1부터). 범위를 벗어나면 1스테이지.</summary>
         public static StageRules Get(int n)
         {
-            return n == 2 ? Forest : Town;
+            return n == 3 ? Factory : n == 2 ? Forest : Town;
         }
 
         /// <summary>깬 뒤 넘어갈 스테이지. 마지막을 깨면 처음으로 돌아간다.</summary>
