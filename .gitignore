@@ -39,6 +39,7 @@ tools/.art-cache/
 # ---- unity-check.sh 스크린샷 ----
 tools/.shots/
 tools/.shots-proto/
+tools/.clip/
 tools/.unity-mirror/
 
 # ---- 아이폰 시험판 빌드(tools/unity-check.sh ios) ----
