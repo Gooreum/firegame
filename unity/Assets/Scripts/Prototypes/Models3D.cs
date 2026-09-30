@@ -248,6 +248,50 @@ namespace FireGame.Prototypes
         }
     }
 
+    /// <summary>
+    /// 아이템 모델 풀: 매 프레임 Begin → Get()… → End. 만드는 법(make)만 받고, 쓴 만큼 켜 두고 남은 것은 끈다(드론·포탑·물폭탄·헬기).
+    /// </summary>
+    public sealed class ModelPool
+    {
+        private readonly Transform _parent;
+        private readonly System.Func<Transform, GameObject> _make;
+        private readonly List<GameObject> _items = new List<GameObject>();
+        private int _used;
+
+        public ModelPool(Transform parent, System.Func<Transform, GameObject> make)
+        {
+            _parent = parent;
+            _make = make;
+        }
+
+        public void Begin()
+        {
+            _used = 0;
+        }
+
+        /// <summary>이번 프레임에 쓸 모델 하나(만들지 못하면 null).</summary>
+        public GameObject Get()
+        {
+            if (_used == _items.Count)
+            {
+                GameObject made = _make(_parent);
+                if (made == null) return null;
+                _items.Add(made);
+            }
+            GameObject go = _items[_used++];
+            if (!go.activeSelf) go.SetActive(true);
+            return go;
+        }
+
+        public void End()
+        {
+            for (int i = _used; i < _items.Count; i++)
+            {
+                if (_items[i].activeSelf) _items[i].SetActive(false);
+            }
+        }
+    }
+
     /// <summary>풀에서 꺼낸 사람의 원래 축척(키 배율을 곱하는 기준).</summary>
     public sealed class PersonScale : MonoBehaviour
     {

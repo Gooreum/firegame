@@ -157,13 +157,10 @@ namespace FireGame.Prototypes
         private Image _windArrow;
         private Text _windLabel;
         private Pool _gems;
-        private Pool _truck;
         private Pool _siren;
         private Pool _cloud;
         private Pool _rainShade;
         private Pool _band;
-        private Pool _plane;
-        private static Sprite _planeSprite;
         private bool _truckShown;
         private float _planeAge = 99f;
         private Vector3 _planeFrom;
@@ -192,22 +189,14 @@ namespace FireGame.Prototypes
         private Pool _auras;
         private Pool _tank;
         private Pool _radar;
-        private Pool _bombs;
 
         // 노란 특수 장비: 헬기(그림자·몸통·로터), 동료.
         private Pool _heliShadow;
-        private Pool _heli;
-        private Pool _rotor;
         private TextMesh _partnerTag;
         private TextMesh _forecastTag;
         private Pool _sprayLines;
-        private Pool _turretBase;
-        private Pool _turretTank;
-        private Pool _droneRotors;
         private Pool _airBombs;
         private Pool _wet;
-        private static Sprite _droneSprite;
-        private static Sprite _turretSprite;
         private static Sprite _airBombSprite;
 
         /// <summary>무기 탄환: 친 무기에서 맞은 곳으로 잠깐 뻗는 물 막대.</summary>
@@ -248,12 +237,10 @@ namespace FireGame.Prototypes
         private float _heliExitAge = 99f;
         private float _frameDt;
         private static Sprite _heliSprite;
-        private static Sprite _rotorSprite;
         private AudioSource _splash;
         private Text _xpText;
         private Text _xpTease;
         private Pool _bombShadows;
-        private Pool _drones;
         private Pool _droneGlow;
         private Pool _foam;
         private Pool _groundFire;
@@ -281,6 +268,15 @@ namespace FireGame.Prototypes
 
         /// <summary>대원·구해 낸 시민·갇힌 사람 3D 모델.</summary>
         private PersonPool _people;
+
+        // 아이템 3D 모델: 드론·포탑·물폭탄·헬기·비행기(기본 도형 조립)와 달리는 소방차(Kenney).
+        private ModelPool _droneModels;
+        private ModelPool _turretModels;
+        private ModelPool _bombModels;
+        private ModelPool _heliModels;
+        private ModelPool _planeModels;
+        private ModelPool _truckModels;
+        private readonly List<ModelPool> _modelPools = new List<ModelPool>();
         private static readonly string[] CivilianModels = { "People/Casual_Female", "People/OldClassy_Male", "People/Casual_Male" };
         private SpriteRenderer _playerGlow;
         private readonly List<Pool> _pools = new List<Pool>();
@@ -1265,6 +1261,7 @@ namespace FireGame.Prototypes
 
             foreach (Pool p in _pools) p.Begin();
             _people.Begin();
+            foreach (ModelPool m in _modelPools) m.Begin();
             foreach (RibbonPool r in _ribbons) r.Begin(_time);
             DrawTown();
             DrawPuddles();
@@ -1282,6 +1279,7 @@ namespace FireGame.Prototypes
             DrawWeather();
             foreach (Pool p in _pools) p.End();
             _people.End();
+            foreach (ModelPool m in _modelPools) m.End();
             foreach (RibbonPool r in _ribbons) r.End();
 
             UpdateSpraySound(dt);
@@ -1471,7 +1469,12 @@ namespace FireGame.Prototypes
                 float dir = _sim.TruckDir;
                 if (!_truckShown) GameAudio.Play(Cue.Critical);
                 _shadows.Put(at + new Vector3(0f, -0.45f, 0f), 5f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.4f);
-                _truck.Put(at, 2.3f, dir > 0f ? -90f : 90f, new Color(1f, 0.55f, 0.5f));
+                GameObject truckModel = _truckModels.Get();
+                if (truckModel != null)
+                {
+                    truckModel.transform.localPosition = new Vector3(at.x, at.y, 0f);
+                    truckModel.transform.localRotation = Models3D.Stand * Quaternion.Euler(0f, dir > 0f ? -90f : 90f, 0f);
+                }
                 // 사이렌: 지붕 앞뒤가 빨강·파랑으로 번갈아 번쩍인다.
                 bool flip = Mathf.Repeat(_time * 6f, 1f) < 0.5f;
                 _siren.Put(at + new Vector3(dir * 0.7f, 0.15f, 0f), 2.2f, 0f, flip ? new Color(1f, 0.15f, 0.1f, 0.95f) : new Color(0.2f, 0.4f, 1f, 0.95f));
@@ -1534,7 +1537,8 @@ namespace FireGame.Prototypes
                 Vector3 dir = (_planeTo - _planeFrom).normalized;
                 float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
                 _shadows.Put(at + new Vector3(0.8f, -1.2f, 0f), 3.2f, deg, new Color(0f, 0f, 0f, 0.3f), null, 0.6f);
-                _plane.Put(at + new Vector3(0f, 2.2f, 0f), 3.4f, deg, Color.white);
+                GameObject planeModel = _planeModels.Get();
+                if (planeModel != null) ItemModels.Place(planeModel, at, 4f, dir, 1.15f);
                 if (Random.value < 0.8f)
                 {
                     Emit("Effects/glow", at + new Vector3(0f, 1.6f, 0f), new Vector3(Random.Range(-0.5f, 0.5f), -3f, 0f), 2f, 0.5f, 0.8f, 1.6f,
@@ -1706,7 +1710,13 @@ namespace FireGame.Prototypes
                         float lift = Mathf.Sin(t * Mathf.PI) * 2f;
                         float bombSize = 0.8f + (0.08f * bombLevel);
                         _bombShadows.Put(at, 0.6f * bombSize, 0f, new Color(0f, 0f, 0f, 0.35f));
-                        _bombs.Put(at + new Vector3(0f, lift, 0f), bombSize * 1.2f, t * 540f, new Color(0.45f, 0.78f, 1f));
+                        // 물풍선 모델: 포물선 높이로 떠서 날아가며 구른다.
+                        GameObject bombModel = _bombModels.Get();
+                        if (bombModel != null)
+                        {
+                            float roll = t * 9f;
+                            ItemModels.Place(bombModel, at, 0.4f + lift, new Vector3(Mathf.Cos(roll), Mathf.Sin(roll), 0f), bombSize * 0.75f);
+                        }
                         _dropGlow.Put(at + new Vector3(0f, lift, 0f), bombSize * (1.2f + (0.15f * bombLevel)), 0f, new Color(0.55f, 0.8f, 1f, 0.25f + (0.04f * bombLevel)));
                         // 날아가며 물방울 꼬리를 흘린다.
                         if (Random.value < 0.8f)
@@ -1750,12 +1760,14 @@ namespace FireGame.Prototypes
                 // 쿼드콥터: 궤도 진행 방향을 보고, 네 팔 끝 날개가 빠르게 돈다.
                 float heading = (a * Mathf.Rad2Deg) + 90f;
                 float body = 0.95f * droneScale;
-                _drones.Put(at, body, heading - 90f, goldDrone ? new Color(1f, 0.9f, 0.55f) : Color.white);
-                for (int arm = 0; arm < 4; arm++)
+                // 쿼드콥터 모델: 1.6칸 떠서 궤도 진행 방향을 보고, 네 날개가 빠르게 돈다. 최대 레벨이면 금빛.
+                GameObject droneModel = _droneModels.Get();
+                if (droneModel != null)
                 {
-                    float ad = ((heading - 90f) + 45f + (arm * 90f)) * Mathf.Deg2Rad;
-                    Vector3 tip = at + (new Vector3(Mathf.Cos(ad), Mathf.Sin(ad), 0f) * body * 0.36f);
-                    _droneRotors.Put(tip, body * 0.42f, (_time * 2200f) + (arm * 40f), new Color(1f, 1f, 1f, 0.85f));
+                    float hd = heading * Mathf.Deg2Rad;
+                    ItemModels.Place(droneModel, at, 1.6f + (0.08f * Mathf.Sin((_time * 5f) + i)), new Vector3(Mathf.Cos(hd), Mathf.Sin(hd), 0f), body * 1.15f);
+                    ItemModels.Spin(droneModel, "Rotor", 2200f, _time);
+                    Models3D.Tint(droneModel, goldDrone ? new Color(1f, 0.85f, 0.45f) : Color.white);
                 }
                 if (goldDrone) _auras.Put(at, 1.3f, 0f, new Color(1f, 0.85f, 0.35f, 0.85f));
                 // 불난 지붕 위: 드론마다 지붕 가운데로 물줄기를 뿌린다.
@@ -1830,18 +1842,21 @@ namespace FireGame.Prototypes
                     _sprayLines.Put(at + new Vector3(0f, 0.9f, 0f), 0.25f, 0f, new Color(0.9f, 0.15f, 0.15f, blink), null, 0.9f / 0.25f);
                 }
                 _shadows.Put(at + new Vector3(0f, -0.2f, 0f), 0.9f * (1f - (0.5f * fall)), 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
-                at += drop;
                 // 남은 시간 고리(파랑이 줄어든다).
                 _civilianRings.Put(at, 1.6f * life + 0.4f, 0f, new Color(0.4f, 0.8f, 1f, 0.35f * blink));
                 Vector3 aim = tu.Aim.HasValue ? W(tu.Aim.Value) : at + new Vector3(1f, 0f, 0f);
                 Vector3 dir = (aim - at).normalized;
                 int tlv = _sim.Build.PowerOf(UpgradeId.Turret);
                 float tsize = 1.1f * LevelScale(tlv) * (post ? 1.15f : 1f);
-                _turretBase.Put(at, tsize, 0f, new Color(1f, 1f, 1f, blink));
-                // 물 탱크(레벨이 오를수록 밝게 맥동) + 포신: 쏠 때마다 뒤로 밀렸다 돌아온다.
-                _turretTank.Put(at + new Vector3(0f, 0.05f, 0f), 0.36f * tsize, 0f, new Color(0.35f, 0.7f, 1f, (0.8f + (0.2f * Mathf.Sin(_time * 6f))) * blink));
-                Vector3 barrel = at + (dir * ((0.42f * tsize) - (0.15f * kick)));
-                _sprayLines.Put(barrel, 0.75f * tsize, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg, new Color(0.8f, 0.82f, 0.86f, blink), null, 0.22f / 0.75f);
+                // 포탑 모델: 하늘에서 떨어져 서고, 머리가 쏘는 곳을 본다. 쏠 때마다 살짝 눌렸다 돌아오고, 꺼지기 전엔 깜빡인다.
+                GameObject turretModel = _turretModels.Get();
+                if (turretModel != null)
+                {
+                    ItemModels.Place(turretModel, at, drop.y, Vector3.down, tsize * (1f - (0.08f * kick)));
+                    ItemModels.Aim(turretModel, dir);
+                    Models3D.Tint(turretModel, blink < 1f ? new Color(0.55f, 0.55f, 0.6f) : tlv >= Loadout.MaxLevel ? new Color(1f, 0.9f, 0.6f) : Color.white);
+                }
+                at += drop;
                 if (tlv >= Loadout.MaxLevel) _auras.Put(at, 1.5f * tsize, 0f, new Color(1f, 0.85f, 0.35f, 0.6f * blink));
                 // 곁에서 타는 건물: 포물선 물방울로 적신다.
                 foreach (Structure st in _sim.Structures)
@@ -2379,9 +2394,13 @@ namespace FireGame.Prototypes
         {
             float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
             _heliShadow.Put(ground + new Vector3(0.3f, -0.2f, 0f), 3.2f, deg, new Color(0f, 0f, 0f, 0.35f * alpha));
-            _heli.Put(ground + HeliLift, 3.2f, deg, new Color(1f, 1f, 1f, alpha));
-            _rotor.Put(ground + HeliLift + (dir * 0.25f), 4.4f, _time * 1400f, new Color(1f, 1f, 1f, 0.55f * alpha));
-            _rotor.Put(ground + HeliLift + (dir * 0.25f), 4.4f, (_time * 1400f) + 45f, new Color(1f, 1f, 1f, 0.3f * alpha));
+            // 헬기 모델: 2.2칸 떠서 나는 쪽을 보고 주·꼬리 날개가 돈다. 빠져나갈 땐 작아지며 사라진다.
+            if (alpha < 0.05f) return;
+            GameObject heli = _heliModels.Get();
+            if (heli == null) return;
+            ItemModels.Place(heli, ground, 2.2f, dir, 1.05f * Mathf.Lerp(0.6f, 1f, alpha));
+            ItemModels.Spin(heli, "Rotor", 1400f, _time);
+            ItemModels.Spin(heli, "TailRotor", 2400f, _time);
         }
 
         /// <summary>구조대원들: 노란 헬멧 소방관이 움직이는 쪽을 보고 달린다. 첫 대원 머리 위에 "구조대" 이름표.</summary>
@@ -2539,37 +2558,6 @@ namespace FireGame.Prototypes
             return _batSprite;
         }
 
-        /// <summary>소방 항공기(위에서 본 모습): 흰 동체, 빨간 날개와 꼬리.</summary>
-        private static Sprite PlaneSprite()
-        {
-            if (_planeSprite != null) return _planeSprite;
-            const int n = 96;
-            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            var pixels = new Color32[n * n];
-            var red = new Color32(210, 45, 40, 255);
-            var white = new Color32(240, 240, 240, 255);
-            var glass = new Color32(120, 200, 245, 255);
-            for (int y = 0; y < n; y++)
-            {
-                for (int x = 0; x < n; x++)
-                {
-                    float u = ((x + 0.5f) / n) - 0.5f;
-                    float v = ((y + 0.5f) / n) - 0.5f;
-                    Color32 c = new Color32(0, 0, 0, 0);
-                    bool body = ((u * u) / (0.07f * 0.07f)) + ((v * v) / (0.46f * 0.46f)) <= 1f;
-                    bool wing = Mathf.Abs(v - 0.05f) < 0.07f - (Mathf.Abs(u) * 0.08f) && Mathf.Abs(u) < 0.47f;
-                    bool tail = Mathf.Abs(v + 0.38f) < 0.04f && Mathf.Abs(u) < 0.17f;
-                    if (wing || tail) c = red;
-                    if (body) c = v > 0.3f ? glass : white;
-                    pixels[(y * n) + x] = c;
-                }
-            }
-            texture.SetPixels32(pixels);
-            texture.Apply();
-            _planeSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
-            return _planeSprite;
-        }
-
         private static Sprite HeliSprite()
         {
             if (_heliSprite != null) return _heliSprite;
@@ -2606,34 +2594,6 @@ namespace FireGame.Prototypes
             texture.Apply();
             _heliSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
             return _heliSprite;
-        }
-
-        /// <summary>돌아가는 로터: 가는 날개 두 개(십자)와 옅은 원판.</summary>
-        private static Sprite RotorSprite()
-        {
-            if (_rotorSprite != null) return _rotorSprite;
-            const int n = 96;
-            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            var pixels = new Color32[n * n];
-            for (int y = 0; y < n; y++)
-            {
-                for (int x = 0; x < n; x++)
-                {
-                    float u = ((x + 0.5f) / n) - 0.5f;
-                    float v = ((y + 0.5f) / n) - 0.5f;
-                    float r = Mathf.Sqrt((u * u) + (v * v));
-                    byte a = 0;
-                    if (r < 0.49f) a = 40;
-                    if (r < 0.49f && (Mathf.Abs(u) < 0.025f || Mathf.Abs(v) < 0.025f)) a = 230;
-                    if (r < 0.05f) a = 255;
-                    byte g = (byte)(r < 0.05f ? 60 : 50);
-                    pixels[(y * n) + x] = new Color32(g, g, g, a);
-                }
-            }
-            texture.SetPixels32(pixels);
-            texture.Apply();
-            _rotorSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
-            return _rotorSprite;
         }
 
         /// <summary>포탑이 하늘에서 떨어져 서는 데 걸리는 초.</summary>
@@ -2878,93 +2838,6 @@ namespace FireGame.Prototypes
                 _turretLandings.RemoveAt(i);
                 _turretLandingIn.RemoveAt(i);
             }
-        }
-
-        /// <summary>위에서 본 쿼드콥터: 흰 몸통에 빨간 띠, 대각선 네 팔, 팔 끝 날개 원. 위쪽이 앞.</summary>
-        private static Sprite DroneSprite()
-        {
-            if (_droneSprite != null) return _droneSprite;
-            const int n = 64;
-            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            var pixels = new Color32[n * n];
-            var white = new Color32(245, 245, 245, 255);
-            var red = new Color32(214, 48, 40, 255);
-            var arm = new Color32(70, 75, 85, 255);
-            var guard = new Color32(120, 125, 135, 255);
-            var lens = new Color32(40, 170, 240, 255);
-            for (int y = 0; y < n; y++)
-            {
-                for (int x = 0; x < n; x++)
-                {
-                    float u = ((x + 0.5f) / n) - 0.5f;
-                    float v = ((y + 0.5f) / n) - 0.5f;
-                    Color32 c = new Color32(0, 0, 0, 0);
-                    // 대각선 팔.
-                    if ((Mathf.Abs(u - v) < 0.05f || Mathf.Abs(u + v) < 0.05f) && Mathf.Abs(u) < 0.36f && Mathf.Abs(v) < 0.36f) c = arm;
-                    // 팔 끝 날개 보호 고리.
-                    for (int k = 0; k < 4; k++)
-                    {
-                        float cx = (k % 2 == 0 ? -1f : 1f) * 0.255f;
-                        float cy = (k < 2 ? -1f : 1f) * 0.255f;
-                        float d = Mathf.Sqrt(((u - cx) * (u - cx)) + ((v - cy) * (v - cy)));
-                        if (d < 0.2f && d > 0.165f) c = guard;
-                    }
-                    // 몸통: 둥근 사각형, 가운데 빨간 띠, 앞쪽 카메라.
-                    if (Mathf.Abs(u) < 0.14f && Mathf.Abs(v) < 0.17f)
-                    {
-                        c = Mathf.Abs(u) > 0.11f || Mathf.Abs(v) > 0.14f ? arm : white;
-                        if (Mathf.Abs(v) < 0.035f && Mathf.Abs(u) <= 0.11f) c = red;
-                        if (v > 0.07f && v < 0.13f && Mathf.Abs(u) < 0.04f) c = lens;
-                    }
-                    pixels[(y * n) + x] = c;
-                }
-            }
-            texture.SetPixels32(pixels);
-            texture.Apply();
-            _droneSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
-            return _droneSprite;
-        }
-
-        /// <summary>방수 포탑 받침: 빨간 삼각대 다리 세 개 + 짙은 원판 받침(물 탱크·포신은 따로 그린다).</summary>
-        private static Sprite TurretSprite()
-        {
-            if (_turretSprite != null) return _turretSprite;
-            const int n = 64;
-            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            var pixels = new Color32[n * n];
-            var red = new Color32(214, 52, 40, 255);
-            var dark = new Color32(120, 24, 20, 255);
-            var metal = new Color32(190, 195, 205, 255);
-            for (int y = 0; y < n; y++)
-            {
-                for (int x = 0; x < n; x++)
-                {
-                    float u = ((x + 0.5f) / n) - 0.5f;
-                    float v = ((y + 0.5f) / n) - 0.5f;
-                    Color32 c = new Color32(0, 0, 0, 0);
-                    float r = Mathf.Sqrt((u * u) + (v * v));
-                    float ang = Mathf.Atan2(v, u);
-                    // 다리 셋(120도 간격), 끝에 발.
-                    for (int k = 0; k < 3; k++)
-                    {
-                        float la = (Mathf.PI / 2f) + (k * Mathf.PI * 2f / 3f) + Mathf.PI;
-                        float lx = Mathf.Cos(la);
-                        float ly = Mathf.Sin(la);
-                        float along = (u * lx) + (v * ly);
-                        float side = Mathf.Abs((u * -ly) + (v * lx));
-                        if (along > 0f && along < 0.44f && side < 0.045f) c = dark;
-                        float fx = u - (lx * 0.42f);
-                        float fy = v - (ly * 0.42f);
-                        if ((fx * fx) + (fy * fy) < 0.006f) c = metal;
-                    }
-                    if (r < 0.26f) c = r > 0.21f ? dark : red;
-                    pixels[(y * n) + x] = c;
-                }
-            }
-            texture.SetPixels32(pixels);
-            texture.Apply();
-            _turretSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
-            return _turretSprite;
         }
 
         /// <summary>공중 소화탄: 빨간 몸통, 흰 띠 두 줄, 꼬리 날개. 위쪽이 앞(떨어지는 쪽).</summary>
@@ -3969,12 +3842,8 @@ namespace FireGame.Prototypes
             _band = new Pool(_world, "Retardant", Art.White, 3, null);
             _pools.Add(_band);
             _rainShade = AddPool("RainShade", "Effects/glow", 3);
-            _truck = new Pool(_world, "Truck", Art.Get("Vehicles/firetruck"), 20, null);
-            _pools.Add(_truck);
             _siren = AddPool("Siren", "Effects/glow", 21, true);
             _cloud = AddPool("Cloud", "Effects/smoke_03", 25);
-            _plane = new Pool(_world, "Plane", PlaneSprite(), 26, null);
-            _pools.Add(_plane);
             _toolbox = new Pool(_world, "Toolbox", ToolboxSprite(), 8, Cutout());
             _chest = new Pool(_world, "Chest", ChestSprite(), 8, Cutout());
             _pools.Add(_chest);
@@ -3992,25 +3861,13 @@ namespace FireGame.Prototypes
             foreach (Pool standing in new[] { _embers, _blazes, _darts, _bats, _enemyCore, _roofFire, _chest, _toolbox }) standing.Upright = true;
             _bombShadows = AddPool("BombShadow", "Effects/glow", 11);
             _heliShadow = new Pool(_world, "HeliShadow", HeliSprite(), 11, null);
-            _heli = new Pool(_world, "Heli", HeliSprite(), 23, null);
-            _rotor = new Pool(_world, "Rotor", RotorSprite(), 24, null);
             _sprayLines = new Pool(_world, "SprayLine", Art.White, 14, null);
             _pools.Add(_sprayLines);
-            _turretBase = new Pool(_world, "TurretBase", TurretSprite(), 13, null);
-            _pools.Add(_turretBase);
-            _turretTank = new Pool(_world, "TurretTank", DiscSprite(), 13, null);
-            _pools.Add(_turretTank);
             _wet = AddPool("Wet", "Effects/glow", 2);
             _airBombs = new Pool(_world, "AirBomb", AirBombSprite(), 23, null);
             _pools.Add(_airBombs);
             _pools.Add(_heliShadow);
-            _pools.Add(_heli);
-            _pools.Add(_rotor);
             _droneGlow = AddPool("DroneGlow", "Effects/glow", 11, true);
-            _drones = new Pool(_world, "Drone", DroneSprite(), 12, null);
-            _pools.Add(_drones);
-            _droneRotors = new Pool(_world, "DroneRotor", RotorSprite(), 13, null);
-            _pools.Add(_droneRotors);
             _hoseTubeEdge = new Pool(_world, "HoseTubeEdge", Art.White, 9, null);
             _hoseTube = new Pool(_world, "HoseTube", Art.White, 10, null);
             // 물줄기: 비치는 겉물(11) 아래, 몸통(12), 더해 그리는 하이라이트(13). 끝 물덩어리는 몸통과 같은 층.
@@ -4041,12 +3898,24 @@ namespace FireGame.Prototypes
             _radar = new Pool(_world, "Radar", BeamSprite(), 10, Additive);
             _pools.Add(_radar);
             _dropGlow = AddPool("DropGlow", "Effects/glow", 12, true);
-            _bombs = AddPool("Bomb", "Effects/water_drop", 13);
 
             _playerGlow = NewSprite(_root, "Magnet", Art.Get("Effects/glow"), 5);
             _playerGlow.color = new Color(0.4f, 0.7f, 1f, 0.08f);
             _player = Models3D.Person("People/Worker_Male", _root, PersonTall);
             _people = new PersonPool(_world, PersonTall);
+            _droneModels = ModelPoolOf(ItemModels.Drone);
+            _turretModels = ModelPoolOf(ItemModels.Turret);
+            _bombModels = ModelPoolOf(ItemModels.Bomb);
+            _heliModels = ModelPoolOf(ItemModels.Heli);
+            _planeModels = ModelPoolOf(ItemModels.Plane);
+            _truckModels = ModelPoolOf(p => Models3D.Place("Cars/firetruck", p, Vector3.zero, 1.5f, 3.2f, 0f, out _));
+        }
+
+        private ModelPool ModelPoolOf(System.Func<Transform, GameObject> make)
+        {
+            var pool = new ModelPool(_world, make);
+            _modelPools.Add(pool);
+            return pool;
         }
 
         private Pool AddPool(string name, string sprite, int order, bool glow = false)
