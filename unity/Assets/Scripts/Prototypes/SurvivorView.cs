@@ -169,6 +169,7 @@ namespace FireGame.Prototypes
         private Pool _nozzle;
         private Pool _reticle;
         private Pool _shadows;
+        private Pool _motes;
         private Pool _hoseTube;
         private Pool _hoseTubeEdge;
         private Pool _bubbles;
@@ -396,7 +397,14 @@ namespace FireGame.Prototypes
             _pixelScreen.transform.SetParent(camera.transform, false);
             _pixelScreen.transform.localPosition = new Vector3(0f, 0f, 5f);
             _pixelScreen.transform.localScale = new Vector3(camera.orthographicSize * 2f * aspect, camera.orthographicSize * 2f, 1f);
-            var screenMat = new Material(Shader.Find("Unlit/Texture")) { mainTexture = _pixelRt };
+            // 화면 보정(채도·색조·햇빛 띠·비네트). 셰이더를 못 찾으면 보정 없이 그대로 옮긴다.
+            Shader grade = Resources.Load<Shader>("Shaders/PixelGrade");
+            if (grade == null)
+            {
+                Debug.LogWarning("[SurvivorView] Shaders/PixelGrade 없음: 보정 없이 그린다.");
+                grade = Shader.Find("Unlit/Texture");
+            }
+            var screenMat = new Material(grade) { mainTexture = _pixelRt };
             _pixelScreen.GetComponent<MeshRenderer>().sharedMaterial = screenMat;
             _hud = UiKit.Node(canvas.transform, "SurvivorHud");
             UiKit.Stretch(_hud);
@@ -1218,6 +1226,7 @@ namespace FireGame.Prototypes
             DrawGear(dt);
             DrawSpecials(dt);
             DrawEdgeArrows();
+            DrawWeather();
             foreach (Pool p in _pools) p.End();
             foreach (RibbonPool r in _ribbons) r.End();
 
@@ -1229,6 +1238,49 @@ namespace FireGame.Prototypes
 
             float loud = _sim.Outcome == SOutcome.Playing ? 1f - Mathf.Exp(-_sim.Enemies.Count / 60f) : 0f;
             GameAudio.SetFireLevel(loud, Mathf.Max(dt, 0.001f));
+        }
+
+        private const int AshCount = 50;
+        private const int EmberMax = 20;
+
+        /// <summary>공기: 화면 안을 천천히 떨어지는 재 + 타는 구조물에서 떠오르는 불티. 해시 자리라 캡처가 결정적이다.</summary>
+        private void DrawWeather()
+        {
+            Vector3 centre = GroundAt(new Vector3(0.5f, 0.5f, 0f));
+            float spanX = (_viewHalfW + 2f) * 2f;
+            float spanY = (_viewHalfH + 3f) * 2f;
+            for (int i = 0; i < AshCount; i++)
+            {
+                float fall = 0.35f + (0.3f * Hash01((i * 7) + 11));
+                float x = (Hash01((i * 7) + 12) * spanX) + (Mathf.Sin((_time * 0.7f) + i) * 0.6f) + (_time * 0.25f);
+                float y = (Hash01((i * 7) + 13) * spanY) - (_time * fall);
+                // 화면 영역 안에서 돌아 나온다.
+                x = centre.x - (spanX / 2f) + Mathf.Repeat(x - centre.x, spanX);
+                y = centre.y - (spanY / 2f) + Mathf.Repeat(y - centre.y, spanY);
+                float lift = 0.3f + (2.7f * Hash01((i * 7) + 14));
+                float size = Hash01((i * 7) + 15) < 0.3f ? 0.13f : 0.08f;
+                _motes.Put(new Vector3(x, y, 0f) + Up(lift), size, 0f, new Color(0.85f, 0.82f, 0.78f, 0.55f));
+            }
+
+            int embers = 0;
+            for (int s = 0; s < _sim.Structures.Count && embers < EmberMax; s++)
+            {
+                Structure st = _sim.Structures[s];
+                if (!st.Burning) continue;
+                float roof = st.IsBuilding ? ShopArt.For(st.Name, st.Half.X * 2f, st.Half.Y * 2f).Height : 0.5f;
+                int n = 2 + Mathf.RoundToInt(st.Fire * 4f);
+                for (int k = 0; k < n && embers < EmberMax; k++, embers++)
+                {
+                    int seed = (s * 31) + (k * 7);
+                    float speed = 0.8f + (0.6f * Hash01(seed + 1));
+                    float rise = Mathf.Repeat((_time * speed) + (Hash01(seed + 2) * 4f), 4f);
+                    float ox = ((Hash01(seed + 3) - 0.5f) * st.Half.X * 1.6f) + (Mathf.Sin((_time * 2f) + seed) * 0.3f * rise);
+                    float oy = (Hash01(seed + 4) - 0.5f) * st.Half.Y * 1.2f;
+                    float fade = 1f - (rise / 4f);
+                    var at = new Vector3(st.Pos.X + ox, st.Pos.Y + oy, 0f) + Up(roof + 0.3f + rise);
+                    _motes.Put(at, 0.1f, 0f, new Color(1f, 0.55f + (0.3f * Hash01(seed + 5)), 0.15f, fade));
+                }
+            }
         }
 
         private static Vector3 W(Vec2 p)
@@ -1513,13 +1565,13 @@ namespace FireGame.Prototypes
                 float warn = p.Life < 1f ? 1f + (0.3f * Mathf.Abs(Mathf.Sin(_time * 12f))) : 1f;
                 float big = 1.3f * warn * (p.Radius / 0.9f);
                 t = Mathf.Max(t, p.Life < 1f ? 0.6f : 0f);
-                _groundGlow.Put(at, p.Radius * 3.4f * warn, 0f, new Color(1f, 0.3f, 0.05f, 0.6f * t));
+                _groundGlow.Put(at, p.Radius * 2.4f * warn, 0f, new Color(1f, 0.3f, 0.05f, 0.4f * t));
                 for (int k = 0; k < 3; k++)
                 {
                     float a = (k * 2.1f) + i;
                     Vector3 o = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.4f;
                     float f = 0.6f + (0.15f * Mathf.Sin((_time * 16f) + (k * 2f) + i));
-                    _groundFire.Put(at + (o * big), f * (0.6f + (0.5f * t)) * big, 0f, new Color(1f, 0.55f, 0.12f, t), Art.Get(k == 0 ? "Effects/fire_01" : "Effects/fire_02"));
+                    _groundFire.Put(at + (o * big), f * (0.6f + (0.5f * t)) * big, 0f, new Color(1f, 0.62f, 0.25f, t), Art.Get(k == 0 ? "Effects/fire_01" : "Effects/fire_02"));
                 }
             }
         }
@@ -3273,35 +3325,32 @@ namespace FireGame.Prototypes
             bool forest = _sim.Stage.Number == 2;
             int size = (int)SurvivorSim.ArenaSize;
             float mid = size / 2f;
-            for (int y = 0; y < size; y += 2)
+            // 바닥은 스테이지 전체를 그린 한 장(풀결·도로·광장·흙길이 이어진다).
+            SpriteRenderer floor = NewSprite(_root, "Ground", GroundArt.Paint(forest, size, mid, SurvivorForest.PathHalf), 0);
+            _ground.Add(floor.gameObject);
+            floor.transform.localPosition = new Vector3(mid, mid, 0.1f);
+            // 숲은 나무 사이로 햇빛 띠가 더 진하다.
+            Material screen = _pixelScreen.GetComponent<MeshRenderer>().sharedMaterial;
+            if (screen.HasProperty("_ShaftColor")) screen.SetColor("_ShaftColor", new Color(1f, 0.92f, 0.7f, forest ? 0.1f : 0.06f));
+
+            if (!forest)
             {
-                for (int x = 0; x < size; x += 2)
+                // 마을 풀밭 덤불(판정 없음): 도로·광장·건물을 피해 흩어 세운다.
+                for (int i = 0; i < 30; i++)
                 {
-                    string art;
-                    Color color;
-                    if (forest)
-                    {
-                        // 숲: 짙은 풀밭에 가운데 십자 흙길.
-                        bool path = Mathf.Abs(x + 1f - mid) < SurvivorForest.PathHalf + 0.5f || Mathf.Abs(y + 1f - mid) < SurvivorForest.PathHalf + 0.5f;
-                        bool alt = ((x * 7) + (y * 13)) % 5 == 0;
-                        art = path ? (alt ? "TopDown/dirt_b" : "TopDown/dirt") : (alt ? "TopDown/grass_b" : "TopDown/grass_a");
-                        float shade = (path ? 0.55f : 0.3f) + (0.05f * (((x * 3) + (y * 5)) % 4) / 3f);
-                        color = path ? new Color(shade * 1.05f, shade * 0.85f, shade * 0.65f) : new Color(shade * 0.85f, shade * 1.05f, shade * 0.7f);
-                    }
-                    else
-                    {
-                        // 가운데 광장과 가게 앞 길은 돌바닥, 나머지는 풀밭.
-                        bool plaza = Mathf.Abs(x + 1f - mid) < 8f && Mathf.Abs(y + 1f - mid) < 8f;
-                        bool street = Mathf.Abs(y + 1f - 25f) < 1.5f || Mathf.Abs(y + 1f - 37f) < 1.5f || Mathf.Abs(x + 1f - 23f) < 1.5f || Mathf.Abs(x + 1f - 37f) < 1.5f;
-                        bool alt = ((x * 7) + (y * 13)) % 5 == 0;
-                        art = plaza || street ? (alt ? "TopDown/floor_stone_b" : "TopDown/floor_stone_a") : (alt ? "TopDown/grass_b" : "TopDown/grass_a");
-                        float shade = (plaza || street ? 0.42f : 0.36f) + (0.05f * (((x * 3) + (y * 5)) % 4) / 3f);
-                        color = plaza || street ? new Color(shade, shade, shade * 1.05f) : new Color(shade * 1.1f, shade, shade * 0.8f);
-                    }
-                    SpriteRenderer r = GroundSprite("Ground", art, 0);
-                    r.transform.localPosition = new Vector3(x + 1f, y + 1f, 0.1f);
-                    r.transform.localScale = Vector3.one * Art.FitWidth(r.sprite, 2f);
-                    r.color = color;
+                    var at = new Vector3(1f + (Hash01((i * 5) + 900) * (size - 2f)), 1f + (Hash01((i * 5) + 901) * (size - 2f)), 0f);
+                    var p = new Vec2(at.x, at.y);
+                    bool road = Mathf.Abs(at.y - 25f) < 2f || Mathf.Abs(at.y - 37f) < 2f || Mathf.Abs(at.x - 23f) < 2f || Mathf.Abs(at.x - 37f) < 2f;
+                    bool plaza = Mathf.Abs(at.x - mid) < 9f && Mathf.Abs(at.y - mid) < 9f;
+                    if (road || plaza || _sim.Structures.Exists(st => st.Within(p, 1.2f))) continue;
+                    SpriteRenderer r = GroundSprite("Decor", "Map/bush", 1);
+                    r.sharedMaterial = Cutout();
+                    float width = 0.6f + (0.3f * Hash01((i * 5) + 902));
+                    float tall = width * r.sprite.bounds.size.y / r.sprite.bounds.size.x;
+                    r.transform.localPosition = at + (Billboard * Vector3.up * tall * 0.5f);
+                    r.transform.localRotation = Billboard;
+                    r.transform.localScale = Vector3.one * Art.FitWidth(r.sprite, width);
+                    r.color = new Color(0.5f, 0.68f, 0.45f);
                 }
             }
 
@@ -3466,7 +3515,7 @@ namespace FireGame.Prototypes
                 if (st.Collapsed)
                 {
                     // 탄 자리: 검은 그루터기·잔해만 남는다.
-                    if (st.Kind != StructureKind.Gas) _houseShadows.Put(at, w * 0.8f, 0f, new Color(0.08f, 0.07f, 0.07f, 0.8f), null, h / w);
+                    if (st.Kind != StructureKind.Gas) _houseShadows.Put(at, w * 0.8f, 0f, new Color(0.05f, 0.06f, 0.12f, 0.55f), null, h / w);
                     continue;
                 }
 
@@ -3545,7 +3594,7 @@ namespace FireGame.Prototypes
             float hgt = look.Height;
             Color side = look.WallColor * tint;
             side.a = 1f;
-            _houseShadows.Put(at + new Vector3(0.35f + (hgt * 0.35f), -0.25f, 0f), w + 0.3f + (hgt * 0.5f), 0f, new Color(0f, 0f, 0f, 0.4f), null, (h + 0.3f) / (w + 0.3f + (hgt * 0.5f)));
+            _houseShadows.Put(at + new Vector3(0.35f + (hgt * 0.35f), -0.25f, 0f), w + 0.3f + (hgt * 0.5f), 0f, new Color(0.04f, 0.05f, 0.14f, 0.45f), null, (h + 0.3f) / (w + 0.3f + (hgt * 0.5f)));
             _walls.PutRot(at + new Vector3(0f, -h / 2f, 0f) + Up(hgt / 2f), Facade, w, hgt, tint, look.Front);
             _walls.PutRot(at + new Vector3(-w / 2f, 0f, 0f) + Up(hgt / 2f), SideW, h, hgt, side, Art.White);
             _walls.PutRot(at + new Vector3(w / 2f, 0f, 0f) + Up(hgt / 2f), SideE, h, hgt, side, Art.White);
@@ -3650,7 +3699,7 @@ namespace FireGame.Prototypes
             float f = st.Fire;
             float area = Mathf.Max(w, h);
             at += Up(baseZ + 0.02f);
-            _roofGlow.Put(at, area * (1.4f + f), 0f, new Color(1f, 0.35f, 0.08f, 0.35f + (0.35f * f)));
+            _roofGlow.Put(at, area * (1f + (0.7f * f)), 0f, new Color(1f, 0.35f, 0.08f, 0.25f + (0.3f * f)));
             int n = st.IsBuilding ? 2 + Mathf.RoundToInt(f * (st.Kind == StructureKind.Depot ? 9f : 6f)) : 1 + Mathf.RoundToInt(f * 2f);
             for (int k = 0; k < n; k++)
             {
@@ -3715,6 +3764,8 @@ namespace FireGame.Prototypes
             _pools.Add(_bars);
             _groundGlow = AddPool("GroundGlow", "Effects/glow", 3, true);
             _shadows = AddPool("Shadow", "Effects/glow", 4);
+            _motes = new Pool(_world, "Mote", Art.White, 21, null);
+            _pools.Add(_motes);
             _foam = AddPool("Foam", "Effects/smoke_01", 3);
             _groundFire = AddPool("GroundFire", "Effects/fire_01", 4);
             _civilianRings = AddPool("CivilianRing", "Effects/glow", 5, true);
