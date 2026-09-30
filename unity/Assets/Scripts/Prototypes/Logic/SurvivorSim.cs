@@ -731,7 +731,7 @@ namespace FireGame.Prototypes.Logic
                 case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
                 case EnemyKind.Squirrel: e.MaxHp = 3f * scale; e.Speed = 3.6f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; e.Seeker = true; break;
                 case EnemyKind.Bat: e.MaxHp = 1.5f * scale; e.Speed = 3.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
-                case EnemyKind.Oil: e.MaxHp = 6f * scale; e.Speed = 1.3f; e.Radius = 0.55f; e.Touch = 6f; e.Xp = 3; break;
+                case EnemyKind.Oil: e.MaxHp = 6f * scale; e.Speed = 1.3f; e.Radius = 0.55f; e.Touch = 10f; e.Xp = 3; break;
             }
             e.Hp = e.MaxHp;
             Enemies.Add(e);
@@ -1144,15 +1144,15 @@ namespace FireGame.Prototypes.Logic
                 e.Pos.X += stepX;
                 e.Pos.Y += stepY;
 
-                // 큰 불은 걸어온 자리에 불을, 기름 방울은 기름 불을 흘린다.
+                // 큰 불과 기름 방울은 걸어온 자리에 불을 흘린다(몸만 덴다). 건물을 태우는 기름은 기름 방울이 터질 때만 튄다:
+                // 흔적까지 건물을 태우면 소방관을 쫓아 불난 건물 곁을 도는 방울이 한 판에 열 번씩 불을 냈다(측정 6).
                 if (e.Kind == EnemyKind.Blaze || e.Kind == EnemyKind.Oil)
                 {
                     e.Trail += (float)Math.Sqrt((stepX * stepX) + (stepY * stepY));
                     if (e.Trail >= TrailStep)
                     {
                         e.Trail = 0f;
-                        if (e.Kind == EnemyKind.Oil) AddOil(e.Pos);
-                        else if (BurningGround.Count < MaxBurningGround)
+                        if (BurningGround.Count < MaxBurningGround)
                         {
                             BurningGround.Add(new Puddle { Pos = e.Pos, Radius = 0.6f, Life = 4f, MaxLife = 4f });
                         }

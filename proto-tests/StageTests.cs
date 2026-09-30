@@ -120,6 +120,7 @@ namespace FireGame.Prototypes.Tests
                 _out.WriteLine("스테이지 " + stage + " " + SurvivorStages.Get(stage).Name + ": 승 " + won + "/10 (동네 잃음 " + town + ", 쓰러짐 " + (lost[stage] - town) + "), 평균 " + (int)(time / 10f) + "초, 잃은 건물 평균 " + (housesLost[stage] / 10f).ToString("0.0"));
             }
             Assert.True(lost[2] > lost[1] || housesLost[2] > housesLost[1], "2스테이지가 1스테이지보다 쉽다");
+            Assert.True(lost[3] > lost[1] || housesLost[3] > housesLost[1], "3스테이지가 1스테이지보다 쉽다");
         }
     }
 }

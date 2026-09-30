@@ -191,7 +191,7 @@ namespace FireGame.Prototypes.Tests
         }
 
         /// <summary>
-        /// 아이템 공정성: 아이템 하나를 Lv3까지 먼저 챙기는 봇이 스테이지 1·2를 시드 10개씩 돈다(아이템당 20판).
+        /// 아이템 공정성: 아이템 하나를 Lv3까지 먼저 챙기는 봇이 스테이지 1~3을 시드 10개씩 돈다(아이템당 30판).
         /// 쓰레기템(구한 사람이 강제 아이템 평균의 65% 미만)도, 필수템(승이 평균의 2배 넘음)도 없어야 한다.
         /// 판별 편차가 평균의 18% 안팎이라, 10판·70%로는 아무 문제 없어도 자주 실패했다.
         /// dotnet test proto-tests --filter ItemReport --logger "console;verbosity=detailed"
@@ -208,16 +208,17 @@ namespace FireGame.Prototypes.Tests
             {
                 FunRow one = Measure(1, 10, fav);
                 FunRow two = Measure(2, 10, fav);
-                return (one.Won + two.Won, (one.Rescued + two.Rescued) / 2f, (one.PeopleLost + two.PeopleLost) / 2f, (one.MinHp + two.MinHp) / 2f);
+                FunRow three = Measure(3, 10, fav);
+                return (one.Won + two.Won + three.Won, (one.Rescued + two.Rescued + three.Rescued) / 3f, (one.PeopleLost + two.PeopleLost + three.PeopleLost) / 3f, (one.MinHp + two.MinHp + three.MinHp) / 3f);
             }
             var basic = Both(null);
-            _out.WriteLine("기본 봇: 승 " + basic.won + "/20, 구조 " + basic.saved.ToString("0.0") + ", 잃음 " + basic.lost.ToString("0.0") + ", 최저 체력 " + (basic.minHp * 100f).ToString("0") + "%");
+            _out.WriteLine("기본 봇: 승 " + basic.won + "/30, 구조 " + basic.saved.ToString("0.0") + ", 잃음 " + basic.lost.ToString("0.0") + ", 최저 체력 " + (basic.minHp * 100f).ToString("0") + "%");
             var rows = new System.Collections.Generic.List<(UpgradeId id, int won, float saved, float lost, float minHp)>();
             foreach (UpgradeId id in items)
             {
                 var r = Both(id);
                 rows.Add((id, r.won, r.saved, r.lost, r.minHp));
-                _out.WriteLine(SurvivorUpgrades.Name(id) + ": 승 " + r.won + "/20, 구조 " + r.saved.ToString("0.0") + ", 잃음 " + r.lost.ToString("0.0") + ", 최저 체력 " + (r.minHp * 100f).ToString("0") + "%");
+                _out.WriteLine(SurvivorUpgrades.Name(id) + ": 승 " + r.won + "/30, 구조 " + r.saved.ToString("0.0") + ", 잃음 " + r.lost.ToString("0.0") + ", 최저 체력 " + (r.minHp * 100f).ToString("0") + "%");
             }
             // 아이템 하나를 강제로 들면 그만큼 다른 카드를 포기하므로, 기본 봇이 아니라 강제한 아이템들의 평균과 비교한다.
             float avgWon = 0f;
@@ -236,8 +237,8 @@ namespace FireGame.Prototypes.Tests
             }
             // 방화복 없이도(기본 봇은 방화복을 거의 안 고른다) 이길 수 있고, 방화복을 들면 몸 압박이 준다.
             // (잃은 사람 수는 10판으론 판마다 1~5명씩 흔들려 판정에 못 쓴다.)
-            // 불 규칙 강화(측정 5) 뒤 목표 승률이 마을 30~40%, 숲 20%대라 20판 기대 승은 5~6이다. 하한은 4.
-            Assert.True(basic.won >= 4, "기본 봇이 너무 못 이긴다: " + basic.won + "/20");
+            // 목표 승률이 마을 30~40%, 숲·공단 20%대라 30판 기대 승은 7~8이다. 하한은 5.
+            Assert.True(basic.won >= 5, "기본 봇이 너무 못 이긴다: " + basic.won + "/30");
             // 같은 보조끼리 비교한다: 보조를 먼저 챙기면 무기가 늦게 차서 몸 압박이 커진다(무기 강제와 섞으면 불공정).
             float passiveHp = 0f;
             int passives = 0;

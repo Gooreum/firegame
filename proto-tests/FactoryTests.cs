@@ -63,8 +63,9 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void OilBlob_LeavesOilFireBehind()
+        public void OilBlob_LeavesPlainFireBehind_NotOil()
         {
+            // 흔적은 몸만 데는 불이다: 흔적까지 건물을 태우면 소방관을 쫓아 불난 건물 곁을 도는 방울이 한 판에 열 번씩 불을 냈다.
             SurvivorSim sim = Quiet();
             Enemy blob = sim.Spawn(EnemyKind.Oil, new Vec2(sim.Player.X + 10f, sim.Player.Y));
             blob.Hp = blob.MaxHp = 1000f;
@@ -73,8 +74,8 @@ namespace FireGame.Prototypes.Tests
                 sim.Hp = sim.MaxHp;
                 sim.Step(0f, 0f);
             }
-            Assert.True(OilCount(sim) >= 2, "3초 걸은 기름 방울이 남긴 기름 불 " + OilCount(sim));
-            Assert.All(sim.BurningGround, p => Assert.True(p.Oil));
+            Assert.True(sim.BurningGround.Count >= 2, "3초 걸은 기름 방울이 남긴 불 " + sim.BurningGround.Count);
+            Assert.Equal(0, OilCount(sim));
         }
 
         [Fact]
