@@ -1955,8 +1955,8 @@ namespace FireGame.Prototypes
                 if (_trail.Count > 12) _trail.RemoveAt(_trail.Count - 1);
             }
 
-            // 노즐 뒤 이음쇠에서 나와 뒷손을 지나 몸 뒤로 끌린다.
-            var points = new List<Vector3>(14) { Hand() - (look * 0.2f), Fist(RightFist), at };
+            // 발밑에서 몸 뒤로 끌린다(손에서 발까지는 서 있는 몸이 가린다).
+            var points = new List<Vector3>(14) { at };
             for (int i = 1; i < _trail.Count; i++) points.Add(_trail[i]);
             Vector3 back = -new Vector3(_sim.Facing.X, _sim.Facing.Y, 0f);
             while (points.Count < 12) points.Add(points[points.Count - 1] + (back * 0.3f));
@@ -1971,8 +1971,9 @@ namespace FireGame.Prototypes
                 float deg = (Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg) - 90f;
                 float fade = 1f - Mathf.Clamp01((i - 8f) / 4f);
                 Vector3 mid = (a + b) * 0.5f;
-                _hoseTubeEdge.Put(mid, 0.3f, deg, new Color(0.35f, 0.25f, 0.15f, fade), null, (span + 0.1f) / 0.3f);
-                _hoseTube.Put(mid, 0.2f, deg, new Color(0.9f, 0.8f, 0.6f, fade), null, (span + 0.1f) / 0.2f);
+                // 도트 2픽셀 빨간 소방 호스 + 어두운 테.
+                _hoseTubeEdge.Put(mid, 0.16f, deg, new Color(0.25f, 0.06f, 0.05f, fade), null, (span + 0.06f) / 0.16f);
+                _hoseTube.Put(mid, 0.1f, deg, new Color(0.85f, 0.2f, 0.15f, fade), null, (span + 0.06f) / 0.1f);
             }
         }
 
@@ -3655,10 +3656,13 @@ namespace FireGame.Prototypes
             float bob = Mathf.Abs(Mathf.Sin((_time * 7f) + seed));
             ShopArt.Look look = ShopArt.For(st.Name, st.Half.X * 2f, st.Half.Y * 2f);
             float hgt = look.Height;
-            // 첫 창 안에 갇힌 사람이 흔들린다(앞벽에 붙어 서 있다).
+            // 갇힌 사람은 지붕 앞 가장자리에 서서 좌우로 몸을 뒤집으며 손을 흔들고, 첫 창은 불빛으로 번쩍인다.
             Rect paneRect = look.Windows.Length > 0 ? look.Windows[0] : new Rect(-0.2f, -st.Half.Y + 0.2f, 0.4f, 0.4f);
-            Vector3 win = FacadePoint(at, st.Half.Y * 2f, new Vector2(paneRect.center.x, paneRect.yMin + (0.06f * bob))) + new Vector3(0f, -0.06f, 0f);
-            _civilians.Put(win, 0.55f, 8f * Mathf.Sin(_time * 9f + seed), Color.white, CivilianArt(seed));
+            Vector3 win = FacadePoint(at, st.Half.Y * 2f, paneRect.center) + new Vector3(0f, -0.06f, 0f);
+            _roofGlow.Put(win, 0.9f, 0f, new Color(1f, 0.6f, 0.2f, 0.4f + (0.3f * bob)));
+            bool wave = Mathf.Repeat((_time * 4f) + seed, 2f) < 1f;
+            Vector3 edge = at + new Vector3(paneRect.center.x, -st.Half.Y + 0.3f, 0f) + Up(hgt + (0.08f * bob));
+            _civilians.Put(edge, wave ? 0.85f : -0.85f, 0f, Color.white, CivilianArt(seed, (int)(_time * 4f)));
 
             bool choking = st.Fire >= SurvivorSim.SmokeFire;
             float urgent = choking ? Mathf.Clamp01(st.Smoke / SurvivorSim.SmokeTime) : 0f;
@@ -3678,7 +3682,7 @@ namespace FireGame.Prototypes
             }
             bool blink = choking && Mathf.Sin(_time * (8f + (16f * urgent))) > 0f;
             help.color = blink ? new Color(1f, 0.35f, 0.3f) : Color.white;
-            help.transform.localPosition = at + Up(hgt + (big ? 1.7f : 1.2f) + (0.15f * bob));
+            help.transform.localPosition = at + Up(hgt + (big ? 1.7f : 1.5f) + (0.15f * bob));
             help.characterSize = 0.06f * (1f + (0.12f * bob));
 
             Vector3 door = W(st.Door);
