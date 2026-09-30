@@ -3587,6 +3587,8 @@ namespace FireGame.Prototypes
             _bats = new Pool(_world, "Bat", BatSprite(), 9, null);
             _pools.Add(_bats);
             _enemyCore = AddPool("EnemyCore", "Effects/fire_01", 10, true);
+            // 픽셀 3D: 원래 서 있는 그림(불 몹·박쥐·지붕 불꽃·시민·상자)은 카메라를 보고 세운다.
+            foreach (Pool standing in new[] { _embers, _blazes, _darts, _bats, _enemyCore, _roofFire, _civilians, _chest, _toolbox }) standing.Upright = true;
             _bombShadows = AddPool("BombShadow", "Effects/glow", 11);
             _heliShadow = new Pool(_world, "HeliShadow", HeliSprite(), 11, null);
             _heli = new Pool(_world, "Heli", HeliSprite(), 23, null);
@@ -3668,6 +3670,7 @@ namespace FireGame.Prototypes
         {
             var go = new GameObject("Number");
             go.transform.SetParent(_world, false);
+            go.transform.localRotation = Billboard;
             var mesh = go.AddComponent<TextMesh>();
             mesh.font = Art.Font;
             MeshRenderer renderer = mesh.GetComponent<MeshRenderer>();
@@ -3684,7 +3687,11 @@ namespace FireGame.Prototypes
         {
             private readonly List<SpriteRenderer> _items = new List<SpriteRenderer>();
             private readonly List<float> _units = new List<float>();
+            private readonly List<float> _aspects = new List<float>();
             private readonly Transform _parent;
+
+            /// <summary>카메라를 보고 선다(발이 땅 자리에 닿는다). 불 몹·시민·상자처럼 서 있는 그림.</summary>
+            public bool Upright;
             private readonly string _name;
             private readonly Sprite _sprite;
             private readonly int _order;
@@ -3715,22 +3722,40 @@ namespace FireGame.Prototypes
                     if (_material != null) created.sharedMaterial = _material;
                     _items.Add(created);
                     _units.Add(Art.FitWidth(_sprite, 1f));
+                    _aspects.Add(AspectOf(_sprite));
                 }
                 SpriteRenderer r = _items[_used];
                 if (sprite != null && r.sprite != sprite)
                 {
                     r.sprite = sprite;
                     _units[_used] = Art.FitWidth(sprite, 1f);
+                    _aspects[_used] = AspectOf(sprite);
                 }
                 float unit = _units[_used];
+                float aspect = _aspects[_used];
                 _used++;
 
                 if (!r.enabled) r.enabled = true;
                 Transform t = r.transform;
-                t.localPosition = at;
-                t.localRotation = Quaternion.Euler(0f, 0f, degrees);
+                if (Upright)
+                {
+                    // 발이 땅 자리에 닿게 반 키만큼 카메라 위쪽으로 올리고, 흔들림은 살짝만 남긴다.
+                    float half = size * stretch * aspect * 0.5f;
+                    t.localPosition = at + (Billboard * Vector3.up * half);
+                    t.localRotation = Billboard * Quaternion.Euler(0f, 0f, Mathf.Clamp(Mathf.DeltaAngle(0f, degrees), -15f, 15f));
+                }
+                else
+                {
+                    t.localPosition = at;
+                    t.localRotation = Quaternion.Euler(0f, 0f, degrees);
+                }
                 t.localScale = new Vector3(unit * size, unit * size * stretch, 1f);
                 r.color = color;
+            }
+
+            private static float AspectOf(Sprite sprite)
+            {
+                return sprite != null && sprite.bounds.size.x > 0.0001f ? sprite.bounds.size.y / sprite.bounds.size.x : 1f;
             }
 
             public void End()
