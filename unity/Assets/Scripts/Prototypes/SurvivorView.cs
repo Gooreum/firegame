@@ -426,6 +426,17 @@ namespace FireGame.Prototypes
             bloom.threshold.Override(1f);
             bloom.intensity.Override(0.8f);
             bloom.scatter.Override(0.65f);
+            // 해: 왼쪽 위에서 땅(+Z)으로 비스듬히 비춰 모델이 오른쪽 아래로 부드러운 그림자를 드리운다.
+            var sun = new GameObject("Sun").AddComponent<Light>();
+            sun.transform.SetParent(_root, false);
+            sun.type = LightType.Directional;
+            sun.intensity = 0.8f;
+            sun.color = new Color(1f, 0.96f, 0.88f);
+            sun.shadows = LightShadows.Soft;
+            sun.shadowStrength = 0.55f;
+            sun.transform.localRotation = Quaternion.LookRotation(new Vector3(-0.45f, 0.35f, 1f), Vector3.back);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.42f, 0.45f, 0.52f);
             _hud = UiKit.Node(canvas.transform, "SurvivorHud");
             UiKit.Stretch(_hud);
 
@@ -3351,10 +3362,20 @@ namespace FireGame.Prototypes
             bool forest = _sim.Stage.Number == 2;
             int size = (int)SurvivorSim.ArenaSize;
             float mid = size / 2f;
-            // 바닥은 스테이지 전체를 그린 한 장(풀결·도로·광장·흙길이 이어진다).
-            SpriteRenderer floor = NewSprite(_root, "Ground", GroundArt.Paint(forest, size, mid, SurvivorForest.PathHalf), 0);
-            _ground.Add(floor.gameObject);
+            // 바닥은 스테이지 전체를 그린 한 장(풀결·도로·광장·흙길이 이어진다). 해 그림자를 받는 Lit 쿼드에 깐다.
+            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            floor.name = "Ground";
+            Collider floorCollider = floor.GetComponent<Collider>();
+            if (Application.isPlaying) Object.Destroy(floorCollider);
+            else Object.DestroyImmediate(floorCollider);
+            floor.transform.SetParent(_root, false);
             floor.transform.localPosition = new Vector3(mid, mid, 0.1f);
+            floor.transform.localScale = new Vector3(size, size, 1f);
+            var floorMat = new Material(Models3D.LitShader) { name = "GroundLit" };
+            floorMat.SetTexture("_BaseMap", GroundArt.Paint(forest, size, mid, SurvivorForest.PathHalf).texture);
+            floorMat.SetFloat("_Smoothness", 0f);
+            floor.GetComponent<MeshRenderer>().sharedMaterial = floorMat;
+            _ground.Add(floor);
             // 숲은 나무 사이로 햇빛 띠가 더 진하다.
             Material screen = _worldScreen.GetComponent<MeshRenderer>().sharedMaterial;
             if (screen.HasProperty("_ShaftColor")) screen.SetColor("_ShaftColor", new Color(1f, 0.92f, 0.7f, forest ? 0.1f : 0.06f));

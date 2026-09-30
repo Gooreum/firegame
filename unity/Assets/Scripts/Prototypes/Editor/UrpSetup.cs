@@ -38,6 +38,11 @@ namespace FireGame.Prototypes.EditorTools
             }
             pipeline.msaaSampleCount = 4;
             pipeline.supportsHDR = true;
+            // 해 그림자: 카메라가 땅에서 약 34칸 떨어져 있어 거리를 넉넉히, 가장자리는 부드럽게.
+            pipeline.shadowDistance = 80f;
+            var so = new SerializedObject(pipeline);
+            so.FindProperty("m_SoftShadowsSupported").boolValue = true;
+            so.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(pipeline);
 
             GraphicsSettings.defaultRenderPipeline = pipeline;
