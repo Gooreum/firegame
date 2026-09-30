@@ -17,6 +17,17 @@ namespace FireGame.Prototypes
     public sealed class SurvivorView : IPrototype
     {
         private const float CameraSize = 9f;
+
+        /// <summary>픽셀 3D: 월드는 이만큼 기운 원근 카메라가 세로 PixelHeight 픽셀로 그려 도트로 키운다(HUD는 원래 해상도).</summary>
+        private const float Tilt = 40f;
+        private const float WorldFov = 30f;
+        private const int PixelHeight = 360;
+
+        /// <summary>세운 스프라이트·글자가 카메라를 보는 방향(카메라는 기울기만 있고 돌지 않으니 늘 같다).</summary>
+        private static readonly Quaternion Billboard = Quaternion.LookRotation(new Vector3(0f, Mathf.Sin(Tilt * Mathf.Deg2Rad), Mathf.Cos(Tilt * Mathf.Deg2Rad)), Vector3.up);
+
+        /// <summary>HUD 카메라가 도트 화면을 보는 곳: 월드에서 멀리 떨어져 월드 스프라이트가 두 번 그려지지 않는다.</summary>
+        private static readonly Vector3 ScreenSpot = new Vector3(-5000f, -5000f, -10f);
         private const int MaxParticles = 1100;
         private const int MaxNumbers = 60;
         private const int MaxScorch = 220;
@@ -30,6 +41,13 @@ namespace FireGame.Prototypes
         private readonly Transform _world;
         private readonly Camera _camera;
         private readonly RectTransform _hud;
+        private readonly Camera _worldCam;
+        private readonly RenderTexture _pixelRt;
+        private readonly GameObject _pixelScreen;
+        private readonly Vector3 _cameraHome;
+        private readonly float _cameraHomeSize;
+        private float _viewHalfW = CameraSize * 16f / 9f;
+        private float _viewHalfH = CameraSize;
 
         private SurvivorSim _sim;
         private readonly bool _maxGear;
@@ -337,6 +355,33 @@ namespace FireGame.Prototypes
             _root.SetParent(parent, false);
             _world = new GameObject("Dynamic").transform;
             _world.SetParent(_root, false);
+
+            // 픽셀 3D: 월드 카메라가 낮은 해상도 텍스처에 그리고, 원래 카메라는 멀리서 그 텍스처(도트)와 HUD만 그린다.
+            _cameraHome = camera.transform.position;
+            _cameraHomeSize = camera.orthographicSize;
+            float aspect = camera.aspect > 0.1f ? camera.aspect : 16f / 9f;
+            _pixelRt = new RenderTexture(Mathf.RoundToInt(PixelHeight * aspect), PixelHeight, 24, RenderTextureFormat.ARGB32) { filterMode = FilterMode.Point, name = "PixelWorld" };
+            var eye = new GameObject("WorldCamera");
+            eye.transform.SetParent(_root, false);
+            _worldCam = eye.AddComponent<Camera>();
+            _worldCam.orthographic = false;
+            _worldCam.fieldOfView = WorldFov;
+            _worldCam.nearClipPlane = 1f;
+            _worldCam.farClipPlane = 300f;
+            _worldCam.clearFlags = CameraClearFlags.SolidColor;
+            _worldCam.backgroundColor = new Color(0.05f, 0.05f, 0.07f);
+            _worldCam.targetTexture = _pixelRt;
+            camera.transform.position = ScreenSpot;
+            _pixelScreen = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            _pixelScreen.name = "PixelScreen";
+            Collider screenCollider = _pixelScreen.GetComponent<Collider>();
+            if (Application.isPlaying) Object.Destroy(screenCollider);
+            else Object.DestroyImmediate(screenCollider);
+            _pixelScreen.transform.SetParent(camera.transform, false);
+            _pixelScreen.transform.localPosition = new Vector3(0f, 0f, 5f);
+            _pixelScreen.transform.localScale = new Vector3(camera.orthographicSize * 2f * aspect, camera.orthographicSize * 2f, 1f);
+            var screenMat = new Material(Shader.Find("Unlit/Texture")) { mainTexture = _pixelRt };
+            _pixelScreen.GetComponent<MeshRenderer>().sharedMaterial = screenMat;
             _hud = UiKit.Node(canvas.transform, "SurvivorHud");
             UiKit.Stretch(_hud);
 
@@ -427,8 +472,22 @@ namespace FireGame.Prototypes
         public void Destroy()
         {
             GameAudio.SetFireLevel(0f, 1f);
+            // 공유 카메라(다른 시험판도 쓴다)를 원래 자리로 되돌린다.
+            if (_camera != null)
+            {
+                _camera.transform.position = _cameraHome;
+                _camera.orthographicSize = _cameraHomeSize;
+            }
+            if (_worldCam != null) _worldCam.targetTexture = null;
+            UiKit.Discard(_pixelScreen);
             UiKit.Discard(_root.gameObject);
             UiKit.Discard(_hud.gameObject);
+            if (_pixelRt != null)
+            {
+                _pixelRt.Release();
+                if (Application.isPlaying) Object.Destroy(_pixelRt);
+                else Object.DestroyImmediate(_pixelRt);
+            }
         }
 
         // ------------------------------------------------------------------
@@ -491,8 +550,9 @@ namespace FireGame.Prototypes
                 else
                 {
                     // 호스: 마우스로 겨누고 왼쪽 버튼을 쥔 동안 쏜다.
-                    Vector3 screen = new Vector3(input.Mouse.x, input.Mouse.y, 10f);
-                    _mouseAt = _world.InverseTransformPoint(_camera.ScreenToWorldPoint(screen));
+                    // 기운 월드 카메라의 광선이 땅(z=0)에 닿는 곳을 겨눈다.
+                    Ray ray = _worldCam.ViewportPointToRay(new Vector3(input.Mouse.x / Mathf.Max(1f, _camera.pixelWidth), input.Mouse.y / Mathf.Max(1f, _camera.pixelHeight), 0f));
+                    _mouseAt = _world.InverseTransformPoint(ray.GetPoint(Mathf.Abs(ray.direction.z) > 0.0001f ? -ray.origin.z / ray.direction.z : 0f));
                     _mouseAt.z = 0f;
                     _hasMouse = true;
                     _sim.Aim = new Vec2(_mouseAt.x - _sim.Player.X, _mouseAt.y - _sim.Player.Y);
@@ -1250,8 +1310,8 @@ namespace FireGame.Prototypes
             if ((_sim.Wind.X != 0f || _sim.Wind.Y != 0f) && _sim.Outcome == SOutcome.Playing && Random.value < 0.6f)
             {
                 // 산불 숲: 화면 곳곳에서 재와 불티가 바람 쪽으로 날린다.
-                float halfH = _camera.orthographicSize;
-                float halfW = halfH * _camera.aspect;
+                float halfH = _viewHalfH;
+                float halfW = _viewHalfW;
                 var at = new Vector3(_cameraAt.x + Random.Range(-halfW, halfW), _cameraAt.y + Random.Range(-halfH, halfH), 0f);
                 var wind = new Vector3(_sim.Wind.X, _sim.Wind.Y, 0f) * Random.Range(3f, 5f);
                 bool spark = Random.value < 0.3f;
@@ -3018,8 +3078,8 @@ namespace FireGame.Prototypes
         private void FollowCamera(float dt)
         {
             if (_camera == null) return;
-            // 줌 킥: +면 확 다가오고(레벨업·진화), −면 물러난다(보스 등장).
-            _camera.orthographicSize = CameraSize * (1f - (0.12f * Mathf.Clamp(_zoomKick, -1.5f, 1.5f)));
+            // 줌 킥: +면 확 다가오고(레벨업·진화), −면 물러난다.
+            float size = CameraSize * (1f - (0.12f * Mathf.Clamp(_zoomKick, -1.5f, 1.5f)));
             _camera.backgroundColor = new Color(0.05f, 0.05f, 0.07f);
 
             var target = new Vector3(_sim.Player.X, _sim.Player.Y, -10f);
@@ -3028,7 +3088,35 @@ namespace FireGame.Prototypes
             float amp = _trauma * _trauma * 0.6f;
             float t = Time.realtimeSinceStartup * 25f;
             Vector3 shake = new Vector3((Mathf.PerlinNoise(t, 0f) * 2f) - 1f, (Mathf.PerlinNoise(0f, t) * 2f) - 1f, 0f) * amp;
-            _camera.transform.position = _cameraAt + shake;
+            PlaceWorldCamera(_cameraAt + shake, size);
+        }
+
+        /// <summary>캡처용: 땅 위 center를 가운데 반높이 halfHeight로 보이게 월드 카메라를 옮긴다.</summary>
+        public void Frame(Vector3 center, float halfHeight)
+        {
+            PlaceWorldCamera(center, halfHeight);
+        }
+
+        /// <summary>땅(z=0) 위 center를 Tilt도 기운 눈으로, 가운데 세로 반폭이 halfHeight가 되는 거리에서 본다.</summary>
+        private void PlaceWorldCamera(Vector3 center, float halfHeight)
+        {
+            float dist = halfHeight / Mathf.Tan(WorldFov * 0.5f * Mathf.Deg2Rad);
+            Vector3 forward = Billboard * Vector3.forward;
+            center.z = 0f;
+            _worldCam.transform.SetPositionAndRotation(center - (forward * dist), Billboard);
+            // 화면 아래 변(가장 좁은 쪽)과 가운데를 땅에 비춰 보이는 반폭·반높이를 잰다.
+            Vector3 mid = GroundAt(new Vector3(0.5f, 0.5f, 0f));
+            Vector3 bottom = GroundAt(new Vector3(0.5f, 0f, 0f));
+            Vector3 corner = GroundAt(new Vector3(0f, 0f, 0f));
+            _viewHalfH = Mathf.Max(1f, mid.y - bottom.y);
+            _viewHalfW = Mathf.Max(1f, bottom.x - corner.x);
+        }
+
+        /// <summary>월드 카메라 화면 한 점(뷰포트)이 땅(z=0)에 닿는 곳.</summary>
+        private Vector3 GroundAt(Vector3 viewport)
+        {
+            Ray ray = _worldCam.ViewportPointToRay(viewport);
+            return ray.GetPoint(Mathf.Abs(ray.direction.z) > 0.0001f ? -ray.origin.z / ray.direction.z : 0f);
         }
 
         private void BuildAudio()
@@ -4032,8 +4120,8 @@ namespace FireGame.Prototypes
             if (_sim.Outcome != SOutcome.Playing || _camera == null) return;
             // 카메라가 따라갈 자리 기준으로 잡는다(이번 프레임 FollowCamera 전이라).
             Vector3 eye = _cameraAt;
-            float halfH = _camera.orthographicSize;
-            float halfW = halfH * _camera.aspect;
+            float halfH = _viewHalfH;
+            float halfW = _viewHalfW;
             foreach (Structure st in _sim.Structures)
             {
                 if (!st.Burning || !(st.IsBuilding || st.Kind == StructureKind.Gas)) continue;
