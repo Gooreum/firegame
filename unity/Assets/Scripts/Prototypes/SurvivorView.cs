@@ -147,6 +147,8 @@ namespace FireGame.Prototypes
             "Houses/building-type-k", "Houses/building-type-m", "Houses/building-type-p", "Houses/building-type-t",
         };
         private static readonly string[] CarModels = { "Cars/sedan", "Cars/suv", "Cars/taxi", "Cars/van", "Cars/hatchback-sports" };
+        private static readonly string[] TownTrees = { "Nature/tree_default", "Nature/tree_oak", "Nature/tree_fat" };
+        private static readonly string[] ForestTrees = { "Nature/tree_pineTallA", "Nature/tree_pineRoundA", "Nature/tree_cone" };
         private const float MaxHouseHeight = 2.4f;
         private readonly List<GameObject> _models = new List<GameObject>();
         private GameObject[] _structModels = new GameObject[0];
@@ -265,7 +267,6 @@ namespace FireGame.Prototypes
         private Pool _roofTrim;
         private Pool _props;
         private Pool _walls;
-        private Pool _trees;
         private Pool _roofGlow;
         private Pool _roofFire;
         private Pool _bars;
@@ -3397,14 +3398,10 @@ namespace FireGame.Prototypes
                     bool road = Mathf.Abs(at.y - 25f) < 2f || Mathf.Abs(at.y - 37f) < 2f || Mathf.Abs(at.x - 23f) < 2f || Mathf.Abs(at.x - 37f) < 2f;
                     bool plaza = Mathf.Abs(at.x - mid) < 9f && Mathf.Abs(at.y - mid) < 9f;
                     if (road || plaza || _sim.Structures.Exists(st => st.Within(p, 1.2f))) continue;
-                    SpriteRenderer r = GroundSprite("Decor", "Map/bush", 1);
-                    r.sharedMaterial = Cutout();
-                    float width = 0.6f + (0.3f * Hash01((i * 5) + 902));
-                    float tall = width * r.sprite.bounds.size.y / r.sprite.bounds.size.x;
-                    r.transform.localPosition = at + (Billboard * Vector3.up * tall * 0.5f);
-                    r.transform.localRotation = Billboard;
-                    r.transform.localScale = Vector3.one * Art.FitWidth(r.sprite, width);
-                    r.color = new Color(0.5f, 0.68f, 0.45f);
+                    float width = 0.7f + (0.4f * Hash01((i * 5) + 902));
+                    GameObject bush = Models3D.Place(i % 2 == 0 ? "Nature/plant_bush" : "Nature/plant_bushLarge", _root, at, width, width, Hash01((i * 5) + 903) * 360f, out _);
+                    if (bush != null) _ground.Add(bush);
+                    Models3D.Tint(bush, Color.white, NatureColor, 1);
                 }
             }
 
@@ -3418,15 +3415,12 @@ namespace FireGame.Prototypes
                     if (Mathf.Abs(at.x - mid) < SurvivorForest.PathHalf + 1f || Mathf.Abs(at.y - mid) < SurvivorForest.PathHalf + 1f) continue;
                     if (_sim.Structures.Exists(st => st.Within(p, 0.9f))) continue;
                     bool rock = Hash01((i * 3) + 2) < 0.3f;
-                    // 덤불·바위는 카메라를 보고 서 있다(발이 땅에 닿게).
-                    SpriteRenderer r = GroundSprite("Decor", rock ? "Map/rock" : "Map/bush", 1);
-                    r.sharedMaterial = Cutout();
-                    float width = rock ? 0.8f : 1.2f;
-                    float tall = width * r.sprite.bounds.size.y / r.sprite.bounds.size.x;
-                    r.transform.localPosition = new Vector3(at.x, at.y, 0f) + (Billboard * Vector3.up * tall * 0.5f);
-                    r.transform.localRotation = Billboard;
-                    r.transform.localScale = Vector3.one * Art.FitWidth(r.sprite, width);
-                    r.color = rock ? new Color(0.6f, 0.6f, 0.62f) : new Color(0.55f, 0.75f, 0.5f);
+                    // 덤불·바위 모델(판정 없음).
+                    string decor = rock ? (i % 2 == 0 ? "Nature/rock_largeA" : "Nature/rock_smallB") : (i % 2 == 0 ? "Nature/plant_bushLarge" : "Nature/plant_bush");
+                    float width = rock ? 0.9f : 1.2f;
+                    GameObject d = Models3D.Place(decor, _root, new Vector3(at.x, at.y, 0f), width, width, Hash01((i * 3) + 5) * 360f, out _);
+                    if (d != null) _ground.Add(d);
+                    Models3D.Tint(d, Color.white, rock ? (System.Func<string, Color?>)RockColor : NatureColor, 1);
                 }
             }
 
@@ -3489,6 +3483,12 @@ namespace FireGame.Prototypes
                 {
                     go = Models3D.Place(CarModels[i % CarModels.Length], _root, at, w, h, 90f, out size);
                 }
+                else if (st.Kind == StructureKind.Tree)
+                {
+                    // 마을은 둥근 활엽수, 숲은 소나무. 키 약 2.3칸, 도는 각은 번호로 섞는다.
+                    string[] kinds = _sim.Stage.Number == 2 ? ForestTrees : TownTrees;
+                    go = Models3D.Place(kinds[i % kinds.Length], _root, at, 1.3f, 1.3f, Hash01(i + 70) * 360f, out size, 2.3f);
+                }
                 if (go == null) continue;
                 _models.Add(go);
                 _structModels[i] = go;
@@ -3502,6 +3502,25 @@ namespace FireGame.Prototypes
                     Models3D.RoofColor(go, new Color(shop.r / top * 0.9f, shop.g / top * 0.9f, shop.b / top * 0.9f));
                 }
             }
+        }
+
+        /// <summary>Kenney 자연 키트 머티리얼(청록 잎·주황 흙)을 바닥 풀빛에 맞춘 차분한 색으로.</summary>
+        private static Color? NatureColor(string material)
+        {
+            if (material.StartsWith("leafsDark")) return new Color(0.2f, 0.42f, 0.24f);
+            if (material.StartsWith("leafs")) return new Color(0.34f, 0.58f, 0.26f);
+            if (material.StartsWith("woodBark")) return new Color(0.42f, 0.3f, 0.22f);
+            if (material.StartsWith("grass")) return new Color(0.3f, 0.52f, 0.26f);
+            if (material.StartsWith("dirt")) return new Color(0.45f, 0.36f, 0.26f);
+            return null;
+        }
+
+        /// <summary>바위: 몸통(흙 머티리얼)은 회색, 이끼(풀)는 어두운 초록.</summary>
+        private static Color? RockColor(string material)
+        {
+            if (material.StartsWith("dirt")) return new Color(0.55f, 0.55f, 0.57f);
+            if (material.StartsWith("grass")) return new Color(0.28f, 0.45f, 0.25f);
+            return null;
         }
 
         /// <summary>예전 가게 그림의 지붕 평균색(빵집 주황·꽃집 초록·문구점 파랑…).</summary>
@@ -3649,10 +3668,8 @@ namespace FireGame.Prototypes
                 switch (st.Kind)
                 {
                     case StructureKind.Tree:
-                        _shadows.Put(at + new Vector3(0.2f, -0.1f, 0f), 2f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.55f);
-                        // 서 있는 나무(옆에서 본 그림). 숲은 소나무·둥근 나무를 섞어 심는다.
-                        string treeArt = _sim.Stage.Number == 2 ? (i % 3 == 0 ? "Map/tree_pine" : "Map/tree_round") : (i % 2 == 0 ? "Map/bush" : "Map/tree_round");
-                        _trees.Put(at + new Vector3(0f, -0.2f, 0f), 1.9f, 0f, tint, Art.Get(treeArt));
+                        // 나무 모델(그림자는 해가 드리운다): 탈수록 검게 그을린다.
+                        Models3D.Tint(model, tint, NatureColor, 1);
                         break;
                     case StructureKind.Car:
                         // 차 모델(그림자는 해가 드리운다): 탈수록 검게, 젖으면 파랗게.
@@ -3675,7 +3692,7 @@ namespace FireGame.Prototypes
                         _props.Put(at, 0.85f * (1f + (0.25f * fuse)), 0f, blink ? new Color(1f, 0.55f, 0.45f) : tint, Art.Get("Props/barrel_red"));
                         break;
                 }
-                if (st.Burning && st.Kind != StructureKind.Gas) DrawRoofFire(st, at, w, h, i, st.Kind == StructureKind.Car ? RoofHeight(i) : st.Kind == StructureKind.Tree ? 0.9f : 0f);
+                if (st.Burning && st.Kind != StructureKind.Gas) DrawRoofFire(st, at, w, h, i, st.Kind == StructureKind.Car ? RoofHeight(i) : st.Kind == StructureKind.Tree ? RoofHeight(i) * 0.55f : 0f);
             }
         }
 
@@ -3859,8 +3876,6 @@ namespace FireGame.Prototypes
             _props = AddPool("Prop", "Props/tree_large", 7);
             _walls = new Pool(_world, "Wall3D", Art.White, 3, Cutout());
             _pools.Add(_walls);
-            _trees = new Pool(_world, "Tree", Art.Get("Map/bush"), 7, Cutout()) { Upright = true };
-            _pools.Add(_trees);
             _roofGlow = AddPool("RoofGlow", "Effects/glow", 8, true);
             _roofFire = AddPool("RoofFire", "Effects/fire_02", 11);
             _bars = new Pool(_world, "Bar", Art.White, 19, null);
