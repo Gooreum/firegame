@@ -34,11 +34,12 @@ namespace FireGame.Prototypes
 
         /// <summary>
         /// 모델을 세워 발자국 w×h(칸) 안에 들게 균일 축척하고, 가운데를 at에, 바닥을 땅(z=0)에 둔다.
-        /// yawDeg는 땅 위에서 도는 각(모델 위쪽 축 기준). 높이(칸)를 돌려준다. 모델이 없으면 null.
+        /// yawDeg는 땅 위에서 도는 각(모델 위쪽 축 기준). maxHeight(0이면 제한 없음)보다 높으면 키만 눌러 낮춘다.
+        /// size는 놓인 크기(가로, 앞뒤, 높이 칸). 모델이 없으면 null.
         /// </summary>
-        public static GameObject Place(string path, Transform parent, Vector3 at, float w, float h, float yawDeg, out float height)
+        public static GameObject Place(string path, Transform parent, Vector3 at, float w, float h, float yawDeg, out Vector3 size, float maxHeight = 0f)
         {
-            height = 0f;
+            size = Vector3.zero;
             GameObject prefab = Load(path);
             if (prefab == null) return null;
             GameObject go = Object.Instantiate(prefab, parent, false);
@@ -47,9 +48,15 @@ namespace FireGame.Prototypes
             float s = Mathf.Min(w / Mathf.Max(0.001f, b.size.x), h / Mathf.Max(0.001f, b.size.y));
             go.transform.localScale = Vector3.one * s;
             b = Measure(go);
+            if (maxHeight > 0f && b.size.z > maxHeight)
+            {
+                // 모델 위쪽 축(Y)이 월드 높이다.
+                go.transform.localScale = new Vector3(s, s * maxHeight / b.size.z, s);
+                b = Measure(go);
+            }
             // 위쪽이 −Z라 바닥은 bounds.max.z.
             go.transform.localPosition += new Vector3(at.x - b.center.x, at.y - b.center.y, at.z - b.max.z);
-            height = b.size.z;
+            size = b.size;
             go.AddComponent<ModelTint>();
             return go;
         }
@@ -100,6 +107,40 @@ namespace FireGame.Prototypes
             t.Apply(tint, part, partKey);
         }
 
+        private static readonly Dictionary<string, Texture2D> Recolored = new Dictionary<string, Texture2D>();
+
+        /// <summary>
+        /// Kenney 주택 colormap의 초록 지붕 칸만 target 색으로 바꾼 텍스처(밝기 비율은 유지). 같은 색이면 재사용.
+        /// 모델 머티리얼 대신 MaterialPropertyBlock의 _BaseMap으로 넣는다.
+        /// </summary>
+        public static void RoofColor(GameObject go, Color target)
+        {
+            if (go == null) return;
+            var t = go.GetComponent<ModelTint>();
+            if (t == null) t = go.AddComponent<ModelTint>();
+            Renderer first = go.GetComponentInChildren<Renderer>();
+            var src = first != null && first.sharedMaterial != null ? first.sharedMaterial.GetTexture("_BaseMap") as Texture2D : null;
+            if (src == null || !src.isReadable) return;
+            string key = src.GetInstanceID() + ":" + ColorUtility.ToHtmlStringRGB(target);
+            if (!Recolored.TryGetValue(key, out Texture2D tex) || tex == null)
+            {
+                Color32[] px = src.GetPixels32();
+                const float RoofLum = (97f * 0.3f) + (203f * 0.59f) + (139f * 0.11f);
+                for (int i = 0; i < px.Length; i++)
+                {
+                    Color32 p = px[i];
+                    if (p.g <= p.r + 40 || p.g <= p.b + 20) continue;
+                    float k = ((p.r * 0.3f) + (p.g * 0.59f) + (p.b * 0.11f)) / RoofLum;
+                    px[i] = new Color32((byte)Mathf.Min(255f, target.r * 255f * k), (byte)Mathf.Min(255f, target.g * 255f * k), (byte)Mathf.Min(255f, target.b * 255f * k), p.a);
+                }
+                tex = new Texture2D(src.width, src.height, TextureFormat.RGBA32, true) { name = src.name + "_" + ColorUtility.ToHtmlStringRGB(target), filterMode = src.filterMode, hideFlags = HideFlags.DontUnloadUnusedAsset };
+                tex.SetPixels32(px);
+                tex.Apply(true);
+                Recolored[key] = tex;
+            }
+            t.SetBaseMap(tex);
+        }
+
         private static Bounds Measure(GameObject go)
         {
             var b = new Bounds(go.transform.position, Vector3.zero);
@@ -141,6 +182,16 @@ namespace FireGame.Prototypes
         private Color _last = new Color(-1f, 0f, 0f, 0f);
         private int _lastKey = -1;
         private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
+        private static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
+        private Texture _baseMap;
+
+        /// <summary>머티리얼 텍스처 대신 쓸 텍스처(지붕 색 바꾼 colormap). 다음 Apply에서 넣는다.</summary>
+        public void SetBaseMap(Texture tex)
+        {
+            _baseMap = tex;
+            _lastKey = -2;
+            Apply(_last.r < 0f ? Color.white : _last, null, 0);
+        }
 
         public void Apply(Color tint, System.Func<string, Color?> part, int partKey)
         {
@@ -164,6 +215,7 @@ namespace FireGame.Prototypes
                     c.a = 1f;
                     _block.Clear();
                     _block.SetColor(BaseColor, c);
+                    if (_baseMap != null) _block.SetTexture(BaseMap, _baseMap);
                     r.SetPropertyBlock(_block, i);
                 }
             }

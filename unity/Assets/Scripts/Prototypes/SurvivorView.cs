@@ -139,6 +139,18 @@ namespace FireGame.Prototypes
         private Pool _bats;
         private static Sprite _batSprite;
         private readonly List<GameObject> _ground = new List<GameObject>();
+
+        /// <summary>가게·창고·차 3D 모델(판마다 새로). 구조물 번호로 찾고, 크기는 (가로, 앞뒤, 높이) 칸.</summary>
+        private static readonly string[] HouseModels =
+        {
+            "Houses/building-type-a", "Houses/building-type-c", "Houses/building-type-e", "Houses/building-type-h",
+            "Houses/building-type-k", "Houses/building-type-m", "Houses/building-type-p", "Houses/building-type-t",
+        };
+        private static readonly string[] CarModels = { "Cars/sedan", "Cars/suv", "Cars/taxi", "Cars/van", "Cars/hatchback-sports" };
+        private const float MaxHouseHeight = 2.4f;
+        private readonly List<GameObject> _models = new List<GameObject>();
+        private GameObject[] _structModels = new GameObject[0];
+        private Vector3[] _structSize = new Vector3[0];
         private int _groundStage;
         private Image _windArrow;
         private Text _windLabel;
@@ -498,6 +510,7 @@ namespace FireGame.Prototypes
             _lastOutcome = SOutcome.Playing;
             _cameraAt = new Vector3(_sim.Player.X, _sim.Player.Y, -10f);
             ClearEffects();
+            BuildModels();
             BuildSigns();
             HideCards();
             _resultBack.gameObject.SetActive(false);
@@ -1303,7 +1316,7 @@ namespace FireGame.Prototypes
             {
                 Structure st = _sim.Structures[s];
                 if (!st.Burning) continue;
-                float roof = st.IsBuilding ? ShopArt.For(st.Name, st.Half.X * 2f, st.Half.Y * 2f).Height : 0.5f;
+                float roof = st.IsBuilding ? RoofHeight(s) : 0.5f;
                 int n = 2 + Mathf.RoundToInt(st.Fire * 4f);
                 for (int k = 0; k < n && embers < EmberMax; k++, embers++)
                 {
@@ -1346,12 +1359,6 @@ namespace FireGame.Prototypes
             }
             _cutout = new Material(shader) { name = "PixelCutout" };
             return _cutout;
-        }
-
-        /// <summary>누운 가게 그림 좌표(가운데 기준)를 앞벽 위 점으로: 아래 가장자리가 땅, 위로 갈수록 높다.</summary>
-        private static Vector3 FacadePoint(Vector3 at, float h, Vector2 local)
-        {
-            return new Vector3(at.x + local.x, at.y - (h / 2f) - 0.03f, -(local.y + (h / 2f)));
         }
 
         private void DrawEnemies()
@@ -3431,34 +3438,9 @@ namespace FireGame.Prototypes
                 Wall(size, i);
             }
 
-            // 출동해 온 소방차(장식, 판정 없음).
-            // 소방차: 높이 1칸 상자(지붕은 위에서 본 소방차 그림, 앞·옆은 빨간 몸통).
-            Sprite truckArt = Art.Get("Vehicles/firetruck");
-            float truckW = 1.3f * truckArt.bounds.size.y / truckArt.bounds.size.x;
-            StaticBox(new Vector3(mid - 3.5f, mid - 2.5f, 0f), truckW, 1.3f, 1f, truckArt, new Color(0.78f, 0.15f, 0.12f));
-        }
-
-        /// <summary>바닥에 고정된 상자(장식): 지붕 그림(90도 돌려 가로로) + 앞·옆 단색 벽.</summary>
-        private void StaticBox(Vector3 at, float w, float h, float hgt, Sprite top, Color body)
-        {
-            Color dark = body * 0.7f;
-            dark.a = 1f;
-            BoxFace(at + new Vector3(0f, -h / 2f, 0f) + Up(hgt / 2f), Facade, w, hgt, body, Art.White);
-            BoxFace(at + new Vector3(-w / 2f, 0f, 0f) + Up(hgt / 2f), SideW, h, hgt, dark, Art.White);
-            BoxFace(at + new Vector3(w / 2f, 0f, 0f) + Up(hgt / 2f), SideE, h, hgt, dark, Art.White);
-            BoxFace(at + Up(hgt), Quaternion.Euler(0f, 0f, 90f), h, w, Color.white, top);
-        }
-
-        private void BoxFace(Vector3 at, Quaternion rotation, float width, float height, Color color, Sprite sprite)
-        {
-            SpriteRenderer r = NewSprite(_root, "BoxFace", sprite, 3);
-            r.sharedMaterial = Cutout();
-            _ground.Add(r.gameObject);
-            Vector3 size = sprite.bounds.size;
-            r.transform.localPosition = at;
-            r.transform.localRotation = rotation;
-            r.transform.localScale = new Vector3(width / size.x, height / size.y, 1f);
-            r.color = color;
+            // 출동해 온 소방차(장식, 판정 없음): 광장 옆에 가로로 세운 소방차 모델.
+            GameObject truck = Models3D.Place("Cars/firetruck", _root, new Vector3(mid - 3.5f, mid - 2.5f, 0f), 3.2f, 1.5f, 90f, out _);
+            if (truck != null) _ground.Add(truck);
         }
 
         /// <summary>바닥·벽·장식 스프라이트. 스테이지가 바뀌면 한꺼번에 지운다.</summary>
@@ -3467,6 +3449,98 @@ namespace FireGame.Prototypes
             SpriteRenderer r = NewSprite(_root, name, Art.Get(art), order);
             _ground.Add(r.gameObject);
             return r;
+        }
+
+        /// <summary>판마다 가게·창고·차를 3D 모델로 한 번 세운다(규칙 크기 Half 안에 맞춤). 가게 모양은 이름으로 고른다.</summary>
+        private void BuildModels()
+        {
+            foreach (GameObject g in _models) UiKit.Discard(g);
+            _models.Clear();
+            int n = _sim.Structures.Count;
+            _structModels = new GameObject[n];
+            _structSize = new Vector3[n];
+            for (int i = 0; i < n; i++)
+            {
+                Structure st = _sim.Structures[i];
+                var at = new Vector3(st.Pos.X, st.Pos.Y, 0f);
+                float w = st.Half.X * 2f;
+                float h = st.Half.Y * 2f;
+                GameObject go = null;
+                Vector3 size = Vector3.zero;
+                if (st.Kind == StructureKind.Depot)
+                {
+                    // 창고(넓은 터): 주택 두 채를 나란히.
+                    go = new GameObject("Depot");
+                    go.transform.SetParent(_root, false);
+                    for (int k = 0; k < 2; k++)
+                    {
+                        string path = HouseModels[(i + (k * 3)) % HouseModels.Length];
+                        Models3D.Place(path, go.transform, at + new Vector3((k - 0.5f) * w * 0.5f, 0f, 0f), w * 0.48f, h * 0.95f, 0f, out Vector3 half, MaxHouseHeight);
+                        size = new Vector3(w, Mathf.Max(size.y, half.y), Mathf.Max(size.z, half.z));
+                    }
+                }
+                else if (st.IsBuilding)
+                {
+                    int pick = 0;
+                    foreach (char ch in st.Name) pick += ch;
+                    go = Models3D.Place(HouseModels[pick % HouseModels.Length], _root, at, w * 0.95f, h * 0.95f, 0f, out size, MaxHouseHeight);
+                }
+                else if (st.Kind == StructureKind.Car)
+                {
+                    go = Models3D.Place(CarModels[i % CarModels.Length], _root, at, w, h, 90f, out size);
+                }
+                if (go == null) continue;
+                _models.Add(go);
+                _structModels[i] = go;
+                _structSize[i] = size;
+                // 주택 모델은 지붕이 모두 초록이라, 예전 가게 그림의 지붕색으로 지붕만 다시 칠해 가게를 구별한다.
+                if (st.IsBuilding)
+                {
+                    // 밝기는 가장 센 채널 0.9로 맞춰 지붕이 칙칙하지 않게. 창고는 두 채 묶음(루트)에 한 번.
+                    Color shop = RoofColor(ShopArt.For(st.Name, w, h));
+                    float top = Mathf.Max(0.01f, Mathf.Max(shop.r, Mathf.Max(shop.g, shop.b)));
+                    Models3D.RoofColor(go, new Color(shop.r / top * 0.9f, shop.g / top * 0.9f, shop.b / top * 0.9f));
+                }
+            }
+        }
+
+        /// <summary>예전 가게 그림의 지붕 평균색(빵집 주황·꽃집 초록·문구점 파랑…).</summary>
+        private static Color RoofColor(ShopArt.Look look)
+        {
+            Texture2D tex = look.Roof.texture;
+            Rect r = look.Roof.textureRect;
+            float cr = 0f, cg = 0f, cb = 0f;
+            int n = 0;
+            for (int y = (int)r.yMin; y < (int)r.yMax; y += 4)
+            {
+                for (int x = (int)r.xMin; x < (int)r.xMax; x += 4)
+                {
+                    Color c = tex.GetPixel(x, y);
+                    if (c.a < 0.5f) continue;
+                    cr += c.r;
+                    cg += c.g;
+                    cb += c.b;
+                    n++;
+                }
+            }
+            return n > 0 ? new Color(cr / n, cg / n, cb / n) : Color.white;
+        }
+
+        /// <summary>구조물 지붕 높이(칸): 모델 높이, 모델이 없으면 예전 상자 높이.</summary>
+        private float RoofHeight(int i)
+        {
+            if (i >= 0 && i < _structModels.Length && _structModels[i] != null) return _structSize[i].z;
+            Structure st = _sim.Structures[i];
+            return st.IsBuilding ? ShopArt.For(st.Name, st.Half.X * 2f, st.Half.Y * 2f).Height : CarHeight;
+        }
+
+        /// <summary>건물 앞벽 창 자리 k(0 가운데, 1 왼쪽, 2 오른쪽): 높이 35%, 모델 앞면 바로 앞.</summary>
+        private Vector3 WindowPoint(int i, int k)
+        {
+            Structure st = _sim.Structures[i];
+            Vector3 size = i < _structSize.Length && _structSize[i].z > 0f ? _structSize[i] : new Vector3(st.Half.X * 2f, st.Half.Y * 2f, RoofHeight(i));
+            float x = k == 0 ? 0f : (k == 1 ? -0.28f : 0.28f) * size.x;
+            return new Vector3(st.Pos.X + x, st.Pos.Y - (size.y / 2f) - 0.04f, -size.z * 0.35f);
         }
 
         /// <summary>가게·창고 이름표. 판마다 동네를 새로 깔므로 다시 만든다.</summary>
@@ -3491,11 +3565,12 @@ namespace FireGame.Prototypes
             _forecastTag.GetComponent<MeshRenderer>().sortingOrder = 18;
             _forecastTag.characterSize = 0.06f;
             _forecastTag.gameObject.SetActive(false);
-            foreach (Structure st in _sim.Structures)
+            for (int i = 0; i < _sim.Structures.Count; i++)
             {
+                Structure st = _sim.Structures[i];
                 if (!st.IsBuilding) continue;
-                // 이름은 앞면 간판 띠 위에 쓴다. 밝은 간판이면 글씨가 어둡다.
-                ShopArt.Look look = ShopArt.For(st.Name, st.Half.X * 2f, st.Half.Y * 2f);
+                // 이름은 지붕 앞 가장자리 위 간판에 쓴다.
+                float roof = RoofHeight(i);
                 TextMesh t = NewText();
                 t.transform.SetParent(_root, false);
                 t.GetComponent<MeshRenderer>().sortingOrder = 20;
@@ -3503,10 +3578,10 @@ namespace FireGame.Prototypes
                 // 도트 화면에서도 읽히게 지붕 앞 가장자리에 큰 간판으로 세운다(글자 한 줄 ≈ 10픽셀).
                 t.characterSize = 0.11f;
                 t.color = Color.white;
-                t.transform.localPosition = new Vector3(st.Pos.X, st.Pos.Y - (st.Half.Y * 0.75f), 0f) + Up(look.Height + 0.45f);
+                t.transform.localPosition = new Vector3(st.Pos.X, st.Pos.Y - (st.Half.Y * 0.75f), 0f) + Up(roof + 0.45f);
                 t.transform.localRotation = Billboard;
                 // 간판 판: 글자 뒤 짙은 띠(가게 색 대신 읽기 쉬운 어두운 판).
-                _signBoards.Add(new Vector4(st.Pos.X, st.Pos.Y - (st.Half.Y * 0.75f), look.Height + 0.45f, Mathf.Min(st.Half.X * 2f - 0.2f, (st.Name.Length * 0.62f) + 0.5f)));
+                _signBoards.Add(new Vector4(st.Pos.X, st.Pos.Y - (st.Half.Y * 0.75f), roof + 0.45f, Mathf.Min(st.Half.X * 2f - 0.2f, (st.Name.Length * 0.62f) + 0.5f)));
                 _signs.Add(t);
 
                 // 갇힌 사람이 외치는 말풍선(불이 나야 보인다).
@@ -3524,10 +3599,11 @@ namespace FireGame.Prototypes
         {
             RoofRects.Clear();
             RoofHeights.Clear();
-            foreach (Structure st in _sim.Structures)
+            for (int k = 0; k < _sim.Structures.Count; k++)
             {
+                Structure st = _sim.Structures[k];
                 if (st.Collapsed || !(st.IsBuilding || st.Kind == StructureKind.Car)) continue;
-                float hgt = st.IsBuilding ? ShopArt.For(st.Name, st.Half.X * 2f, st.Half.Y * 2f).Height : CarHeight;
+                float hgt = RoofHeight(k);
                 RoofRects.Add(new Rect(st.Pos.X - st.Half.X + 0.05f, st.Pos.Y - st.Half.Y + 0.05f, (st.Half.X * 2f) - 0.1f, (st.Half.Y * 2f) - 0.1f));
                 RoofHeights.Add(hgt);
             }
@@ -3540,6 +3616,8 @@ namespace FireGame.Prototypes
                 float h = st.Half.Y * 2f;
                 float burnt = 1f - Mathf.Clamp01(st.Integrity);
                 float wet = st.Wet > 0f ? Mathf.Min(1f, st.Wet / 2f) : 0f;
+                GameObject model = i < _structModels.Length ? _structModels[i] : null;
+                if (model != null && model.activeSelf == st.Collapsed) model.SetActive(!st.Collapsed);
 
                 if (st.IsBuilding)
                 {
@@ -3577,20 +3655,9 @@ namespace FireGame.Prototypes
                         _trees.Put(at + new Vector3(0f, -0.2f, 0f), 1.9f, 0f, tint, Art.Get(treeArt));
                         break;
                     case StructureKind.Car:
-                    {
-                        // 낮은 상자: 지붕은 위에서 본 차 그림, 앞·옆은 몸통 색.
-                        bool blue = i % 2 == 0;
-                        Color body = (blue ? new Color(0.2f, 0.42f, 0.8f) : new Color(0.2f, 0.2f, 0.23f)) * tint;
-                        body.a = 1f;
-                        Color dark = body * 0.7f;
-                        dark.a = 1f;
-                        _shadows.Put(at + new Vector3(0.2f, -0.3f, 0f), 2.6f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.5f);
-                        _walls.PutRot(at + new Vector3(0f, -h / 2f, 0f) + Up(CarHeight / 2f), Facade, w, CarHeight, body, Art.White);
-                        _walls.PutRot(at + new Vector3(-w / 2f, 0f, 0f) + Up(CarHeight / 2f), SideW, h, CarHeight, dark, Art.White);
-                        _walls.PutRot(at + new Vector3(w / 2f, 0f, 0f) + Up(CarHeight / 2f), SideE, h, CarHeight, dark, Art.White);
-                        _walls.PutRot(at + Up(CarHeight), Quaternion.Euler(0f, 0f, 90f), h, w, tint, Art.Get(blue ? "Vehicles/car_blue" : "Vehicles/car_black"));
+                        // 차 모델(그림자는 해가 드리운다): 탈수록 검게, 젖으면 파랗게.
+                        Models3D.Tint(model, tint);
                         break;
-                    }
                     case StructureKind.Gas:
                         // 퓨즈가 도는 동안 빨갛게 깜빡이며 부풀고 불똥이 튄다.
                         float fuse = st.Fuse >= 0f ? 1f - (st.Fuse / SurvivorSim.GasFuse) : 0f;
@@ -3608,7 +3675,7 @@ namespace FireGame.Prototypes
                         _props.Put(at, 0.85f * (1f + (0.25f * fuse)), 0f, blink ? new Color(1f, 0.55f, 0.45f) : tint, Art.Get("Props/barrel_red"));
                         break;
                 }
-                if (st.Burning && st.Kind != StructureKind.Gas) DrawRoofFire(st, at, w, h, i, st.Kind == StructureKind.Car ? CarHeight : st.Kind == StructureKind.Tree ? 0.9f : 0f);
+                if (st.Burning && st.Kind != StructureKind.Gas) DrawRoofFire(st, at, w, h, i, st.Kind == StructureKind.Car ? RoofHeight(i) : st.Kind == StructureKind.Tree ? 0.9f : 0f);
             }
         }
 
@@ -3632,30 +3699,23 @@ namespace FireGame.Prototypes
                 return;
             }
 
-            // 가게 그림 한 장(지붕+앞면). 탈수록 검게 그을리고, 불빛에 붉게 일렁이고, 젖으면 파랗게 번들거린다.
+            // 주택 모델: 탈수록 검게 그을리고, 불빛에 붉게 일렁이고, 젖으면 파랗게 번들거린다.
             ShopArt.Look look = ShopArt.For(st.Name, w, h);
             Color tint = Color.Lerp(Color.white, new Color(0.2f, 0.16f, 0.15f), Mathf.Pow(burnt, 0.7f));
             if (st.Burning) tint = Color.Lerp(tint, new Color(1f, 0.6f, 0.4f), 0.15f * st.Fire * (0.7f + (0.3f * Mathf.Sin(_time * 9f + seed))));
             if (wet > 0f) tint = Color.Lerp(tint, new Color(0.65f, 0.82f, 1f), 0.3f * wet);
-            // 상자: 앞벽(가게 그림 아래쪽)·옆벽 둘·지붕(그림 위쪽, 높이 hgt에 눕힘).
-            float hgt = look.Height;
-            Color side = look.WallColor * tint;
-            side.a = 1f;
-            _houseShadows.Put(at + new Vector3(0.35f + (hgt * 0.35f), -0.25f, 0f), w + 0.3f + (hgt * 0.5f), 0f, new Color(0.04f, 0.05f, 0.14f, 0.45f), null, (h + 0.3f) / (w + 0.3f + (hgt * 0.5f)));
-            _walls.PutRot(at + new Vector3(0f, -h / 2f, 0f) + Up(hgt / 2f), Facade, w, hgt, tint, look.Front);
-            _walls.PutRot(at + new Vector3(-w / 2f, 0f, 0f) + Up(hgt / 2f), SideW, h, hgt, side, Art.White);
-            _walls.PutRot(at + new Vector3(w / 2f, 0f, 0f) + Up(hgt / 2f), SideE, h, hgt, side, Art.White);
-            _walls.PutRot(at + Up(hgt), Quaternion.identity, w, h, tint, look.Roof);
+            float hgt = RoofHeight(seed);
+            Models3D.Tint(_structModels[seed], tint);
 
-            // 불이 나면 앞벽 유리창 안쪽이 주황으로 일렁인다.
+            // 불이 나면 앞벽 창 자리(가운데 줄 셋)가 주황으로 일렁인다.
             if (st.Burning)
             {
-                foreach (Rect r in look.Windows)
+                for (int k = 0; k < 3; k++)
                 {
-                    float flick = 0.5f + (0.5f * Mathf.Sin((_time * 13f) + seed + r.x));
-                    Vector3 c = FacadePoint(at, h, r.center) + new Vector3(0f, -0.01f, 0f);
-                    _roofTrim.PutRot(c, Facade, r.width, r.height, Color.Lerp(new Color(1f, 0.45f, 0.1f, 0.85f), new Color(1f, 0.8f, 0.35f, 0.9f), flick * st.Fire));
-                    _roofGlow.PutRot(c + new Vector3(0f, -0.02f, 0f), Facade, r.width * 1.8f, r.width * 1.8f, new Color(1f, 0.5f, 0.12f, 0.25f + (0.35f * st.Fire)));
+                    Vector3 c = WindowPoint(seed, k);
+                    float flick = 0.5f + (0.5f * Mathf.Sin((_time * 13f) + seed + k));
+                    _roofTrim.PutRot(c, Facade, 0.45f, 0.35f, Color.Lerp(new Color(1f, 0.45f, 0.1f, 0.85f), new Color(1f, 0.8f, 0.35f, 0.9f), flick * st.Fire));
+                    _roofGlow.PutRot(c + new Vector3(0f, -0.02f, 0f), Facade, 0.8f, 0.8f, new Color(1f, 0.5f, 0.12f, 0.25f + (0.35f * st.Fire)));
                 }
             }
             else if (look.Steam.HasValue && Random.value < 0.025f)
@@ -3700,14 +3760,13 @@ namespace FireGame.Prototypes
 
             var at = new Vector3(st.Pos.X, st.Pos.Y, 0f);
             float bob = Mathf.Abs(Mathf.Sin((_time * 7f) + seed));
-            ShopArt.Look look = ShopArt.For(st.Name, st.Half.X * 2f, st.Half.Y * 2f);
-            float hgt = look.Height;
+            float hgt = RoofHeight(seed);
             // 갇힌 사람은 지붕 앞 가장자리에 서서 좌우로 몸을 뒤집으며 손을 흔들고, 첫 창은 불빛으로 번쩍인다.
-            Rect paneRect = look.Windows.Length > 0 ? look.Windows[0] : new Rect(-0.2f, -st.Half.Y + 0.2f, 0.4f, 0.4f);
-            Vector3 win = FacadePoint(at, st.Half.Y * 2f, paneRect.center) + new Vector3(0f, -0.06f, 0f);
+            Vector3 win = WindowPoint(seed, 0) + new Vector3(0f, -0.06f, 0f);
+            float front = seed < _structSize.Length && _structSize[seed].y > 0f ? _structSize[seed].y / 2f : st.Half.Y;
             _roofGlow.Put(win, 0.9f, 0f, new Color(1f, 0.6f, 0.2f, 0.4f + (0.3f * bob)));
             bool wave = Mathf.Repeat((_time * 4f) + seed, 2f) < 1f;
-            Vector3 edge = at + new Vector3(paneRect.center.x, -st.Half.Y + 0.3f, 0f) + Up(hgt + (0.08f * bob));
+            Vector3 edge = at + new Vector3(win.x - at.x, -front + 0.3f, 0f) + Up(hgt + (0.08f * bob));
             _civilians.Put(edge, wave ? 0.85f : -0.85f, 0f, Color.white, CivilianArt(seed, (int)(_time * 4f)));
 
             bool choking = st.Fire >= SurvivorSim.SmokeFire;

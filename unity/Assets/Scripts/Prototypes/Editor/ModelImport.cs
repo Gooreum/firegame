@@ -36,6 +36,13 @@ namespace FireGame.Prototypes.EditorTools
             m.animationType = Person ? ModelImporterAnimationType.Legacy : ModelImporterAnimationType.None;
         }
 
+        /// <summary>모델 텍스처(colormap)는 가게마다 지붕 색을 바꿔 칠하려고 CPU에서 읽을 수 있게 둔다.</summary>
+        private void OnPreprocessTexture()
+        {
+            if (!assetPath.StartsWith(Root)) return;
+            ((TextureImporter)assetImporter).isReadable = true;
+        }
+
         private void OnPreprocessAnimation()
         {
             if (!Ours || !Person) return;
