@@ -3,6 +3,7 @@
 #
 #   tools/ios-install.sh            Unity 빌드 → Xcode 서명·빌드 → 설치 → 실행
 #   tools/ios-install.sh --no-unity Unity 빌드는 건너뛰고 이미 있는 Xcode 프로젝트로 설치만
+#   tools/ios-install.sh --stage 3  설치 후 첫 실행을 3스테이지로 연다(그 뒤로는 평소처럼 진행이 저장된다)
 #
 # 필요한 것: Unity iOS 모듈, Xcode에 로그인한 개발자 팀(LHW4ZX343L), 개발자 모드를 켠 아이폰(잠금 해제).
 set -euo pipefail
@@ -12,6 +13,16 @@ TEAM="LHW4ZX343L"
 BUNDLE="com.mingu.firegame.proto"
 OUT="$REPO_ROOT/unity/Builds/ios"
 DERIVED="$REPO_ROOT/unity/Builds/ios-derived"
+
+NO_UNITY=0
+START_STAGE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-unity) NO_UNITY=1 ;;
+    --stage) START_STAGE="${2:-}"; shift ;;
+  esac
+  shift
+done
 
 # 1) 연결된 아이폰부터 찾는다(없으면 몇 분짜리 빌드를 하기 전에 멈춘다).
 DEVICES_JSON="$(mktemp)"
@@ -37,8 +48,8 @@ fi
 echo "아이폰: ${NAME//_/ } ($UDID)"
 
 # 2) Unity → Xcode 프로젝트
-if [ "${1:-}" != "--no-unity" ]; then
-  "$REPO_ROOT/tools/unity-check.sh" ios "$OUT"
+if [ "$NO_UNITY" = 0 ]; then
+  START_STAGE="$START_STAGE" "$REPO_ROOT/tools/unity-check.sh" ios "$OUT"
 fi
 [ -d "$OUT/Unity-iPhone.xcodeproj" ] || { echo "Xcode 프로젝트가 없다: $OUT" >&2; exit 1; }
 

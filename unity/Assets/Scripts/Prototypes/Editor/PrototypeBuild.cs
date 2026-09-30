@@ -44,6 +44,17 @@ namespace FireGame.Prototypes.EditorTools
                 PlayerSettings.iOS.appleEnableAutomaticSigning = true;
                 PlayerSettings.iOS.targetOSVersionString = "15.0";
 
+                // tools/ios-install.sh --stage N: 첫 실행 스테이지를 박아 넣는다. 복사본 프로젝트라 저장소엔 안 남고,
+                // 다음 빌드의 rsync --delete가 지운다.
+                const string startFile = "Assets/Resources/ProtoStartStage.txt";
+                string start = ArgValue("-startStage");
+                if (!string.IsNullOrEmpty(start))
+                {
+                    System.IO.File.WriteAllText(startFile, start.Trim());
+                    AssetDatabase.ImportAsset(startFile);
+                    Debug.Log("[ProtoBuild] 시작 스테이지 " + start);
+                }
+
                 var options = new BuildPlayerOptions
                 {
                     scenes = new[] { BootScene },

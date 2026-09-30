@@ -70,6 +70,9 @@ namespace FireGame.Prototypes
         private int _stage;
         public const string StageKey = "firegame.proto.stage";
 
+        /// <summary>시작 스테이지를 이미 적용한 빌드(buildGUID). 같은 빌드를 다시 켜면 저장된 진행을 이어 간다.</summary>
+        public const string StartBuildKey = "firegame.proto.startBuild";
+
         /// <summary>가운데 띠 색: 스테이지 시작은 파랑, 보스 등장은 빨강.</summary>
         private Color _bandTint = new Color(0.6f, 0f, 0f);
         private float _accumulator;
@@ -532,6 +535,15 @@ namespace FireGame.Prototypes
         public static int SavedStage()
         {
             int n = PlayerPrefs.GetInt(StageKey, 1);
+            // 시작 스테이지를 박아 넣은 빌드(tools/ios-install.sh --stage N)는 그 빌드의 첫 실행만 그 스테이지로 연다.
+            var start = Resources.Load<TextAsset>("ProtoStartStage");
+            if (start != null && int.TryParse(start.text.Trim(), out int forced) && PlayerPrefs.GetString(StartBuildKey, "") != Application.buildGUID)
+            {
+                n = forced;
+                PlayerPrefs.SetString(StartBuildKey, Application.buildGUID);
+                PlayerPrefs.SetInt(StageKey, n);
+                PlayerPrefs.Save();
+            }
             return n >= 1 && n <= SurvivorStages.Count ? n : 1;
         }
 

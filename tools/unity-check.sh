@@ -97,7 +97,7 @@ case "$MODE" in
     mkdir -p "$PROJECT"
     rsync -a --delete --exclude Temp --exclude Logs --exclude Library --exclude Builds "$REPO_ROOT/unity/" "$PROJECT/"
     "$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -logFile "$LOG" -buildTarget iOS \
-      -executeMethod FireGame.Prototypes.EditorTools.PrototypeBuild.BuildIOS -buildPath "$OUT"
+      -executeMethod FireGame.Prototypes.EditorTools.PrototypeBuild.BuildIOS -buildPath "$OUT" ${START_STAGE:+-startStage "$START_STAGE"}
     status=$?
     report_compile_errors || exit 1
     grep -E "\[ProtoBuild\]" "$LOG" | sed 's/^/  /'
