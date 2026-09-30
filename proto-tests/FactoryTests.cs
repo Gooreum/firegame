@@ -156,5 +156,75 @@ namespace FireGame.Prototypes.Tests
             Assert.False(early, "기름 방울이 OilFrom 전에 나왔다");
             Assert.True(seen, "2분 동안 기름 방울이 한 번도 안 나왔다");
         }
+        private static void TakeFoam(SurvivorSim sim)
+        {
+            sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { UpgradeId.Foam };
+            sim.Choose(0);
+        }
+
+        /// <summary>폼이 처음 깔릴 때까지 돌린다(적은 치운다).</summary>
+        private static Vec2 RunUntilFoam(SurvivorSim sim)
+        {
+            for (int i = 0; i < (int)((SurvivorSim.FoamInterval + 1f) / SurvivorSim.Dt); i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                if (sim.JustFoam) return sim.FoamAt.Value;
+            }
+            Assert.Fail("폼이 안 깔렸다");
+            return default;
+        }
+
+        [Fact]
+        public void Foam_LandsOnTheGroundFireCluster_AndPutsItOut()
+        {
+            SurvivorSim sim = Quiet();
+            TakeFoam(sim);
+            var spot = new Vec2(sim.Player.X + 7f, sim.Player.Y + 3f);
+            for (int k = 0; k < 5; k++) sim.BurningGround.Add(new Puddle { Pos = new Vec2(spot.X + (k * 0.5f), spot.Y), Radius = SurvivorSim.OilRadius, Life = 60f, MaxLife = 60f, Oil = true });
+            // 멀리 외톨이 하나: 폼은 몰린 쪽으로 간다.
+            sim.BurningGround.Add(new Puddle { Pos = new Vec2(sim.Player.X - 9f, sim.Player.Y), Radius = SurvivorSim.OilRadius, Life = 60f, MaxLife = 60f, Oil = true });
+            Vec2 at = RunUntilFoam(sim);
+            Assert.True(at.DistanceTo(spot) < SurvivorSim.FoamRadius, "폼이 몰린 곳이 아닌 " + at.X + "," + at.Y + "에 깔렸다");
+            Assert.Equal(1, OilCount(sim));
+        }
+
+        [Fact]
+        public void Foam_KeepsNewOilFireOut_WhileItLasts()
+        {
+            SurvivorSim sim = Quiet();
+            TakeFoam(sim);
+            sim.BurningGround.Add(new Puddle { Pos = new Vec2(sim.Player.X + 6f, sim.Player.Y), Radius = SurvivorSim.OilRadius, Life = 60f, MaxLife = 60f, Oil = true });
+            Vec2 at = RunUntilFoam(sim);
+            for (int i = 0; i < (int)((SurvivorSim.FoamTime - 1f) / SurvivorSim.Dt); i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+            }
+            sim.AddOil(at);
+            Assert.Equal(0, OilCount(sim));
+            // 폼이 걷히면 다시 선다.
+            for (int i = 0; i < (int)(1.5f / SurvivorSim.Dt); i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+            }
+            Assert.Null(sim.FoamAt);
+            sim.AddOil(at);
+            Assert.Equal(1, OilCount(sim));
+        }
+
+        [Fact]
+        public void Foam_KnocksDownABurningPlant_WhenNoGroundFire()
+        {
+            SurvivorSim sim = Quiet();
+            TakeFoam(sim);
+            Structure plant = Plant(sim, 7f, 0f);
+            sim.Ignite(plant, 1f);
+            RunUntilFoam(sim);
+            Assert.Contains(sim.Knocked, k => k.At == plant);
+            Assert.True(plant.Fire < 0.85f, "폼 맞은 공장 불 " + plant.Fire);
+        }
     }
 }

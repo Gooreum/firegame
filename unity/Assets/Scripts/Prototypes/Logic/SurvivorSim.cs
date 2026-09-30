@@ -494,6 +494,13 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이번 틱에 방염제 띠가 새로 뿌려졌다.</summary>
         public bool JustRetardant;
+
+        /// <summary>폼 깔개 자리(없으면 null)와 남은 시간. 그 안에 생기는 기름 불은 바로 꺼진다.</summary>
+        public Vec2? FoamAt;
+        public float FoamLeft;
+
+        /// <summary>이번 틱에 폼이 새로 깔렸다.</summary>
+        public bool JustFoam;
         public bool JustLeveled;
         public bool JustEvolved;
 
@@ -766,6 +773,7 @@ namespace FireGame.Prototypes.Logic
             Sprinkled.Clear();
             JustRain = false;
             JustRetardant = false;
+            JustFoam = false;
             GasBlasts.Clear();
             RescuedFrom.Clear();
             PeopleLost.Clear();
@@ -1259,6 +1267,7 @@ namespace FireGame.Prototypes.Logic
             if (Build.Level(UpgradeId.Sprinkler) > 0) TickSprinkler();
             if (Build.Level(UpgradeId.Rain) > 0) TickRain();
             if (Build.Level(UpgradeId.Retardant) > 0) TickRetardant();
+            if (Build.Level(UpgradeId.Foam) > 0) TickFoam();
         }
 
         private float _truckClock = 2f;
@@ -1537,6 +1546,54 @@ namespace FireGame.Prototypes.Logic
             JustRain = true;
         }
 
+        private float _foamClock = 2f;
+
+        /// <summary>폼 살포: 10초마다 14칸 안에서 바닥 불이 가장 몰린 곳(없으면 가장 큰 불)에 반경 4.5 폼. 바닥 불을 끄고, 탈 것에 한 번에 물을 붓고, 적은 8 피해. 8초 동안 그 안 새 기름 불을 막는다.</summary>
+        private void TickFoam()
+        {
+            if (FoamAt.HasValue)
+            {
+                FoamLeft -= Dt;
+                if (FoamLeft <= 0f) FoamAt = null;
+            }
+            _foamClock -= Dt;
+            if (_foamClock > 0f) return;
+            _foamClock = FoamInterval;
+            Vec2 at = GroundFireCenter(14f) ?? FireCenter(14f);
+            FoamAt = at;
+            FoamLeft = FoamTime;
+            JustFoam = true;
+            Douse(at, FoamRadius);
+            foreach (Structure st in Structures)
+            {
+                if (st.Burning && st.Within(at, FoamRadius)) Soak(st, FoamDouse, false);
+            }
+            Near(at, FoamRadius, _near);
+            foreach (Enemy e in _near) Damage(e, 8f, Knockback(at, e.Pos, 3f), true, HitSource.Special, at);
+        }
+
+        /// <summary>range 안 바닥 불 중 FoamRadius 안에 가장 많은 바닥 불을 거느린 자리. 없으면 null.</summary>
+        private Vec2? GroundFireCenter(float range)
+        {
+            Vec2? best = null;
+            int bestN = 0;
+            foreach (Puddle p in BurningGround)
+            {
+                if (p.Out || p.Life <= 0f || p.Pos.DistanceTo(Player) > range) continue;
+                int n = 0;
+                foreach (Puddle q in BurningGround)
+                {
+                    if (!q.Out && q.Life > 0f && q.Pos.DistanceTo(p.Pos) <= FoamRadius) n++;
+                }
+                if (n > bestN)
+                {
+                    bestN = n;
+                    best = p.Pos;
+                }
+            }
+            return best;
+        }
+
         private float _retardantClock = 3f;
 
         /// <summary>방염제: 15초마다 가장 큰 불을 가로지르는 폭 3·길이 14 띠. 띠 안 구조물은 20초 동안 안 타고, 바닥 불은 꺼지고, 적은 15 피해.</summary>
@@ -1616,6 +1673,10 @@ namespace FireGame.Prototypes.Logic
         public const float TruckSoakRange = 3f;
         public const float SprinklerInterval = 6f;
         public const float SprinklerDouse = 0.25f;
+        public const float FoamInterval = 10f;
+        public const float FoamTime = 8f;
+        public const float FoamRadius = 4.5f;
+        public const float FoamDouse = 0.3f;
         public const float RainInterval = 12f;
         public const float RainTime = 3f;
         public const float RainRadius = 6f;
@@ -1769,6 +1830,12 @@ namespace FireGame.Prototypes.Logic
         public void AddOil(Vec2 at)
         {
             if (BurningGround.Count >= MaxBurningGround) return;
+            // 폼이 깔린 곳에는 기름 불이 서지 못한다.
+            if (FoamAt.HasValue && FoamAt.Value.DistanceTo(at) <= FoamRadius)
+            {
+                Extinguished.Add(at);
+                return;
+            }
             BurningGround.Add(new Puddle { Pos = ClampToArena(at), Radius = OilRadius, Life = OilLife, MaxLife = OilLife, Oil = true });
         }
 

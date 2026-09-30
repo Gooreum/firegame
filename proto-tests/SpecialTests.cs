@@ -138,6 +138,11 @@ namespace FireGame.Prototypes.Tests
             Assert.DoesNotContain(UpgradeId.Truck, SurvivorStages.Get(2).Specials);
             Assert.Contains(UpgradeId.Rain, SurvivorStages.Get(2).Specials);
             foreach (UpgradeId id in SurvivorStages.Get(2).Specials) Assert.True(Loadout.IsSpecial(id));
+            Assert.Equal(4, SurvivorStages.Get(3).Specials.Length);
+            Assert.Contains(UpgradeId.Foam, SurvivorStages.Get(3).Specials);
+            Assert.DoesNotContain(UpgradeId.Foam, SurvivorStages.Get(1).Specials);
+            Assert.DoesNotContain(UpgradeId.Foam, SurvivorStages.Get(2).Specials);
+            foreach (UpgradeId id in SurvivorStages.Get(3).Specials) Assert.True(Loadout.IsSpecial(id));
         }
     }
 }
