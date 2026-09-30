@@ -5,6 +5,7 @@
 #   tools/unity-check.sh shots [폴더]      화면을 PNG로 찍는다(기본: tools/.shots)
 #   tools/unity-check.sh proto-shots [폴더] 재미 검증 시험판 화면(기본: tools/.shots-proto)
 #   tools/unity-check.sh ios [폴더]        시험판 C 아이폰용 Xcode 프로젝트(기본: unity/Builds/ios). 설치는 tools/ios-install.sh
+#   tools/unity-check.sh clip [폴더]       README용 플레이 장면 연속 프레임(기본: tools/.clip). GIF는 tools/make-gif.py
 #   tools/unity-check.sh models            Resources/Models 모델마다 머티리얼·셰이더·클립·크기를 찍는다
 #   tools/unity-check.sh urp-setup         URP 파이프라인 애셋을 만들고 그래픽·품질 설정에 꽂는다(결과는 커밋)
 #
@@ -104,6 +105,18 @@ case "$MODE" in
     echo "Xcode 프로젝트: $OUT/Unity-iPhone.xcodeproj"
     ;;
 
+  clip)
+    OUT="${2:-$REPO_ROOT/tools/.clip}"
+    mkdir -p "$OUT"
+    rm -f "$OUT"/*.png
+    "$UNITY" -batchmode -projectPath "$PROJECT" -logFile "$LOG" \
+      -executeMethod FireGame.Prototypes.EditorTools.PrototypeShots.RecordClip -shotDir "$OUT"
+    status=$?
+    report_compile_errors || exit 1
+    grep -E "\[ProtoClip\]" "$LOG" | sed 's/^/  /'
+    [ $status -eq 0 ] || { echo "장면 녹화 실패, 종료 코드 $status (로그: $LOG)"; exit 1; }
+    ;;
+
   models)
     "$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -logFile "$LOG" \
       -executeMethod FireGame.Prototypes.EditorTools.ModelImport.Report
@@ -136,7 +149,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "사용법: $0 compile | shots [폴더] | proto-shots [폴더] | ios [폴더] | urp-setup | models" >&2
+    echo "사용법: $0 compile | shots [폴더] | proto-shots [폴더] | ios [폴더] | urp-setup | models | clip" >&2
     exit 2
     ;;
 esac

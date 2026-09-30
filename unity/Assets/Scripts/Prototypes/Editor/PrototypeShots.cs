@@ -260,18 +260,7 @@ namespace FireGame.Prototypes.EditorTools
                 setup?.Invoke(view);
                 var bot = new SurvivorBot(view.Sim);
                 int guard = 0;
-                while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400)
-                {
-                    if (view.Sim.PendingChoices != null)
-                    {
-                        view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices, view.Sim.Build));
-                        continue;
-                    }
-                    KeepAlive(view.Sim);
-                    bot.AimHose();
-                    view.Step(bot.Move());
-                    view.Refresh(SurvivorSim.Dt);
-                }
+                while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) BotTick(view, bot);
                 if (!until(view)) throw new Exception("조건에 닿기 전에 판이 끝났다: " + view.Sim.Outcome + " t=" + view.Sim.Time);
                 // 카드는 0.3초 뒤에 튀어 오르니 다 뜬 뒤를 찍는다. 효과도 조금 흐르게 둔다.
                 for (int i = 0; i < settle; i++) view.Refresh(SurvivorSim.Dt);
@@ -287,6 +276,62 @@ namespace FireGame.Prototypes.EditorTools
                 Debug.LogError("[ProtoShots] 실패: " + name + " — " + e);
                 return 1;
             }
+        }
+
+        /// <summary>봇 한 칸: 카드가 떠 있으면 고르고, 아니면 살려 둔 채 조준·이동하고 화면을 60Hz 한 칸 흘린다.</summary>
+        private static void BotTick(SurvivorView view, SurvivorBot bot)
+        {
+            if (view.Sim.PendingChoices != null)
+            {
+                view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices, view.Sim.Build));
+                return;
+            }
+            KeepAlive(view.Sim);
+            bot.AimHose();
+            view.Step(bot.Move());
+            view.Refresh(SurvivorSim.Dt);
+        }
+
+        /// <summary>
+        /// README용 플레이 장면: 봇이 판을 굴리다 ClipFrom초부터 ClipSeconds초 동안 ClipStep칸마다 한 장씩 찍는다(60Hz ÷ 5 = 12fps).
+        /// 실행: tools/unity-check.sh clip [폴더] → frame_000.png…, GIF는 tools/make-gif.py.
+        /// </summary>
+        public static void RecordClip()
+        {
+            const float ClipFrom = 140f;
+            const float ClipSeconds = 8f;
+            const int ClipStep = 5;
+            try
+            {
+                string dir = ArgValue("-shotDir") ?? Path.Combine(Application.dataPath, "../../tools/.clip");
+                Directory.CreateDirectory(dir);
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var root = new GameObject("Prototype");
+                Camera camera = PrototypeHost.SetUpCamera();
+                camera.aspect = (float)Width / Height;
+                Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
+                var view = new SurvivorView(root.transform, camera, canvas);
+                view.Restart(ShotSeed);
+                var bot = new SurvivorBot(view.Sim);
+                int guard = 0;
+                // 무기·대원이 갖춰지고 불이 번지는 중반까지 굴린다.
+                while (view.Sim.Time < ClipFrom && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) BotTick(view, bot);
+                int frames = Mathf.RoundToInt(ClipSeconds * 60f / ClipStep);
+                for (int f = 0; f < frames; f++)
+                {
+                    for (int k = 0; k < ClipStep; k++) BotTick(view, bot);
+                    Canvas.ForceUpdateCanvases();
+                    Capture(camera, Path.Combine(dir, "frame_" + f.ToString("000") + ".png"));
+                }
+                Debug.Log("[ProtoClip] 완료 " + frames + "장, t=" + (int)view.Sim.Time + ", " + view.Sim.Outcome);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[ProtoClip] 실패 — " + e);
+                EditorApplication.Exit(1);
+                return;
+            }
+            EditorApplication.Exit(0);
         }
 
         /// <summary>
