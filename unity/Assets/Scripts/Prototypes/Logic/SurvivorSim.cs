@@ -188,6 +188,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>신고 + 구조(+ 대형 신고·상자).</summary>
         public int Events;
+
+        /// <summary>건물에서 건물로 불이 옮겨붙은 횟수.</summary>
+        public int Spreads;
         public float DamageTaken;
 
         /// <summary>구조로 찬 체력.</summary>
@@ -345,11 +348,29 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>물 1 피해가 건물 불 세기를 줄이는 양. 물대포 Lv1이면 다 탄 가게를 약 3초에 끈다.</summary>
         public const float WaterPerDamage = 0.035f;
+        /// <summary>건물 불이 초당 커지는 양. 신고 불(0.5)이 약 8초면 다 탄다.</summary>
         public const float FireGrowth = 0.04f;
-        public const float WetTime = 10f;
+
+        /// <summary>끈 자리가 젖어 있는 시간. 짧아서 끄고 떠나면 금방 다시 탈 수 있다.</summary>
+        public const float WetTime = 8f;
+
+        /// <summary>큰 불일수록 물이 덜 먹힌다: 물 효과 = 1 − FireResist × 불 세기(0.3이면 83%, 1.0이면 45%).</summary>
+        public const float FireResist = 0.55f;
+
+        /// <summary>신고로 붙는 불 세기.</summary>
+        public const float ReportFire = 0.35f;
+
+        /// <summary>이 세기 이상 타는 건물은 StageRules.SpreadEvery마다 가장 가까운 건물로 불을 옮긴다.</summary>
+        public const float SpreadFire = 0.8f;
+
+        /// <summary>건물 사이 가장자리 거리가 이 안이어야 옮겨붙는다(마을 가게 사이는 7~8칸).</summary>
+        public const float SpreadRange = 9f;
+
+        /// <summary>옮겨붙은 불 세기.</summary>
+        public const float SpreadIgnite = 0.3f;
 
         /// <summary>불 세기 1로 이만큼 타면 건물이 무너진다(초). 나무·차는 BurnSmall.</summary>
-        public const float BurnBuilding = 40f;
+        public const float BurnBuilding = 32f;
         public const float BurnSmall = 20f;
         public const float EmberSight = 9f;
         public const float SpreadAt = 0.4f;
@@ -384,6 +405,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이번 틱에 누군가를 구해 낸 건물.</summary>
         public readonly List<Structure> RescuedFrom = new List<Structure>();
+
+        /// <summary>이번 틱에 옆 건물에서 불이 옮겨붙은 건물.</summary>
+        public readonly List<Structure> Spread = new List<Structure>();
 
         /// <summary>이번 틱에 새로 불붙은 구조물.</summary>
         public readonly List<Structure> Ignited = new List<Structure>();
@@ -689,6 +713,7 @@ namespace FireGame.Prototypes.Logic
             Extinguished.Clear();
             Reignited.Clear();
             Ignited.Clear();
+            Spread.Clear();
             Fell.Clear();
             Doused.Clear();
             HeliDrops.Clear();
@@ -900,7 +925,7 @@ namespace FireGame.Prototypes.Logic
             ForecastAt = null;
             if (pick == null) return null;
             pick.Wet = 0f;
-            Ignite(pick, 0.35f);
+            Ignite(pick, ReportFire);
             return pick;
         }
 
@@ -1178,7 +1203,7 @@ namespace FireGame.Prototypes.Logic
                     Douse(Player, radius);
                     foreach (Structure st in Structures)
                     {
-                        if (st.Within(Player, radius)) Soak(st, wall ? 0.8f : 0.5f);
+                        if (st.Within(Player, radius)) Soak(st, wall ? 0.8f : 0.5f, false);
                     }
                     Near(Player, radius, _near);
                     foreach (Enemy e in _near) Damage(e, wall ? 20f : 12f, Knockback(Player, e.Pos, wall ? 12f : 8f), true, HitSource.Curtain, Player);
@@ -1412,7 +1437,7 @@ namespace FireGame.Prototypes.Logic
             {
                 if (_truckSoaked.Contains(st) || !st.Within(at, TruckSoakRange)) continue;
                 _truckSoaked.Add(st);
-                Soak(st, 0.4f);
+                Soak(st, 0.4f, false);
             }
             Douse(at, TruckHitRange);
             _truckLeft -= Dt;
@@ -1431,7 +1456,7 @@ namespace FireGame.Prototypes.Logic
             {
                 if (!st.IsBuilding || !st.Burning) continue;
                 Sprinkled.Add(st);
-                Soak(st, SprinklerDouse);
+                Soak(st, SprinklerDouse, false);
                 Douse(st.Pos, Math.Max(st.Half.X, st.Half.Y) + 2.5f);
                 foreach (Enemy e in Enemies)
                 {
@@ -1489,7 +1514,7 @@ namespace FireGame.Prototypes.Logic
             {
                 if (st.Collapsed || SegmentDistance(st.Pos, band.A, band.B) > r + Math.Max(st.Half.X, st.Half.Y)) continue;
                 // 방염제는 띠 안 불을 완전히 누르고 한동안 안 타게 한다.
-                Soak(st, 1f);
+                Soak(st, 1f, false);
                 st.Wet = Math.Max(st.Wet, RetardantWet);
             }
             foreach (Puddle p in BurningGround)
@@ -1638,7 +1663,7 @@ namespace FireGame.Prototypes.Logic
                         Douse(s.Target, s.Radius);
                         foreach (Structure st in Structures)
                         {
-                            if (st.Within(s.Target, s.Radius)) Soak(st, s.Damage * WaterPerDamage);
+                            if (st.Within(s.Target, s.Radius)) Soak(st, s.Damage * WaterPerDamage, false);
                         }
                         Near(s.Target, s.Radius, _near);
                         HitSource source = s.Kind == ShotKind.Heli ? HitSource.Special : HitSource.Bomb;
@@ -1701,19 +1726,25 @@ namespace FireGame.Prototypes.Logic
                 Ignited.Add(s);
                 s.SpitClock = 2f;
                 s.BlazeClock = 6f;
+                s.SpreadClock = Stage.SpreadEvery;
                 s.RescueHold = 0f;
                 if (s.Kind == StructureKind.Gas) s.Fuse = GasFuse;
             }
             return fresh;
         }
 
-        /// <summary>물을 붓는다: 타면 불 세기를 줄이고, 다 꺼지거나 안 타면 한동안 젖는다.</summary>
-        private void Soak(Structure s, float water)
+        /// <summary>
+        /// 물을 붓는다: 타면 불 세기를 줄이고, 다 꺼지거나 안 타면 한동안 젖는다.
+        /// 꾸준히 뿌리는 물(호스·드론·포탑·대원·비)은 큰 불에 덜 먹힌다(resist). 한 번에 쏟는 물(폭탄·헬기·장막·소방차·스프링클러)은
+        /// 불 세기와 상관없이 다 먹힌다: 놓친 큰 불을 잡는 건 그런 아이템의 몫이다.
+        /// </summary>
+        private void Soak(Structure s, float water, bool resist = true)
         {
             if (s.Collapsed) return;
             if (s.Burning)
             {
-                s.Fire -= water;
+                // 큰 불일수록 물이 덜 먹힌다: 일찍 잡으면 쉽고, 놓치면 오래 걸린다.
+                s.Fire -= resist ? water * (1f - (FireResist * s.Fire)) : water;
                 if (s.Fire > 0f) return;
                 s.Fire = 0f;
                 s.Fuse = -1f;
@@ -1764,6 +1795,26 @@ namespace FireGame.Prototypes.Logic
                     return;
                 }
             }
+        }
+
+        /// <summary>s와 가장자리 거리가 SpreadRange 안인 가장 가까운 불붙을 수 있는 건물(젖었거나 타면 건너뛴다).</summary>
+        public Structure NextBuilding(Structure s)
+        {
+            Structure best = null;
+            float bestD = SpreadRange;
+            foreach (Structure t in Structures)
+            {
+                if (t == s || !t.IsBuilding || !t.Flammable) continue;
+                float dx = Math.Max(Math.Abs(t.Pos.X - s.Pos.X) - t.Half.X - s.Half.X, 0f);
+                float dy = Math.Max(Math.Abs(t.Pos.Y - s.Pos.Y) - t.Half.Y - s.Half.Y, 0f);
+                float gap = (float)Math.Sqrt((dx * dx) + (dy * dy));
+                if (gap <= bestD)
+                {
+                    bestD = gap;
+                    best = t;
+                }
+            }
+            return best;
         }
 
         /// <summary>s에서 바람이 부는 쪽(내적 &gt; 0.3) 4칸 안의 가장 가까운 안 탄 나무나 건물.</summary>
@@ -1877,6 +1928,22 @@ namespace FireGame.Prototypes.Logic
                         // 대화재 동안 숲은 바람이 거세진다(캠프를 덮치는 산불).
                         float chance = Finale ? Stage.FinaleWindChance : WindSpreadChance;
                         if (next != null && Rand() < chance) Ignite(next, 0.3f);
+                    }
+                }
+
+                // 크게 타는 건물은 옆 건물로 직접 옮겨붙는다: 놓친 불 하나가 동네를 번진다.
+                if (s.IsBuilding && s.Fire >= SpreadFire && Stage.SpreadEvery > 0f)
+                {
+                    s.SpreadClock -= Dt;
+                    if (s.SpreadClock <= 0f)
+                    {
+                        s.SpreadClock = Stage.SpreadEvery;
+                        Structure next = NextBuilding(s);
+                        if (next != null && Ignite(next, SpreadIgnite))
+                        {
+                            Spread.Add(next);
+                            Stats.Spreads++;
+                        }
                     }
                 }
 

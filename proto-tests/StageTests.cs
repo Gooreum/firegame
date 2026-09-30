@@ -26,7 +26,7 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(SurvivorSim.ReportTimes, sim.Stage.ReportTimes);
             Assert.Equal(SurvivorSim.FireGrowth, sim.Stage.FireGrowth);
             Assert.Equal(1f, sim.Stage.EnemyHp);
-            Assert.Equal(1f, sim.Stage.SpawnRate);
+            Assert.Equal(1.3f, sim.Stage.SpawnRate);
             Assert.Equal(SurvivorTown.Build().Count, sim.Structures.Count);
             sim.Enemies.Clear();
             Assert.Equal(2f, sim.Spawn(EnemyKind.Ember, sim.Player).MaxHp);

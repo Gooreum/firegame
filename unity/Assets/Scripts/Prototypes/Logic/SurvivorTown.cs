@@ -58,6 +58,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>산불: 바람 쪽 이웃에 불을 옮기기까지 남은 시간(나무만).</summary>
         public float WindClock;
 
+        /// <summary>크게 타는 건물이 옆 건물로 불을 옮기기까지 남은 시간.</summary>
+        public float SpreadClock;
+
         public bool Burning
         {
             get { return Fire > 0f && !Collapsed; }

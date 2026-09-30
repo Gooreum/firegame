@@ -47,6 +47,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>이 간격마다 재 박쥐 무리가 가장자리에서 날아온다(0이면 안 온다).</summary>
         public float BatFlockEvery;
 
+        /// <summary>크게 타는 건물(세기 0.8~)이 이 간격마다 가장 가까운 건물로 불을 옮긴다(초). 0이면 안 옮긴다.</summary>
+        public float SpreadEvery = 8f;
+
         /// <summary>산불: 바람이 불어 타는 나무가 바람 쪽 이웃에 불을 옮긴다.</summary>
         public bool Wind;
 
@@ -68,6 +71,8 @@ namespace FireGame.Prototypes.Logic
             Name = "마을",
             Map = SurvivorTown.Build,
             ReportTimes = SurvivorSim.ReportTimes,
+            // 불 규칙 강화(측정 5): 불이 오래 버티는 만큼 몰려오는 불 몹을 늘려 몸 압박(위기 판)을 되살린다.
+            SpawnRate = 1.3f,
             Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Truck, UpgradeId.Sprinkler },
         };
 
@@ -81,14 +86,16 @@ namespace FireGame.Prototypes.Logic
             ReportTimes = new[] { 10f, 30f, 50f, 70f, 90f, 110f, 120f, 140f, 160f, 180f, 200f, 230f },
             // 숲의 난이도는 배율이 아니라 새 규칙(바람·다람쥐·박쥐)에서 온다.
             EnemyHp = 1f,
-            SpawnRate = 1f,
+            SpawnRate = 1.2f,
             // 대화재 동안 바람이 거세져 산불이 캠프를 덮친다.
             FinaleWindChance = 0.35f,
             BlazeMax = 0.25f,
             DartShare = 0f,
-            SquirrelShare = 0.03f,
+            SquirrelShare = 0.01f,
             BatFlockEvery = 20f,
             Wind = true,
+            // 숲은 바람이 나무·건물로 불을 옮기므로 건물끼리 직접 번지는 규칙은 끈다(둘 다 켜면 봇 0/10).
+            SpreadEvery = 0f,
             // 나무 수십 그루가 보통(×2) 간격으로 뱉으면 불씨 떼가 동네를 덮는다.
             TreeSpit = 4f,
             Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Rain, UpgradeId.Retardant },

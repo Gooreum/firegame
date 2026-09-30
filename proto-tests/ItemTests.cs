@@ -35,9 +35,16 @@ namespace FireGame.Prototypes.Tests
             for (int i = 0; i < ticks; i++)
             {
                 sim.Hp = sim.MaxHp;
-                if (sim.PendingChoices != null) sim.Choose(0);
+                if (sim.PendingChoices != null) sim.Choose(NoPartner(sim.PendingChoices));
                 sim.Step(0f, 0f);
             }
+        }
+
+        /// <summary>도중 레벨업에선 대원 카드를 피한다: 대원이 구하면 드론·도끼 같은 다른 아이템의 구조를 가린다.</summary>
+        private static int NoPartner(List<UpgradeId> cards)
+        {
+            int k = cards.FindIndex(c => c != UpgradeId.Partner && c != UpgradeId.Squad);
+            return k >= 0 ? k : 0;
         }
 
         private static Structure Shop(SurvivorSim sim, float dx, float dy, int residents = 0)
