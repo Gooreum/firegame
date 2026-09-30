@@ -867,6 +867,22 @@ namespace FireGame.Prototypes
                 ShowAlert("방염제 살포!", new Color(1f, 0.45f, 0.45f));
                 GameAudio.Play(Cue.SprayFoam);
             }
+            if (_sim.JustFoam && _sim.FoamAt.HasValue)
+            {
+                // 폼 포탄이 떨어져 터진다: 흰 번쩍 + 흰 거품이 사방으로 튄다.
+                Vector3 at = W(_sim.FoamAt.Value);
+                float r = SurvivorSim.FoamRadius;
+                Flare(at, r * 1.8f, new Color(0.95f, 1f, 1f), 3);
+                Shockwave(at, new Color(1f, 1f, 1f, 0.9f), r * 2.4f, 0.5f);
+                for (int k = 0; k < 16; k++)
+                {
+                    float a = k * Mathf.PI / 8f;
+                    EmitFalling("Effects/smoke_01", at, new Vector3(Mathf.Cos(a) * 4f, 3f + Mathf.Sin(a), 0f), 0.9f, 0.5f, new Color(1f, 1f, 1f, 0.95f));
+                }
+                SpawnText(at + new Vector3(0f, 2.5f, 0f), "폼 살포!", new Color(0.9f, 1f, 1f), 1.4f);
+                _trauma = Mathf.Min(1f, _trauma + 0.15f);
+                GameAudio.Play(Cue.SprayFoam);
+            }
             if (_sim.JustCurtain) CurtainBurst();
 
             foreach (Vec2 e in _sim.Explosions)
@@ -1386,7 +1402,7 @@ namespace FireGame.Prototypes
                 Vector3 at = W(e.Pos);
                 float flicker = 1f + (0.09f * Mathf.Sin((_time * 14f) + (i * 1.7f)));
                 bool hit = e.HitFlash > 0f;
-                float foot = e.Kind == EnemyKind.Blaze ? 1.8f : 1f;
+                float foot = e.Kind == EnemyKind.Blaze ? 1.8f : e.Kind == EnemyKind.Oil ? 1.7f : 1f;
                 _shadows.Put(at + new Vector3(0f, -0.1f, 0f), foot, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
                 // 물을 먹을수록 불이 쪼그라든다(체력 비례).
                 float life = 0.55f + (0.45f * Mathf.Clamp01(e.Hp / Mathf.Max(0.01f, e.MaxHp)));
@@ -1442,6 +1458,21 @@ namespace FireGame.Prototypes
                         if (Random.value < 0.04f)
                         {
                             EmitFalling("Effects/smoke_01", at, new Vector3(Random.Range(-0.5f, 0.5f), 0.5f, 0f), 0.6f, 0.25f, new Color(0.25f, 0.22f, 0.22f, 0.7f));
+                        }
+                        break;
+                    }
+                    case EnemyKind.Oil:
+                    {
+                        // 기름 방울: 출렁이는 검보라 기름 덩어리 위로 보라·주황 불이 인다.
+                        float wob = 1f + (0.08f * Mathf.Sin((_time * 5f) + i));
+                        _foam.Put(at + new Vector3(0f, 0.05f, 0f), 2.2f * life * wob, 0f, hit ? water : new Color(0.08f, 0.05f, 0.1f, 1f), Art.Get("Effects/glow"), 0.75f);
+                        _enemyGlow.Put(at, 2.2f * flicker * life, 0f, new Color(0.85f, 0.25f, 0.75f, 0.4f));
+                        _blazes.Put(at + new Vector3(0f, 0.35f, 0f), 3.2f * flicker * punch, 0f, hit ? water : new Color(1f, 0.4f, 0.75f));
+                        if (!hit) _enemyCore.Put(at + new Vector3(0f, 0.15f, 0f), 1.2f * flicker * life, 0f, new Color(1f, 0.6f, 0.25f, 0.9f));
+                        if (Random.value < 0.05f)
+                        {
+                            Emit(Smokes[Random.Range(0, Smokes.Length)], at + new Vector3(0f, 0.7f, 0f), new Vector3(Random.Range(-0.3f, 0.3f), 1f, 0f), 0.4f, 1.4f,
+                                0.5f, 1.6f, new Color(0.12f, 0.1f, 0.12f, 0.55f), new Color(0.1f, 0.1f, 0.1f, 0f), Random.Range(-60f, 60f));
                         }
                         break;
                     }
@@ -1526,6 +1557,25 @@ namespace FireGame.Prototypes
                     EmitSprite(BeamSprite(), p, new Vector3(-2f, -16f, 0f), 0f, 0.22f, 0.08f, 0.08f, new Color(0.75f, 0.88f, 1f, 0.8f), new Color(0.75f, 0.88f, 1f, 0f), 0f, true, 0f, 8f, 7f);
                 }
                 if (Random.value < 0.5f) Splash(at + new Vector3(Random.Range(-r, r) * 0.8f, Random.Range(-r, r) * 0.6f, 0f), 2, 0.3f);
+            }
+
+            if (_sim.FoamAt.HasValue)
+            {
+                // 폼 깔개: 흰 거품 덩어리가 원을 덮고, 걷히기 1초 전부터 옅어진다.
+                Vector3 at = W(_sim.FoamAt.Value);
+                float r = SurvivorSim.FoamRadius;
+                float fade = Mathf.Clamp01(_sim.FoamLeft / 1f) * Mathf.Clamp01((SurvivorSim.FoamTime - _sim.FoamLeft) / 0.25f);
+                for (int k = 0; k < 14; k++)
+                {
+                    float a = (k * 2.4f) + 0.3f;
+                    float d = r * 0.75f * Mathf.Sqrt((k + 0.5f) / 14f);
+                    float puff = 1f + (0.06f * Mathf.Sin((_time * 3f) + k));
+                    Vector3 o = new Vector3(Mathf.Cos(a) * d, Mathf.Sin(a) * d, 0f);
+                    // 거품 덩어리: 연기·원판 그림은 반투명 가장자리가 어둡게 섞여 회색으로 보여, 더하는 빛으로 겹쳐 하얗게 쌓는다.
+                    _groundGlow.Put(at + o, r * 0.8f * puff, 0f, new Color(0.9f, 0.95f, 1f, 0.4f * fade));
+                }
+                _groundGlow.Put(at, r * 2.2f, 0f, new Color(0.7f, 0.9f, 1f, 0.15f * fade));
+                if (Random.value < 0.3f * fade) Steam(at + new Vector3(Random.Range(-r, r) * 0.6f, Random.Range(-r, r) * 0.5f, 0f), 1, 0.4f);
             }
 
             foreach (Band b in _sim.Retardants)
@@ -1637,6 +1687,16 @@ namespace FireGame.Prototypes
                 float warn = p.Life < 1f ? 1f + (0.3f * Mathf.Abs(Mathf.Sin(_time * 12f))) : 1f;
                 float big = 1.3f * warn * (p.Radius / 0.9f);
                 t = Mathf.Max(t, p.Life < 1f ? 0.6f : 0f);
+                if (p.Oil)
+                {
+                    // 기름 불: 무지갯빛 검은 기름 얼룩 위로 보라·주황 불. 닿은 건물에 옮겨붙는다.
+                    // 불꽃은 하나만: 기름 불은 여럿이 한데 모여 불더미가 되기 쉬워, 검은 얼룩이 보이게 불을 적게 그린다.
+                    _foam.Put(at, p.Radius * 3.4f, 0f, new Color(0.07f, 0.05f, 0.09f, 0.95f * Mathf.Max(t, 0.5f)), Art.Get("Effects/glow"), 0.8f);
+                    _groundGlow.Put(at, p.Radius * 3f * warn, 0f, new Color(0.9f, 0.2f, 0.8f, 0.45f * t));
+                    float flick = 0.55f + (0.15f * Mathf.Sin((_time * 14f) + i));
+                    _groundFire.Put(at, flick * (0.8f + (0.4f * t)) * big * 1.3f, 0f, new Color(1f, 0.45f, 0.85f, t), Art.Get("Effects/fire_01"));
+                    continue;
+                }
                 _groundGlow.Put(at, p.Radius * 2.4f * warn, 0f, new Color(1f, 0.3f, 0.05f, 0.4f * t));
                 for (int k = 0; k < 3; k++)
                 {
@@ -4613,6 +4673,14 @@ namespace FireGame.Prototypes
                     Emit("Effects/glow", p, Vector3.zero, 0f, 0.6f, 1.6f, 2.4f, new Color(1f, 0.4f, 0.1f, 0.9f), new Color(1f, 0.2f, 0f, 0f), 0f, true);
                 }
                 _trauma = Mathf.Min(1f, _trauma + 0.25f);
+                GameAudio.Play(Cue.SecondIgnition);
+            }
+            foreach (Structure st in _sim.OilCaught)
+            {
+                Vector3 at = W(st.Pos);
+                if (st.IsBuilding) ShowAlert("기름 불이 " + st.Name + "에 옮겨붙었다!", new Color(0.95f, 0.45f, 0.8f));
+                Shockwave(at, new Color(0.85f, 0.3f, 0.7f, 1f), st.IsBuilding ? 6f : 3f, 0.45f);
+                Flare(at, st.IsBuilding ? 3.5f : 2f, new Color(1f, 0.45f, 0.6f), 2);
                 GameAudio.Play(Cue.SecondIgnition);
             }
         }

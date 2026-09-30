@@ -139,6 +139,23 @@ namespace FireGame.Prototypes.EditorTools
             // 3스테이지 공단: 공장·약품 드럼 무더기·컨테이너, 콘크리트 바닥과 노란 차선. 드럼 무더기와 이웃 공장이 보이게 잡는다.
             failures += SurvivorShot(dir, "c28_factory", view => view.Sim.Time >= 45f && view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.Oil), 10, false,
                 view => view.Frame(new Vector3(24f, 38f, 0f), 13f), 3);
+            // 공단 기름 방울과 기름 불: 소방관 옆에 방울 둘과 공장 곁 기름 불을 놓고 크게 잡는다.
+            failures += SurvivorShot(dir, "c28b_oil", view => view.Sim.Time >= 3.5f, 4, false,
+                view => view.Frame(new Vector3(view.Sim.Player.X + 3f, view.Sim.Player.Y + 2f, 0f), 7f), 3,
+                view =>
+                {
+                    Vec2 p = view.Sim.Player;
+                    foreach (Vec2 at in new[] { new Vec2(p.X + 4f, p.Y + 1f), new Vec2(p.X + 6f, p.Y + 3f) })
+                    {
+                        Enemy blob = view.Sim.Spawn(EnemyKind.Oil, at);
+                        blob.Speed = 0f;
+                        blob.Hp = blob.MaxHp = 999f;
+                    }
+                    for (int k = 0; k < 4; k++) view.Sim.BurningGround.Add(new Puddle { Pos = new Vec2(p.X + 2f + (k * 0.9f), p.Y + 4f + ((k % 2) * 0.5f)), Radius = SurvivorSim.OilRadius, Life = 30f, MaxLife = 30f, Oil = true });
+                });
+            // 공단 전용 노란 카드(풀장비): 폼 살포가 바닥 불을 덮은 흰 거품 깔개.
+            failures += SurvivorShot(dir, "c29_foam", view => view.Sim.Time >= 20f && view.Sim.FoamAt.HasValue && view.Sim.FoamLeft < SurvivorSim.FoamTime - 0.5f && view.Sim.PendingChoices == null, 12, true,
+                view => view.Frame(new Vector3(view.Sim.FoamAt.Value.X, view.Sim.FoamAt.Value.Y, 0f), 9f), 3);
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);

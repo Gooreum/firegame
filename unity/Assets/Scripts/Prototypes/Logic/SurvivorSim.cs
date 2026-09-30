@@ -1548,7 +1548,7 @@ namespace FireGame.Prototypes.Logic
 
         private float _foamClock = 2f;
 
-        /// <summary>폼 살포: 10초마다 14칸 안에서 바닥 불이 가장 몰린 곳(없으면 가장 큰 불)에 반경 4.5 폼. 바닥 불을 끄고, 탈 것에 한 번에 물을 붓고, 적은 8 피해. 8초 동안 그 안 새 기름 불을 막는다.</summary>
+        /// <summary>폼 살포: 10초마다 14칸 안에서 바닥 불이 가장 몰린 곳(없으면 가장 큰 불, 둘 다 없으면 생길 때까지 기다린다)에 반경 4.5 폼. 바닥 불을 끄고, 탈 것에 한 번에 물을 붓고, 적은 8 피해. 8초 동안 그 안 새 기름 불을 막는다.</summary>
         private void TickFoam()
         {
             if (FoamAt.HasValue)
@@ -1558,8 +1558,11 @@ namespace FireGame.Prototypes.Logic
             }
             _foamClock -= Dt;
             if (_foamClock > 0f) return;
+            // 덮을 불이 없으면 쏘지 않고 기다린다(빈 땅에 쏘면 아무 일도 없다).
+            Vec2? target = GroundFireCenter(14f) ?? BurningCenter(14f);
+            if (!target.HasValue) return;
             _foamClock = FoamInterval;
-            Vec2 at = GroundFireCenter(14f) ?? FireCenter(14f);
+            Vec2 at = target.Value;
             FoamAt = at;
             FoamLeft = FoamTime;
             JustFoam = true;
@@ -1570,6 +1573,18 @@ namespace FireGame.Prototypes.Logic
             }
             Near(at, FoamRadius, _near);
             foreach (Enemy e in _near) Damage(e, 8f, Knockback(at, e.Pos, 3f), true, HitSource.Special, at);
+        }
+
+        /// <summary>range 안에서 가장 센 불난 탈 것(가스통 빼고). 없으면 null.</summary>
+        private Vec2? BurningCenter(float range)
+        {
+            Structure best = null;
+            foreach (Structure st in Structures)
+            {
+                if (!st.Burning || st.Kind == StructureKind.Gas || st.DistanceTo(Player) > range) continue;
+                if (best == null || st.Fire > best.Fire) best = st;
+            }
+            return best?.Pos;
         }
 
         /// <summary>range 안 바닥 불 중 FoamRadius 안에 가장 많은 바닥 불을 거느린 자리. 없으면 null.</summary>
