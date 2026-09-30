@@ -31,6 +31,18 @@ namespace FireGame.Prototypes
 
             /// <summary>김이 오르는 자리(굴뚝·배기구·솥). 없으면 null.</summary>
             public Vector2? Steam;
+
+            /// <summary>픽셀 3D 상자용: 앞벽(아래 FrontRows 행)과 지붕(그 위) 그림, 옆벽 색.</summary>
+            public Sprite Front;
+            public Sprite Roof;
+            public int FrontRows;
+            public Color WallColor = new Color(0.6f, 0.58f, 0.55f);
+
+            /// <summary>앞벽 높이(칸) = 상자 높이.</summary>
+            public float Height
+            {
+                get { return (float)FrontRows / Ppu; }
+            }
         }
 
         private static readonly Dictionary<string, Look> Cache = new Dictionary<string, Look>();
@@ -43,6 +55,25 @@ namespace FireGame.Prototypes
             look = new Look();
             Paint(c, name, look);
             look.Sprite = c.ToSprite(name);
+            Texture2D texture = look.Sprite.texture;
+            look.FrontRows = Mathf.Clamp(look.FrontRows, 1, c.H - 1);
+            look.Front = Sprite.Create(texture, new Rect(0, 0, c.W, look.FrontRows), new Vector2(0.5f, 0.5f), Ppu);
+            look.Roof = Sprite.Create(texture, new Rect(0, look.FrontRows, c.W, c.H - look.FrontRows), new Vector2(0.5f, 0.5f), Ppu);
+            look.Front.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            look.Roof.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            // 옆벽: 앞벽 아래쪽 줄의 평균 색을 조금 어둡게.
+            float r = 0f, g = 0f, b = 0f;
+            int n = 0;
+            for (int x = 0; x < c.W; x += 3)
+            {
+                Color32 p = c.Get(x, look.FrontRows / 3);
+                if (p.a < 128) continue;
+                r += p.r;
+                g += p.g;
+                b += p.b;
+                n++;
+            }
+            if (n > 0) look.WallColor = new Color(r / n / 255f * 0.72f, g / n / 255f * 0.72f, b / n / 255f * 0.72f);
             Cache[key] = look;
             return look;
         }
@@ -61,6 +92,7 @@ namespace FireGame.Prototypes
 
             // 앞면 높이(픽셀): 건물 높이의 절반. 그 위가 지붕(40%로는 가게 유리창이 작아 알아보기 어려웠다).
             int front = Mathf.RoundToInt(c.H * 0.5f);
+            look.FrontRows = front;
             int sign0 = front - 16;
             var windows = new List<RectInt>();
 
@@ -235,6 +267,7 @@ namespace FireGame.Prototypes
         private static void Depot(Canvas c, Look look)
         {
             int front = Mathf.RoundToInt(c.H * 0.42f);
+            look.FrontRows = front;
             Color32 metal = Rgb(0.62f, 0.66f, 0.7f);
             for (int x = 0; x < c.W; x++)
             {
