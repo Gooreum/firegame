@@ -188,6 +188,72 @@ namespace FireGame.Prototypes
         }
     }
 
+    /// <summary>
+    /// 사람 모델 풀: 매 프레임 Begin → Get(모델)… → End. 쓴 만큼 켜 두고 남은 것은 끈다(대원·시민·갇힌 사람).
+    /// </summary>
+    public sealed class PersonPool
+    {
+        private readonly Transform _parent;
+        private readonly float _tall;
+        private readonly Dictionary<string, List<GameObject>> _items = new Dictionary<string, List<GameObject>>();
+        private readonly Dictionary<string, int> _used = new Dictionary<string, int>();
+
+        public PersonPool(Transform parent, float tall)
+        {
+            _parent = parent;
+            _tall = tall;
+        }
+
+        public void Begin()
+        {
+            var keys = new List<string>(_used.Keys);
+            foreach (string k in keys) _used[k] = 0;
+        }
+
+        /// <summary>이번 프레임에 쓸 path 모델 하나(없으면 null). 크기 scale은 키 배율.</summary>
+        public GameObject Get(string path, float scale = 1f)
+        {
+            if (!_items.TryGetValue(path, out List<GameObject> list))
+            {
+                list = new List<GameObject>();
+                _items[path] = list;
+                _used[path] = 0;
+            }
+            int n = _used[path];
+            if (n == list.Count)
+            {
+                GameObject made = Models3D.Person(path, _parent, _tall);
+                if (made == null) return null;
+                list.Add(made);
+            }
+            GameObject go = list[n];
+            _used[path] = n + 1;
+            if (!go.activeSelf) go.SetActive(true);
+            var mark = go.GetComponent<PersonScale>() ?? go.AddComponent<PersonScale>();
+            if (mark.Base == 0f) mark.Base = go.transform.localScale.x;
+            go.transform.localScale = Vector3.one * mark.Base * scale;
+            return go;
+        }
+
+        public void End()
+        {
+            foreach (KeyValuePair<string, List<GameObject>> kv in _items)
+            {
+                int used = _used[kv.Key];
+                for (int i = used; i < kv.Value.Count; i++)
+                {
+                    if (kv.Value[i].activeSelf) kv.Value[i].SetActive(false);
+                }
+            }
+        }
+    }
+
+    /// <summary>풀에서 꺼낸 사람의 원래 축척(키 배율을 곱하는 기준).</summary>
+    public sealed class PersonScale : MonoBehaviour
+    {
+        public float Base;
+    }
+
     /// <summary>모델 하나의 렌더러·머티리얼 원래 색을 기억해 틴트를 바뀔 때만 넣는다.</summary>
     public sealed class ModelTint : MonoBehaviour
     {

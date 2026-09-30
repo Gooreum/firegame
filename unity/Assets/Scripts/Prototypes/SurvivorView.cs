@@ -198,7 +198,6 @@ namespace FireGame.Prototypes
         private Pool _heliShadow;
         private Pool _heli;
         private Pool _rotor;
-        private Pool _partner;
         private TextMesh _partnerTag;
         private TextMesh _forecastTag;
         private Pool _sprayLines;
@@ -259,7 +258,6 @@ namespace FireGame.Prototypes
         private Pool _foam;
         private Pool _groundFire;
         private Pool _groundGlow;
-        private Pool _civilians;
         private Pool _civilianRings;
         private Pool _houseShadows;
         private Pool _roofEdges;
@@ -280,6 +278,10 @@ namespace FireGame.Prototypes
         private static Sprite _arrowSprite;
 
         private GameObject _player;
+
+        /// <summary>대원·구해 낸 시민·갇힌 사람 3D 모델.</summary>
+        private PersonPool _people;
+        private static readonly string[] CivilianModels = { "People/Casual_Female", "People/OldClassy_Male", "People/Casual_Male" };
         private SpriteRenderer _playerGlow;
         private readonly List<Pool> _pools = new List<Pool>();
         private readonly List<RibbonPool> _ribbons = new List<RibbonPool>();
@@ -1262,6 +1264,7 @@ namespace FireGame.Prototypes
             if (_sim.Outcome != SOutcome.Playing) _overAge += dt;
 
             foreach (Pool p in _pools) p.Begin();
+            _people.Begin();
             foreach (RibbonPool r in _ribbons) r.Begin(_time);
             DrawTown();
             DrawPuddles();
@@ -1278,6 +1281,7 @@ namespace FireGame.Prototypes
             DrawEdgeArrows();
             DrawWeather();
             foreach (Pool p in _pools) p.End();
+            _people.End();
             foreach (RibbonPool r in _ribbons) r.End();
 
             UpdateSpraySound(dt);
@@ -1594,7 +1598,13 @@ namespace FireGame.Prototypes
                 float a = t < 0.7f ? 1f : 1f - ((t - 0.7f) / 0.3f);
                 _civilianRings.Put(at, 1.2f, 0f, new Color(0.4f, 1f, 0.4f, 0.4f * a));
                 _shadows.Put(at + new Vector3(0f, -0.3f, 0f), 0.8f, 0f, new Color(0f, 0f, 0f, 0.35f * a), null, 0.5f);
-                _civilians.Put(at + new Vector3(0f, 0.12f * Mathf.Abs(Mathf.Sin(_time * 16f)), 0f), 0.85f, 0f, new Color(1f, 1f, 1f, a), CivilianArt(i, (int)((_time * 10f) + i)));
+                // 3D 시민은 반투명이 안 되니 거의 사라질 때 숨긴다.
+                if (a < 0.2f) continue;
+                GameObject person = _people.Get(CivilianModel(i));
+                if (person == null) continue;
+                Models3D.Pose(person, at, new Vector3(Mathf.Sin(i * 2.3f) * 1.2f, -2.6f, 0f));
+                Models3D.Play(person, "Run", 1.2f, _time + i);
+                Models3D.Tint(person, Color.white, CivilianColor(i), 10 + CivilianKind(i));
             }
         }
 
@@ -1769,7 +1779,13 @@ namespace FireGame.Prototypes
                 float lift = Mathf.Clamp01(patrol.DroneRescue / SurvivorSim.DroneRescueTime);
                 Vector3 top = center + new Vector3(0f, 2.2f, 0f);
                 SprayLine(top, center, 0.08f, new Color(1f, 0.85f, 0.3f, 0.95f));
-                _civilians.Put(Vector3.Lerp(center, top, lift), 0.6f, 10f * Mathf.Sin(_time * 8f), Color.white, CivilianArt(0));
+                GameObject lifted = _people.Get(CivilianModel(0), 0.75f);
+                if (lifted != null)
+                {
+                    Models3D.Pose(lifted, Vector3.Lerp(center, top, lift), Vector3.down);
+                    Models3D.Play(lifted, "Jump", 1f, _time);
+                    Models3D.Tint(lifted, Color.white, CivilianColor(0), 10 + CivilianKind(0));
+                }
             }
 
             DrawTurrets();
@@ -2089,14 +2105,6 @@ namespace FireGame.Prototypes
             if (_stance > 0.01f) _nozzle.Put(Fist(RightFist), 0.18f, 0f, new Color(glove.r, glove.g, glove.b, _stance), DiscSprite());
         }
 
-        /// <summary>바라보는 방향으로 앞(카메라 쪽)·뒤·옆 중 하나. 왼쪽을 보면 옆모습을 뒤집는다.</summary>
-        private static PixelPeople.Face FaceOf(Vector3 dir, out bool flip)
-        {
-            flip = dir.x < 0f;
-            if (Mathf.Abs(dir.y) > Mathf.Abs(dir.x) * 1.2f) return dir.y < 0f ? PixelPeople.Face.Down : PixelPeople.Face.Up;
-            return PixelPeople.Face.Side;
-        }
-
         /// <summary>사람 모델 키(칸).</summary>
         private const float PersonTall = 1.6f;
 
@@ -2118,9 +2126,39 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>구조되는 시민(여자·할아버지·남자)을 번갈아.</summary>
-        private static Sprite CivilianArt(int k, int frame = 0)
+        private static string CivilianModel(int k)
         {
-            return PixelPeople.Get((PixelPeople.Kind)(2 + (((k % 3) + 3) % 3)), 0, PixelPeople.Face.Down, frame);
+            return CivilianModels[CivilianKind(k)];
+        }
+
+        /// <summary>시민 옷(위에서도 보이게 밝게): 여자 분홍, 할아버지 황갈·흰머리, 남자 초록.</summary>
+        private static int CivilianKind(int k)
+        {
+            return ((k % 3) + 3) % 3;
+        }
+
+        private static System.Func<string, Color?> CivilianColor(int k)
+        {
+            int kind = CivilianKind(k);
+            Color shirt = kind == 0 ? new Color(0.92f, 0.45f, 0.6f) : kind == 1 ? new Color(0.7f, 0.52f, 0.34f) : new Color(0.3f, 0.65f, 0.35f);
+            Color hair = kind == 0 ? new Color(0.55f, 0.32f, 0.16f) : kind == 1 ? new Color(0.85f, 0.85f, 0.85f) : new Color(0.3f, 0.22f, 0.16f);
+            return material =>
+            {
+                if (material.StartsWith("Shirt")) return shirt;
+                if (material.StartsWith("Hair") || material.StartsWith("Hat")) return hair;
+                if (material.StartsWith("Pants")) return new Color(0.3f, 0.32f, 0.5f);
+                return null;
+            };
+        }
+
+        /// <summary>대원 옷: 노란 안전모, 주황 작업복, 연노랑 반사띠.</summary>
+        private static Color? PartnerColor(string material)
+        {
+            if (material.StartsWith("Hat")) return new Color(1f, 0.82f, 0.15f);
+            if (material.StartsWith("Shirt")) return new Color(0.95f, 0.5f, 0.15f);
+            if (material.StartsWith("Vest")) return new Color(0.95f, 0.95f, 0.6f);
+            if (material.StartsWith("Pants")) return new Color(0.22f, 0.22f, 0.28f);
+            return null;
         }
 
         private void DrawPlayer()
@@ -2379,11 +2417,16 @@ namespace FireGame.Prototypes
                 }
                 if (squad) _auras.Put(at, 1.3f, 0f, new Color(1f, 0.85f, 0.35f, 0.5f));
                 float pd = _partnerDeg[i] * Mathf.Deg2Rad;
-                PixelPeople.Face pface = FaceOf(new Vector3(Mathf.Cos(pd), Mathf.Sin(pd), 0f), out bool pflip);
                 bool walking = moved.sqrMagnitude > 0.0001f;
-                Sprite partnerArt = PixelPeople.Get(PixelPeople.Kind.Partner, 0, pface, walking ? (int)((_time * 8f) + i) : 0);
-                _partner.Put(at + Up(bob), pflip ? -0.95f : 0.95f, 0f, squad ? new Color(1f, 0.9f, 0.5f) : Color.white, partnerArt);
-                if (i == 0 && _partnerTag != null) _partnerTag.transform.localPosition = at + new Vector3(0f, 0.85f, -0.2f);
+                GameObject mate = _people.Get("People/Worker_Female");
+                if (mate != null)
+                {
+                    // 주황 옷·노란 안전모 대원. 구조 분대면 금빛이 돈다.
+                    Models3D.Pose(mate, at, new Vector3(Mathf.Cos(pd), Mathf.Sin(pd), 0f));
+                    Models3D.Play(mate, walking ? "Run" : "Idle", 1f, _time + i);
+                    Models3D.Tint(mate, squad ? new Color(1f, 0.92f, 0.6f) : Color.white, PartnerColor, 1);
+                }
+                if (i == 0 && _partnerTag != null) _partnerTag.transform.localPosition = at + Up(PersonTall + 0.25f);
             }
         }
 
@@ -3446,7 +3489,8 @@ namespace FireGame.Prototypes
             }
 
             // 출동해 온 소방차(장식, 판정 없음): 광장 옆에 가로로 세운 소방차 모델.
-            GameObject truck = Models3D.Place("Cars/firetruck", _root, new Vector3(mid - 3.5f, mid - 2.5f, 0f), 3.2f, 1.5f, 90f, out _);
+            // 소방관이 지나다니는 한가운데를 가리지 않게 광장 왼쪽 위 모서리에 세운다.
+            GameObject truck = Models3D.Place("Cars/firetruck", _root, new Vector3(mid - 6f, mid + 6f, 0f), 3.2f, 1.5f, 90f, out _);
             if (truck != null) _ground.Add(truck);
         }
 
@@ -3796,8 +3840,16 @@ namespace FireGame.Prototypes
             float front = seed < _structSize.Length && _structSize[seed].y > 0f ? _structSize[seed].y / 2f : st.Half.Y;
             _roofGlow.Put(win, 0.9f, 0f, new Color(1f, 0.6f, 0.2f, 0.4f + (0.3f * bob)));
             bool wave = Mathf.Repeat((_time * 4f) + seed, 2f) < 1f;
-            Vector3 edge = at + new Vector3(win.x - at.x, -front + 0.3f, 0f) + Up(hgt + (0.08f * bob));
-            _civilians.Put(edge, wave ? 0.85f : -0.85f, 0f, Color.white, CivilianArt(seed, (int)(_time * 4f)));
+            // 앞 가장자리에 서면 간판에 가려 지붕 가운데 조금 뒤에 세운다.
+            Vector3 edge = at + new Vector3(win.x - at.x, front * 0.15f, 0f) + Up(hgt * 0.8f + (0.08f * bob));
+            GameObject waving = _people.Get(CivilianModel(seed));
+            if (waving != null)
+            {
+                // 카메라 쪽을 보고 두 팔을 번쩍 들며 구해 달라고 손짓한다.
+                Models3D.Pose(waving, edge, Vector3.down);
+                Models3D.Play(waving, "Victory", 1.2f, _time + seed);
+                Models3D.Tint(waving, Color.white, CivilianColor(seed), 10 + CivilianKind(seed));
+            }
 
             bool choking = st.Fire >= SurvivorSim.SmokeFire;
             float urgent = choking ? Mathf.Clamp01(st.Smoke / SurvivorSim.SmokeTime) : 0f;
@@ -3811,7 +3863,11 @@ namespace FireGame.Prototypes
                 for (int k = 0; k < st.Residents; k++)
                 {
                     float wob = Mathf.Sin((_time * 8f) + k) * 0.06f;
-                    _civilians.Put(at + new Vector3(left + (k * gap), -st.Half.Y * 0.5f, 0f) + Up(hgt + 0.05f + wob), 0.5f, 8f * Mathf.Sin((_time * 9f) + k), Color.white, CivilianArt((seed + k)));
+                    GameObject crowd = _people.Get(CivilianModel(seed + k), 0.7f);
+                    if (crowd == null) continue;
+                    Models3D.Pose(crowd, at + new Vector3(left + (k * gap), -st.Half.Y * 0.5f, 0f) + Up(hgt + 0.05f + wob), Vector3.down);
+                    Models3D.Play(crowd, "Victory", 1.2f, _time + k);
+                    Models3D.Tint(crowd, Color.white, CivilianColor(seed + k), 10 + CivilianKind(seed + k));
                 }
                 _civilianRings.Put(at, Mathf.Max(st.Half.X, st.Half.Y) * (3f + (0.4f * Mathf.Sin(_time * 5f))), 0f, new Color(1f, 0.2f, 0.1f, 0.35f));
             }
@@ -3925,8 +3981,6 @@ namespace FireGame.Prototypes
             _pools.Add(_toolbox);
             _pools.Add(_gems);
             _pools.Add(_gemCores);
-            _civilians = new Pool(_world, "Civilian", Art.Get("TopDown/civilian_man"), 8, Cutout());
-            _pools.Add(_civilians);
             _enemyGlow = AddPool("EnemyGlow", "Effects/glow", 8, true);
             _embers = AddPool("Ember", "Effects/fire_01", 9);
             _blazes = AddPool("Blaze", "Effects/fire_02", 9);
@@ -3935,13 +3989,11 @@ namespace FireGame.Prototypes
             _pools.Add(_bats);
             _enemyCore = AddPool("EnemyCore", "Effects/fire_01", 10, true);
             // 픽셀 3D: 원래 서 있는 그림(불 몹·박쥐·지붕 불꽃·시민·상자)은 카메라를 보고 세운다.
-            foreach (Pool standing in new[] { _embers, _blazes, _darts, _bats, _enemyCore, _roofFire, _civilians, _chest, _toolbox }) standing.Upright = true;
+            foreach (Pool standing in new[] { _embers, _blazes, _darts, _bats, _enemyCore, _roofFire, _chest, _toolbox }) standing.Upright = true;
             _bombShadows = AddPool("BombShadow", "Effects/glow", 11);
             _heliShadow = new Pool(_world, "HeliShadow", HeliSprite(), 11, null);
             _heli = new Pool(_world, "Heli", HeliSprite(), 23, null);
             _rotor = new Pool(_world, "Rotor", RotorSprite(), 24, null);
-            _partner = new Pool(_world, "Partner", PixelPeople.Get(PixelPeople.Kind.Partner, 0, PixelPeople.Face.Down, 0), 15, Cutout()) { Upright = true };
-            _pools.Add(_partner);
             _sprayLines = new Pool(_world, "SprayLine", Art.White, 14, null);
             _pools.Add(_sprayLines);
             _turretBase = new Pool(_world, "TurretBase", TurretSprite(), 13, null);
@@ -3994,6 +4046,7 @@ namespace FireGame.Prototypes
             _playerGlow = NewSprite(_root, "Magnet", Art.Get("Effects/glow"), 5);
             _playerGlow.color = new Color(0.4f, 0.7f, 1f, 0.08f);
             _player = Models3D.Person("People/Worker_Male", _root, PersonTall);
+            _people = new PersonPool(_world, PersonTall);
         }
 
         private Pool AddPool(string name, string sprite, int order, bool glow = false)
