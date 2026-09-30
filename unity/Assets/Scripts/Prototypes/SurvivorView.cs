@@ -813,6 +813,7 @@ namespace FireGame.Prototypes
             {
                 Vector3 at = W(e);
                 WaterBlast(at, SurvivorSim.HeliRadius, Loadout.MaxLevel);
+                Flare(at, SurvivorSim.HeliRadius * 2.4f, new Color(0.75f, 0.95f, 1f), 4);
                 Shockwave(at, new Color(0.9f, 0.97f, 1f, 0.9f), SurvivorSim.HeliRadius * 3f, 0.5f, 0.08f);
                 _trauma = Mathf.Min(1f, _trauma + 0.35f);
                 HitStop(0.04f);
@@ -826,6 +827,7 @@ namespace FireGame.Prototypes
             {
                 // 스프링클러: 지붕에서 물 고리가 터지고 물방울이 사방으로 흩날린다.
                 Vector3 at = W(st.Pos) + new Vector3(0f, 0.4f, 0f);
+                Flare(at, 4f, new Color(0.65f, 0.92f, 1f), 2);
                 Shockwave(at, new Color(0.6f, 0.9f, 1f, 0.95f), 6f, 0.45f);
                 Splash(at, 16, 1.4f);
                 Steam(at, 4, 1.4f);
@@ -864,6 +866,7 @@ namespace FireGame.Prototypes
                 int lv = _sim.Build.PowerOf(UpgradeId.WaterBomb);
                 Vector3 at = W(e);
                 WaterBlast(at, _sim.Build.BombRadius, lv);
+                Flare(at, _sim.Build.BombRadius * 2.2f, new Color(0.8f, 0.95f, 1f), 3);
                 // 착지 순간: 흰 번쩍 + 땅에 남는 물 자국 + 건물이면 지붕에서 김 기둥.
                 Emit("Effects/glow", at, Vector3.zero, 0f, 0.1f, _sim.Build.BombRadius * 2.6f, _sim.Build.BombRadius * 3.2f, new Color(1f, 1f, 1f, 0.95f), new Color(0.6f, 0.9f, 1f, 0f), 0f, true);
                 AddWet(at, _sim.Build.BombRadius * 2.2f, 1.2f, false);
@@ -878,6 +881,7 @@ namespace FireGame.Prototypes
                 // 공중 소화탄: 물폭탄보다 크고 금빛 고리, 김 기둥 두 배.
                 Vector3 at = W(e);
                 WaterBlast(at, 2.2f * 1.5f, Loadout.MaxLevel);
+                Flare(at, 7f, new Color(1f, 0.9f, 0.6f), 4);
                 Emit("Effects/glow", at, Vector3.zero, 0f, 0.12f, 7f, 9f, new Color(1f, 1f, 1f, 1f), new Color(1f, 0.85f, 0.4f, 0f), 0f, true);
                 Shockwave(at, new Color(1f, 0.85f, 0.35f, 1f), 12f, 0.5f, 0.05f);
                 Pillar(at, new Color(0.5f, 0.85f, 1f));
@@ -1133,10 +1137,12 @@ namespace FireGame.Prototypes
                 GameAudio.Play(Cue.PickUp);
             }
 
+            ShowFireSignals();
+
             foreach (Structure st in _sim.Ignited)
             {
                 Vector3 at = W(st.Pos);
-                if (st.IsBuilding)
+                if (st.IsBuilding && !_sim.Spread.Contains(st))
                 {
                     ShowAlert(st.Name + "에 불!" + (st.Residents > 0 ? "  " + st.Residents + "명 갇힘" : ""), new Color(1f, 0.6f, 0.25f));
                     Shockwave(at, new Color(1f, 0.45f, 0.1f, 0.9f), 6f, 0.5f);
@@ -1801,6 +1807,7 @@ namespace FireGame.Prototypes
             }
 
             DrawTurrets();
+            DrawSpreadWarnings();
             DrawTracers();
             DrawCurtainCharge();
             DrawForecast();
@@ -2738,6 +2745,7 @@ namespace FireGame.Prototypes
             float r = _sim.CurtainRadiusNow;
             float ring = r * 2.4f;
             Flash(new Color(0.75f, 0.92f, 1f), wall ? 0.22f : 0.14f);
+            Flare(at, r * 1.4f, new Color(0.7f, 0.92f, 1f), wall ? 3 : 2, 0.14f);
             Shockwave(at, new Color(0.45f, 0.8f, 1f, 1f), ring, 0.4f);
             Shockwave(at, new Color(0.85f, 0.97f, 1f, 0.9f), ring * 0.8f, 0.35f, 0.08f);
             if (wall || lv >= Loadout.MaxLevel) Shockwave(at, new Color(1f, 0.85f, 0.35f, 1f), ring * 1.1f, 0.45f, 0.05f);
@@ -4512,6 +4520,61 @@ namespace FireGame.Prototypes
             texture.Apply();
             _arrowSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
             return _arrowSprite;
+        }
+
+        /// <summary>
+        /// 한 번에 쏟는 물의 번쩍임: 가산 빛을 layers겹 겹쳐 1을 넘겨 블룸이 번지게 한다
+        /// (스프라이트 색은 1에서 잘리므로 색을 올리는 대신 겹친다). 짧게 끝나는 번쩍임에만 쓴다.
+        /// </summary>
+        private void Flare(Vector3 at, float size, Color color, int layers, float life = 0.2f)
+        {
+            for (int k = 0; k < layers; k++)
+            {
+                Emit("Effects/glow", at, Vector3.zero, 0f, life * (1f + (0.25f * k)), size * (0.7f + (0.2f * k)), size * (1.1f + (0.25f * k)),
+                    new Color(color.r, color.g, color.b, 1f), new Color(color.r, color.g, color.b, 0f), 0f, true);
+            }
+        }
+
+        /// <summary>불 규칙 신호: 크게 줄인 불은 지붕 위 파란 "−N%", 옆 건물로 번진 불은 빨간 알림과 두 건물을 잇는 불길.</summary>
+        private void ShowFireSignals()
+        {
+            foreach (FireKnock k in _sim.Knocked)
+            {
+                SpawnText(W(k.At.Pos) + new Vector3(0f, 2.2f, 0f), "−" + Mathf.RoundToInt(k.Amount * 100f) + "%", new Color(0.45f, 0.85f, 1f), 1.5f);
+            }
+            for (int i = 0; i < _sim.Spread.Count; i++)
+            {
+                Structure to = _sim.Spread[i];
+                Vector3 a = W(_sim.SpreadFrom[i].Pos);
+                Vector3 b = W(to.Pos);
+                ShowAlert(_sim.SpreadFrom[i].Name + "에서 " + to.Name + "(으)로 번졌다!", new Color(1f, 0.3f, 0.2f));
+                Shockwave(b, new Color(1f, 0.3f, 0.05f, 1f), 7f, 0.5f);
+                Flare(b, 4f, new Color(1f, 0.45f, 0.1f), 3);
+                // 옮긴 건물에서 옮겨붙은 건물까지 불길이 차례로 타오른다(가까운 쪽부터 오래 남는다).
+                for (int k = 0; k < 20; k++)
+                {
+                    Vector3 p = Vector3.Lerp(a, b, k / 19f);
+                    Emit(Flames[k % Flames.Length], p, new Vector3(Random.Range(-0.5f, 0.5f), 2f, 0f), 1f, 0.7f + (k * 0.03f), 1.8f, 0.6f,
+                        new Color(1f, 0.6f, 0.2f, 1f), new Color(1f, 0.25f, 0.05f, 0f), Random.Range(-90f, 90f), true);
+                    Emit("Effects/glow", p, Vector3.zero, 0f, 0.6f, 1.6f, 2.4f, new Color(1f, 0.4f, 0.1f, 0.9f), new Color(1f, 0.2f, 0f, 0f), 0f, true);
+                }
+                _trauma = Mathf.Min(1f, _trauma + 0.25f);
+                GameAudio.Play(Cue.SecondIgnition);
+            }
+        }
+
+        /// <summary>곧 번질 불: 세기 0.8 넘고 3초 안에 옮겨붙을 건물까지 깜빡이는 빨간 줄(가까울수록 빨리 깜빡인다).</summary>
+        private void DrawSpreadWarnings()
+        {
+            if (_sim.Stage.SpreadEvery <= 0f || _sim.Outcome != SOutcome.Playing) return;
+            foreach (Structure st in _sim.Structures)
+            {
+                if (!st.IsBuilding || !st.Burning || st.Fire < SurvivorSim.SpreadFire || st.SpreadClock > 3f) continue;
+                Structure next = _sim.NextBuilding(st);
+                if (next == null) continue;
+                float beat = 0.5f + (0.5f * Mathf.Sin(_time * (8f + (6f * (3f - st.SpreadClock)))));
+                SprayLine(W(st.Pos), W(next.Pos), 0.18f, new Color(1f, 0.25f, 0.1f, 0.35f + (0.5f * beat)));
+            }
         }
 
         private void ShowAlert(string text, Color color)

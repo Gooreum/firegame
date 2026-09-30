@@ -125,6 +125,15 @@ namespace FireGame.Prototypes.EditorTools
                 }
                 if (near != null) view.Sim.Ignite(near, 0.8f);
             });
+            // 불 규칙: 크게 타는 빵집이 옆 가게로 번지는 순간(빨간 알림 + 두 건물을 잇는 불길). 두 건물 가운데를 본다.
+            failures += SurvivorShot(dir, "c26_fire_spread", view => view.Sim.Spread.Count > 0, 4, false, view =>
+            {
+                Structure from = view.Sim.SpreadFrom[0];
+                Structure to = view.Sim.Spread[0];
+                view.Frame(new Vector3((from.Pos.X + to.Pos.X) / 2f, (from.Pos.Y + to.Pos.Y) / 2f, 0f), 12f);
+            }, 1, view => view.Sim.Ignite(view.Sim.Structures.Find(st => st.Name == "빵집"), 1f));
+            // 한 번에 쏟는 물(풀장비 물폭탄·헬기)이 큰 불을 줄인 순간: 블룸 번쩍임 + 지붕 위 "−N%".
+            failures += SurvivorShot(dir, "c27_fire_knock", view => view.Sim.Knocked.Count > 0 && view.Sim.PendingChoices == null, 6, true);
             // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
             failures += SurvivorShot(dir, "c19_forest_specials", view => view.Sim.RainAt.HasValue && view.Sim.Retardants.Count > 0, 45, true, null, 2);
 

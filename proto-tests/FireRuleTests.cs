@@ -106,6 +106,64 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void HeliDrop_KnocksABigFireDown_AndSignalsIt()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 8f, 0f);
+            sim.Ignite(shop, 1f);
+            sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { UpgradeId.Heli };
+            sim.Choose(0);
+            FireKnock? knock = null;
+            for (int i = 0; i < 60 * 4 && knock == null; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                foreach (FireKnock k in sim.Knocked)
+                {
+                    if (k.At == shop) knock = k;
+                }
+            }
+            Assert.NotNull(knock);
+            Assert.True(knock.Value.Amount > SurvivorSim.KnockShown, "헬기 물이 줄인 양 " + knock.Value.Amount);
+        }
+
+        [Fact]
+        public void HoseTicks_AreTooSmallToSignal()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 6f, 0f);
+            sim.Ignite(shop, 1f);
+            for (int i = 0; i < 60; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Aim = new Vec2(shop.Pos.X - sim.Player.X, shop.Pos.Y - sim.Player.Y);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+                Assert.Empty(sim.Knocked);
+            }
+        }
+
+        [Fact]
+        public void Spread_TellsWhereItCameFrom()
+        {
+            SurvivorSim sim = Quiet();
+            Structure burning = Shop(sim, 8f, 0f);
+            Structure next = Shop(sim, 8f, 7f);
+            sim.Ignite(burning, 0.9f);
+            for (int i = 0; i < (int)((sim.Stage.SpreadEvery + 0.2f) / SurvivorSim.Dt); i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+                int k = sim.Spread.IndexOf(next);
+                if (k < 0) continue;
+                Assert.Same(burning, sim.SpreadFrom[k]);
+                return;
+            }
+            Assert.Fail("번짐이 안 일어났다");
+        }
+
+        [Fact]
         public void Report_IgnitesAtReportFire()
         {
             var sim = new SurvivorSim(1);

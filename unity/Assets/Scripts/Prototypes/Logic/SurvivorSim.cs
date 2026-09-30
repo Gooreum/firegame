@@ -157,6 +157,15 @@ namespace FireGame.Prototypes.Logic
         Special,
     }
 
+    /// <summary>화면용: 한 번에 크게 줄인 건물 불(물폭탄·헬기·장막 등). 지붕 위에 "−N%"를 띄운다.</summary>
+    public struct FireKnock
+    {
+        public Structure At;
+
+        /// <summary>줄어든 불 세기(0~1).</summary>
+        public float Amount;
+    }
+
     /// <summary>화면용 한 틱 기록. 피해 숫자·파편을 그린다.</summary>
     public struct Hit
     {
@@ -406,8 +415,15 @@ namespace FireGame.Prototypes.Logic
         /// <summary>이번 틱에 누군가를 구해 낸 건물.</summary>
         public readonly List<Structure> RescuedFrom = new List<Structure>();
 
-        /// <summary>이번 틱에 옆 건물에서 불이 옮겨붙은 건물.</summary>
+        /// <summary>이번 틱에 옆 건물에서 불이 옮겨붙은 건물. SpreadFrom[i]가 옮긴 건물이다.</summary>
         public readonly List<Structure> Spread = new List<Structure>();
+        public readonly List<Structure> SpreadFrom = new List<Structure>();
+
+        /// <summary>이번 틱에 한 번에 KnockShown 넘게 줄어든 건물 불.</summary>
+        public readonly List<FireKnock> Knocked = new List<FireKnock>();
+
+        /// <summary>이만큼 넘게 한 번에 줄어야 Knocked에 든다(꾸준한 물줄기의 한 틱은 훨씬 작다).</summary>
+        public const float KnockShown = 0.15f;
 
         /// <summary>이번 틱에 새로 불붙은 구조물.</summary>
         public readonly List<Structure> Ignited = new List<Structure>();
@@ -714,6 +730,8 @@ namespace FireGame.Prototypes.Logic
             Reignited.Clear();
             Ignited.Clear();
             Spread.Clear();
+            SpreadFrom.Clear();
+            Knocked.Clear();
             Fell.Clear();
             Doused.Clear();
             HeliDrops.Clear();
@@ -1744,7 +1762,9 @@ namespace FireGame.Prototypes.Logic
             if (s.Burning)
             {
                 // 큰 불일수록 물이 덜 먹힌다: 일찍 잡으면 쉽고, 놓치면 오래 걸린다.
+                float before = s.Fire;
                 s.Fire -= resist ? water * (1f - (FireResist * s.Fire)) : water;
+                if (before - Math.Max(0f, s.Fire) > KnockShown && s.IsBuilding) Knocked.Add(new FireKnock { At = s, Amount = before - Math.Max(0f, s.Fire) });
                 if (s.Fire > 0f) return;
                 s.Fire = 0f;
                 s.Fuse = -1f;
@@ -1942,6 +1962,7 @@ namespace FireGame.Prototypes.Logic
                         if (next != null && Ignite(next, SpreadIgnite))
                         {
                             Spread.Add(next);
+                            SpreadFrom.Add(s);
                             Stats.Spreads++;
                         }
                     }
