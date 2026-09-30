@@ -1498,7 +1498,7 @@ namespace FireGame.Prototypes
                 float a = t < 0.7f ? 1f : 1f - ((t - 0.7f) / 0.3f);
                 _civilianRings.Put(at, 1.2f, 0f, new Color(0.4f, 1f, 0.4f, 0.4f * a));
                 _shadows.Put(at + new Vector3(0f, -0.3f, 0f), 0.8f, 0f, new Color(0f, 0f, 0f, 0.35f * a), null, 0.5f);
-                _civilians.Put(at + new Vector3(0f, 0.12f * Mathf.Abs(Mathf.Sin(_time * 16f)), 0f), 0.85f, 0f, new Color(1f, 1f, 1f, a), Art.Get(Faces[i % Faces.Length]));
+                _civilians.Put(at + new Vector3(0f, 0.12f * Mathf.Abs(Mathf.Sin(_time * 16f)), 0f), 0.85f, 0f, new Color(1f, 1f, 1f, a), CivilianArt(i, (int)((_time * 10f) + i)));
             }
         }
 
@@ -1673,7 +1673,7 @@ namespace FireGame.Prototypes
                 float lift = Mathf.Clamp01(patrol.DroneRescue / SurvivorSim.DroneRescueTime);
                 Vector3 top = center + new Vector3(0f, 2.2f, 0f);
                 SprayLine(top, center, 0.08f, new Color(1f, 0.85f, 0.3f, 0.95f));
-                _civilians.Put(Vector3.Lerp(center, top, lift), 0.6f, 10f * Mathf.Sin(_time * 8f), Color.white, Art.Get(Faces[0]));
+                _civilians.Put(Vector3.Lerp(center, top, lift), 0.6f, 10f * Mathf.Sin(_time * 8f), Color.white, CivilianArt(0));
             }
 
             DrawTurrets();
@@ -1813,14 +1813,15 @@ namespace FireGame.Prototypes
             WaterRibbon.Build(_ribbonIn, w, _time, jet ? 0.6f : 1f, _ribbon, _blobs);
             if (_ribbon.Count < 2) return;
 
-            _waterSheath.Put(_ribbon, 1.35f, 0f, new Color(0.5f, 0.78f, 1f, 0.35f), 5f);
-            _waterBody.Put(_ribbon, 1f, 0f, new Color(0.55f, 0.8f, 1f, jet ? 0.8f : 0.92f), 8f);
+            float lift = last.Hose ? HandHeight : 0f;
+            _waterSheath.Put(_ribbon, 1.35f, 0f, new Color(0.5f, 0.78f, 1f, 0.35f), 5f, lift);
+            _waterBody.Put(_ribbon, 1f, 0f, new Color(0.55f, 0.8f, 1f, jet ? 0.8f : 0.92f), 8f, lift);
             // 빛은 왼쪽 위에서 온다: 하이라이트를 진행 방향 왼쪽으로 치우친다.
-            _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f);
+            _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f, lift);
             if (!jet && _sim.Build.Level(UpgradeId.Hose) >= Loadout.MaxLevel)
             {
                 // 물대포 MAX: 줄기 한가운데 금빛-흰 심지가 흐르고 끝에서 금빛 반짝이가 튄다.
-                _waterShine.Put(_ribbon, 0.16f, 0f, new Color(1f, 0.88f, 0.45f, 0.75f), 22f);
+                _waterShine.Put(_ribbon, 0.16f, 0f, new Color(1f, 0.88f, 0.45f, 0.75f), 22f, lift);
                 WaterRibbon.Point tipPt = _ribbon[_ribbon.Count - 1];
                 if (Random.value < 0.35f) Sparkle(new Vector3(tipPt.Pos.X, tipPt.Pos.Y, 0f), 1, new Color(1f, 0.9f, 0.5f));
             }
@@ -1964,7 +1965,10 @@ namespace FireGame.Prototypes
         /// 노즐을 쥔 손: 들고 다닐 때는 오른손, 쏠 때는 옆으로 선 몸의 앞손(왼손).
         /// 뒷손(오른손)은 호스를 받친다.
         /// </summary>
-        private Vector3 Hand() => Vector3.Lerp(Fist(RightFist), Fist(LeftFist), _stance);
+        private Vector3 Hand() => Vector3.Lerp(Fist(RightFist), Fist(LeftFist), _stance) + Up(HandHeight);
+
+        /// <summary>서 있는 소방관이 노즐을 쥔 높이(칸). 물줄기는 여기서 나와 4칸에 걸쳐 땅으로 떨어진다.</summary>
+        private const float HandHeight = 0.55f;
 
         /// <summary>물이 나오는 노즐 끝. 물줄기·총구 물보라가 모두 여기서 시작한다.</summary>
         private Vector3 NozzleTip() => Hand() + (Look() * 0.5f);
@@ -1988,16 +1992,39 @@ namespace FireGame.Prototypes
             if (_stance > 0.01f) _nozzle.Put(Fist(RightFist), 0.18f, 0f, new Color(glove.r, glove.g, glove.b, _stance), DiscSprite());
         }
 
+        /// <summary>바라보는 방향으로 앞(카메라 쪽)·뒤·옆 중 하나. 왼쪽을 보면 옆모습을 뒤집는다.</summary>
+        private static PixelPeople.Face FaceOf(Vector3 dir, out bool flip)
+        {
+            flip = dir.x < 0f;
+            if (Mathf.Abs(dir.y) > Mathf.Abs(dir.x) * 1.2f) return dir.y < 0f ? PixelPeople.Face.Down : PixelPeople.Face.Up;
+            return PixelPeople.Face.Side;
+        }
+
+        /// <summary>구조되는 시민(여자·할아버지·남자)을 번갈아.</summary>
+        private static Sprite CivilianArt(int k, int frame = 0)
+        {
+            return PixelPeople.Get((PixelPeople.Kind)(2 + (((k % 3) + 3) % 3)), 0, PixelPeople.Face.Down, frame);
+        }
+
         private void DrawPlayer()
         {
             Vector3 at = W(_sim.Player);
             Vector3 look = Look();
             Vector3 kick = look * (-0.1f * _recoil);
             float lookDeg = Mathf.Atan2(look.y, look.x) * Mathf.Rad2Deg;
-            _player.transform.localPosition = at + kick + new Vector3(0f, 0f, -0.01f);
-            _shadows.Put(at + new Vector3(0.05f, -0.15f, 0f), 1f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.55f);
-            // 몸을 조준에서 조금 오른쪽으로 틀어, 오른쪽 옆구리에 노즐을 끼고 버티는 자세.
-            _player.transform.localRotation = Quaternion.Euler(0f, 0f, lookDeg + BodyTurn);
+            _shadows.Put(at + new Vector3(0.05f, -0.1f, 0f), 1f, 0f, new Color(0f, 0f, 0f, 0.45f), null, 0.5f);
+            // 서 있는 도트 소방관: 조준 쪽을 보고(앞·뒤·옆, 왼쪽은 뒤집기), 걸으면 다리를 번갈아 내딛으며 통통 튄다.
+            bool moving = (at - _lastPlayer).sqrMagnitude > 0.00001f;
+            PixelPeople.Face face = FaceOf(look, out bool flip);
+            int outfitNow = Mathf.Min(_sim.Build.Level(UpgradeId.Suit), 4);
+            _player.sprite = PixelPeople.Get(PixelPeople.Kind.Firefighter, outfitNow, face, moving ? (int)(_time * 8f) : 0);
+            float bodyW = 1.05f;
+            float bodyH = bodyW * PixelPeople.Height / PixelPeople.Width;
+            float unit = Art.FitWidth(_player.sprite, bodyW);
+            _player.transform.localScale = new Vector3(flip ? -unit : unit, unit, 1f);
+            float hop = moving ? 0.07f * Mathf.Abs(Mathf.Sin(_time * 16f)) : 0f;
+            _player.transform.localPosition = at + kick + (Billboard * Vector3.up * ((bodyH * 0.5f) + hop));
+            _player.transform.localRotation = Billboard;
             DrawNozzle(look, lookDeg);
             DrawHoseLine(at, look);
             DrawReticle(at);
@@ -2006,8 +2033,6 @@ namespace FireGame.Prototypes
             int outfit = Mathf.Min(suit, 4);
             if (outfit != _suitShown)
             {
-                _player.sprite = Art.Get("TopDown/player_suit_" + outfit);
-                _player.transform.localScale = Vector3.one * Art.FitWidth(_player.sprite, 0.95f);
                 if (_suitShown >= 0 && outfit > _suitShown) SuitUp(at);
                 _suitShown = outfit;
             }
@@ -2243,7 +2268,11 @@ namespace FireGame.Prototypes
                     if (Random.value < 0.05f) Steam(wetAt + new Vector3(0f, 0.3f, 0f), 1, 0.9f);
                 }
                 if (squad) _auras.Put(at, 1.3f, 0f, new Color(1f, 0.85f, 0.35f, 0.5f));
-                _partner.Put(at + new Vector3(0f, bob, 0f), 0.85f, _partnerDeg[i], squad ? new Color(1f, 0.9f, 0.5f) : Color.white);
+                float pd = _partnerDeg[i] * Mathf.Deg2Rad;
+                PixelPeople.Face pface = FaceOf(new Vector3(Mathf.Cos(pd), Mathf.Sin(pd), 0f), out bool pflip);
+                bool walking = moved.sqrMagnitude > 0.0001f;
+                Sprite partnerArt = PixelPeople.Get(PixelPeople.Kind.Partner, 0, pface, walking ? (int)((_time * 8f) + i) : 0);
+                _partner.Put(at + Up(bob), pflip ? -0.95f : 0.95f, 0f, squad ? new Color(1f, 0.9f, 0.5f) : Color.white, partnerArt);
                 if (i == 0 && _partnerTag != null) _partnerTag.transform.localPosition = at + new Vector3(0f, 0.85f, -0.2f);
             }
         }
@@ -3580,7 +3609,7 @@ namespace FireGame.Prototypes
             // 첫 창 안에 갇힌 사람이 흔들린다(앞벽에 붙어 서 있다).
             Rect paneRect = look.Windows.Length > 0 ? look.Windows[0] : new Rect(-0.2f, -st.Half.Y + 0.2f, 0.4f, 0.4f);
             Vector3 win = FacadePoint(at, st.Half.Y * 2f, new Vector2(paneRect.center.x, paneRect.yMin + (0.06f * bob))) + new Vector3(0f, -0.06f, 0f);
-            _civilians.Put(win, 0.55f, 8f * Mathf.Sin(_time * 9f + seed), Color.white, Art.Get(Faces[seed % Faces.Length]));
+            _civilians.Put(win, 0.55f, 8f * Mathf.Sin(_time * 9f + seed), Color.white, CivilianArt(seed));
 
             bool choking = st.Fire >= SurvivorSim.SmokeFire;
             float urgent = choking ? Mathf.Clamp01(st.Smoke / SurvivorSim.SmokeTime) : 0f;
@@ -3594,7 +3623,7 @@ namespace FireGame.Prototypes
                 for (int k = 0; k < st.Residents; k++)
                 {
                     float wob = Mathf.Sin((_time * 8f) + k) * 0.06f;
-                    _civilians.Put(at + new Vector3(left + (k * gap), -st.Half.Y * 0.5f, 0f) + Up(hgt + 0.05f + wob), 0.5f, 8f * Mathf.Sin((_time * 9f) + k), Color.white, Art.Get(Faces[(seed + k) % Faces.Length]));
+                    _civilians.Put(at + new Vector3(left + (k * gap), -st.Half.Y * 0.5f, 0f) + Up(hgt + 0.05f + wob), 0.5f, 8f * Mathf.Sin((_time * 9f) + k), Color.white, CivilianArt((seed + k)));
                 }
                 _civilianRings.Put(at, Mathf.Max(st.Half.X, st.Half.Y) * (3f + (0.4f * Mathf.Sin(_time * 5f))), 0f, new Color(1f, 0.2f, 0.1f, 0.35f));
             }
@@ -3723,7 +3752,8 @@ namespace FireGame.Prototypes
             _heliShadow = new Pool(_world, "HeliShadow", HeliSprite(), 11, null);
             _heli = new Pool(_world, "Heli", HeliSprite(), 23, null);
             _rotor = new Pool(_world, "Rotor", RotorSprite(), 24, null);
-            _partner = AddPool("Partner", "TopDown/player_suit_1", 15);
+            _partner = new Pool(_world, "Partner", PixelPeople.Get(PixelPeople.Kind.Partner, 0, PixelPeople.Face.Down, 0), 15, Cutout()) { Upright = true };
+            _pools.Add(_partner);
             _sprayLines = new Pool(_world, "SprayLine", Art.White, 14, null);
             _pools.Add(_sprayLines);
             _turretBase = new Pool(_world, "TurretBase", TurretSprite(), 13, null);
@@ -3775,7 +3805,8 @@ namespace FireGame.Prototypes
 
             _playerGlow = NewSprite(_root, "Magnet", Art.Get("Effects/glow"), 5);
             _playerGlow.color = new Color(0.4f, 0.7f, 1f, 0.08f);
-            _player = NewSprite(_root, "Player", Art.Get("TopDown/player_suit_0"), 15);
+            _player = NewSprite(_root, "Player", PixelPeople.Get(PixelPeople.Kind.Firefighter, 0, PixelPeople.Face.Down, 0), 15);
+            _player.sharedMaterial = Cutout();
             _player.transform.localScale = Vector3.one * Art.FitWidth(_player.sprite, 0.95f);
         }
 
@@ -3870,7 +3901,7 @@ namespace FireGame.Prototypes
                 if (Upright)
                 {
                     // 발이 땅 자리에 닿게 반 키만큼 카메라 위쪽으로 올리고, 흔들림은 살짝만 남긴다.
-                    float half = size * stretch * aspect * 0.5f;
+                    float half = Mathf.Abs(size) * stretch * aspect * 0.5f;
                     t.localPosition = at + (Billboard * Vector3.up * half);
                     t.localRotation = Billboard * Quaternion.Euler(0f, 0f, Mathf.Clamp(Mathf.DeltaAngle(0f, degrees), -15f, 15f));
                 }
@@ -3879,7 +3910,7 @@ namespace FireGame.Prototypes
                     t.localPosition = at;
                     t.localRotation = Quaternion.Euler(0f, 0f, degrees);
                 }
-                t.localScale = new Vector3(unit * size, unit * size * stretch, 1f);
+                t.localScale = new Vector3(unit * size, unit * Mathf.Abs(size) * stretch, 1f);
                 r.color = color;
             }
 
@@ -3965,7 +3996,7 @@ namespace FireGame.Prototypes
             /// <param name="widthScale">리본 반폭 배율.</param>
             /// <param name="offset">반폭 대비 법선 쪽으로 옮기는 양(+ = 진행 방향 왼쪽).</param>
             /// <param name="flowSpeed">결이 흐르는 속도(칸/초).</param>
-            public void Put(List<WaterRibbon.Point> pts, float widthScale, float offset, Color color, float flowSpeed)
+            public void Put(List<WaterRibbon.Point> pts, float widthScale, float offset, Color color, float flowSpeed, float lift = 0f)
             {
                 if (pts.Count < 2) return;
                 if (_used == _meshes.Count)
@@ -3995,7 +4026,9 @@ namespace FireGame.Prototypes
                 for (int i = 0; i < pts.Count; i++)
                 {
                     WaterRibbon.Point p = pts[i];
-                    var center = new Vector3(p.Pos.X, p.Pos.Y, 0f);
+                    // 호스 줄기: 손 높이(lift)에서 나와 4칸에 걸쳐 땅으로 떨어진다.
+                    float fall = Mathf.Clamp01(1f - (p.Along / 4f));
+                    var center = new Vector3(p.Pos.X, p.Pos.Y, -lift * fall * (2f - fall));
                     var n = new Vector3(p.Normal.X, p.Normal.Y, 0f);
                     Vector3 shift = n * (p.Half * offset);
                     Vector3 half = n * (p.Half * widthScale);
