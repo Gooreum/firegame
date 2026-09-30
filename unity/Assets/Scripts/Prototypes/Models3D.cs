@@ -83,16 +83,30 @@ namespace FireGame.Prototypes
             go.transform.localRotation = Stand * Quaternion.Euler(0f, yaw, 0f);
         }
 
-        /// <summary>Idle·Walk·Run·Victory 같은 클립으로 부드럽게 바꾼다(이미 틀고 있으면 그대로).</summary>
-        public static void Play(GameObject go, string clip, float speed = 1f)
+        /// <summary>
+        /// Idle·Walk·Run·Victory 같은 클립으로 부드럽게 바꾼다(이미 틀고 있으면 그대로).
+        /// 플레이 중이 아니면(편집기 캡처) 애니메이션이 저절로 돌지 않으므로 time(초)으로 직접 자세를 뽑는다.
+        /// </summary>
+        public static void Play(GameObject go, string clip, float speed = 1f, float time = 0f)
         {
-            var anim = go.GetComponent<Animation>();
+            var anim = go != null ? go.GetComponent<Animation>() : null;
             if (anim == null) return;
             string name = Armature + clip;
             AnimationState state = anim[name];
             if (state == null) return;
             state.speed = speed;
-            if (!anim.IsPlaying(name)) anim.CrossFade(name, 0.15f);
+            if (Application.isPlaying)
+            {
+                if (!anim.IsPlaying(name)) anim.CrossFade(name, 0.15f);
+                return;
+            }
+            foreach (AnimationState other in anim)
+            {
+                other.enabled = other == state;
+                other.weight = other == state ? 1f : 0f;
+            }
+            state.time = state.length > 0f ? Mathf.Repeat(time * speed, state.length) : 0f;
+            anim.Sample();
         }
 
         /// <summary>

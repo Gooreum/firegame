@@ -279,7 +279,7 @@ namespace FireGame.Prototypes
         private readonly List<Image> _stars = new List<Image>();
         private static Sprite _arrowSprite;
 
-        private SpriteRenderer _player;
+        private GameObject _player;
         private SpriteRenderer _playerGlow;
         private readonly List<Pool> _pools = new List<Pool>();
         private readonly List<RibbonPool> _ribbons = new List<RibbonPool>();
@@ -2097,6 +2097,26 @@ namespace FireGame.Prototypes
             return PixelPeople.Face.Side;
         }
 
+        /// <summary>사람 모델 키(칸).</summary>
+        private const float PersonTall = 1.6f;
+
+        /// <summary>
+        /// 방화복 단계별 소방관 옷(Worker 모델 머티리얼 이름): 0 회청 안전모·파랑 작업복(어두운 바닥에서도 보이게) → 1 노란 안전모 → 2 빨간 안전모·황갈 방화복
+        /// → 3 빨간 방화복 → 4 은색 방열복. 피부·얼굴은 그대로.
+        /// </summary>
+        private Color? SuitColor(string material)
+        {
+            int outfit = Mathf.Clamp(_sim.Build.Level(UpgradeId.Suit), 0, 4);
+            Color hat = outfit == 0 ? new Color(0.36f, 0.4f, 0.48f) : outfit == 1 ? new Color(1f, 0.82f, 0.15f) : outfit < 4 ? new Color(0.9f, 0.18f, 0.12f) : new Color(0.88f, 0.9f, 0.93f);
+            Color coat = outfit < 2 ? new Color(0.2f, 0.45f, 0.85f) : outfit == 2 ? new Color(0.82f, 0.66f, 0.32f) : outfit == 3 ? new Color(0.85f, 0.2f, 0.14f) : new Color(0.72f, 0.75f, 0.8f);
+            Color stripe = outfit < 2 ? new Color(0.45f, 0.7f, 1f) : outfit == 2 ? new Color(0.85f, 1f, 0.3f) : outfit == 3 ? new Color(1f, 0.95f, 0.45f) : new Color(1f, 0.85f, 0.35f);
+            if (material.StartsWith("Hat")) return hat;
+            if (material.StartsWith("Vest")) return stripe;
+            if (material.StartsWith("Shirt")) return coat;
+            if (material.StartsWith("Pants")) return outfit == 4 ? new Color(0.62f, 0.65f, 0.7f) : new Color(0.22f, 0.22f, 0.28f);
+            return null;
+        }
+
         /// <summary>구조되는 시민(여자·할아버지·남자)을 번갈아.</summary>
         private static Sprite CivilianArt(int k, int frame = 0)
         {
@@ -2110,18 +2130,11 @@ namespace FireGame.Prototypes
             Vector3 kick = look * (-0.1f * _recoil);
             float lookDeg = Mathf.Atan2(look.y, look.x) * Mathf.Rad2Deg;
             _shadows.Put(at + new Vector3(0.05f, -0.1f, 0f), 1f, 0f, new Color(0f, 0f, 0f, 0.45f), null, 0.5f);
-            // 서 있는 도트 소방관: 조준 쪽을 보고(앞·뒤·옆, 왼쪽은 뒤집기), 걸으면 다리를 번갈아 내딛으며 통통 튄다.
+            // 3D 소방관: 조준 쪽을 보고(쏘는 동안은 옆으로 틀어 선다), 움직이면 달리고 서 있으면 숨 고른다.
             bool moving = (at - _lastPlayer).sqrMagnitude > 0.00001f;
-            PixelPeople.Face face = FaceOf(look, out bool flip);
-            int outfitNow = Mathf.Min(_sim.Build.Level(UpgradeId.Suit), 4);
-            _player.sprite = PixelPeople.Get(PixelPeople.Kind.Firefighter, outfitNow, face, moving ? (int)(_time * 8f) : 0);
-            float bodyW = 1.05f;
-            float bodyH = bodyW * PixelPeople.Height / PixelPeople.Width;
-            float unit = Art.FitWidth(_player.sprite, bodyW);
-            _player.transform.localScale = new Vector3(flip ? -unit : unit, unit, 1f);
-            float hop = moving ? 0.07f * Mathf.Abs(Mathf.Sin(_time * 16f)) : 0f;
-            _player.transform.localPosition = at + kick + (Billboard * Vector3.up * ((bodyH * 0.5f) + hop));
-            _player.transform.localRotation = Billboard;
+            float bodyRad = (lookDeg + BodyTurn) * Mathf.Deg2Rad;
+            Models3D.Pose(_player, at + kick, new Vector3(Mathf.Cos(bodyRad), Mathf.Sin(bodyRad), 0f));
+            Models3D.Play(_player, moving ? "Run" : "Idle", 1f, _time);
             DrawNozzle(look, lookDeg);
             DrawHoseLine(at, look);
             DrawReticle(at);
@@ -2135,7 +2148,7 @@ namespace FireGame.Prototypes
             }
             // 최대 레벨이면 은색 방열복이 금빛으로 일렁인다.
             Color baseColor = suit >= Loadout.MaxLevel ? Color.Lerp(Color.white, new Color(1f, 0.85f, 0.4f), 0.25f + (0.15f * Mathf.Sin(_time * 4f))) : Color.white;
-            _player.color = Color.Lerp(baseColor, new Color(1f, 0.35f, 0.3f), Mathf.Clamp01(_hurt * 2f));
+            Models3D.Tint(_player, Color.Lerp(baseColor, new Color(1f, 0.35f, 0.3f), Mathf.Clamp01(_hurt * 2f)), SuitColor, outfit);
             _playerGlow.transform.localPosition = at;
             float r = 2f * _sim.Magnet * 0.5f;
             _playerGlow.transform.localScale = Vector3.one * Art.FitWidth(_playerGlow.sprite, r * 2f);
@@ -3980,9 +3993,7 @@ namespace FireGame.Prototypes
 
             _playerGlow = NewSprite(_root, "Magnet", Art.Get("Effects/glow"), 5);
             _playerGlow.color = new Color(0.4f, 0.7f, 1f, 0.08f);
-            _player = NewSprite(_root, "Player", PixelPeople.Get(PixelPeople.Kind.Firefighter, 0, PixelPeople.Face.Down, 0), 15);
-            _player.sharedMaterial = Cutout();
-            _player.transform.localScale = Vector3.one * Art.FitWidth(_player.sprite, 0.95f);
+            _player = Models3D.Person("People/Worker_Male", _root, PersonTall);
         }
 
         private Pool AddPool(string name, string sprite, int order, bool glow = false)
