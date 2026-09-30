@@ -3,6 +3,7 @@ using FireGame.Prototypes.Logic;
 using FireGame.UnityLayer;
 using FireGame.UnityLayer.Feel;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
 namespace FireGame.Prototypes
@@ -55,6 +56,7 @@ namespace FireGame.Prototypes
         private readonly Camera _worldCam;
         private readonly RenderTexture _worldRt;
         private readonly GameObject _worldScreen;
+        private readonly UnityEngine.Rendering.VolumeProfile _worldPost;
         private readonly Vector3 _cameraHome;
         private readonly float _cameraHomeSize;
         private float _viewHalfW = CameraSize * 16f / 9f;
@@ -412,6 +414,18 @@ namespace FireGame.Prototypes
             }
             var screenMat = new Material(grade) { mainTexture = _worldRt };
             _worldScreen.GetComponent<MeshRenderer>().sharedMaterial = screenMat;
+            // 블룸: 월드 카메라만 후처리한다(HUD는 선명하게). 문턱 1이라 밝은 지붕·차는 그대로 두고,
+            // 가산으로 겹쳐 1을 넘는 불·빛·불티만 번진다(HDR 버퍼).
+            _worldCam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+            var volume = new GameObject("WorldVolume").AddComponent<UnityEngine.Rendering.Volume>();
+            volume.transform.SetParent(_root, false);
+            volume.isGlobal = true;
+            _worldPost = ScriptableObject.CreateInstance<UnityEngine.Rendering.VolumeProfile>();
+            volume.sharedProfile = _worldPost;
+            var bloom = _worldPost.Add<UnityEngine.Rendering.Universal.Bloom>(true);
+            bloom.threshold.Override(1f);
+            bloom.intensity.Override(0.8f);
+            bloom.scatter.Override(0.65f);
             _hud = UiKit.Node(canvas.transform, "SurvivorHud");
             UiKit.Stretch(_hud);
 
@@ -509,6 +523,11 @@ namespace FireGame.Prototypes
                 _camera.orthographicSize = _cameraHomeSize;
             }
             if (_worldCam != null) _worldCam.targetTexture = null;
+            if (_worldPost != null)
+            {
+                if (Application.isPlaying) Object.Destroy(_worldPost);
+                else Object.DestroyImmediate(_worldPost);
+            }
             UiKit.Discard(_worldScreen);
             UiKit.Discard(_root.gameObject);
             UiKit.Discard(_hud.gameObject);
