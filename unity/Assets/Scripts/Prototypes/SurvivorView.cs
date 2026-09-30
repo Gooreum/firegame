@@ -18,10 +18,10 @@ namespace FireGame.Prototypes
     {
         private const float CameraSize = 9f;
 
-        /// <summary>픽셀 3D: 월드는 이만큼 기운 원근 카메라가 세로 PixelHeight 픽셀로 그려 도트로 키운다(HUD는 원래 해상도).</summary>
-        private const float Tilt = 40f;
+        /// <summary>월드는 수직에서 이만큼 기운(땅에서 65°) 원근 카메라가 화면 해상도(세로 최대 MaxWorldHeight)로 그린다.</summary>
+        private const float Tilt = 25f;
         private const float WorldFov = 30f;
-        private const int PixelHeight = 270;
+        private const int MaxWorldHeight = 1080;
 
         /// <summary>세운 스프라이트·글자가 카메라를 보는 방향(카메라는 기울기만 있고 돌지 않으니 늘 같다).</summary>
         private static readonly Quaternion Billboard = Quaternion.LookRotation(new Vector3(0f, Mathf.Sin(Tilt * Mathf.Deg2Rad), Mathf.Cos(Tilt * Mathf.Deg2Rad)), Vector3.up);
@@ -37,7 +37,7 @@ namespace FireGame.Prototypes
         private static readonly List<float> RoofHeights = new List<float>();
         private static Material _cutout;
 
-        /// <summary>HUD 카메라가 도트 화면을 보는 곳: 월드에서 멀리 떨어져 월드 스프라이트가 두 번 그려지지 않는다.</summary>
+        /// <summary>HUD 카메라가 월드 화면을 보는 곳: 월드에서 멀리 떨어져 월드 스프라이트가 두 번 그려지지 않는다.</summary>
         private static readonly Vector3 ScreenSpot = new Vector3(-5000f, -5000f, -10f);
         private const int MaxParticles = 1100;
         private const int MaxNumbers = 60;
@@ -53,8 +53,8 @@ namespace FireGame.Prototypes
         private readonly Camera _camera;
         private readonly RectTransform _hud;
         private readonly Camera _worldCam;
-        private readonly RenderTexture _pixelRt;
-        private readonly GameObject _pixelScreen;
+        private readonly RenderTexture _worldRt;
+        private readonly GameObject _worldScreen;
         private readonly Vector3 _cameraHome;
         private readonly float _cameraHomeSize;
         private float _viewHalfW = CameraSize * 16f / 9f;
@@ -373,11 +373,17 @@ namespace FireGame.Prototypes
             _world = new GameObject("Dynamic").transform;
             _world.SetParent(_root, false);
 
-            // 픽셀 3D: 월드 카메라가 낮은 해상도 텍스처에 그리고, 원래 카메라는 멀리서 그 텍스처(도트)와 HUD만 그린다.
+            // 월드 카메라가 텍스처에 그리고, 원래 카메라는 멀리서 그 텍스처(보정 셰이더)와 HUD만 그린다.
             _cameraHome = camera.transform.position;
             _cameraHomeSize = camera.orthographicSize;
             float aspect = camera.aspect > 0.1f ? camera.aspect : 16f / 9f;
-            _pixelRt = new RenderTexture(Mathf.RoundToInt(PixelHeight * aspect), PixelHeight, 24, RenderTextureFormat.ARGB32) { filterMode = FilterMode.Point, name = "PixelWorld" };
+            int height = Mathf.Clamp(camera.pixelHeight, 540, MaxWorldHeight);
+            _worldRt = new RenderTexture(Mathf.RoundToInt(height * aspect), height, 24, RenderTextureFormat.ARGB32)
+            {
+                filterMode = FilterMode.Bilinear,
+                antiAliasing = 4,
+                name = "WorldScreen",
+            };
             var eye = new GameObject("WorldCamera");
             eye.transform.SetParent(_root, false);
             _worldCam = eye.AddComponent<Camera>();
@@ -387,16 +393,16 @@ namespace FireGame.Prototypes
             _worldCam.farClipPlane = 300f;
             _worldCam.clearFlags = CameraClearFlags.SolidColor;
             _worldCam.backgroundColor = new Color(0.05f, 0.05f, 0.07f);
-            _worldCam.targetTexture = _pixelRt;
+            _worldCam.targetTexture = _worldRt;
             camera.transform.position = ScreenSpot;
-            _pixelScreen = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            _pixelScreen.name = "PixelScreen";
-            Collider screenCollider = _pixelScreen.GetComponent<Collider>();
+            _worldScreen = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            _worldScreen.name = "WorldScreen";
+            Collider screenCollider = _worldScreen.GetComponent<Collider>();
             if (Application.isPlaying) Object.Destroy(screenCollider);
             else Object.DestroyImmediate(screenCollider);
-            _pixelScreen.transform.SetParent(camera.transform, false);
-            _pixelScreen.transform.localPosition = new Vector3(0f, 0f, 5f);
-            _pixelScreen.transform.localScale = new Vector3(camera.orthographicSize * 2f * aspect, camera.orthographicSize * 2f, 1f);
+            _worldScreen.transform.SetParent(camera.transform, false);
+            _worldScreen.transform.localPosition = new Vector3(0f, 0f, 5f);
+            _worldScreen.transform.localScale = new Vector3(camera.orthographicSize * 2f * aspect, camera.orthographicSize * 2f, 1f);
             // 화면 보정(채도·색조·햇빛 띠·비네트). 셰이더를 못 찾으면 보정 없이 그대로 옮긴다.
             Shader grade = Resources.Load<Shader>("Shaders/PixelGrade");
             if (grade == null)
@@ -404,8 +410,8 @@ namespace FireGame.Prototypes
                 Debug.LogWarning("[SurvivorView] Shaders/PixelGrade 없음: 보정 없이 그린다.");
                 grade = Shader.Find("Unlit/Texture");
             }
-            var screenMat = new Material(grade) { mainTexture = _pixelRt };
-            _pixelScreen.GetComponent<MeshRenderer>().sharedMaterial = screenMat;
+            var screenMat = new Material(grade) { mainTexture = _worldRt };
+            _worldScreen.GetComponent<MeshRenderer>().sharedMaterial = screenMat;
             _hud = UiKit.Node(canvas.transform, "SurvivorHud");
             UiKit.Stretch(_hud);
 
@@ -503,14 +509,14 @@ namespace FireGame.Prototypes
                 _camera.orthographicSize = _cameraHomeSize;
             }
             if (_worldCam != null) _worldCam.targetTexture = null;
-            UiKit.Discard(_pixelScreen);
+            UiKit.Discard(_worldScreen);
             UiKit.Discard(_root.gameObject);
             UiKit.Discard(_hud.gameObject);
-            if (_pixelRt != null)
+            if (_worldRt != null)
             {
-                _pixelRt.Release();
-                if (Application.isPlaying) Object.Destroy(_pixelRt);
-                else Object.DestroyImmediate(_pixelRt);
+                _worldRt.Release();
+                if (Application.isPlaying) Object.Destroy(_worldRt);
+                else Object.DestroyImmediate(_worldRt);
             }
         }
 
@@ -3331,7 +3337,7 @@ namespace FireGame.Prototypes
             _ground.Add(floor.gameObject);
             floor.transform.localPosition = new Vector3(mid, mid, 0.1f);
             // 숲은 나무 사이로 햇빛 띠가 더 진하다.
-            Material screen = _pixelScreen.GetComponent<MeshRenderer>().sharedMaterial;
+            Material screen = _worldScreen.GetComponent<MeshRenderer>().sharedMaterial;
             if (screen.HasProperty("_ShaftColor")) screen.SetColor("_ShaftColor", new Color(1f, 0.92f, 0.7f, forest ? 0.1f : 0.06f));
 
             if (!forest)
