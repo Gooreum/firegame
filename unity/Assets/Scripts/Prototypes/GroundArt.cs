@@ -4,7 +4,8 @@ namespace FireGame.Prototypes
 {
     /// <summary>
     /// 픽셀 3D 바닥 한 장: 타일 격자 대신 스테이지 전체를 그린 절차 텍스처(칸당 Ppu 픽셀).
-    /// 마을은 풀밭 + 도로 4줄(연석·가운데 점선) + 석판 광장, 숲은 짙은 풀 + 십자 흙길. 해시 노이즈라 같은 입력이면 같은 그림.
+    /// 마을은 풀밭 + 도로 4줄(연석·가운데 점선) + 석판 광장, 숲은 짙은 풀 + 십자 흙길, 공단은 콘크리트 판 + 노란 차선 + 기름 얼룩.
+    /// 해시 노이즈라 같은 입력이면 같은 그림.
     /// </summary>
     public static class GroundArt
     {
@@ -17,14 +18,14 @@ namespace FireGame.Prototypes
         private const float Curb = 0.25f;
         private const float PlazaHalf = 8f;
 
-        private static Sprite _town;
-        private static Sprite _forest;
+        /// <summary>스테이지 번호별로 한 장씩 만들어 둔다(0은 비움).</summary>
+        private static readonly Sprite[] Cached = new Sprite[4];
 
-        /// <summary>스테이지 바닥 한 장(가운데 = mid). 마을·숲 각각 한 번만 만들고 재사용한다.</summary>
-        public static Sprite Paint(bool forest, int size, float mid, float pathHalf)
+        /// <summary>스테이지 바닥 한 장(가운데 = mid). 스테이지마다 한 번만 만들고 재사용한다. 모르는 번호는 마을.</summary>
+        public static Sprite Paint(int stage, int size, float mid, float pathHalf)
         {
-            Sprite cached = forest ? _forest : _town;
-            if (cached != null) return cached;
+            if (stage < 1 || stage >= Cached.Length) stage = 1;
+            if (Cached[stage] != null) return Cached[stage];
 
             int n = size * Ppu;
             var pixels = new Color32[n * n];
@@ -34,7 +35,7 @@ namespace FireGame.Prototypes
                 {
                     float x = (px + 0.5f) / Ppu;
                     float y = (py + 0.5f) / Ppu;
-                    Color c = forest ? Forest(px, py, x, y, mid, pathHalf) : Town(px, py, x, y, mid);
+                    Color c = stage == 2 ? Forest(px, py, x, y, mid, pathHalf) : stage == 3 ? Factory(px, py, x, y, mid) : Town(px, py, x, y, mid);
                     pixels[(py * n) + px] = c;
                 }
             }
@@ -42,15 +43,14 @@ namespace FireGame.Prototypes
             {
                 filterMode = FilterMode.Point,
                 wrapMode = TextureWrapMode.Clamp,
-                name = forest ? "GroundForest" : "GroundTown",
+                name = "Ground" + stage,
                 hideFlags = HideFlags.DontUnloadUnusedAsset,
             };
             texture.SetPixels32(pixels);
             texture.Apply(false);
             Sprite sprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), Ppu);
             sprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
-            if (forest) _forest = sprite;
-            else _town = sprite;
+            Cached[stage] = sprite;
             return sprite;
         }
 
@@ -95,6 +95,41 @@ namespace FireGame.Prototypes
                 return Opaque(stone);
             }
             return Grass(px, py, grain, 1f);
+        }
+
+        /// <summary>공단: 2칸 콘크리트 판(줄눈·판마다 밝기) + 마을 자리의 아스팔트 길(노란 실선 두 줄) + 짙은 기름 얼룩.</summary>
+        private static Color Factory(int px, int py, float x, float y, float mid)
+        {
+            float grain = Hash(px, py);
+            float roadY = Nearest(y, RoadsY);
+            float roadX = Nearest(x, RoadsX);
+            float road = Mathf.Min(Mathf.Abs(y - roadY), Mathf.Abs(x - roadX));
+            Color c;
+            if (road < RoadHalf + Curb)
+            {
+                c = new Color(0.25f, 0.25f, 0.27f) * (0.92f + (0.1f * Noise(px, py, 24)) + (0.05f * grain));
+                bool alongY = Mathf.Abs(y - roadY) < Mathf.Abs(x - roadX);
+                float centre = alongY ? Mathf.Abs(y - roadY) : Mathf.Abs(x - roadX);
+                bool crossing = Mathf.Abs(y - roadY) < RoadHalf && Mathf.Abs(x - roadX) < RoadHalf;
+                // 가운데 노란 실선 두 줄(공장 지대 차선).
+                if (!crossing && centre > 0.06f && centre < 0.14f) c = new Color(0.85f, 0.7f, 0.2f);
+            }
+            else
+            {
+                const int slab = Ppu * 2;
+                int tx = px / slab;
+                int ty = py / slab;
+                bool joint = (px % slab) == 0 || (py % slab) == 0;
+                c = new Color(0.56f, 0.56f, 0.54f) * (0.9f + (0.1f * Hash(tx, ty)) + (0.06f * Noise(px, py, 30)) + (0.04f * grain));
+                if (joint) c *= 0.8f;
+                // 광장 가장자리: 노랑·검정 빗금 안전선.
+                float edge = Mathf.Max(Mathf.Abs(x - mid), Mathf.Abs(y - mid));
+                if (Mathf.Abs(edge - PlazaHalf) < 0.18f) c = Mathf.Repeat(x + y, 1f) < 0.5f ? new Color(0.9f, 0.75f, 0.15f) : new Color(0.15f, 0.15f, 0.15f);
+            }
+            // 기름 얼룩: 큰 노이즈 봉우리만 어둡게.
+            float stain = Noise(px + 431, py + 97, 40);
+            if (stain > 0.8f) c = Color.Lerp(c, new Color(0.2f, 0.19f, 0.22f), Mathf.Clamp01((stain - 0.8f) * 6f) * 0.45f);
+            return Opaque(c);
         }
 
         private static Color Forest(int px, int py, float x, float y, float mid, float pathHalf)

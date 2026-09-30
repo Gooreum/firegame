@@ -62,6 +62,20 @@ namespace FireGame.Prototypes
             return root;
         }
 
+        /// <summary>약품 드럼(공단): 노란 원통 + 검은 띠 둘 + 뚜껑 테. 지름 약 1칸, 높이 약 1.3칸.</summary>
+        public static GameObject Drum(Transform parent)
+        {
+            GameObject root = Root("DrumModel", parent);
+            var yellow = new Color(0.95f, 0.75f, 0.12f);
+            // 원기둥은 높이 2(스케일 y=1이면 2칸)라 y 스케일을 반으로.
+            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.65f, 0f), new Vector3(1f, 0.65f, 1f), yellow);
+            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.42f, 0f), new Vector3(1.03f, 0.06f, 1.03f), Dark);
+            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.9f, 0f), new Vector3(1.03f, 0.06f, 1.03f), Dark);
+            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 1.31f, 0f), new Vector3(0.9f, 0.02f, 0.9f), Steel);
+            Part(PrimitiveType.Cylinder, root, new Vector3(0.22f, 1.34f, 0.1f), new Vector3(0.14f, 0.03f, 0.14f), Dark);
+            return root;
+        }
+
         /// <summary>물폭탄: 파란 물풍선 + 흰 띠 + 꼭지. 지름 약 1칸.</summary>
         public static GameObject Bomb(Transform parent)
         {

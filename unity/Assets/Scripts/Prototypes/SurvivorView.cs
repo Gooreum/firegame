@@ -147,6 +147,14 @@ namespace FireGame.Prototypes
             "Houses/building-type-k", "Houses/building-type-m", "Houses/building-type-p", "Houses/building-type-t",
         };
         private static readonly string[] CarModels = { "Cars/sedan", "Cars/suv", "Cars/taxi", "Cars/van", "Cars/hatchback-sports" };
+
+        /// <summary>공단(3스테이지) 공장 여덟 종과 컨테이너(차 자리). Kenney City Kit Industrial.</summary>
+        private static readonly string[] FactoryModels =
+        {
+            "Industrial/building-b", "Industrial/building-c", "Industrial/building-e", "Industrial/building-f",
+            "Industrial/building-k", "Industrial/building-l", "Industrial/building-m", "Industrial/building-r",
+        };
+        private static readonly string[] ContainerModels = { "Industrial/shipping-container-a", "Industrial/shipping-container-b", "Industrial/shipping-container-c" };
         private static readonly string[] TownTrees = { "Nature/tree_default", "Nature/tree_oak", "Nature/tree_fat" };
         private static readonly string[] ForestTrees = { "Nature/tree_pineTallA", "Nature/tree_pineRoundA", "Nature/tree_cone" };
         private const float MaxHouseHeight = 2.4f;
@@ -3305,6 +3313,7 @@ namespace FireGame.Prototypes
             foreach (GameObject g in _ground) UiKit.Discard(g);
             _ground.Clear();
             bool forest = _sim.Stage.Number == 2;
+            bool factory = _sim.Stage.Number == 3;
             int size = (int)SurvivorSim.ArenaSize;
             float mid = size / 2f;
             // 바닥은 스테이지 전체를 그린 한 장(풀결·도로·광장·흙길이 이어진다). 해 그림자를 받는 Lit 쿼드에 깐다.
@@ -3317,7 +3326,7 @@ namespace FireGame.Prototypes
             floor.transform.localPosition = new Vector3(mid, mid, 0.1f);
             floor.transform.localScale = new Vector3(size, size, 1f);
             var floorMat = new Material(Models3D.LitShader) { name = "GroundLit" };
-            floorMat.SetTexture("_BaseMap", GroundArt.Paint(forest, size, mid, SurvivorForest.PathHalf).texture);
+            floorMat.SetTexture("_BaseMap", GroundArt.Paint(_sim.Stage.Number, size, mid, SurvivorForest.PathHalf).texture);
             floorMat.SetFloat("_Smoothness", 0f);
             floor.GetComponent<MeshRenderer>().sharedMaterial = floorMat;
             _ground.Add(floor);
@@ -3325,7 +3334,21 @@ namespace FireGame.Prototypes
             Material screen = _worldScreen.GetComponent<MeshRenderer>().sharedMaterial;
             if (screen.HasProperty("_ShaftColor")) screen.SetColor("_ShaftColor", new Color(1f, 0.92f, 0.7f, forest ? 0.1f : 0.06f));
 
-            if (!forest)
+            if (factory)
+            {
+                // 공단 장식(판정 없음): 급수탑 하나와 작은 탱크들을 가장자리 빈터에 세운다.
+                float[] decor = { 6f, 54f, 54f, 6f, 6f, 6f, 54f, 54f, 30f, 6f };
+                for (int i = 0; i < decor.Length; i += 2)
+                {
+                    var p = new Vec2(decor[i], decor[i + 1]);
+                    if (_sim.Structures.Exists(st => st.Within(p, 2f))) continue;
+                    string kind = i == 0 ? "Industrial/water-tower" : "Industrial/detail-tank";
+                    GameObject d = Models3D.Place(kind, _root, new Vector3(p.X, p.Y, 0f), 2.2f, 2.2f, Hash01(i + 40) * 360f, out _, i == 0 ? 4f : 1.8f);
+                    if (d != null) _ground.Add(d);
+                }
+            }
+
+            if (!forest && !factory)
             {
                 // 마을 풀밭 덤불(판정 없음): 도로·광장·건물을 피해 흩어 세운다.
                 for (int i = 0; i < 30; i++)
@@ -3389,6 +3412,7 @@ namespace FireGame.Prototypes
             foreach (GameObject g in _models) UiKit.Discard(g);
             _models.Clear();
             int n = _sim.Structures.Count;
+            bool factory = _sim.Stage.Number == 3;
             _structModels = new GameObject[n];
             _structSize = new Vector3[n];
             for (int i = 0; i < n; i++)
@@ -3399,7 +3423,18 @@ namespace FireGame.Prototypes
                 float h = st.Half.Y * 2f;
                 GameObject go = null;
                 Vector3 size = Vector3.zero;
-                if (st.Kind == StructureKind.Depot)
+                if (st.Kind == StructureKind.Depot && factory)
+                {
+                    // 정유 저장소: 큰 원통 탱크 둘을 나란히.
+                    go = new GameObject("Refinery");
+                    go.transform.SetParent(_root, false);
+                    for (int k = 0; k < 2; k++)
+                    {
+                        Models3D.Place("Industrial/detail-tank-large", go.transform, at + new Vector3((k - 0.5f) * w * 0.5f, 0f, 0f), w * 0.48f, h * 0.95f, 0f, out Vector3 half, MaxHouseHeight);
+                        size = new Vector3(w, Mathf.Max(size.y, half.y), Mathf.Max(size.z, half.z));
+                    }
+                }
+                else if (st.Kind == StructureKind.Depot)
                 {
                     // 창고(넓은 터): 주택 두 채를 나란히.
                     go = new GameObject("Depot");
@@ -3415,11 +3450,20 @@ namespace FireGame.Prototypes
                 {
                     int pick = 0;
                     foreach (char ch in st.Name) pick += ch;
-                    go = Models3D.Place(HouseModels[pick % HouseModels.Length], _root, at, w * 0.95f, h * 0.95f, 0f, out size, MaxHouseHeight);
+                    string[] kinds = factory ? FactoryModels : HouseModels;
+                    go = Models3D.Place(kinds[pick % kinds.Length], _root, at, w * 0.95f, h * 0.95f, 0f, out size, MaxHouseHeight);
                 }
                 else if (st.Kind == StructureKind.Car)
                 {
-                    go = Models3D.Place(CarModels[i % CarModels.Length], _root, at, w, h, 90f, out size);
+                    go = factory
+                        ? Models3D.Place(ContainerModels[i % ContainerModels.Length], _root, at, w, h, 90f, out size)
+                        : Models3D.Place(CarModels[i % CarModels.Length], _root, at, w, h, 90f, out size);
+                }
+                else if (st.Kind == StructureKind.Gas && factory)
+                {
+                    // 약품 드럼: 기본 도형 모델(퓨즈 깜빡임은 DrawTown이 칠한다).
+                    go = ItemModels.Drum(_root);
+                    ItemModels.Place(go, at, 0f, Vector3.up, 0.8f);
                 }
                 else if (st.Kind == StructureKind.Tree)
                 {
@@ -3432,7 +3476,8 @@ namespace FireGame.Prototypes
                 _structModels[i] = go;
                 _structSize[i] = size;
                 // 주택 모델은 지붕이 모두 초록이라, 예전 가게 그림의 지붕색으로 지붕만 다시 칠해 가게를 구별한다.
-                if (st.IsBuilding)
+                // 공장은 모델마다 모양이 달라 키트 원래 색(회보라·주황)을 둔다.
+                if (st.IsBuilding && !factory)
                 {
                     // 밝기는 가장 센 채널 0.9로 맞춰 지붕이 칙칙하지 않게. 창고는 두 채 묶음(루트)에 한 번.
                     Color shop = RoofColor(ShopArt.For(st.Name, w, h));
@@ -3627,7 +3672,16 @@ namespace FireGame.Prototypes
                                     0.3f, 0.05f, new Color(1f, 0.9f, 0.4f), new Color(1f, 0.3f, 0.05f, 0f), 0f, true);
                             }
                         }
-                        _props.Put(at, 0.85f * (1f + (0.25f * fuse)), 0f, blink ? new Color(1f, 0.55f, 0.45f) : tint, Art.Get("Props/barrel_red"));
+                        if (model != null)
+                        {
+                            // 약품 드럼 모델: 퓨즈가 돌면 빨갛게 깜빡이며 부푼다.
+                            Models3D.Tint(model, blink ? new Color(1f, 0.45f, 0.35f) : tint);
+                            model.transform.localScale = Vector3.one * 0.8f * (1f + (0.2f * fuse));
+                        }
+                        else
+                        {
+                            _props.Put(at, 0.85f * (1f + (0.25f * fuse)), 0f, blink ? new Color(1f, 0.55f, 0.45f) : tint, Art.Get("Props/barrel_red"));
+                        }
                         break;
                 }
                 if (st.Burning && st.Kind != StructureKind.Gas) DrawRoofFire(st, at, w, h, i, st.Kind == StructureKind.Car ? RoofHeight(i) : st.Kind == StructureKind.Tree ? RoofHeight(i) * 0.55f : 0f);

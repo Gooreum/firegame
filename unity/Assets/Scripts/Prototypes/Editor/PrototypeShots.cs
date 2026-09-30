@@ -136,6 +136,9 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c27_fire_knock", view => view.Sim.Knocked.Count > 0 && view.Sim.PendingChoices == null, 6, true);
             // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
             failures += SurvivorShot(dir, "c19_forest_specials", view => view.Sim.RainAt.HasValue && view.Sim.Retardants.Count > 0, 45, true, null, 2);
+            // 3스테이지 공단: 공장·약품 드럼 무더기·컨테이너, 콘크리트 바닥과 노란 차선. 드럼 무더기와 이웃 공장이 보이게 잡는다.
+            failures += SurvivorShot(dir, "c28_factory", view => view.Sim.Time >= 45f && view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.Oil), 10, false,
+                view => view.Frame(new Vector3(24f, 38f, 0f), 13f), 3);
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);

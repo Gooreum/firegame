@@ -4,6 +4,7 @@
 #   Houses  Kenney City Kit Suburban   https://kenney.nl/assets/city-kit-suburban
 #   Cars    Kenney Car Kit             https://kenney.nl/assets/car-kit
 #   Nature  Kenney Nature Kit          https://kenney.nl/assets/nature-kit
+#   Industrial  Kenney City Kit Industrial  https://kenney.nl/assets/city-kit-industrial
 #   People  Quaternius Ultimate Animated Character Pack  https://quaternius.com/packs/ultimatedanimatedcharacter.html
 #
 # 다시 돌리면 같은 파일을 덮어쓴다.
@@ -17,6 +18,7 @@ trap 'rm -rf "$WORK"' EXIT
 HOUSES="building-type-a building-type-c building-type-e building-type-h building-type-k building-type-m building-type-p building-type-t"
 CARS="sedan suv taxi van hatchback-sports firetruck"
 NATURE="tree_default tree_oak tree_fat tree_pineRoundA tree_pineTallA tree_cone plant_bush plant_bushLarge rock_largeA rock_smallB"
+INDUSTRIAL="building-b building-c building-e building-f building-k building-l building-m building-r detail-tank detail-tank-large shipping-container-a shipping-container-b shipping-container-c water-tower"
 # 이름=구글 드라이브 파일 ID (Quaternius FBX 폴더)
 PEOPLE="Worker_Male=1rS4HxTBJKur-T_BZRDsvv68J2zr278wn Worker_Female=1-l5q7N7Q7ggdALBt_FfZszpf2otp3-QH Casual_Male=1Ls3XUkHqIcz3HL9JaW-dNWNnLiQLdkrs Casual_Female=1AYI79-CtvncVV0DW0Mg6_9hRKpX8Y1Pe OldClassy_Male=1mPqpDpTXYlFNZEVaf2rx39_o65k2-AhW"
 
@@ -41,6 +43,7 @@ kenney() {
 kenney Houses https://kenney.nl/media/pages/assets/city-kit-suburban/2c871b7af2-1745479373/kenney_city-kit-suburban_20.zip "$HOUSES" textured
 kenney Cars https://kenney.nl/media/pages/assets/car-kit/1a312ec241-1775131960/kenney_car-kit.zip "$CARS" textured
 kenney Nature https://kenney.nl/media/pages/assets/nature-kit/37ac38a37b-1677698939/kenney_nature-kit.zip "$NATURE"
+kenney Industrial https://kenney.nl/media/pages/assets/city-kit-industrial/0ec35b139d-1788171848/kenney_city-kit-industrial_2.0.zip "$INDUSTRIAL" textured
 
 mkdir -p "$DEST/People"
 for pair in $PEOPLE; do

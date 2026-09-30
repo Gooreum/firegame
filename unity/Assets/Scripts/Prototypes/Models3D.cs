@@ -48,6 +48,14 @@ namespace FireGame.Prototypes
             float s = Mathf.Min(w / Mathf.Max(0.001f, b.size.x), h / Mathf.Max(0.001f, b.size.y));
             go.transform.localScale = Vector3.one * s;
             b = Measure(go);
+            // 처음 잰 경계가 실제와 다른 모델이 있다(Kenney 컨테이너는 3.7배 작게 잡혔다): 한 번 더 재서 발자국에 맞춘다.
+            float fix = Mathf.Min(w / Mathf.Max(0.001f, b.size.x), h / Mathf.Max(0.001f, b.size.y));
+            if (Mathf.Abs(fix - 1f) > 0.01f)
+            {
+                s *= fix;
+                go.transform.localScale = Vector3.one * s;
+                b = Measure(go);
+            }
             if (maxHeight > 0f && b.size.z > maxHeight)
             {
                 // 모델 위쪽 축(Y)이 월드 높이다.
