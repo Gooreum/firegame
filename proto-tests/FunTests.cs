@@ -182,7 +182,8 @@ namespace FireGame.Prototypes.Tests
                 Assert.True(row.LevelGap <= town.LevelGap * 1.2f, row.Stage + "스테이지 레벨업이 느리다: " + row.LevelGap + "초 (마을 " + town.LevelGap + ")");
                 Assert.True(row.IdleShare <= town.IdleShare + 0.05f, row.Stage + "스테이지 걷기만 하는 시간이 길다: " + row.IdleShare + " (마을 " + town.IdleShare + ")");
                 Assert.True(row.EventsPerMin >= town.EventsPerMin * 0.8f, row.Stage + "스테이지 사건이 적다: " + row.EventsPerMin + " (마을 " + town.EventsPerMin + ")");
-                Assert.InRange(row.Crises, 3, 8);
+                // 숲은 체력보다 동네를 잃는 쪽으로 무너진다: 봇 60판 위기 판 평균이 10판당 3.5라 10판 하한은 2로 둔다.
+                Assert.InRange(row.Crises, 2, 8);
             }
             // 몸 압박: 체력이 절반 밑으로 떨어진 위기 판이 10판 중 3~8판(없으면 방화복이 쓸모없고, 늘 그러면 구조보다 생존이 먼저다).
             // 평균 최저 체력은 "몇 판은 쓰러지고 나머지는 멀쩡"한 두 갈래 분포를 못 담아 쓰지 않는다.
@@ -235,7 +236,8 @@ namespace FireGame.Prototypes.Tests
             }
             // 방화복 없이도(기본 봇은 방화복을 거의 안 고른다) 이길 수 있고, 방화복을 들면 몸 압박이 준다.
             // (잃은 사람 수는 10판으론 판마다 1~5명씩 흔들려 판정에 못 쓴다.)
-            Assert.True(basic.won >= 6, "기본 봇이 너무 못 이긴다: " + basic.won + "/20");
+            // 불 규칙 강화(측정 5) 뒤 목표 승률이 마을 30~40%, 숲 20%대라 20판 기대 승은 5~6이다. 하한은 4.
+            Assert.True(basic.won >= 4, "기본 봇이 너무 못 이긴다: " + basic.won + "/20");
             // 같은 보조끼리 비교한다: 보조를 먼저 챙기면 무기가 늦게 차서 몸 압박이 커진다(무기 강제와 섞으면 불공정).
             float passiveHp = 0f;
             int passives = 0;
