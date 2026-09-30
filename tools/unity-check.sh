@@ -5,6 +5,7 @@
 #   tools/unity-check.sh shots [폴더]      화면을 PNG로 찍는다(기본: tools/.shots)
 #   tools/unity-check.sh proto-shots [폴더] 재미 검증 시험판 화면(기본: tools/.shots-proto)
 #   tools/unity-check.sh ios [폴더]        시험판 C 아이폰용 Xcode 프로젝트(기본: unity/Builds/ios). 설치는 tools/ios-install.sh
+#   tools/unity-check.sh urp-setup         URP 파이프라인 애셋을 만들고 그래픽·품질 설정에 꽂는다(결과는 커밋)
 #
 # 에디터가 같은 프로젝트를 열고 있으면 배치 모드가 실행되지 않는다. 먼저 에디터를 닫는다.
 set -uo pipefail
@@ -102,8 +103,30 @@ case "$MODE" in
     echo "Xcode 프로젝트: $OUT/Unity-iPhone.xcodeproj"
     ;;
 
+  urp-setup)
+    "$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -logFile "$LOG" \
+      -executeMethod FireGame.Prototypes.EditorTools.UrpSetup.Apply
+    status=$?
+    report_compile_errors || exit 1
+    grep -E "\[UrpSetup\]" "$LOG" | sed 's/^/  /'
+    [ $status -eq 0 ] || { echo "URP 설정 실패, 종료 코드 $status (로그: $LOG)"; exit 1; }
+    # 복사본에서 돌았으면 만든 애셋·설정을 실제 프로젝트로 가져온다(에디터는 다시 열어야 반영된다).
+    if [ "$PROJECT" != "$REPO_ROOT/unity" ]; then
+      rsync -a "$PROJECT/Assets/Settings" "$REPO_ROOT/unity/Assets/"
+      for f in UniversalRenderPipelineGlobalSettings.asset DefaultVolumeProfile.asset; do
+        cp "$PROJECT/Assets/$f" "$PROJECT/Assets/$f.meta" "$REPO_ROOT/unity/Assets/"
+      done
+      cp "$PROJECT/ProjectSettings/ShaderGraphSettings.asset" "$REPO_ROOT/unity/ProjectSettings/" 2>/dev/null
+      cp "$PROJECT/Assets/Settings.meta" "$PROJECT/Assets/Scripts/Prototypes/Editor/UrpSetup.cs.meta" "$REPO_ROOT/unity/Assets/" 2>/dev/null
+      mv "$REPO_ROOT/unity/Assets/UrpSetup.cs.meta" "$REPO_ROOT/unity/Assets/Scripts/Prototypes/Editor/" 2>/dev/null
+      cp "$PROJECT/ProjectSettings/GraphicsSettings.asset" "$PROJECT/ProjectSettings/QualitySettings.asset" "$REPO_ROOT/unity/ProjectSettings/"
+      cp "$PROJECT/Packages/packages-lock.json" "$REPO_ROOT/unity/Packages/"
+      echo "복사본 결과를 unity/로 가져왔다. 열린 에디터는 다시 열어야 URP가 반영된다."
+    fi
+    ;;
+
   *)
-    echo "사용법: $0 compile | shots [폴더] | proto-shots [폴더] | ios [폴더]" >&2
+    echo "사용법: $0 compile | shots [폴더] | proto-shots [폴더] | ios [폴더] | urp-setup" >&2
     exit 2
     ;;
 esac
