@@ -263,6 +263,9 @@ namespace FireGame.Prototypes.Logic
         public const float BaseMaxHp = 100f;
         public const float SpawnDistance = 17f;
 
+        /// <summary>0:00의 가장자리 스폰 배율(초당 SpawnRate × 이 값). 4:00엔 8배까지 오른다.</summary>
+        public const float EarlySpawn = 1.5f;
+
         private const float CellSize = 2f;
         private const int Cells = (int)(ArenaSize / CellSize);
 
@@ -319,11 +322,11 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>콤보가 끊기기까지 남은 시간(초).</summary>
         public float ComboClock;
-        public const float ComboWindow = 2.5f;
+        public const float ComboWindow = 1f;
 
         /// <summary>콤보가 이만큼 쌓일 때마다 구슬 배율이 +1 (최대 ComboMaxMult).</summary>
-        public const int ComboStep = 8;
-        public const int ComboMaxMult = 3;
+        public const int ComboStep = 20;
+        public const int ComboMaxMult = 2;
 
         /// <summary>건물 불을 끄면 콤보가 이만큼 오른다(처치 하나는 1).</summary>
         public const int ComboPerDouse = 5;
@@ -887,7 +890,8 @@ namespace FireGame.Prototypes.Logic
         private void Direct()
         {
             // 불은 이제 주로 건물에서 나온다. 가장자리에서 몰려오는 불은 예전(3→35)보다 훨씬 적다.
-            float rate = Stage.SpawnRate * (1f + (7f * (float)Math.Pow(Math.Min(Time / RunTime, 1f), 1.5)));
+            // 첫 1분이 한산하지 않게 시작은 EarlySpawn배, 끝(4:00)은 그대로 8배다.
+            float rate = Stage.SpawnRate * (EarlySpawn + ((8f - EarlySpawn) * (float)Math.Pow(Math.Min(Time / RunTime, 1f), 1.5)));
             _spawnDebt += rate * Dt;
             while (_spawnDebt >= 1f)
             {

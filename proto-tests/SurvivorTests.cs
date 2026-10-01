@@ -644,8 +644,8 @@ namespace FireGame.Prototypes.Tests
             bool signalled = false;
             for (int i = 0; i < 60 * 3; i++)
             {
-                // 구조 구슬로 레벨이 오르면 카드를 고르고 계속 선다.
-                if (sim.PendingChoices != null) sim.Choose(0);
+                // 구조 경험치로 레벨이 오르면 카드를 고르고 계속 선다. 무기(물폭탄 등)는 불을 꺼서 구조를 끊으니 보조를 고른다.
+                if (sim.PendingChoices != null) sim.Choose(Math.Max(0, sim.PendingChoices.FindIndex(Loadout.IsPassive)));
                 sim.Step(0f, 0f);
                 if (sim.JustRescued && sim.RescuedFrom.Contains(shop)) signalled = true;
             }
@@ -980,17 +980,17 @@ namespace FireGame.Prototypes.Tests
             Assert.False(sim.JustComboTier);
             Assert.Equal(1, sim.ComboMult);
 
-            sim.Kill(Far(sim, 9f));
-            Assert.True(sim.JustComboTier, "8번째 처치에 배율이 올라야 한다");
+            sim.Kill(Far(sim, -5f));
+            Assert.True(sim.JustComboTier, "ComboStep번째 처치에 배율이 올라야 한다");
             Assert.Equal(2, sim.ComboMult);
 
-            Enemy ninth = Far(sim, 12f);
+            Enemy ninth = Far(sim, -8f);
             sim.Kill(ninth);
             Gem gem = sim.Gems.Find(g => g.Pos.X == ninth.Pos.X && g.Pos.Y == ninth.Pos.Y);
             Assert.NotNull(gem);
             Assert.Equal(2, gem.Value);
 
-            for (int i = 0; i < 24; i++) sim.Kill(Far(sim, 20f + i));
+            for (int i = 0; i < 2 * SurvivorSim.ComboStep; i++) sim.Kill(Far(sim, 20f + i));
             Assert.Equal(SurvivorSim.ComboMaxMult, sim.ComboMult);
         }
 

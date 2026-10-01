@@ -100,12 +100,13 @@ namespace FireGame.Prototypes.Tests
         {
             var lost = new int[SurvivorStages.Count + 1];
             var housesLost = new int[SurvivorStages.Count + 1];
+            int seeds = FunTests.Seeds;
             for (int stage = 1; stage <= SurvivorStages.Count; stage++)
             {
                 int won = 0;
                 int town = 0;
                 float time = 0f;
-                for (int seed = 1; seed <= 10; seed++)
+                for (int seed = 1; seed <= seeds; seed++)
                 {
                     var sim = new SurvivorSim(seed, stage);
                     var bot = new SurvivorBot(sim);
@@ -117,7 +118,7 @@ namespace FireGame.Prototypes.Tests
                     housesLost[stage] += sim.HousesLost;
                     time += sim.Time;
                 }
-                _out.WriteLine("스테이지 " + stage + " " + SurvivorStages.Get(stage).Name + ": 승 " + won + "/10 (동네 잃음 " + town + ", 쓰러짐 " + (lost[stage] - town) + "), 평균 " + (int)(time / 10f) + "초, 잃은 건물 평균 " + (housesLost[stage] / 10f).ToString("0.0"));
+                _out.WriteLine("스테이지 " + stage + " " + SurvivorStages.Get(stage).Name + ": 승 " + won + "/" + seeds + " (동네 잃음 " + town + ", 쓰러짐 " + (lost[stage] - town) + "), 평균 " + (int)(time / seeds) + "초, 잃은 건물 평균 " + (housesLost[stage] / (float)seeds).ToString("0.0"));
             }
             Assert.True(lost[2] > lost[1] || housesLost[2] > housesLost[1], "2스테이지가 1스테이지보다 쉽다");
             Assert.True(lost[3] > lost[1] || housesLost[3] > housesLost[1], "3스테이지가 1스테이지보다 쉽다");

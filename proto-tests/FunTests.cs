@@ -127,6 +127,12 @@ namespace FireGame.Prototypes.Tests
             }
         }
 
+        /// <summary>측정 판 수. 기본 10, 환경변수 FIREGAME_SEEDS로 늘려 편차를 줄인다(문서의 60판 측정).</summary>
+        public static int Seeds
+        {
+            get { return int.TryParse(Environment.GetEnvironmentVariable("FIREGAME_SEEDS"), out int n) && n > 0 ? n : 10; }
+        }
+
         public static FunRow Measure(int stage, int seeds, UpgradeId? favorite = null)
         {
             var row = new FunRow { Stage = stage };
@@ -172,22 +178,23 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void FunReport_StagesMatchTown()
         {
-            FunRow town = Measure(1, 10);
+            int seeds = Seeds;
+            FunRow town = Measure(1, seeds);
             _out.WriteLine(town.ToString());
             for (int stage = 2; stage <= SurvivorStages.Count; stage++)
             {
-                FunRow row = Measure(stage, 10);
+                FunRow row = Measure(stage, seeds);
                 _out.WriteLine(row.ToString());
                 // 1스테이지만큼 할 일이 자주 온다(docs/prototype-c-balance.md §5).
                 Assert.True(row.LevelGap <= town.LevelGap * 1.2f, row.Stage + "스테이지 레벨업이 느리다: " + row.LevelGap + "초 (마을 " + town.LevelGap + ")");
                 Assert.True(row.IdleShare <= town.IdleShare + 0.05f, row.Stage + "스테이지 걷기만 하는 시간이 길다: " + row.IdleShare + " (마을 " + town.IdleShare + ")");
                 Assert.True(row.EventsPerMin >= town.EventsPerMin * 0.8f, row.Stage + "스테이지 사건이 적다: " + row.EventsPerMin + " (마을 " + town.EventsPerMin + ")");
                 // 숲은 체력보다 동네를 잃는 쪽으로 무너진다: 봇 60판 위기 판 평균이 10판당 3.5라 10판 하한은 2로 둔다.
-                Assert.InRange(row.Crises, 2, 8);
+                Assert.InRange(row.Crises * 10f / seeds, 2f, 8f);
             }
             // 몸 압박: 체력이 절반 밑으로 떨어진 위기 판이 10판 중 3~8판(없으면 방화복이 쓸모없고, 늘 그러면 구조보다 생존이 먼저다).
             // 평균 최저 체력은 "몇 판은 쓰러지고 나머지는 멀쩡"한 두 갈래 분포를 못 담아 쓰지 않는다.
-            Assert.InRange(town.Crises, 3, 8);
+            Assert.InRange(town.Crises * 10f / seeds, 3f, 8f);
         }
 
         /// <summary>
