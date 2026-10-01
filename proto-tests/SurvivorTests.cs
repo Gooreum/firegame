@@ -944,6 +944,70 @@ namespace FireGame.Prototypes.Tests
             Assert.True(shop.Door.DistanceTo(sim.Player) > SurvivorSim.RescueRange, "소방관이 문 앞에 간 게 아니어야 한다");
         }
 
+        // --- 연속 진압 콤보 ---
+
+        private static Enemy Far(SurvivorSim sim, float dx)
+        {
+            Enemy e = sim.Spawn(EnemyKind.Ember, new Vec2(sim.Player.X + dx, sim.Player.Y + 8f));
+            e.Speed = 0f;
+            return e;
+        }
+
+        [Fact]
+        public void Combo_GrowsWithKills_AndBreaksAfterTheWindow()
+        {
+            SurvivorSim sim = Quiet();
+            for (int i = 0; i < 3; i++) sim.Kill(Far(sim, i));
+            Assert.Equal(3, sim.Combo);
+            Assert.Equal(3, sim.Stats.MaxCombo);
+            Assert.Equal(1, sim.ComboMult);
+
+            int ended = 0;
+            for (int i = 0; i < (int)((SurvivorSim.ComboWindow + 0.1f) / SurvivorSim.Dt); i++)
+            {
+                sim.Step(0f, 0f);
+                if (sim.ComboEnded > 0) ended = sim.ComboEnded;
+            }
+            Assert.Equal(3, ended);
+            Assert.Equal(0, sim.Combo);
+        }
+
+        [Fact]
+        public void Combo_MultipliesGems_UpToThree()
+        {
+            SurvivorSim sim = Quiet();
+            for (int i = 0; i < SurvivorSim.ComboStep - 1; i++) sim.Kill(Far(sim, i));
+            Assert.False(sim.JustComboTier);
+            Assert.Equal(1, sim.ComboMult);
+
+            sim.Kill(Far(sim, 9f));
+            Assert.True(sim.JustComboTier, "8번째 처치에 배율이 올라야 한다");
+            Assert.Equal(2, sim.ComboMult);
+
+            Enemy ninth = Far(sim, 12f);
+            sim.Kill(ninth);
+            Gem gem = sim.Gems.Find(g => g.Pos.X == ninth.Pos.X && g.Pos.Y == ninth.Pos.Y);
+            Assert.NotNull(gem);
+            Assert.Equal(2, gem.Value);
+
+            for (int i = 0; i < 24; i++) sim.Kill(Far(sim, 20f + i));
+            Assert.Equal(SurvivorSim.ComboMaxMult, sim.ComboMult);
+        }
+
+        [Fact]
+        public void DousingABuilding_AddsFiveCombo()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 6f, 0f);
+            sim.Ignite(shop, 0.05f);
+            for (int i = 0; i < 120 && shop.Burning; i++) Spray(sim, shop.Pos, 1);
+            Assert.False(shop.Burning, "작은 불을 2초 안에 못 껐다");
+            Assert.Equal(SurvivorSim.ComboPerDouse, sim.Combo);
+            Gem gem = sim.Gems.Find(g => g.Pos.DistanceTo(shop.Door) < 0.01f);
+            Assert.NotNull(gem);
+            Assert.Equal(8, gem.Value);
+        }
+
         [Fact]
         public void Hose_PushesTheCrowdBack()
         {

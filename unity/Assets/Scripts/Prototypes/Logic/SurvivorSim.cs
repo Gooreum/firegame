@@ -220,6 +220,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>증기 폭발 횟수.</summary>
         public int SteamBursts;
+
+        /// <summary>한 판에서 가장 길게 이어진 콤보.</summary>
+        public int MaxCombo;
     }
 
     /// <summary>
@@ -310,6 +313,32 @@ namespace FireGame.Prototypes.Logic
         public int Xp;
         public int Kills;
         public int Rescued;
+
+        /// <summary>이어진 처치·진화 수. ComboWindow 안에 다음이 없으면 끊긴다.</summary>
+        public int Combo;
+
+        /// <summary>콤보가 끊기기까지 남은 시간(초).</summary>
+        public float ComboClock;
+        public const float ComboWindow = 2.5f;
+
+        /// <summary>콤보가 이만큼 쌓일 때마다 구슬 배율이 +1 (최대 ComboMaxMult).</summary>
+        public const int ComboStep = 8;
+        public const int ComboMaxMult = 3;
+
+        /// <summary>건물 불을 끄면 콤보가 이만큼 오른다(처치 하나는 1).</summary>
+        public const int ComboPerDouse = 5;
+
+        /// <summary>지금 콤보의 구슬 배율(1~ComboMaxMult).</summary>
+        public int ComboMult
+        {
+            get { return Math.Min(ComboMaxMult, 1 + (Combo / ComboStep)); }
+        }
+
+        /// <summary>이번 틱에 구슬 배율이 올랐다.</summary>
+        public bool JustComboTier;
+
+        /// <summary>이번 틱에 끊긴 콤보 수(없으면 0).</summary>
+        public int ComboEnded;
 
         /// <summary>떨어져 있는 공구상자(많아야 하나).</summary>
         public readonly List<Pickup> Toolboxes = new List<Pickup>();
@@ -667,6 +696,15 @@ namespace FireGame.Prototypes.Logic
             TickToolboxes();
             TickRescue();
             TickChests();
+            if (Combo > 0)
+            {
+                ComboClock -= Dt;
+                if (ComboClock <= 0f)
+                {
+                    ComboEnded = Combo;
+                    Combo = 0;
+                }
+            }
             // Sweep 전에 잰다: 죽은 적을 치우면 해시 번호가 어긋난다.
             Measure();
             Sweep();
@@ -816,6 +854,8 @@ namespace FireGame.Prototypes.Logic
             AmbulanceAt = null;
             JustRescued = false;
             JustWave = false;
+            JustComboTier = false;
+            ComboEnded = 0;
             JustWindShift = false;
             JustBats = false;
             GemsCollected = 0;
@@ -1937,8 +1977,9 @@ namespace FireGame.Prototypes.Logic
                 s.Fuse = -1f;
                 s.HoseHold = 0f;
                 Doused.Add(s);
-                // 불을 끈 보상: 건물은 큰 구슬, 작은 것은 작은 구슬.
-                DropGem(s.Door, s.IsBuilding ? 8 : 3);
+                // 불을 끈 보상: 건물은 큰 구슬, 작은 것은 작은 구슬. 건물 진화는 콤보를 크게 잇는다.
+                if (s.IsBuilding) ComboAdd(ComboPerDouse);
+                DropGem(s.Door, (s.IsBuilding ? 8 : 3) * ComboMult);
             }
             s.Wet = WetTime;
         }
@@ -2619,11 +2660,24 @@ namespace FireGame.Prototypes.Logic
             if (show || killed) Hits.Add(new Hit { Pos = e.Pos, Damage = amount, Crit = crit, Killed = killed, Kind = e.Kind, Source = source, From = from });
         }
 
-        private void Kill(Enemy e)
+        /// <summary>이어진 처치·진화: 콤보를 올리고 배율이 오르면 알린다.</summary>
+        private void ComboAdd(int n)
         {
+            int before = ComboMult;
+            Combo += n;
+            ComboClock = ComboWindow;
+            if (Combo > Stats.MaxCombo) Stats.MaxCombo = Combo;
+            if (ComboMult > before) JustComboTier = true;
+        }
+
+        /// <summary>적을 잡는다(테스트도 쓴다): 콤보를 잇고 배율만큼 큰 구슬을 떨군다.</summary>
+        public void Kill(Enemy e)
+        {
+            if (e.Dead) return;
             e.Dead = true;
             Kills++;
-            DropGem(e.Pos, e.Xp);
+            ComboAdd(1);
+            DropGem(e.Pos, e.Xp * ComboMult);
             if (e.Kind == EnemyKind.Blaze)
             {
                 BurningGround.Add(new Puddle { Pos = e.Pos, Radius = 0.9f, Life = 3f, MaxLife = 3f });
