@@ -223,6 +223,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>한 판에서 가장 길게 이어진 콤보.</summary>
         public int MaxCombo;
+
+        /// <summary>무너지기 직전에 구한 횟수(아슬아슬 구조).</summary>
+        public int CloseCalls;
     }
 
     /// <summary>
@@ -505,6 +508,25 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이번 틱에 증기 폭발이 난 건물.</summary>
         public readonly List<Structure> SteamBursts = new List<Structure>();
+
+        /// <summary>갇힌 사람이 있는 건물이 이만큼 안에 무너지면 경고(초).</summary>
+        public const float CollapseWarnAt = 12f;
+
+        /// <summary>무너지기 이만큼 전의 구조는 아슬아슬 구조: 경험치 보너스.</summary>
+        public const float CloseCallAt = 6f;
+        public const int CloseCallXp = 40;
+
+        /// <summary>대화재 랜드마크의 갇힌 사람을 다 구하면 받는 경험치.</summary>
+        public const int LandmarkXp = 80;
+
+        /// <summary>이번 틱에 "곧 무너진다" 경고가 시작된 건물(건물마다 한 번, 꺼지면 다시).</summary>
+        public readonly List<Structure> CollapseWarnings = new List<Structure>();
+
+        /// <summary>이번 틱에 무너지기 직전에 사람을 구한 건물.</summary>
+        public readonly List<Structure> CloseCalls = new List<Structure>();
+
+        /// <summary>이번 틱에 대화재 랜드마크의 갇힌 사람을 다 구했다.</summary>
+        public bool JustLandmarkSaved;
 
         /// <summary>이번 틱에 새로 불붙은 구조물.</summary>
         public readonly List<Structure> Ignited = new List<Structure>();
@@ -832,6 +854,9 @@ namespace FireGame.Prototypes.Logic
             OilCaught.Clear();
             Knocked.Clear();
             SteamBursts.Clear();
+            CollapseWarnings.Clear();
+            CloseCalls.Clear();
+            JustLandmarkSaved = false;
             Fell.Clear();
             Doused.Clear();
             HeliDrops.Clear();
@@ -1980,6 +2005,7 @@ namespace FireGame.Prototypes.Logic
                 s.Fire = 0f;
                 s.Fuse = -1f;
                 s.HoseHold = 0f;
+                s.Warned = false;
                 Doused.Add(s);
                 // 불을 끈 보상: 건물은 큰 구슬, 작은 것은 작은 구슬. 건물 진화는 콤보를 크게 잇는다.
                 if (s.IsBuilding) ComboAdd(ComboPerDouse);
@@ -2172,6 +2198,12 @@ namespace FireGame.Prototypes.Logic
                 {
                     Fall(s);
                     continue;
+                }
+                // 사람이 갇힌 건물이 곧 무너진다: 건물마다 한 번 알린다(끄면 풀린다).
+                if (s.IsBuilding && s.Residents > 0 && !s.Warned && TimeToFall(s) <= CollapseWarnAt)
+                {
+                    s.Warned = true;
+                    CollapseWarnings.Add(s);
                 }
 
                 if (Stage.Wind && s.Kind == StructureKind.Tree && s.Fire >= SpreadAt)
@@ -2636,11 +2668,32 @@ namespace FireGame.Prototypes.Logic
         }
 
         /// <summary>갇힌 사람 한 명을 데리고 나온다(문 앞 구조·구조 드론).</summary>
+        /// <summary>이대로 타면 몇 초 뒤 무너지나(안 타면 무한). 불이 아직 크는 중이면 위쪽 어림이다.</summary>
+        public float TimeToFall(Structure s)
+        {
+            if (s.Collapsed || s.Fire <= 0f) return float.PositiveInfinity;
+            return s.Integrity * (s.IsBuilding ? BurnBuilding : BurnSmall) / s.Fire;
+        }
+
         private void RescueOne(Structure s)
         {
             s.Residents--;
             Rescued++;
             Xp += 20;
+            // 무너지기 직전의 구조는 더 값지다.
+            if (TimeToFall(s) <= CloseCallAt)
+            {
+                Xp += CloseCallXp;
+                CloseCalls.Add(s);
+                Stats.CloseCalls++;
+            }
+            // 대화재의 절정: 랜드마크에 갇힌 사람을 다 구했다.
+            if (Finale && s == Landmark && s.Residents == 0)
+            {
+                Xp += LandmarkXp;
+                JustLandmarkSaved = true;
+                Stats.Events++;
+            }
             float heal = RescueHeal + (Build.Level(UpgradeId.Ambulance) > 0 ? AmbulanceHeal : 0f);
             Stats.HealRescue += Math.Min(MaxHp, Hp + heal) - Hp;
             Hp = Math.Min(MaxHp, Hp + heal);

@@ -50,6 +50,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>물대포 물을 맞은 양(초 분량). 타는 동안 천천히 식고, SurvivorSim.SteamHold에 닿으면 증기 폭발.</summary>
         public float HoseHold;
+
+        /// <summary>"곧 무너진다" 경고를 이미 띄웠다. 꺼지면 풀린다.</summary>
+        public bool Warned;
         public bool Collapsed;
 
         /// <summary>다음 불씨를 뱉기까지 남은 시간.</summary>

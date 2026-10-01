@@ -147,6 +147,155 @@ namespace FireGame.Prototypes.Tests
             Assert.True(sim.Chests[0].Pos.DistanceTo(big.Door) < 0.01f);
         }
 
+        // --- 세트피스: 무너짐 카운트다운 · 아슬아슬 구조 · 랜드마크 사수 ---
+
+        private static SurvivorSim Quiet()
+        {
+            var sim = new SurvivorSim(1);
+            sim.Enemies.Clear();
+            sim.Structures.Clear();
+            sim.Reports = false;
+            return sim;
+        }
+
+        private static Structure Shop(SurvivorSim sim, float dx, float dy, int residents)
+        {
+            var s = new Structure { Kind = StructureKind.House, Name = "가게", Pos = new Vec2(sim.Player.X + dx, sim.Player.Y + dy), Half = new Vec2(2f, 1.5f), Residents = residents };
+            sim.Structures.Add(s);
+            return s;
+        }
+
+        /// <summary>한 틱 돌리고 그 틱에 받은 경험치(레벨업에 쓰인 몫까지)를 돌려준다.</summary>
+        private static int XpGained(SurvivorSim sim)
+        {
+            int before = sim.Xp;
+            int need = sim.XpToNext;
+            int level = sim.Level;
+            sim.Enemies.Clear();
+            sim.Step(0f, 0f);
+            return sim.Xp - before + (sim.Level > level ? need : 0);
+        }
+
+        [Fact]
+        public void TimeToFall_IsInfiniteUnlessBurning_ThenIntegrityOverFire()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 6f, 0f, 1);
+            Assert.Equal(float.PositiveInfinity, sim.TimeToFall(shop));
+            sim.Ignite(shop, 1f);
+            shop.Integrity = 0.5f;
+            Assert.Equal(0.5f * SurvivorSim.BurnBuilding, sim.TimeToFall(shop), 3);
+        }
+
+        [Fact]
+        public void Building_WarnsOnce_WhenCollapseIsNear()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 6f, 0f, 1);
+            Structure empty = Shop(sim, -6f, 0f, 0);
+            foreach (Structure s in new[] { shop, empty })
+            {
+                sim.Ignite(s, 1f);
+                s.Integrity = 0.3f;
+            }
+            sim.Enemies.Clear();
+            sim.Step(0f, 0f);
+            Assert.Equal(new[] { shop }, sim.CollapseWarnings);
+            for (int i = 0; i < 30; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+                Assert.Empty(sim.CollapseWarnings);
+            }
+        }
+
+        [Fact]
+        public void Warning_ComesBack_AfterDousingAndReigniting()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 6f, 0f, 1);
+            sim.Ignite(shop, 1f);
+            shop.Integrity = 0.3f;
+            sim.Enemies.Clear();
+            sim.Step(0f, 0f);
+            Assert.Single(sim.CollapseWarnings);
+
+            shop.Fire = 0.02f;
+            for (int i = 0; i < 60 && shop.Burning; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Aim = new Vec2(shop.Pos.X - sim.Player.X, shop.Pos.Y - sim.Player.Y);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+            }
+            Assert.False(shop.Burning);
+            sim.Spraying = false;
+            shop.Wet = 0f;
+            sim.Ignite(shop, 1f);
+            sim.Enemies.Clear();
+            sim.Step(0f, 0f);
+            Assert.Equal(new[] { shop }, sim.CollapseWarnings);
+        }
+
+        [Fact]
+        public void Rescue_JustBeforeCollapse_IsACloseCall()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 0f, 3.2f, 1);
+            sim.Ignite(shop, 1f);
+            shop.Integrity = 0.15f;
+            Assert.True(sim.TimeToFall(shop) <= SurvivorSim.CloseCallAt);
+            int gain = 0;
+            for (int i = 0; i < 90 && !sim.JustRescued; i++) gain = XpGained(sim);
+            Assert.True(sim.JustRescued, "1.5초 안에 못 구했다");
+            Assert.Equal(new[] { shop }, sim.CloseCalls);
+            Assert.Equal(1, sim.Stats.CloseCalls);
+            Assert.Equal(20 + SurvivorSim.CloseCallXp, gain);
+        }
+
+        [Fact]
+        public void Rescue_WithTimeToSpare_IsNotACloseCall()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 0f, 3.2f, 1);
+            sim.Ignite(shop, 0.3f);
+            int gain = 0;
+            for (int i = 0; i < 90 && !sim.JustRescued; i++) gain = XpGained(sim);
+            Assert.True(sim.JustRescued);
+            Assert.Empty(sim.CloseCalls);
+            Assert.Equal(0, sim.Stats.CloseCalls);
+            Assert.Equal(20, gain);
+        }
+
+        [Fact]
+        public void ClearingTheLandmark_Signals_AndRewards()
+        {
+            var sim = new SurvivorSim(1);
+            RunTo(sim, SurvivorSim.FinaleAt + 0.1f);
+            Structure mark = sim.Landmark;
+            Assert.NotNull(mark);
+            // 마지막 한 명만 남긴 채 문 앞으로 간다. 튼튼함을 채워 아슬아슬 보너스는 끼지 않게 한다.
+            mark.Residents = 1;
+            mark.Integrity = 1f;
+            WalkTo(sim, mark.Door, 60 * 30, () => mark.Door.DistanceTo(sim.Player) <= SurvivorSim.RescueRange * 0.5f);
+            Assert.True(mark.Door.DistanceTo(sim.Player) <= SurvivorSim.RescueRange, "문 앞에 못 갔다");
+            mark.Integrity = 1f;
+            int gain = 0;
+            int events = sim.Stats.Events;
+            for (int i = 0; i < 120 && !sim.JustLandmarkSaved; i++)
+            {
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Hp = sim.MaxHp;
+                events = sim.Stats.Events;
+                gain = XpGained(sim);
+            }
+            Assert.True(sim.JustLandmarkSaved, "랜드마크 사수 신호가 없다");
+            Assert.Equal(0, mark.Residents);
+            Assert.Empty(sim.CloseCalls);
+            Assert.Equal(20 + SurvivorSim.LandmarkXp, gain);
+            Assert.Equal(events + 2, sim.Stats.Events);
+        }
+
         [Fact]
         public void CollapsedBigReport_GivesNoChest()
         {
