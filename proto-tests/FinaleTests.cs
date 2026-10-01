@@ -121,6 +121,33 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void DousingTheBigReport_WithNoOneLost_AlsoDropsTheChest()
+        {
+            // 불을 먼저 꺼서 안의 사람이 안전해져도 "한 명도 잃지 않고 지켰다"는 같다: 상자가 나온다.
+            var sim = new SurvivorSim(1);
+            Structure big = ToBigReport(sim);
+            int inside = big.Residents;
+            big.Fire = 0.01f;
+            sim.Enemies.Clear();
+            sim.Aim = new Vec2(big.Pos.X - sim.Player.X, big.Pos.Y - sim.Player.Y);
+            // 소방관을 문 앞 사거리 안에 두고 끈다.
+            sim.Player = new Vec2(big.Door.X, big.Door.Y - 4f);
+            for (int i = 0; i < 180 && big.Burning; i++)
+            {
+                sim.Enemies.Clear();
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Aim = new Vec2(big.Pos.X - sim.Player.X, big.Pos.Y - sim.Player.Y);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+            }
+            Assert.False(big.Burning, "불을 못 껐다");
+            Assert.Equal(inside, big.Residents);
+            Assert.Null(sim.BigReport);
+            Assert.Single(sim.Chests);
+            Assert.True(sim.Chests[0].Pos.DistanceTo(big.Door) < 0.01f);
+        }
+
+        [Fact]
         public void CollapsedBigReport_GivesNoChest()
         {
             var sim = new SurvivorSim(1);

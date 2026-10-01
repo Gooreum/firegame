@@ -86,10 +86,18 @@ namespace FireGame.Prototypes.EditorTools
             // 대형 신고(1:20): 갇힌 사람 얼굴 줄, "대형 화재!" 띠, 화면 밖이면 붉은 화살표.
             failures += SurvivorShot(dir, "c18_big_report", view => view.Sim.BigReport != null && view.Sim.Time >= SurvivorSim.BigReportTimes[0] + 0.6f, 4);
             // 대형 신고를 다 구해 떨어진 보물상자, 그리고 상자가 열리며 카드가 뜨는 순간.
-            failures += SurvivorShot(dir, "c18b_chest", view => view.Sim.Chests.Count > 0, 10);
+            // 상자는 한 명도 잃지 않고 다 구해야 나온다: 봇에게 맡기면 시드 따라 못 받으니 대형 신고가 뜨면 소방관을 문 앞에 세운다.
+            failures += SurvivorShot(dir, "c18b_chest", view =>
+            {
+                // 바닥에 놓인 상자를 보려고: 소방관이 문에서 떨어져 있을 때 불을 꺼 버려 상자가 떨어지게 한다(줍기 범위 = 구조 범위라 문 앞에선 바로 줍는다).
+                Structure big = view.Sim.BigReport;
+                if (big != null && big.Burning && big.Door.DistanceTo(view.Sim.Player) > 2f) big.Fire = 0f;
+                return view.Sim.Chests.Count > 0;
+            }, 10);
             // 여는 순간만 보려고, 상자가 떨어지면 소방관을 상자 위로 옮긴다(다음 틱에 줍는다).
             failures += SurvivorShot(dir, "c18c_chest_open", view =>
             {
+                HoldBigReportDoor(view);
                 if (view.Sim.Chests.Count > 0 && view.Sim.PendingChoices == null) view.Sim.Player = view.Sim.Chests[0].Pos;
                 return view.Sim.JustChest;
             }, 45);
@@ -126,12 +134,33 @@ namespace FireGame.Prototypes.EditorTools
                 if (near != null) view.Sim.Ignite(near, 0.8f);
             });
             // 불 규칙: 크게 타는 빵집이 옆 가게로 번지는 순간(빨간 알림 + 두 건물을 잇는 불길). 두 건물 가운데를 본다.
-            failures += SurvivorShot(dir, "c26_fire_spread", view => view.Sim.Spread.Count > 0, 4, false, view =>
+            failures += SurvivorShot(dir, "c26_fire_spread", view =>
+            {
+                // 봇이 빵집을 끄기 전에 번져야 한다: 번질 때까지 소방관을 빵집 반대편에 둔다.
+                if (view.Sim.Spread.Count == 0)
+                {
+                    Structure bakery = view.Sim.Structures.Find(st => st.Name == "빵집");
+                    if (bakery != null) view.Sim.Player = new Vec2(SurvivorSim.ArenaSize - bakery.Pos.X, SurvivorSim.ArenaSize - bakery.Pos.Y);
+                }
+                return view.Sim.Spread.Count > 0;
+            }, 4, false, view =>
             {
                 Structure from = view.Sim.SpreadFrom[0];
                 Structure to = view.Sim.Spread[0];
                 view.Frame(new Vector3((from.Pos.X + to.Pos.X) / 2f, (from.Pos.Y + to.Pos.Y) / 2f, 0f), 12f);
             }, 1, view => view.Sim.Ignite(view.Sim.Structures.Find(st => st.Name == "빵집"), 1f));
+            // 증기 폭발: 큰 불에 물줄기를 버틴 끝에 지붕에서 김이 터지는 순간. 적을 치워 봇이 건물만 쏘게 한다.
+            failures += SurvivorShot(dir, "c30_steam_burst", view =>
+            {
+                view.Sim.Enemies.Clear();
+                return view.Sim.SteamBursts.Count > 0;
+            }, 6, false, view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 3f, 0f), 9f), 1, view =>
+            {
+                Structure near = null;
+                foreach (Structure st in view.Sim.Structures) if (st.IsBuilding && (near == null || st.DistanceTo(view.Sim.Player) < near.DistanceTo(view.Sim.Player))) near = st;
+                view.Sim.Ignite(near, 1f);
+                view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 5f);
+            });
             // 한 번에 쏟는 물(풀장비 물폭탄·헬기)이 큰 불을 줄인 순간: 블룸 번쩍임 + 지붕 위 "−N%".
             failures += SurvivorShot(dir, "c27_fire_knock", view => view.Sim.Knocked.Count > 0 && view.Sim.PendingChoices == null, 6, true);
             // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
@@ -272,6 +301,14 @@ namespace FireGame.Prototypes.EditorTools
             {
                 if (st.IsBuilding && !st.Collapsed && st.Integrity < 0.3f) st.Integrity = 0.3f;
             }
+        }
+
+        /// <summary>대형 신고 건물에 사람이 남아 있으면 소방관을 그 문 앞에 세운다(상자 캡처용: 한 명도 잃지 않아야 상자가 나온다).</summary>
+        private static void HoldBigReportDoor(SurvivorView view)
+        {
+            Structure big = view.Sim.BigReport;
+            // 문 앞 구조 범위(1.3) 안이되 줍기 범위(0.9) 밖에 서서, 떨어진 상자가 바로 주워지지 않게 한다.
+            if (big != null && !big.Collapsed && big.Residents > 0 && view.Sim.PendingChoices == null) view.Sim.Player = new Vec2(big.Door.X, big.Door.Y - 1.1f);
         }
 
         private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<SurvivorView> frame = null, int stage = 1, Action<SurvivorView> setup = null)

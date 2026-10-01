@@ -85,6 +85,30 @@ namespace FireGame.Prototypes.Logic
             return s;
         }
 
+        /// <summary>증기 폭발 "치이익" 0.6초: 확 터지는 밝은 잡음이 낮은 쉭 소리로 잦아든다.</summary>
+        public static float[] SteamBurst()
+        {
+            int n = (int)(Rate * 0.6f);
+            float[] s = new float[n];
+            var rng = new Random(23);
+            float hi = 0f, lo = 0f;
+            float aHi = 1f - (float)Math.Exp(-2 * Math.PI * 6000 / Rate);
+            float aLo = 1f - (float)Math.Exp(-2 * Math.PI * 900 / Rate);
+            for (int i = 0; i < n; i++)
+            {
+                float t = (float)i / Rate;
+                float white = ((float)rng.NextDouble() * 2f) - 1f;
+                hi += aHi * (white - hi);
+                lo += aLo * (white - lo);
+                // 처음 0.1초는 밝은 김이 확 터지고, 그 뒤는 낮은 쉭 소리만 길게 남는다.
+                float burst = Math.Min(1f, t / 0.01f) * (float)Math.Exp(-t * 14f);
+                float tail = (float)Math.Exp(-t * 4f) * 0.6f;
+                s[i] = (hi * burst * 2f) + (lo * tail);
+            }
+            Normalize(s, 0.85f);
+            return s;
+        }
+
         private static void Normalize(float[] s, float peak)
         {
             float max = 0f;

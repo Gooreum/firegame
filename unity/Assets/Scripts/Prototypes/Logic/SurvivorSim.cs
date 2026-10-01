@@ -2391,8 +2391,9 @@ namespace FireGame.Prototypes.Logic
                 {
                     BigReport = null;
                 }
-                else if (BigReport.Residents <= 0)
+                else if (BigReport.Residents <= 0 || !BigReport.Burning)
                 {
+                    // 다 구했거나 불을 다 꺼서 안의 사람이 안전해졌다. 한 명도 잃지 않았으면 상자.
                     if (!_bigFailed) Chests.Add(new Pickup { Pos = BigReport.Door, Life = ChestLife });
                     BigReport = null;
                 }

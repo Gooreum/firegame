@@ -90,8 +90,9 @@ namespace FireGame.Prototypes
         private float _shownXp;
         private float _putOutClock;
         private float _gemClock;
-        private float _comboClock;
-        private int _combo;
+        /// <summary>이 판에서 가장 길었던 콤보(결과창용).</summary>
+        private int _comboPeak;
+        private Text _comboText;
         private float _hitStop;
         private float _zoomKick;
         private float _recoil;
@@ -101,7 +102,6 @@ namespace FireGame.Prototypes
         private float _cardsIn = -1f;
         private float _waveAge = 99f;
         private float _hurtClock;
-        private int _comboShown;
         private Vector3 _lastPlayer;
         private float _stepClock;
         private float _regenClock;
@@ -249,6 +249,7 @@ namespace FireGame.Prototypes
         private float _frameDt;
         private static Sprite _heliSprite;
         private AudioSource _splash;
+        private AudioSource _steam;
         private Text _xpText;
         private Text _xpTease;
         private Pool _bombShadows;
@@ -503,7 +504,7 @@ namespace FireGame.Prototypes
             _cardsIn = -1f;
             _waveAge = 99f;
             _hurtClock = 0f;
-            _comboShown = 0;
+            _comboPeak = 0;
             _toolboxesShown = 0;
             _chestsShown = 0;
             _planeAge = 99f;
@@ -843,6 +844,20 @@ namespace FireGame.Prototypes
                 _heliExitDir = (new Vector3(1.4f, -1f, 0f)).normalized;
                 _heliExitAge = 0f;
             }
+
+            // 증기 폭발: 물줄기를 버틴 보상. 지붕에서 김이 확 솟고 둘레로 충격파, 잠깐 멈칫, 치이익.
+            foreach (Structure st in _sim.SteamBursts)
+            {
+                Vector3 at = W(st.Pos);
+                Steam(at, 30, 2.6f);
+                SteamPillar(at, 2f);
+                Shockwave(at, new Color(0.95f, 0.98f, 1f, 0.9f), SurvivorSim.SteamRadius * 2.5f, 0.5f, 0.1f);
+                Flare(at, SurvivorSim.SteamRadius * 1.5f, Color.white, 3);
+                SpawnText(at + new Vector3(0f, 2.8f, 0f), "증기 폭발!", new Color(0.8f, 0.95f, 1f), 1.6f);
+                _trauma = Mathf.Min(1f, _trauma + 0.3f);
+                HitStop(0.05f);
+                PlaySteam();
+            }
             foreach (Structure st in _sim.Sprinkled)
             {
                 // 스프링클러: 지붕에서 물 고리가 터지고 물방울이 사방으로 흩날린다.
@@ -944,21 +959,25 @@ namespace FireGame.Prototypes
             if (_sim.GemsCollected > 0)
             {
                 _xpPunch = 1f;
-                _combo = _comboClock > 0f ? _combo + _sim.GemsCollected : 0;
-                _comboClock = 0.5f;
                 if (_gemClock <= 0f)
                 {
-                    PlayChime(1f + Mathf.Min(1f, _combo * 0.04f));
+                    // 구슬 소리는 콤보가 길수록 높아진다.
+                    PlayChime(1f + Mathf.Min(1f, _sim.Combo * 0.03f));
                     _gemClock = 0.04f;
                     Emit("Effects/glow", W(_sim.Player), Vector3.zero, 0f, 0.15f, 0.8f, 1.8f, new Color(0.4f, 0.8f, 1f, 0.6f), new Color(0.4f, 0.8f, 1f, 0f), 0f, true);
                 }
-                if (_combo < _comboShown) _comboShown = 0;
-                if (_combo >= _comboShown + 10)
-                {
-                    _comboShown = _combo - (_combo % 10);
-                    SpawnText(W(_sim.Player) + new Vector3(0.9f, 0.9f, 0f), "×" + _comboShown, new Color(0.5f, 0.85f, 1f), 1.2f);
-                }
             }
+
+            // 연속 진압 콤보: 배율이 오르면 금색으로 알리고, 길게 잇다 끊기면 몇 연속이었는지 보여 준다.
+            if (_sim.JustComboTier)
+            {
+                SpawnText(W(_sim.Player) + new Vector3(0f, 1.4f, 0f), "구슬 ×" + _sim.ComboMult + "!", new Color(1f, 0.85f, 0.3f), 1.8f);
+                Flash(new Color(1f, 0.85f, 0.3f), 0.2f);
+                _zoomKick = 0.5f;
+                PlayChime(1.6f);
+            }
+            if (_sim.ComboEnded >= 10) SpawnText(W(_sim.Player) + new Vector3(0f, 1f, 0f), _sim.ComboEnded + "연속 진압!", new Color(0.6f, 0.9f, 1f), 1.4f);
+            if (_sim.Combo > _comboPeak) _comboPeak = _sim.Combo;
 
             if (_sim.JustLeveled)
             {
@@ -1295,7 +1314,6 @@ namespace FireGame.Prototypes
             _igniteClock -= dt;
             _sizzleClock -= dt;
             _gemClock -= dt;
-            _comboClock -= dt;
             _cardAge += dt;
             _alertAge += dt;
             _bossBannerAge += dt;
@@ -2741,6 +2759,15 @@ namespace FireGame.Prototypes
                     Impact(at, c, 0.9f, lv);
                     break;
                 }
+                case HitSource.Steam:
+                {
+                    // 증기에 데어 건물 바깥으로 튕기는 흰 김 꼬리.
+                    Vector3 away = (at - from).sqrMagnitude > 0.0001f ? (at - from).normalized : Vector3.up;
+                    float deg = (Mathf.Atan2(away.y, away.x) * Mathf.Rad2Deg) - 90f;
+                    EmitSprite(BeamSprite(), at - (away * 0.3f), away * 2.5f, 3f, 0.2f, 0.4f, 0.16f, new Color(1f, 1f, 1f, 0.9f), new Color(0.9f, 0.95f, 1f, 0f), 0f, true, 0f, 3f, deg);
+                    Steam(at, 2, 0.7f);
+                    break;
+                }
                 case HitSource.Curtain:
                 {
                     // 장막에 밀려나는 물 꼬리.
@@ -3331,6 +3358,17 @@ namespace FireGame.Prototypes
             _splash = _root.gameObject.AddComponent<AudioSource>();
             _splash.playOnAwake = false;
             _splash.clip = MakeClip("HeliSplash", ProtoSounds.Splash());
+
+            _steam = _root.gameObject.AddComponent<AudioSource>();
+            _steam.playOnAwake = false;
+            _steam.clip = MakeClip("SteamBurst", ProtoSounds.SteamBurst());
+        }
+
+        private void PlaySteam()
+        {
+            if (_steam == null || _steam.clip == null) return;
+            _steam.pitch = Random.Range(0.9f, 1.1f);
+            _steam.PlayOneShot(_steam.clip, 0.9f);
         }
 
         private static AudioClip MakeClip(string name, float[] samples)
@@ -4358,6 +4396,9 @@ namespace FireGame.Prototypes
             UiKit.Place(_timer.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -46f), new Vector2(400f, 70f));
             _kills = UiKit.OutlinedLabel(_hud, "Kills", "", 30, new Color(1f, 0.85f, 0.6f), TextAnchor.UpperCenter);
             UiKit.Place(_kills.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -114f), new Vector2(900f, 40f));
+            // 연속 진압 콤보: 3부터 보이고, 끊기기 전까지 남은 시간만큼 흐려진다.
+            _comboText = UiKit.OutlinedLabel(_hud, "Combo", "", 44, Color.white, TextAnchor.UpperCenter);
+            UiKit.Place(_comboText.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -200f), new Vector2(600f, 60f));
 
             Image hpBack = UiKit.Image(_hud, "HpBack", Art.White, new Color(0f, 0f, 0f, 0.6f));
             UiKit.Place(hpBack.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -110f), new Vector2(380f, 32f));
@@ -4467,6 +4508,18 @@ namespace FireGame.Prototypes
             bool edge = total > 0 && (_sim.HousesLost + 1) * 2 > total && _sim.Outcome == SOutcome.Playing;
             _kills.color = edge && Mathf.Sin(_time * 10f) > 0f ? new Color(1f, 0.35f, 0.3f) : new Color(1f, 0.85f, 0.6f);
             _level.text = "Lv " + _sim.Level;
+
+            bool combo = _sim.Combo >= 3 && _sim.Outcome == SOutcome.Playing;
+            _comboText.gameObject.SetActive(combo);
+            if (combo)
+            {
+                int mult = _sim.ComboMult;
+                _comboText.text = _sim.Combo + " 연속" + (mult > 1 ? "  ×" + mult : "");
+                float left = Mathf.Clamp01(_sim.ComboClock / SurvivorSim.ComboWindow);
+                Color tint = mult >= 2 ? new Color(1f, 0.75f, 0.25f) : _sim.Combo >= SurvivorSim.ComboStep / 2 ? new Color(1f, 0.95f, 0.6f) : Color.white;
+                _comboText.color = new Color(tint.r, tint.g, tint.b, 0.35f + (0.65f * left));
+                _comboText.rectTransform.localScale = Vector3.one * (1f + (0.12f * (mult - 1)) + (0.08f * Mathf.Clamp01(1f - (_sim.ComboClock / SurvivorSim.ComboWindow) * 4f)));
+            }
 
             float xp = Mathf.Clamp01(_sim.Xp / (float)_sim.XpToNext);
             _shownXp = dt <= 0f ? xp : Mathf.Lerp(_shownXp, xp, 1f - Mathf.Exp(-14f * dt));
