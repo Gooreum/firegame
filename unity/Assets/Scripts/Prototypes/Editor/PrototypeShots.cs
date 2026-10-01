@@ -149,6 +149,31 @@ namespace FireGame.Prototypes.EditorTools
                 Structure to = view.Sim.Spread[0];
                 view.Frame(new Vector3((from.Pos.X + to.Pos.X) / 2f, (from.Pos.Y + to.Pos.Y) / 2f, 0f), 12f);
             }, 1, view => view.Sim.Ignite(view.Sim.Structures.Find(st => st.Name == "빵집"), 1f));
+            // 곧 무너진다: 사람이 갇힌 가게의 지붕 초읽기 라벨·붉은 고리와 위 알림 줄.
+            failures += SurvivorShot(dir, "c31_collapse_warning", view => view.Sim.CollapseWarnings.Count > 0, 12, false,
+                view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 3f, 0f), 9f), 1, view =>
+            {
+                Structure near = NearestHouse(view);
+                near.Residents = 2;
+                near.Integrity = 0.3f;
+                view.Sim.Ignite(near, 1f);
+                view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 4f);
+            });
+            // 아슬아슬 구조: 무너지기 몇 초 전 문 앞에서 한 명을 데리고 나오는 순간(금색 글자·번쩍·줌).
+            failures += SurvivorShot(dir, "c32_close_call", view =>
+            {
+                Structure near = NearestHouse(view);
+                view.Sim.Hp = view.Sim.MaxHp;
+                if (near.Residents > 0 && view.Sim.PendingChoices == null) view.Sim.Player = near.Door;
+                return view.Sim.CloseCalls.Count > 0;
+            }, 4, false, view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 2f, 0f), 8f), 1, view =>
+            {
+                Structure near = NearestHouse(view);
+                near.Residents = 1;
+                near.Integrity = 0.15f;
+                view.Sim.Ignite(near, 1f);
+                view.Sim.Player = near.Door;
+            }, false);
             // 증기 폭발: 큰 불에 물줄기를 버틴 끝에 지붕에서 김이 터지는 순간. 적을 치워 봇이 건물만 쏘게 한다.
             failures += SurvivorShot(dir, "c30_steam_burst", view =>
             {
@@ -303,6 +328,17 @@ namespace FireGame.Prototypes.EditorTools
             }
         }
 
+        /// <summary>소방관에게 가장 가까운 가게·창고.</summary>
+        private static Structure NearestHouse(SurvivorView view)
+        {
+            Structure near = null;
+            foreach (Structure st in view.Sim.Structures)
+            {
+                if (st.IsBuilding && !st.Collapsed && (near == null || st.DistanceTo(view.Sim.Player) < near.DistanceTo(view.Sim.Player))) near = st;
+            }
+            return near;
+        }
+
         /// <summary>대형 신고 건물에 사람이 남아 있으면 소방관을 그 문 앞에 세운다(상자 캡처용: 한 명도 잃지 않아야 상자가 나온다).</summary>
         private static void HoldBigReportDoor(SurvivorView view)
         {
@@ -311,7 +347,8 @@ namespace FireGame.Prototypes.EditorTools
             if (big != null && !big.Collapsed && big.Residents > 0 && view.Sim.PendingChoices == null) view.Sim.Player = new Vec2(big.Door.X, big.Door.Y - 1.1f);
         }
 
-        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<SurvivorView> frame = null, int stage = 1, Action<SurvivorView> setup = null)
+        /// <param name="keepAlive">false면 체력·튼튼함을 받쳐 주지 않는다(무너지기 직전 장면용).</param>
+        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<SurvivorView> frame = null, int stage = 1, Action<SurvivorView> setup = null, bool keepAlive = true)
         {
             try
             {
@@ -326,7 +363,7 @@ namespace FireGame.Prototypes.EditorTools
                 setup?.Invoke(view);
                 var bot = new SurvivorBot(view.Sim);
                 int guard = 0;
-                while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) BotTick(view, bot);
+                while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) BotTick(view, bot, keepAlive);
                 if (!until(view)) throw new Exception("조건에 닿기 전에 판이 끝났다: " + view.Sim.Outcome + " t=" + view.Sim.Time);
                 // 카드는 0.3초 뒤에 튀어 오르니 다 뜬 뒤를 찍는다. 효과도 조금 흐르게 둔다.
                 for (int i = 0; i < settle; i++) view.Refresh(SurvivorSim.Dt);
@@ -345,14 +382,14 @@ namespace FireGame.Prototypes.EditorTools
         }
 
         /// <summary>봇 한 칸: 카드가 떠 있으면 고르고, 아니면 살려 둔 채 조준·이동하고 화면을 60Hz 한 칸 흘린다.</summary>
-        private static void BotTick(SurvivorView view, SurvivorBot bot)
+        private static void BotTick(SurvivorView view, SurvivorBot bot, bool keepAlive = true)
         {
             if (view.Sim.PendingChoices != null)
             {
                 view.Choose(SurvivorBot.PickCard(view.Sim.PendingChoices, view.Sim.Build));
                 return;
             }
-            KeepAlive(view.Sim);
+            if (keepAlive) KeepAlive(view.Sim);
             bot.AimHose();
             view.Step(bot.Move());
             view.Refresh(SurvivorSim.Dt);

@@ -1108,13 +1108,53 @@ namespace FireGame.Prototypes
 
             if (_sim.JustRescued)
             {
+                // 대원·드론이 구해도 그 건물 문 앞에서 연출한다.
+                Vector3 at = _sim.RescuedFrom.Count > 0 ? W(_sim.RescuedFrom[0].Door) : W(_sim.Player);
                 var green = new Color(0.5f, 1f, 0.5f);
-                Pillar(W(_sim.Player), green);
-                Shockwave(W(_sim.Player), green, 7f, 0.45f);
-                Sparkle(W(_sim.Player), 16, green);
-                Burst(W(_sim.Player), 14, green, 5f);
-                SpawnText(W(_sim.Player) + new Vector3(0f, 0.8f, 0f), "구조! +20", new Color(0.5f, 1f, 0.5f), 1.4f);
+                Pillar(at, green);
+                Shockwave(at, green, 7f, 0.45f);
+                Sparkle(at, 16, green);
+                Burst(at, 14, green, 5f);
+                SpawnText(at + new Vector3(0f, 0.8f, 0f), "구조! +20", new Color(0.5f, 1f, 0.5f), 1.4f);
                 GameAudio.Play(Cue.PickUp);
+            }
+
+            // 곧 무너진다: 붉은 알림과 떨림. 지붕 위 초읽기는 DrawTrapped가 매 프레임 그린다.
+            foreach (Structure st in _sim.CollapseWarnings)
+            {
+                ShowAlert(st.Name + " 곧 무너진다! " + st.Residents + "명 갇힘", new Color(1f, 0.3f, 0.25f));
+                GameAudio.Play(Cue.Critical);
+                _trauma = Mathf.Min(1f, _trauma + 0.25f);
+            }
+
+            // 아슬아슬 구조: 시간이 느려지고 화면이 당겨지며 금색 글자.
+            foreach (Structure st in _sim.CloseCalls)
+            {
+                Vector3 at = W(st.Door);
+                _slowmo = Mathf.Max(_slowmo, 0.7f);
+                _zoomKick = 1f;
+                Flash(Color.white, 0.5f);
+                HitStop(0.06f);
+                Pillar(at, new Color(1f, 0.85f, 0.3f));
+                Sparkle(at, 30, new Color(1f, 0.9f, 0.4f));
+                SpawnText(at + new Vector3(0f, 1.8f, 0f), "아슬아슬 구조! +" + SurvivorSim.CloseCallXp, new Color(1f, 0.85f, 0.3f), 2f);
+                GameAudio.Play(Cue.Rescued);
+            }
+
+            if (_sim.JustLandmarkSaved && _sim.Landmark != null)
+            {
+                // 대화재의 절정: 랜드마크 사수. 금색 띠, 느려지는 시간, 불똥 비.
+                Vector3 at = W(_sim.Landmark.Pos);
+                _bossBandText.text = _sim.Landmark.Name + " 사수! 전원 구조 +" + SurvivorSim.LandmarkXp;
+                _bandTint = new Color(0.6f, 0.45f, 0.05f);
+                _bossBannerAge = 0f;
+                _slowmo = Mathf.Max(_slowmo, 1f);
+                _zoomKick = 1.2f;
+                Flash(new Color(1f, 0.9f, 0.5f), 0.7f);
+                for (int k = 0; k < 3; k++) Shockwave(at, new Color(1f, 0.9f, 0.5f), 8f + (5f * k), 0.8f, 0.12f * k);
+                Burst(at, 120, new Color(1f, 0.8f, 0.3f), 12f);
+                Pillar(at, new Color(1f, 0.9f, 0.5f));
+                GameAudio.Play(Cue.Won);
             }
 
             if (_sim.PlayerHurt > 0f)
@@ -3918,8 +3958,17 @@ namespace FireGame.Prototypes
             }
             bool blink = choking && Mathf.Sin(_time * (8f + (16f * urgent))) > 0f;
             help.color = blink ? new Color(1f, 0.35f, 0.3f) : Color.white;
+            // 곧 무너진다: 라벨이 초읽기로 바뀌고 빨갛게 뛰며, 둘레에 붉은 고리.
+            float fall = _sim.TimeToFall(st);
+            bool nearFall = fall <= SurvivorSim.CollapseWarnAt;
+            if (nearFall)
+            {
+                help.text = "무너진다 " + Mathf.CeilToInt(fall) + "초 · " + st.Residents + "명";
+                help.color = Color.Lerp(new Color(1f, 0.2f, 0.1f), Color.white, 0.5f + (0.5f * Mathf.Sin(_time * 12f)));
+                _civilianRings.Put(at, Mathf.Max(st.Half.X, st.Half.Y) * (2.6f + (0.3f * Mathf.Sin(_time * 12f))), 0f, new Color(1f, 0.15f, 0.05f, 0.5f));
+            }
             help.transform.localPosition = at + Up(hgt + (big ? 1.7f : 1.5f) + (0.15f * bob));
-            help.characterSize = 0.06f * (1f + (0.12f * bob));
+            help.characterSize = 0.06f * (1f + (0.12f * bob) + (nearFall ? 0.15f : 0f));
 
             Vector3 door = W(st.Door);
             float pulse = 1.5f + (0.25f * Mathf.Sin(_time * 6f));
@@ -4396,9 +4445,9 @@ namespace FireGame.Prototypes
             UiKit.Place(_timer.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -46f), new Vector2(400f, 70f));
             _kills = UiKit.OutlinedLabel(_hud, "Kills", "", 30, new Color(1f, 0.85f, 0.6f), TextAnchor.UpperCenter);
             UiKit.Place(_kills.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -114f), new Vector2(900f, 40f));
-            // 연속 진압 콤보: 3부터 보이고, 끊기기 전까지 남은 시간만큼 흐려진다.
-            _comboText = UiKit.OutlinedLabel(_hud, "Combo", "", 44, Color.white, TextAnchor.UpperCenter);
-            UiKit.Place(_comboText.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -200f), new Vector2(600f, 60f));
+            // 연속 진압 콤보: 체력 바 아래 왼쪽(가운데 위는 대화재 막대·알림이 쓴다). 3부터 보이고, 끊기기 전까지 남은 시간만큼 흐려진다.
+            _comboText = UiKit.OutlinedLabel(_hud, "Combo", "", 44, Color.white, TextAnchor.UpperLeft);
+            UiKit.Place(_comboText.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -150f), new Vector2(500f, 60f));
 
             Image hpBack = UiKit.Image(_hud, "HpBack", Art.White, new Color(0f, 0f, 0f, 0.6f));
             UiKit.Place(hpBack.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -110f), new Vector2(380f, 32f));
@@ -4582,9 +4631,22 @@ namespace FireGame.Prototypes
             {
                 Structure mark = _sim.Landmark;
                 bool people = mark != null && !mark.Collapsed && mark.Burning && mark.Residents > 0;
-                _bossName.text = people ? "대화재 · " + mark.Name + "에 " + mark.Residents + "명 갇힘" : "대화재 · 끝까지 지켜라";
-                float left = Mathf.Clamp01((SurvivorSim.RunTime - _sim.Time) / (SurvivorSim.RunTime - SurvivorSim.FinaleAt));
-                _bossFill.rectTransform.localScale = new Vector3(left, 1f, 1f);
+                if (people)
+                {
+                    // 사람이 갇혀 있는 동안은 "무너지기까지 남은 시간"이 막대다. 붉게 줄어든다.
+                    float fall = _sim.TimeToFall(mark);
+                    _bossName.text = "대화재 · " + mark.Name + " " + Mathf.CeilToInt(Mathf.Min(fall, 99f)) + "초 뒤 무너짐 · " + mark.Residents + "명 갇힘";
+                    _bossFill.rectTransform.localScale = new Vector3(Mathf.Clamp01(fall / SurvivorSim.BurnBuilding), 1f, 1f);
+                    bool urgent = fall <= SurvivorSim.CollapseWarnAt;
+                    _bossFill.color = urgent && Mathf.Sin(_time * 12f) > 0f ? new Color(1f, 0.2f, 0.1f) : new Color(0.9f, 0.3f, 0.15f);
+                }
+                else
+                {
+                    _bossName.text = "대화재 · 끝까지 지켜라";
+                    float left = Mathf.Clamp01((SurvivorSim.RunTime - _sim.Time) / (SurvivorSim.RunTime - SurvivorSim.FinaleAt));
+                    _bossFill.rectTransform.localScale = new Vector3(left, 1f, 1f);
+                    _bossFill.color = new Color(1f, 0.45f, 0.1f);
+                }
             }
 
             bool band = _bossBannerAge < 2.8f;
