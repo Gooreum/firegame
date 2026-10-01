@@ -149,6 +149,9 @@ namespace FireGame.Prototypes.EditorTools
                 Structure to = view.Sim.Spread[0];
                 view.Frame(new Vector3((from.Pos.X + to.Pos.X) / 2f, (from.Pos.Y + to.Pos.Y) / 2f, 0f), 12f);
             }, 1, view => view.Sim.Ignite(view.Sim.Structures.Find(st => st.Name == "빵집"), 1f));
+            // 소방서: 켜면 먼저 보이는 화면(새 소방서)과, 별 5개로 드론 담당을 해금한 직후.
+            failures += StationShot(dir, "c33_station", null);
+            failures += StationShot(dir, "c33b_station_unlock", "stars=5;best=3,2,0;unlocked=rookie,rescue;selected=rescue", "pilot");
             // 곧 무너진다: 사람이 갇힌 가게의 지붕 초읽기 라벨·붉은 고리와 위 알림 줄.
             failures += SurvivorShot(dir, "c31_collapse_warning", view => view.Sim.CollapseWarnings.Count > 0, 12, false,
                 view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 3f, 0f), 9f), 1, view =>
@@ -328,6 +331,33 @@ namespace FireGame.Prototypes.EditorTools
             }
         }
 
+        /// <summary>소방서 화면을 찍는다. save가 있으면 그 저장 글을 끼우고(저장하지 않는다), tap이 있으면 그 소방관 칸을 누른 뒤 찍는다.</summary>
+        private static int StationShot(string dir, string name, string save, string tap = null)
+        {
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var root = new GameObject("Prototype");
+                Camera camera = PrototypeHost.SetUpCamera();
+                camera.aspect = (float)Width / Height;
+                Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
+                var view = new SurvivorView(root.transform, camera, canvas);
+                view.LoadStation(save ?? "");
+                if (tap != null) view.TapFirefighter(tap);
+                if (!view.StationOpen) throw new Exception("소방서가 열려 있지 않다");
+                for (int i = 0; i < 5; i++) view.Refresh(SurvivorSim.Dt);
+                Canvas.ForceUpdateCanvases();
+                Capture(camera, Path.Combine(dir, name + ".png"));
+                Debug.Log("[ProtoShots] " + name + " (소방서: " + view.Station.Serialize() + ")");
+                return 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[ProtoShots] 실패: " + name + " — " + e);
+                return 1;
+            }
+        }
+
         /// <summary>소방관에게 가장 가까운 가게·창고.</summary>
         private static Structure NearestHouse(SurvivorView view)
         {
@@ -359,6 +389,7 @@ namespace FireGame.Prototypes.EditorTools
                 Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
 
                 var view = new SurvivorView(root.transform, camera, canvas, maxGear, stage);
+                view.CloseStation();
                 view.Restart(ShotSeed);
                 setup?.Invoke(view);
                 var bot = new SurvivorBot(view.Sim);
@@ -414,6 +445,7 @@ namespace FireGame.Prototypes.EditorTools
                 camera.aspect = (float)Width / Height;
                 Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
                 var view = new SurvivorView(root.transform, camera, canvas);
+                view.CloseStation();
                 view.Restart(ShotSeed);
                 var bot = new SurvivorBot(view.Sim);
                 int guard = 0;
@@ -455,6 +487,7 @@ namespace FireGame.Prototypes.EditorTools
                 Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
 
                 var view = new SurvivorView(root.transform, camera, canvas);
+                view.CloseStation();
                 var bot = new SurvivorBot(view.Sim);
                 while (view.Sim.Time < 8f && view.Sim.Outcome == SOutcome.Playing)
                 {
@@ -525,6 +558,7 @@ namespace FireGame.Prototypes.EditorTools
                 Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
 
                 var view = new SurvivorView(root.transform, camera, canvas);
+                view.CloseStation();
                 view.Sim.Reports = false;
                 var bot = new SurvivorBot(view.Sim);
                 while (view.Sim.Time < 3f && view.Sim.Outcome == SOutcome.Playing)
@@ -581,6 +615,7 @@ namespace FireGame.Prototypes.EditorTools
                 Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
 
                 var view = new SurvivorView(root.transform, camera, canvas);
+                view.CloseStation();
                 view.Restart(ShotSeed);
                 var bot = new SurvivorBot(view.Sim);
                 int guard = 0;

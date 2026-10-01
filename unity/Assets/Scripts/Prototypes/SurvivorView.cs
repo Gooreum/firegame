@@ -73,6 +73,18 @@ namespace FireGame.Prototypes
         /// <summary>시작 스테이지를 이미 적용한 빌드(buildGUID). 같은 빌드를 다시 켜면 저장된 진행을 이어 간다.</summary>
         public const string StartBuildKey = "firegame.proto.startBuild";
 
+        /// <summary>소방서(별 통장·해금·고른 소방관) 저장 글.</summary>
+        public const string StationKey = "firegame.proto.station";
+        private FireStation _station;
+
+        /// <summary>false면 저장하지 않는다(캡처 하니스가 주입한 소방서).</summary>
+        private bool _stationPersist = true;
+        private RectTransform _stationLayer;
+        private bool _stationOpen;
+
+        /// <summary>이 판에서 번 별(결과창용).</summary>
+        private int _earned;
+
         /// <summary>가운데 띠 색: 스테이지 시작은 파랑, 보스 등장은 빨강.</summary>
         private Color _bandTint = new Color(0.6f, 0f, 0f);
         private float _accumulator;
@@ -467,8 +479,13 @@ namespace FireGame.Prototypes
             BuildHud();
             // 조이스틱은 HUD 맨 위에(카드·결과창은 따로 켜고 끈다).
             foreach (Image stick in new[] { _leftRing, _leftKnob, _rightRing, _rightKnob }) stick.transform.SetAsLastSibling();
+            _stationLayer = UiKit.Node(canvas.transform, "Station");
+            UiKit.Stretch(_stationLayer);
+            _station = FireStation.Parse(PlayerPrefs.GetString(StationKey, ""));
             BuildAudio();
             Restart(_seed);
+            // 판은 소방서에서 소방관을 고르고 "출동"해야 시작한다.
+            OpenStation();
         }
 
         public SurvivorSim Sim
@@ -479,8 +496,9 @@ namespace FireGame.Prototypes
         public void Restart(int seed)
         {
             _seed = seed;
-            _sim = new SurvivorSim(seed, _stage);
+            _sim = new SurvivorSim(seed, _stage, _station != null ? _station.Current.Start : null);
             if (_maxGear) _sim.GiveMaxGear();
+            _earned = 0;
             if (_groundStage != _sim.Stage.Number)
             {
                 // 스테이지가 바뀌면 바닥(마을 돌길·숲 흙길)을 새로 깐다.
@@ -548,6 +566,125 @@ namespace FireGame.Prototypes
             return n >= 1 && n <= SurvivorStages.Count ? n : 1;
         }
 
+        // ------------------------------------------------------------------
+        // 소방서: 판 사이에 남는 것. 별로 소방관을 해금하고 골라 출동한다.
+        // ------------------------------------------------------------------
+
+        public bool StationOpen
+        {
+            get { return _stationOpen; }
+        }
+
+        public FireStation Station
+        {
+            get { return _station; }
+        }
+
+        /// <summary>캡처·테스트용: 저장 글로 소방서를 바꿔 끼운다(저장하지 않는다). 열려 있으면 다시 그린다.</summary>
+        public void LoadStation(string text)
+        {
+            _station = FireStation.Parse(text);
+            _stationPersist = false;
+            Restart(_seed);
+            if (_stationOpen) OpenStation();
+        }
+
+        private void SaveStation()
+        {
+            if (!_stationPersist || !Application.isPlaying) return;
+            PlayerPrefs.SetString(StationKey, _station.Serialize());
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>소방서를 연다(열려 있으면 다시 그린다). 판은 그동안 멈춘다.</summary>
+        public void OpenStation()
+        {
+            ClearStation();
+            _stationOpen = true;
+
+            Image dim = UiKit.Image(_stationLayer, "Dim", Art.White, new Color(0.02f, 0.03f, 0.08f, 0.82f));
+            UiKit.Stretch(dim.rectTransform);
+
+            Text title = UiKit.OutlinedLabel(_stationLayer, "Title", "소방서", 84, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
+            UiKit.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 400f), new Vector2(900f, 110f));
+
+            string best = "";
+            for (int n = 1; n <= SurvivorStages.Count; n++) best += (n > 1 ? "  ·  " : "") + SurvivorStages.Get(n).Name + " ★" + _station.Best[n];
+            Text stars = UiKit.OutlinedLabel(_stationLayer, "Stars", "모은 별 ★ " + _station.Stars + "      최고  " + best, 36, Color.white, TextAnchor.MiddleCenter);
+            UiKit.Place(stars.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 318f), new Vector2(1500f, 50f));
+
+            Text next = UiKit.OutlinedLabel(_stationLayer, "Next", "다음 출동: STAGE " + _stage + " · " + SurvivorStages.Get(_stage).Name, 32, new Color(0.7f, 0.85f, 1f), TextAnchor.MiddleCenter);
+            UiKit.Place(next.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 268f), new Vector2(1000f, 44f));
+
+            Firefighter[] roster = Roster.All;
+            for (int i = 0; i < roster.Length; i++)
+            {
+                Firefighter f = roster[i];
+                bool unlocked = _station.IsUnlocked(f.Id);
+                bool selected = _station.Selected == f.Id;
+                bool affordable = _station.CanUnlock(f.Id);
+                string sprite = selected ? "UI/button_yellow" : unlocked ? "UI/button_blue" : affordable ? "UI/button_green" : "UI/button_grey";
+                string id = f.Id;
+                Button card = UiKit.Button(_stationLayer, "Firefighter" + i, Art.Get(sprite), "", 0, () => TapFirefighter(id));
+                RectTransform rect = card.GetComponent<RectTransform>();
+                float x = (i - ((roster.Length - 1) / 2f)) * 330f;
+                UiKit.Place(rect, new Vector2(0.5f, 0.5f), new Vector2(x, -20f), new Vector2(310f, 440f));
+
+                Text name = UiKit.OutlinedLabel(rect, "Name", f.Name, 42, Color.white, TextAnchor.MiddleCenter);
+                UiKit.Place(name.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -60f), new Vector2(290f, 60f));
+                string gear = "";
+                foreach (UpgradeId u in f.Start) gear += (gear.Length > 0 ? " + " : "") + SurvivorUpgrades.Name(u);
+                Text gearLabel = UiKit.OutlinedLabel(rect, "Gear", gear, 28, new Color(1f, 0.95f, 0.6f), TextAnchor.UpperCenter);
+                UiKit.Place(gearLabel.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -120f), new Vector2(280f, 80f));
+                gearLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+                Text story = UiKit.OutlinedLabel(rect, "Story", f.Story, 26, Color.white, TextAnchor.UpperCenter);
+                UiKit.Place(story.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -210f), new Vector2(270f, 120f));
+                story.horizontalOverflow = HorizontalWrapMode.Wrap;
+                string state = selected ? "출동 대기" : unlocked ? "탭하면 선택" : affordable ? "탭하면 해금  ★" + f.Cost : "해금  ★" + f.Cost + " 필요";
+                Color stateColor = selected ? new Color(1f, 0.9f, 0.4f) : unlocked ? Color.white : affordable ? new Color(0.6f, 1f, 0.6f) : new Color(1f, 0.6f, 0.6f);
+                Text stateLabel = UiKit.OutlinedLabel(rect, "State", state, 30, stateColor, TextAnchor.MiddleCenter);
+                UiKit.Place(stateLabel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 40f), new Vector2(290f, 50f));
+            }
+
+            Button go = UiKit.Button(_stationLayer, "Go", Art.Get("UI/button_red"), "출동!", 56, CloseStation);
+            UiKit.Place(go.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(0f, -340f), new Vector2(460f, 110f));
+            Text hint = UiKit.OutlinedLabel(_stationLayer, "Hint", "소방관을 골라 탭  ·  출동은 버튼 또는 Enter", 26, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
+            UiKit.Place(hint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -430f), new Vector2(1000f, 40f));
+        }
+
+        /// <summary>소방관 칸을 눌렀다: 해금했으면 고르고, 별이 모자라지 않으면 해금한다. 판을 그 장비로 다시 연다.</summary>
+        public void TapFirefighter(string id)
+        {
+            bool changed = _station.IsUnlocked(id) ? _station.Select(id) : _station.Unlock(id);
+            if (!changed) return;
+            SaveStation();
+            Restart(_seed);
+            OpenStation();
+        }
+
+        /// <summary>출동: 소방서를 닫고 판을 시작한다.</summary>
+        public void CloseStation()
+        {
+            if (!_stationOpen)
+            {
+                ClearStation();
+                return;
+            }
+            ClearStation();
+            _stationOpen = false;
+            // 소방서에 있는 동안 흘러간 시작 띠를 다시 띄운다.
+            _bossBandText.text = "STAGE " + _sim.Stage.Number + " · " + _sim.Stage.Name;
+            _bandTint = new Color(0.05f, 0.25f, 0.6f);
+            _bossBannerAge = 0f;
+            _accumulator = 0f;
+        }
+
+        private void ClearStation()
+        {
+            if (_stationLayer == null) return;
+            for (int i = _stationLayer.childCount - 1; i >= 0; i--) UiKit.Discard(_stationLayer.GetChild(i).gameObject);
+        }
+
         /// <summary>스테이지를 바꾸고 새 판을 연다.</summary>
         private void GoToStage(int stage)
         {
@@ -575,6 +712,7 @@ namespace FireGame.Prototypes
             UiKit.Discard(_worldScreen);
             UiKit.Discard(_root.gameObject);
             UiKit.Discard(_hud.gameObject);
+            if (_stationLayer != null) UiKit.Discard(_stationLayer.gameObject);
             if (_worldRt != null)
             {
                 _worldRt.Release();
@@ -600,13 +738,25 @@ namespace FireGame.Prototypes
                 return;
             }
 
+            if (_stationOpen)
+            {
+                // 소방서: 판은 멈춰 있고, 출동 버튼이나 Enter로 나간다. 소방관 칸은 버튼이 받는다.
+                if (input.EndTurn) CloseStation();
+                else
+                {
+                    Refresh(dt);
+                    return;
+                }
+            }
+
             if (_sim.Outcome != SOutcome.Playing)
             {
                 if (_overAge > 1f && input.MouseClicked)
                 {
-                    // 이기면 다음 스테이지, 지면 같은 스테이지를 다시.
+                    // 이기면 다음 스테이지, 지면 같은 스테이지. 어느 쪽이든 소방서를 거쳐 다시 출동한다.
                     if (_sim.Outcome == SOutcome.Won) GoToStage(SurvivorStages.Next(_stage));
                     else Restart(_seed + 1);
+                    OpenStation();
                     return;
                 }
             }
@@ -1177,6 +1327,9 @@ namespace FireGame.Prototypes
                 _overAge = 0f;
                 if (_sim.Outcome == SOutcome.Won)
                 {
+                    // 별은 소방서 통장에 남는다.
+                    _earned = _station.RecordResult(_stage, _sim.Stars);
+                    SaveStation();
                     // 4:00까지 지켜 냈다: 번쩍 → (잠깐 뒤) 고리 세 겹 + 거대한 김 + 불똥 비.
                     Vector3 at = W(_sim.Player);
                     Flash(Color.white, 0.9f);
@@ -4673,8 +4826,9 @@ namespace FireGame.Prototypes
                 string head = won ? "동네를 지켜 냈다!" : _sim.LostTown ? "동네가 다 타 버렸다" : "쓰러졌다";
                 string stats = "지킨 건물 " + (total - _sim.HousesLost) + "/" + total + "\n구한 사람 " + _sim.Rescued + "   ·   잃은 사람 " + _sim.CiviliansLost;
                 int played = Mathf.FloorToInt(_sim.Time);
-                string more = (played / 60).ToString("00") + ":" + (played % 60).ToString("00") + " 버팀  ·  처치 " + _sim.Kills + "  ·  Lv " + _sim.Level;
-                _result.text = head + "\n\n" + (won ? "\n\n" : "") + stats + "\n" + more + "\n\n" + (_overAge > 1f ? (won ? "탭하면 다음: STAGE " + SurvivorStages.Next(_stage) + " " + SurvivorStages.Get(SurvivorStages.Next(_stage)).Name : "탭하면 다시") : "");
+                string more = (played / 60).ToString("00") + ":" + (played % 60).ToString("00") + " 버팀  ·  처치 " + _sim.Kills + "  ·  최고 " + _comboPeak + "연속  ·  Lv " + _sim.Level;
+                string bank = won ? "★ +" + _earned + "  ·  모은 별 " + _station.Stars + "\n" : "";
+                _result.text = head + "\n\n" + (won ? "\n\n" : "") + stats + "\n" + more + "\n" + bank + "\n" + (_overAge > 1f ? (won ? "탭하면 소방서로 · 다음: STAGE " + SurvivorStages.Next(_stage) + " " + SurvivorStages.Get(SurvivorStages.Next(_stage)).Name : "탭하면 소방서로") : "");
                 for (int i = 0; i < _stars.Count; i++)
                 {
                     _stars[i].gameObject.SetActive(won);
