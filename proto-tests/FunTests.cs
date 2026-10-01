@@ -107,6 +107,12 @@ namespace FireGame.Prototypes.Tests
             public float KillsPerMin;
             public float MinHp;
 
+            /// <summary>분당 받은 피해. 방화복처럼 "덜 맞는" 효과는 여기에 바로 드러난다(최저 체력은 승패 노이즈에 묻힌다).</summary>
+            public float DamagePerMin;
+
+            /// <summary>받은 불 피해 ÷ 원값. 방화복 없이는 1, Lv3 방화복은 0.55. 봇의 행동과 상관없이 방화복만 잰다.</summary>
+            public float FireCut;
+
             /// <summary>한 번이라도 체력이 절반 밑으로 떨어진 판 수(위기 판).</summary>
             public int Crises;
             public float Rescued;
@@ -152,6 +158,8 @@ namespace FireGame.Prototypes.Tests
                 row.TreeOnlyShare += sim.Stats.TreeFireOnly / Math.Max(sim.Time, 1f);
                 row.KillsPerMin += sim.Kills / minutes;
                 row.MinHp += sim.Stats.MinHpRatio;
+                row.DamagePerMin += sim.Stats.DamageTaken / minutes;
+                row.FireCut += sim.Stats.FireDamageRaw > 0f ? Math.Min(1f, sim.Stats.DamageTaken / sim.Stats.FireDamageRaw) : 1f;
                 if (sim.Stats.MinHpRatio < 0.5f) row.Crises++;
                 row.Rescued += sim.Rescued;
                 row.PeopleLost += sim.CiviliansLost;
@@ -165,6 +173,8 @@ namespace FireGame.Prototypes.Tests
             row.TreeOnlyShare *= k;
             row.KillsPerMin *= k;
             row.MinHp *= k;
+            row.DamagePerMin *= k;
+            row.FireCut *= k;
             row.Rescued *= k;
             row.PeopleLost *= k;
             row.HousesLost *= k;
@@ -238,21 +248,25 @@ namespace FireGame.Prototypes.Tests
                 UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Turret,
                 UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Radio, UpgradeId.Axe, UpgradeId.Oxygen, UpgradeId.Suit,
             };
-            (int won, float saved, float lost, float minHp) Both(UpgradeId? fav)
+            (int won, float saved, float lost, float minHp, float damage, float fireCut) Both(UpgradeId? fav)
             {
                 FunRow one = Measure(1, 10, fav);
                 FunRow two = Measure(2, 10, fav);
                 FunRow three = Measure(3, 10, fav);
-                return (one.Won + two.Won + three.Won, (one.Rescued + two.Rescued + three.Rescued) / 3f, (one.PeopleLost + two.PeopleLost + three.PeopleLost) / 3f, (one.MinHp + two.MinHp + three.MinHp) / 3f);
+                return (one.Won + two.Won + three.Won, (one.Rescued + two.Rescued + three.Rescued) / 3f, (one.PeopleLost + two.PeopleLost + three.PeopleLost) / 3f, (one.MinHp + two.MinHp + three.MinHp) / 3f, (one.DamagePerMin + two.DamagePerMin + three.DamagePerMin) / 3f, (one.FireCut + two.FireCut + three.FireCut) / 3f);
+            }
+            string Line(string name, (int won, float saved, float lost, float minHp, float damage, float fireCut) r)
+            {
+                return name + ": 승 " + r.won + "/30, 구조 " + r.saved.ToString("0.0") + ", 잃음 " + r.lost.ToString("0.0") + ", 최저 체력 " + (r.minHp * 100f).ToString("0") + "%, 분당 피해 " + r.damage.ToString("0") + ", 불 피해 비율 " + r.fireCut.ToString("0.00");
             }
             var basic = Both(null);
-            _out.WriteLine("기본 봇: 승 " + basic.won + "/30, 구조 " + basic.saved.ToString("0.0") + ", 잃음 " + basic.lost.ToString("0.0") + ", 최저 체력 " + (basic.minHp * 100f).ToString("0") + "%");
-            var rows = new System.Collections.Generic.List<(UpgradeId id, int won, float saved, float lost, float minHp)>();
+            _out.WriteLine(Line("기본 봇", basic));
+            var rows = new System.Collections.Generic.List<(UpgradeId id, int won, float saved, float lost, float minHp, float damage, float fireCut)>();
             foreach (UpgradeId id in items)
             {
                 var r = Both(id);
-                rows.Add((id, r.won, r.saved, r.lost, r.minHp));
-                _out.WriteLine(SurvivorUpgrades.Name(id) + ": 승 " + r.won + "/30, 구조 " + r.saved.ToString("0.0") + ", 잃음 " + r.lost.ToString("0.0") + ", 최저 체력 " + (r.minHp * 100f).ToString("0") + "%");
+                rows.Add((id, r.won, r.saved, r.lost, r.minHp, r.damage, r.fireCut));
+                _out.WriteLine(Line(SurvivorUpgrades.Name(id), r));
             }
             // 아이템 하나를 강제로 들면 그만큼 다른 카드를 포기하므로, 기본 봇이 아니라 강제한 아이템들의 평균과 비교한다.
             float avgWon = 0f;
@@ -273,18 +287,11 @@ namespace FireGame.Prototypes.Tests
             // (잃은 사람 수는 10판으론 판마다 1~5명씩 흔들려 판정에 못 쓴다.)
             // 목표 승률이 마을 30~40%, 숲·공단 20%대라 30판 기대 승은 7~8이다. 하한은 5.
             Assert.True(basic.won >= 5, "기본 봇이 너무 못 이긴다: " + basic.won + "/30");
-            // 같은 보조끼리 비교한다: 보조를 먼저 챙기면 무기가 늦게 차서 몸 압박이 커진다(무기 강제와 섞으면 불공정).
-            float passiveHp = 0f;
-            int passives = 0;
-            foreach (var r in rows)
-            {
-                if (!Loadout.IsPassive(r.id)) continue;
-                passiveHp += r.minHp;
-                passives++;
-            }
-            passiveHp /= passives;
+            // 방화복은 봇의 행동과 떼어서 잰다. 최저 체력은 몇 판 쓰러졌느냐에 묻히고, 분당 피해는 체력이 넉넉한 봇이 불 곁에 더 오래 서서
+            // 오히려 커진다(봇은 체력이 절반 밑일 때만 물러난다). 받은 불 피해 ÷ 원값은 방화복 레벨만 따른다: Lv3이면 0.55.
             var suit = rows.Find(r => r.id == UpgradeId.Suit);
-            Assert.True(suit.minHp >= passiveHp, "방화복을 들어도 체력이 더 깎인다: " + suit.minHp + " (보조 평균 " + passiveHp + ")");
+            Assert.True(suit.fireCut <= 0.85f, "방화복을 들어도 불 피해를 덜 받지 않는다: 비율 " + suit.fireCut + " (기본 봇 " + basic.fireCut + ")");
+            Assert.True(suit.fireCut < basic.fireCut, "방화복 봇이 기본 봇보다 불 피해를 덜 막는다: " + suit.fireCut + " vs " + basic.fireCut);
         }
     }
 }

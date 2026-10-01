@@ -226,6 +226,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>무너지기 직전에 구한 횟수(아슬아슬 구조).</summary>
         public int CloseCalls;
+
+        /// <summary>방화복을 안 입었다면 받았을 불 피해(열기·바닥 불·불 몹 접촉의 원값). DamageTaken과 비교하면 방화복이 얼마나 막았는지 나온다.</summary>
+        public float FireDamageRaw;
     }
 
     /// <summary>
@@ -1934,7 +1937,7 @@ namespace FireGame.Prototypes.Logic
             foreach (Puddle p in BurningGround)
             {
                 p.Life -= Dt;
-                if (p.Pos.DistanceTo(Player) <= p.Radius + PlayerRadius) Hurt(10f * Build.HeatScale * Dt);
+                if (p.Pos.DistanceTo(Player) <= p.Radius + PlayerRadius) Burn(10f * Dt);
                 if (!p.Oil || p.Out || p.Life <= 0f) continue;
                 // 기름 불은 닿은 탈 것에 옮겨붙는다: 건물 곁에서 기름 방울을 터뜨리면 건물이 탄다.
                 foreach (Structure st in Structures)
@@ -2327,7 +2330,7 @@ namespace FireGame.Prototypes.Logic
         {
             Near(Player, PlayerRadius, _near);
             // 적은 전부 불이다: 방화복이 닿는 피해도 줄인다.
-            foreach (Enemy e in _near) Hurt(e.Touch * Build.HeatScale * Dt);
+            foreach (Enemy e in _near) Burn(e.Touch * Dt);
         }
 
         /// <summary>이번 틱 열기로 받은 피해(그림용).</summary>
@@ -2351,7 +2354,14 @@ namespace FireGame.Prototypes.Logic
             if (worst <= 0f) return;
             float wall = Build.Level(UpgradeId.WaterWall) > 0 ? 0.5f : 1f;
             HeatHurt = HeatDps * worst * Build.HeatScale * wall * Dt;
-            Hurt(HeatHurt);
+            Burn(HeatDps * worst * wall * Dt);
+        }
+
+        /// <summary>불에 데는 피해: 방화복(HeatScale)만큼 덜 받는다. 원값은 통계에 남긴다.</summary>
+        private void Burn(float raw)
+        {
+            Stats.FireDamageRaw += raw;
+            Hurt(raw * Build.HeatScale);
         }
 
         private void Hurt(float amount)
