@@ -47,6 +47,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>구조 드론이 지붕 위에 머문 시간(2초마다 한 명).</summary>
         public float DroneRescue;
+
+        /// <summary>물대포 물을 맞은 양(초 분량). 타는 동안 천천히 식고, SurvivorSim.SteamHold에 닿으면 증기 폭발.</summary>
+        public float HoseHold;
         public bool Collapsed;
 
         /// <summary>다음 불씨를 뱉기까지 남은 시간.</summary>

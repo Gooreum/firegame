@@ -161,6 +161,9 @@ namespace FireGame.Prototypes.Logic
         Curtain,
         Turret,
         Special,
+
+        /// <summary>증기 폭발: 건물 불에 물줄기를 이어 맞혀 터진 김.</summary>
+        Steam,
     }
 
     /// <summary>화면용: 한 번에 크게 줄인 건물 불(물폭탄·헬기·장막 등). 지붕 위에 "−N%"를 띄운다.</summary>
@@ -214,6 +217,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>구조로 찬 체력.</summary>
         public float HealRescue;
         public float MinHpRatio = 1f;
+
+        /// <summary>증기 폭발 횟수.</summary>
+        public int SteamBursts;
     }
 
     /// <summary>
@@ -375,6 +381,23 @@ namespace FireGame.Prototypes.Logic
         /// <summary>큰 불일수록 물이 덜 먹힌다: 물 효과 = 1 − FireResist × 불 세기(0.3이면 83%, 1.0이면 45%).</summary>
         public const float FireResist = 0.55f;
 
+        /// <summary>물대포 한 방울이 불 몹을 미는 힘(예전 2.5). 큰 불·기름 방울은 무거워서 절반.</summary>
+        public const float HoseKnock = 4f;
+
+        /// <summary>건물 불에 물대포 물을 이만큼(초 분량) 맞히면 증기 폭발. 저항은 이렇게 뚫는다.</summary>
+        public const float SteamHold = 2f;
+
+        /// <summary>맞은 물이 식는 속도(초당). 코앞 불씨를 잡고 돌아와도 쌓인 게 남는다.</summary>
+        public const float SteamCool = 0.25f;
+
+        /// <summary>증기 폭발이 한 번에 줄이는 불 세기(저항 무시).</summary>
+        public const float SteamDouse = 0.35f;
+
+        /// <summary>증기 폭발이 건물 가장자리에서 미치는 범위·피해·밀치기.</summary>
+        public const float SteamRadius = 4f;
+        public const float SteamHit = 6f;
+        public const float SteamPush = 6f;
+
         /// <summary>신고로 붙는 불 세기.</summary>
         public const float ReportFire = 0.35f;
 
@@ -447,6 +470,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이만큼 넘게 한 번에 줄어야 Knocked에 든다(꾸준한 물줄기의 한 틱은 훨씬 작다).</summary>
         public const float KnockShown = 0.15f;
+
+        /// <summary>이번 틱에 증기 폭발이 난 건물.</summary>
+        public readonly List<Structure> SteamBursts = new List<Structure>();
 
         /// <summary>이번 틱에 새로 불붙은 구조물.</summary>
         public readonly List<Structure> Ignited = new List<Structure>();
@@ -764,6 +790,7 @@ namespace FireGame.Prototypes.Logic
             SpreadFrom.Clear();
             OilCaught.Clear();
             Knocked.Clear();
+            SteamBursts.Clear();
             Fell.Clear();
             Doused.Clear();
             HeliDrops.Clear();
@@ -1812,7 +1839,11 @@ namespace FireGame.Prototypes.Logic
                         s.Struck.Add(e);
                     }
                     var dir = new Vec2(s.Vel.X / 14f, s.Vel.Y / 14f);
-                    Damage(e, s.Damage, new Vec2(dir.X * 2.5f, dir.Y * 2.5f), true, HitSource.Hose, s.From);
+                    // 물줄기는 불 떼를 민다: 노즐 가까이는 세고 끝에선 약하다(끝까지 밀어내면 물줄기 끝에 산 채로 쌓인다).
+                    // 큰 불·기름 방울은 무거워서 절반만 밀린다.
+                    float push = s.Hose ? HoseKnock * (1f - (s.Age / s.Life)) : 2.5f;
+                    if (e.Kind == EnemyKind.Blaze || e.Kind == EnemyKind.Oil) push *= 0.5f;
+                    Damage(e, s.Damage, new Vec2(dir.X * push, dir.Y * push), true, HitSource.Hose, s.From);
                     s.Pierce--;
                     if (s.Pierce <= 0)
                     {
@@ -1904,6 +1935,7 @@ namespace FireGame.Prototypes.Logic
                 if (s.Fire > 0f) return;
                 s.Fire = 0f;
                 s.Fuse = -1f;
+                s.HoseHold = 0f;
                 Doused.Add(s);
                 // 불을 끈 보상: 건물은 큰 구슬, 작은 것은 작은 구슬.
                 DropGem(s.Door, s.IsBuilding ? 8 : 3);
@@ -1923,14 +1955,37 @@ namespace FireGame.Prototypes.Logic
                     if (s.Soaked == null) s.Soaked = new List<Structure>();
                     if (s.Soaked.Contains(st)) continue;
                     s.Soaked.Add(st);
+                    if (s.Hose) Warm(st);
                     Soak(st, s.Damage * WaterPerDamage);
                     continue;
                 }
+                if (s.Hose) Warm(st);
                 Soak(st, s.Damage * WaterPerDamage);
                 s.Dead = true;
                 return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// 물대포 물줄기가 건물 불에 닿았다: 맞은 물이 쌓이고(틱마다 SteamCool씩 식는다), SteamHold에 닿으면 증기 폭발.
+        /// 증기 폭발은 큰 불에도 다 먹히는 한 방이라, 저항(FireResist)을 "버티는 손"으로 뚫는 길이다.
+        /// </summary>
+        private void Warm(Structure st)
+        {
+            if (!st.IsBuilding || !st.Burning) return;
+            st.HoseHold += HoseInterval;
+            if (st.HoseHold < SteamHold) return;
+            st.HoseHold = 0f;
+            Soak(st, SteamDouse, false);
+            SteamBursts.Add(st);
+            Stats.SteamBursts++;
+            // 곁의 불 몹을 데우고 바깥으로 민다.
+            foreach (Enemy e in Enemies)
+            {
+                if (e.Dead || st.DistanceTo(e.Pos) > SteamRadius) continue;
+                Damage(e, SteamHit, Knockback(st.Pos, e.Pos, SteamPush), true, HitSource.Steam, st.Pos);
+            }
         }
 
         /// <summary>불이 탈 것에 닿으면 옮겨붙는다. 불씨는 불을 옮기고 사라진다(젖은 곳에 닿아도 꺼진다).</summary>
@@ -2067,6 +2122,7 @@ namespace FireGame.Prototypes.Logic
 
                 s.Fire = Math.Min(1f, s.Fire + (Stage.FireGrowth * Dt));
                 s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding : BurnSmall);
+                if (s.HoseHold > 0f) s.HoseHold = Math.Max(0f, s.HoseHold - (SteamCool * Dt));
                 if (s.Integrity <= 0f)
                 {
                     Fall(s);

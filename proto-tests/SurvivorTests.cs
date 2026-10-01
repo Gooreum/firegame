@@ -945,6 +945,24 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void Hose_PushesTheCrowdBack()
+        {
+            SurvivorSim sim = Quiet();
+            // 불씨는 2.4로 다가온다. 노즐 가까이의 물줄기 밀치기가 그보다 세면 거리가 벌어진다.
+            Enemy ember = sim.Spawn(EnemyKind.Ember, new Vec2(sim.Player.X + 2.5f, sim.Player.Y));
+            ember.MaxHp = 999f;
+            ember.Hp = 999f;
+            float before = ember.Pos.DistanceTo(sim.Player);
+            for (int i = 0; i < 90; i++)
+            {
+                sim.Aim = new Vec2(1f, 0f);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+            }
+            Assert.True(ember.Pos.DistanceTo(sim.Player) > before, "물줄기를 맞은 불씨가 밀려나지 않았다: " + before + " → " + ember.Pos.DistanceTo(sim.Player));
+        }
+
+        [Fact]
         public void Hose_StaysOneStream_ButGrowsThickerAndStronger()
         {
             SurvivorSim sim = Quiet();

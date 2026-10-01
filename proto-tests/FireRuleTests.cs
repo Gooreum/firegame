@@ -144,6 +144,85 @@ namespace FireGame.Prototypes.Tests
             }
         }
 
+        /// <summary>가게에 ticks 동안 물대포를 쏘고(spraying이 false면 쉬고), 증기 폭발 횟수와 폭발 틱의 가장 큰 Knocked 양을 센다.</summary>
+        private static void Hose(SurvivorSim sim, Structure shop, int ticks, bool spraying, ref int bursts, ref float biggestKnock)
+        {
+            for (int i = 0; i < ticks; i++)
+            {
+                sim.Aim = new Vec2(shop.Pos.X - sim.Player.X, shop.Pos.Y - sim.Player.Y);
+                sim.Spraying = spraying;
+                sim.Step(0f, 0f);
+                if (sim.SteamBursts.Count == 0) continue;
+                bursts += sim.SteamBursts.Count;
+                foreach (FireKnock k in sim.Knocked) if (k.Amount > biggestKnock) biggestKnock = k.Amount;
+            }
+        }
+
+        [Fact]
+        public void Steam_BurstsAfterTwoSecondsOfHose_AndIgnoresResist()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 6f, 0f);
+            sim.Ignite(shop, 1f);
+            int bursts = 0;
+            float knock = 0f;
+            // 물이 닿기까지 0.4초, 맞는 동안에도 초당 SteamCool만큼 식어 2초 분량을 채우려면 3초 남짓 걸린다.
+            Hose(sim, shop, 240, true, ref bursts, ref knock);
+            Assert.True(bursts >= 1, "4초를 이어 쐈는데 증기 폭발이 없다");
+            Assert.True(knock >= 0.3f, "증기 폭발은 저항을 무시하고 한 번에 크게 줄여야 한다: " + knock);
+            Assert.Equal(bursts, sim.Stats.SteamBursts);
+        }
+
+        [Fact]
+        public void Steam_CoolsSlowly_SoAShortBreakKeepsTheCharge()
+        {
+            // 코앞 불씨를 잡으러 1초 손을 떼도 쌓인 물은 남는다: 2초 + 1초 쉼 + 2초면 터진다.
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 6f, 0f);
+            sim.Ignite(shop, 1f);
+            int bursts = 0;
+            float knock = 0f;
+            Hose(sim, shop, 120, true, ref bursts, ref knock);
+            Hose(sim, shop, 60, false, ref bursts, ref knock);
+            Hose(sim, shop, 120, true, ref bursts, ref knock);
+            Assert.True(bursts >= 1, "짧게 쉬었다고 쌓인 물이 날아갔다");
+
+            // 오래 쉬면 다 식는다: 1.5초 + 8초 쉼 + 1.5초로는 안 터진다.
+            sim = Quiet();
+            shop = Shop(sim, 6f, 0f);
+            sim.Ignite(shop, 1f);
+            bursts = 0;
+            Hose(sim, shop, 90, true, ref bursts, ref knock);
+            Hose(sim, shop, 480, false, ref bursts, ref knock);
+            Hose(sim, shop, 90, true, ref bursts, ref knock);
+            Assert.Equal(0, bursts);
+        }
+
+        [Fact]
+        public void Steam_ScaldsAndPushesTheCrowdBesideTheBuilding()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 6f, 0f);
+            sim.Ignite(shop, 1f);
+            // 가게 건너편(물줄기가 닿지 않는 쪽)에 불씨 하나.
+            Enemy ember = sim.Spawn(EnemyKind.Ember, new Vec2(shop.Pos.X + 3f, shop.Pos.Y));
+            ember.Speed = 0f;
+            ember.MaxHp = 999f;
+            ember.Hp = 999f;
+            bool scalded = false;
+            for (int i = 0; i < 240 && !scalded; i++)
+            {
+                sim.Aim = new Vec2(shop.Pos.X - sim.Player.X, shop.Pos.Y - sim.Player.Y);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+                if (sim.SteamBursts.Count == 0) continue;
+                scalded = sim.Hits.Exists(h => h.Source == HitSource.Steam);
+                Assert.True(ember.Knock.X > 0f, "증기는 불씨를 건물 바깥으로 밀어야 한다");
+            }
+            Assert.True(scalded, "증기 폭발이 곁의 불씨를 데우지 않았다");
+            Assert.True(ember.Hp < 999f);
+        }
+
         [Fact]
         public void Spread_TellsWhereItCameFrom()
         {
