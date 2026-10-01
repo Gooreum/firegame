@@ -944,6 +944,33 @@ namespace FireGame.Prototypes.Tests
             Assert.True(shop.Door.DistanceTo(sim.Player) > SurvivorSim.RescueRange, "소방관이 문 앞에 간 게 아니어야 한다");
         }
 
+        // --- 소방서: 시작 장비 ---
+
+        [Fact]
+        public void StartingGear_IsWhatTheStationGives()
+        {
+            var sim = new SurvivorSim(1, 1, Roster.Get("veteran").Start);
+            Assert.Equal(1, sim.Build.Level(UpgradeId.Hose));
+            Assert.Equal(1, sim.Build.Level(UpgradeId.Curtain));
+            Assert.Equal(1, sim.Build.Level(UpgradeId.Suit));
+            Assert.Equal(0, sim.Build.Level(UpgradeId.Partner));
+            Assert.Equal(sim.MaxHp, sim.Hp);
+            Assert.True(sim.MaxHp > SurvivorSim.BaseMaxHp, "방화복이 최대 체력을 올려야 한다");
+
+            var rookie = new SurvivorSim(1);
+            Assert.Equal(1, rookie.Build.Level(UpgradeId.Hose));
+            Assert.Equal(0, rookie.Build.Level(UpgradeId.Suit));
+            Assert.Equal(SurvivorSim.BaseMaxHp, rookie.Hp);
+
+            // 빈 손으로도 터지지 않는다: 쏴도 아무 일이 없다.
+            var bare = new SurvivorSim(1, 1, new UpgradeId[0]);
+            bare.Enemies.Clear();
+            bare.Aim = new Vec2(1f, 0f);
+            bare.Spraying = true;
+            bare.Step(0f, 0f);
+            Assert.Empty(bare.Shots);
+        }
+
         // --- 연속 진압 콤보 ---
 
         private static Enemy Far(SurvivorSim sim, float dx)

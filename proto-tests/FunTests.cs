@@ -133,12 +133,12 @@ namespace FireGame.Prototypes.Tests
             get { return int.TryParse(Environment.GetEnvironmentVariable("FIREGAME_SEEDS"), out int n) && n > 0 ? n : 10; }
         }
 
-        public static FunRow Measure(int stage, int seeds, UpgradeId? favorite = null)
+        public static FunRow Measure(int stage, int seeds, UpgradeId? favorite = null, UpgradeId[] start = null)
         {
             var row = new FunRow { Stage = stage };
             for (int seed = 1; seed <= seeds; seed++)
             {
-                var sim = new SurvivorSim(seed, stage);
+                var sim = new SurvivorSim(seed, stage, start);
                 var bot = new SurvivorBot(sim) { Favorite = favorite };
                 int guard = 0;
                 while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) bot.Play();
@@ -195,6 +195,33 @@ namespace FireGame.Prototypes.Tests
             // 몸 압박: 체력이 절반 밑으로 떨어진 위기 판이 10판 중 3~8판(없으면 방화복이 쓸모없고, 늘 그러면 구조보다 생존이 먼저다).
             // 평균 최저 체력은 "몇 판은 쓰러지고 나머지는 멀쩡"한 두 갈래 분포를 못 담아 쓰지 않는다.
             Assert.InRange(town.Crises * 10f / seeds, 3f, 8f);
+        }
+
+        /// <summary>
+        /// 소방관 공정성: 소방서 명단의 소방관마다 그 시작 장비로 마을을 10판 돈다.
+        /// 모두 할 만해야 하고(승 1~9), 신입보다 지나치게 잘 이기는 필수 소방관도, 사람을 못 구하는 소방관도 없어야 한다.
+        /// dotnet test proto-tests --filter RosterReport --logger "console;verbosity=detailed"
+        /// </summary>
+        [Fact]
+        public void RosterReport_EveryFirefighterIsPlayable()
+        {
+            int seeds = Seeds;
+            FunRow rookie = null;
+            var rows = new System.Collections.Generic.List<(Firefighter f, FunRow row)>();
+            foreach (Firefighter f in Roster.All)
+            {
+                FunRow row = Measure(1, seeds, null, f.Start);
+                if (f.Id == Roster.Default) rookie = row;
+                rows.Add((f, row));
+                _out.WriteLine(f.Name + " (" + string.Join("+", f.Start) + ", ★" + f.Cost + "): 승 " + row.Won + "/" + seeds + ", 구조 " + row.Rescued.ToString("0.0") + ", 잃음 " + row.PeopleLost.ToString("0.0") + ", 레벨업 간격 " + row.LevelGap.ToString("0.0") + "초, 최저 체력 " + (row.MinHp * 100f).ToString("0") + "% (위기 판 " + row.Crises + ")");
+            }
+            Assert.NotNull(rookie);
+            foreach (var (f, row) in rows)
+            {
+                Assert.InRange(row.Won * 10f / seeds, 1f, 9f);
+                Assert.True(row.Won <= (rookie.Won * 2) + 2, f.Name + "만 너무 잘 이긴다: " + row.Won + " (신입 " + rookie.Won + ")");
+                Assert.True(row.Rescued >= rookie.Rescued * 0.65f, f.Name + "는 사람을 너무 못 구한다: " + row.Rescued + " (신입 " + rookie.Rescued + ")");
+            }
         }
 
         /// <summary>

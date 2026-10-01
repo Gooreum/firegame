@@ -641,12 +641,18 @@ namespace FireGame.Prototypes.Logic
         private readonly int[] _head = new int[Cells * Cells];
         private int[] _next = new int[MaxEnemies * 2];
 
-        public SurvivorSim(int seed, int stage = 1)
+        /// <summary>시작 장비를 주지 않으면 물대포 하나(신입 소방관).</summary>
+        public static readonly UpgradeId[] DefaultStart = { UpgradeId.Hose };
+
+        /// <param name="start">소방서에서 고른 소방관의 시작 장비(Lv1씩). null이면 DefaultStart.</param>
+        public SurvivorSim(int seed, int stage = 1, IReadOnlyList<UpgradeId> start = null)
         {
             Stage = SurvivorStages.Get(stage);
             Structures = Stage.Map();
             _rng = new Rng(seed == 0 ? 1 : seed);
-            Build.Add(UpgradeId.Hose);
+            foreach (UpgradeId id in start ?? DefaultStart) Build.Add(id);
+            // 방화복으로 시작하면 최대 체력이 다르다.
+            Hp = MaxHp;
         }
 
         public int XpToNext
