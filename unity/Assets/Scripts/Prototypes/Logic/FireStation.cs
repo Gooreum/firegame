@@ -62,6 +62,17 @@ namespace FireGame.Prototypes.Logic
             get { return Roster.Get(Selected); }
         }
 
+        /// <summary>이번 출동에 들고 갈 대비 장비(브리핑에서 고른 것). 저장하지 않는다 — 스테이지마다 다시 고른다.</summary>
+        public UpgradeId? Prep;
+
+        /// <summary>이 스테이지의 시작 장비: 고른 소방관의 장비 + 대비 장비 하나(그 스테이지의 Counters 안에 있고 아직 안 든 것만, Lv1).</summary>
+        public IReadOnlyList<UpgradeId> StartFor(StageRules stage)
+        {
+            var list = new List<UpgradeId>(Current.Start);
+            if (Prep.HasValue && stage != null && stage.Counters != null && Array.IndexOf(stage.Counters, Prep.Value) >= 0 && !list.Contains(Prep.Value)) list.Add(Prep.Value);
+            return list;
+        }
+
         /// <summary>판 결과를 적는다: 받은 별을 통장에 더하고 최고 기록을 갱신한다. 돌려주는 값은 이번에 번 별.</summary>
         public int RecordResult(int stage, int stars)
         {

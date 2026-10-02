@@ -19,6 +19,18 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void StartFor_WithoutPrep_IsTheFirefightersStart()
+        {
+            var station = new FireStation();
+            Assert.Null(station.Prep);
+            for (int n = 1; n <= SurvivorStages.Count; n++) Assert.Equal(station.Current.Start, station.StartFor(SurvivorStages.Get(n)));
+            // 저장 글엔 대비 장비가 없다(스테이지마다 다시 고른다).
+            station.Prep = UpgradeId.Boots;
+            Assert.DoesNotContain("Boots", station.Serialize());
+            Assert.Null(FireStation.Parse(station.Serialize()).Prep);
+        }
+
+        [Fact]
         public void Winning_BanksStars_AndKeepsTheBest()
         {
             var station = new FireStation();

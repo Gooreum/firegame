@@ -69,7 +69,8 @@ namespace FireGame.Prototypes.Tests
                         for (int k = 0; k < sim.PendingChoices.Count; k++)
                         {
                             UpgradeId id = sim.PendingChoices[k];
-                            if (!Loadout.IsSpecial(id) || id == UpgradeId.Cannon) continue;
+                            // 진화 카드(방수포·구조 분대…)는 노란 카드로 세지만 풀이 아니라 장비에서 온다: 대비 장비가 두 배로 나와 다른 진화도 뜬다.
+                            if (!Loadout.IsSpecial(id) || Loadout.IsEvolution(id)) continue;
                             Assert.Contains(id, pool);
                             seen.Add(id);
                             pick = k;

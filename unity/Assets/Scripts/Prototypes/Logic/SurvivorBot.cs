@@ -12,7 +12,7 @@ namespace FireGame.Prototypes.Logic
         private static readonly UpgradeId[] Priority =
         {
             UpgradeId.Cannon, UpgradeId.Squad, UpgradeId.AirBomb, UpgradeId.RescueDrone, UpgradeId.WaterWall, UpgradeId.RescuePost,
-            UpgradeId.Heli, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Hose, UpgradeId.Ambulance, UpgradeId.Sprinkler, UpgradeId.Rain, UpgradeId.Truck, UpgradeId.Retardant,
+            UpgradeId.Heli, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Hose, UpgradeId.Ambulance, UpgradeId.Sprinkler, UpgradeId.Rain, UpgradeId.Truck, UpgradeId.Retardant, UpgradeId.Foam,
             UpgradeId.Tank, UpgradeId.Drone, UpgradeId.WaterBomb, UpgradeId.Turret,
             UpgradeId.Suit, UpgradeId.Boots,
         };

@@ -305,8 +305,9 @@ namespace FireGame.Prototypes.Logic
         /// 아니면 <paramref name="level"/>(새 레벨)이 5의 배수일 때 노란 특수 장비를 반드시 한 장 넣는다.
         /// 뽑을 게 모자라면 그만큼만 준다(0장일 수도). <paramref name="specialPool"/>가 있으면 노란 카드는 그 안에서만 나온다.
         /// <paramref name="forceSpecial"/>이면(보물상자 첫 장) 노란 카드를 반드시 넣는다.
+        /// <paramref name="stage"/>가 있으면 그 스테이지의 Excluded 일반 장비는 안 나오고 Counters는 두 배로 나온다(한 뽑기에 같은 카드는 없다).
         /// </summary>
-        public static List<UpgradeId> Roll(Loadout loadout, int level, ref Rng rng, IList<UpgradeId> specialPool = null, bool forceSpecial = false)
+        public static List<UpgradeId> Roll(Loadout loadout, int level, ref Rng rng, IList<UpgradeId> specialPool = null, bool forceSpecial = false, StageRules stage = null)
         {
             var pool = new List<UpgradeId>();
             var specials = new List<UpgradeId>();
@@ -315,7 +316,9 @@ namespace FireGame.Prototypes.Logic
                 var id = (UpgradeId)i;
                 if (Loadout.IsEvolution(id) || !loadout.CanTake(id)) continue;
                 if (Loadout.IsSpecial(id) && specialPool != null && !specialPool.Contains(id)) continue;
+                if (!Loadout.IsSpecial(id) && stage != null && Array.IndexOf(stage.Excluded, id) >= 0) continue;
                 (Loadout.IsSpecial(id) ? specials : pool).Add(id);
+                if (!Loadout.IsSpecial(id) && stage != null && stage.Counters != null && Array.IndexOf(stage.Counters, id) >= 0) pool.Add(id);
             }
 
             var picks = new List<UpgradeId>(3);
@@ -326,8 +329,10 @@ namespace FireGame.Prototypes.Logic
             while (picks.Count < 3 && pool.Count > 0)
             {
                 int k = rng.Next(pool.Count);
-                picks.Add(pool[k]);
-                pool.RemoveAt(k);
+                UpgradeId pick = pool[k];
+                picks.Add(pick);
+                // 대비 장비는 두 번 들어 있다: 뽑히면 둘 다 지운다.
+                pool.RemoveAll(x => x == pick);
             }
             // 뽑을 게 모자라면 그만큼만. 회복으로 채우지 않는다(회복은 바닥 구급상자로).
             return picks;

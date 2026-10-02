@@ -856,7 +856,7 @@ namespace FireGame.Prototypes.Logic
                 Level++;
                 Stats.LevelTimes.Add(Time);
                 // 고를 게 없으면 카드 화면을 열지 않는다(레벨업 밀치기·연출은 그대로).
-                List<UpgradeId> cards = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials);
+                List<UpgradeId> cards = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials, false, Stage);
                 PendingChoices = cards.Count > 0 ? cards : null;
                 ChoosingChest = false;
                 JustLeveled = true;
@@ -882,7 +882,7 @@ namespace FireGame.Prototypes.Logic
             {
                 bool special = _bonusPicks == ChestPicks;
                 _bonusPicks--;
-                List<UpgradeId> cards = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials, special);
+                List<UpgradeId> cards = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials, special, Stage);
                 if (cards.Count == 0) continue;
                 ChoosingChest = true;
                 PendingChoices = cards;
