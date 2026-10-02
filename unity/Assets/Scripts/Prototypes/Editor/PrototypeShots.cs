@@ -72,7 +72,13 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c14_max_burst", view => view.Sim.JustMaxed.HasValue, 8, false, null, 1, view => Pick(view, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose));
             failures += NextStageShot(dir, "c14b_next_stage");
             // 공구상자를 주워 건물을 고치는 순간(초록 빛줄기·"수리!").
-            failures += SurvivorShot(dir, "c15_toolbox", view => view.Sim.Toolboxes.Exists(b => b.Pos.DistanceTo(view.Sim.Player) < 5f), 5);
+            // 건물 하나를 미리 상하게 해 첫 40초에 상자가 떨어지게 하고, 떨어지면 소방관을 3칸 옆으로 옮긴다(봇은 갇힌 사람을 먼저 가느라 상자를 못 볼 때가 있다).
+            failures += SurvivorShot(dir, "c15_toolbox", view =>
+            {
+                if (view.Sim.Toolboxes.Count > 0 && view.Sim.PendingChoices == null && view.Sim.Toolboxes[0].Pos.DistanceTo(view.Sim.Player) >= 5f)
+                    view.Sim.Player = new Vec2(view.Sim.Toolboxes[0].Pos.X + 3f, view.Sim.Toolboxes[0].Pos.Y);
+                return view.Sim.Toolboxes.Exists(b => b.Pos.DistanceTo(view.Sim.Player) < 5f);
+            }, 5, false, null, 1, view => NearestHouse(view).Integrity = 0.6f);
             // 줍는 순간만 보려고, 공구상자가 떨어지면 소방관을 그 위로 옮긴다.
             failures += SurvivorShot(dir, "c15b_toolbox_repair", view =>
             {
@@ -192,6 +198,29 @@ namespace FireGame.Prototypes.EditorTools
                 Structure near = NearestHouse(view);
                 view.Sim.Ignite(near, 0.9f);
                 Pick(view, UpgradeId.Drone, UpgradeId.Drone, UpgradeId.Drone);
+            });
+            // 머리 위 체력 바: 체력 40%로 고정(KeepAlive 끔). 바가 붉게 줄어 있고 HUD 왼쪽 위엔 체력 바가 없다.
+            failures += SurvivorShot(dir, "c45_head_hp", view =>
+            {
+                view.Sim.Hp = view.Sim.MaxHp * 0.4f;
+                return view.Sim.Time > 2f;
+            }, 4, false, view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 1f, 0f), 5f), 1, view => view.Sim.Enemies.Clear(), false);
+            // 구급상자: 흰 상자에 빨간 십자가 소방관 곁 바닥에서 튄다.
+            failures += SurvivorShot(dir, "c47_medkit", view => view.Sim.Time > 1f && view.Sim.Kits.Count > 0, 6,
+                false, view => view.Frame(new Vector3(view.Sim.Player.X + 1.5f, view.Sim.Player.Y + 0.5f, 0f), 6f), 1, view =>
+            {
+                view.Sim.Enemies.Clear();
+                view.Sim.Kits.Add(new Pickup { Pos = new Vec2(view.Sim.Player.X + 3f, view.Sim.Player.Y), Life = 20f });
+            });
+            // 마감 게이지: 큰 불 속 2명, 연기가 6초 쌓여 "7초 · 2명"이 붉게.
+            failures += SurvivorShot(dir, "c48_deadline", view => view.Sim.Time > 0.5f, 4, false,
+                view => { Structure near = NearestHouse(view); view.Frame(new Vector3(near.Pos.X, near.Pos.Y - 1f, 0f), 7f); }, 1, view =>
+            {
+                Structure near = NearestHouse(view);
+                near.Residents = 2;
+                view.Sim.Ignite(near, 0.7f);
+                near.Smoke = 6f;
+                view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 4f);
             });
             failures += SurvivorShot(dir, "c43_boots", view =>
             {

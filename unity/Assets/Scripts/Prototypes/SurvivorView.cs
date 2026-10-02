@@ -220,6 +220,9 @@ namespace FireGame.Prototypes
         private Pool _toolboxGlow;
         private int _toolboxesShown;
         private static Sprite _toolboxSprite;
+        private Pool _kit;
+        private int _kitsShown;
+        private static Sprite _kitSprite;
         private Pool _chest;
         private int _chestsShown;
         private static Sprite _chestSprite;
@@ -384,8 +387,9 @@ namespace FireGame.Prototypes
         private Text _level;
         private Text _timer;
         private Text _kills;
-        private Image _hpFill;
-        private Text _hpText;
+        /// <summary>월드 글자 태그(마감 게이지 "N초 · N명", 화살표 라벨). 프레임마다 쓴 만큼만 켜 둔다.</summary>
+        private readonly List<TextMesh> _tags = new List<TextMesh>();
+        private int _tagsUsed;
         private Text _build;
         private Text _alert;
         private Image _bossBack;
@@ -553,6 +557,13 @@ namespace FireGame.Prototypes
             _comboPeak = 0;
             _toolboxesShown = 0;
             _chestsShown = 0;
+            _kitsShown = 0;
+            foreach (TextMesh t in _tags)
+            {
+                if (t != null) UiKit.Discard(t.gameObject);
+            }
+            _tags.Clear();
+            _tagsUsed = 0;
             _planeAge = 99f;
             _ambulanceAge = 99f;
             _truckShown = false;
@@ -1438,6 +1449,19 @@ namespace FireGame.Prototypes
                 GameAudio.Play(Cue.PickUp);
             }
             _toolboxesShown = _sim.Toolboxes.Count;
+            // 구급상자: 떨어지면 알림, 주우면 초록 "+35".
+            if (_sim.Kits.Count > _kitsShown)
+            {
+                ShowAlert("구급상자가 떨어졌다! 체력 +" + (int)SurvivorSim.KitHeal, new Color(1f, 0.6f, 0.6f));
+                GameAudio.Play(Cue.PickUp);
+            }
+            _kitsShown = _sim.Kits.Count;
+            if (_sim.JustPickedKit)
+            {
+                Sparkle(W(_sim.Player), 12, new Color(0.5f, 1f, 0.5f));
+                SpawnText(W(_sim.Player) + new Vector3(0f, 1.3f, 0f), "+" + (int)SurvivorSim.KitHeal, new Color(0.5f, 1f, 0.5f), 1.4f);
+                GameAudio.Play(Cue.PickUp);
+            }
             foreach (Structure st in _sim.Repaired)
             {
                 // 수리: 소방관에서 건물로 초록 빛이 날아가고, 건물에서 반짝이·기둥이 솟는다.
@@ -1600,6 +1624,7 @@ namespace FireGame.Prototypes
             DrawWetMarks();
             DrawGems();
             DrawToolboxes();
+            DrawKits();
             DrawChests();
             DrawCivilians();
             DrawEnemies();
@@ -1610,6 +1635,7 @@ namespace FireGame.Prototypes
             DrawEdgeArrows();
             DrawWeather();
             foreach (Pool p in _pools) p.End();
+            EndTags();
             _people.End();
             foreach (ModelPool m in _modelPools) m.End();
             foreach (RibbonPool r in _ribbons) r.End();
@@ -1968,6 +1994,49 @@ namespace FireGame.Prototypes
                 _toolboxGlow.Put(at, 3f + (0.4f * Mathf.Sin(_time * 6f)), 0f, new Color(1f, 0.6f, 0.2f, 0.55f * a));
                 _toolbox.Put(at + new Vector3(0f, bob, 0f), 1.5f, 0f, new Color(1f, 1f, 1f, a));
             }
+        }
+
+        /// <summary>구급상자: 흰 상자에 빨간 십자. 통통 튀고 붉은 빛이 돌며, 사라지기 5초 전부터 깜빡인다.</summary>
+        private void DrawKits()
+        {
+            foreach (Pickup kit in _sim.Kits)
+            {
+                Vector3 at = W(kit.Pos);
+                float bob = Mathf.Abs(Mathf.Sin(_time * 4f)) * 0.3f;
+                bool blink = kit.Life < 5f && Mathf.Sin(_time * 18f) < 0f;
+                float a = blink ? 0.35f : 1f;
+                _shadows.Put(at + new Vector3(0f, -0.35f, 0f), 1f - (bob * 0.8f), 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
+                _toolboxGlow.Put(at, 3f + (0.4f * Mathf.Sin(_time * 6f)), 0f, new Color(1f, 0.45f, 0.45f, 0.5f * a));
+                _kit.Put(at + new Vector3(0f, bob, 0f), 1.4f, 0f, new Color(1f, 1f, 1f, a));
+            }
+        }
+
+        /// <summary>월드 글자 태그 하나를 이번 프레임에 놓는다. 프레임 끝의 EndTags가 안 쓴 것을 끈다.</summary>
+        private void Tag(Vector3 at, string text, Color color, float size)
+        {
+            TextMesh t;
+            if (_tagsUsed < _tags.Count)
+            {
+                t = _tags[_tagsUsed];
+            }
+            else
+            {
+                t = NewText();
+                t.GetComponent<MeshRenderer>().sortingOrder = 23;
+                _tags.Add(t);
+            }
+            _tagsUsed++;
+            t.gameObject.SetActive(true);
+            t.text = text;
+            t.color = color;
+            t.characterSize = size;
+            t.transform.localPosition = at;
+        }
+
+        private void EndTags()
+        {
+            for (int i = _tagsUsed; i < _tags.Count; i++) _tags[i].gameObject.SetActive(false);
+            _tagsUsed = 0;
         }
 
         /// <summary>보물상자: 금빛 위에서 통통 튀고, 빛기둥이 서고, 사라지기 5초 전부터 깜빡인다.</summary>
@@ -2574,6 +2643,9 @@ namespace FireGame.Prototypes
         /// <summary>사람 모델 키(칸).</summary>
         private const float PersonTall = 1.6f;
 
+        /// <summary>마감 게이지가 꽉 차 보이는 남은 시간(초). 이보다 많이 남았으면 꽉 찬 초록.</summary>
+        private const float DeadlineShown = 30f;
+
         /// <summary>
         /// 방화복 단계별 소방관 옷(Worker 모델 머티리얼 이름): 0 회청 안전모·파랑 작업복(어두운 바닥에서도 보이게) → 1 노란 안전모 → 2 빨간 안전모·황갈 방화복
         /// → 3 빨간 방화복 → 4 은색 방열복. 피부·얼굴은 그대로.
@@ -2653,6 +2725,15 @@ namespace FireGame.Prototypes
             // 최대 레벨이면 은색 방열복이 금빛으로 일렁인다.
             Color baseColor = suit >= Loadout.MaxLevel ? Color.Lerp(Color.white, new Color(1f, 0.85f, 0.4f), 0.25f + (0.15f * Mathf.Sin(_time * 4f))) : Color.white;
             Models3D.Tint(_player, Color.Lerp(baseColor, new Color(1f, 0.35f, 0.3f), Mathf.Clamp01(_hurt * 2f)), SuitColor, outfit);
+
+            // 머리 위 체력 바(건물 내구도 바와 같은 풀). 최대 체력이 크면 조금 길다. 30% 밑이면 깜빡인다.
+            float hpRatio = Mathf.Clamp01(_sim.Hp / _sim.MaxHp);
+            float hpW = 1.5f * _sim.MaxHp / SurvivorSim.BaseMaxHp;
+            Vector3 hpBar = at + Up(PersonTall + 0.45f);
+            _bars.PutRot(hpBar, Billboard, hpW + 0.08f, 0.22f, new Color(0f, 0f, 0f, 0.7f));
+            bool lowHp = hpRatio < 0.3f && Mathf.Sin(_time * 10f) < 0f;
+            _bars.PutRot(hpBar + new Vector3(-(hpW * (1f - hpRatio)) / 2f, 0f, 0f) + (Billboard * new Vector3(0f, 0f, -0.01f)), Billboard, Mathf.Max(0.01f, hpW * hpRatio), 0.14f,
+                lowHp ? new Color(1f, 0.6f, 0.5f) : new Color(0.9f, 0.25f, 0.2f));
             _playerGlow.transform.localPosition = at;
             float r = 2f * _sim.Magnet * 0.5f;
             _playerGlow.transform.localScale = Vector3.one * Art.FitWidth(_playerGlow.sprite, r * 2f);
@@ -2957,6 +3038,42 @@ namespace FireGame.Prototypes
             texture.Apply();
             _toolboxSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
             return _toolboxSprite;
+        }
+
+        /// <summary>구급상자: 흰 상자, 어두운 테두리, 가운데 빨간 십자, 위에 손잡이 아치.</summary>
+        private static Sprite KitSprite()
+        {
+            if (_kitSprite != null) return _kitSprite;
+            const int n = 64;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            var white = new Color32(245, 245, 240, 255);
+            var rim = new Color32(90, 90, 95, 255);
+            var cross = new Color32(220, 40, 40, 255);
+            var handle = new Color32(60, 60, 65, 255);
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = ((x + 0.5f) / n) - 0.5f;
+                    float v = ((y + 0.5f) / n) - 0.5f;
+                    Color32 c = new Color32(0, 0, 0, 0);
+                    bool body = Mathf.Abs(u) < 0.4f && v > -0.32f && v < 0.16f;
+                    bool edge = body && (Mathf.Abs(u) > 0.36f || v < -0.28f || v > 0.12f);
+                    float ax = u / 0.18f;
+                    float ay = (v - 0.16f) / 0.16f;
+                    float arch = (ax * ax) + (ay * ay);
+                    if (v > 0.16f && arch < 1f && arch > 0.5f) c = handle;
+                    if (body) c = edge ? rim : white;
+                    bool plus = (Mathf.Abs(u) < 0.06f && Mathf.Abs(v + 0.08f) < 0.17f) || (Mathf.Abs(v + 0.08f) < 0.06f && Mathf.Abs(u) < 0.17f);
+                    if (body && !edge && plus) c = cross;
+                    pixels[(y * n) + x] = c;
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _kitSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+            return _kitSprite;
         }
 
         /// <summary>재 박쥐: 머리가 +x, 날개가 위아래(y)로 펼쳐진다. 세로로 눌러 퍼덕임을 낸다.</summary>
@@ -4183,11 +4300,27 @@ namespace FireGame.Prototypes
 
             if (st.Burning) DrawRoofFire(st, at, w, h, seed, hgt);
 
-            // 한 번이라도 탔으면 지붕 위에 튼튼함 막대(초록→빨강). 카메라를 보고 선다.
-            if (st.Integrity < 0.999f)
+            // 타는 동안은 마감 게이지(언제까지 꺼야 하나: 사람이 있으면 첫 사람을 잃기까지, 없으면 무너지기까지 ÷ 30초).
+            // 꺼진 뒤 손상이 남았으면 튼튼함 막대(초록→빨강). 둘 다 카메라를 보고 선다.
+            float bw = w * 0.8f;
+            Vector3 bar = at + new Vector3(0f, st.Half.Y * 0.6f, 0f) + Up(hgt + 0.9f);
+            if (st.Burning)
             {
-                float bw = w * 0.8f;
-                Vector3 bar = at + new Vector3(0f, st.Half.Y * 0.6f, 0f) + Up(hgt + 0.9f);
+                float left = _sim.Deadline(st);
+                float fill = Mathf.Clamp01(left / DeadlineShown);
+                bool blink = left < 5f && Mathf.Sin(_time * 10f) < 0f;
+                _bars.PutRot(bar, Billboard, bw + 0.08f, 0.26f, new Color(0f, 0f, 0f, 0.75f));
+                _bars.PutRot(bar + new Vector3(-(bw * (1f - fill)) / 2f, 0f, 0f) + (Billboard * new Vector3(0f, 0f, -0.01f)), Billboard, Mathf.Max(0.01f, bw * fill), 0.18f,
+                    blink ? Color.white : Color.Lerp(new Color(1f, 0.2f, 0.1f), new Color(0.45f, 0.95f, 0.4f), fill));
+                if (!float.IsInfinity(left))
+                {
+                    // 글자는 막대 안에(위엔 "살려줘!" 말풍선이 있다).
+                    string label = Mathf.CeilToInt(left) + "초" + (st.Residents > 0 ? " · " + st.Residents + "명" : "");
+                    Tag(bar + (Billboard * new Vector3(0f, 0f, -0.03f)), label, fill < 0.3f ? new Color(1f, 0.75f, 0.65f) : Color.white, 0.032f);
+                }
+            }
+            else if (st.Integrity < 0.999f)
+            {
                 _bars.PutRot(bar, Billboard, bw + 0.08f, 0.22f, new Color(0f, 0f, 0f, 0.7f));
                 float fill = Mathf.Clamp01(st.Integrity);
                 _bars.PutRot(bar + new Vector3(-(bw * (1f - fill)) / 2f, 0f, 0f) + (Billboard * new Vector3(0f, 0f, -0.01f)), Billboard, Mathf.Max(0.01f, bw * fill), 0.14f,
@@ -4363,6 +4496,8 @@ namespace FireGame.Prototypes
             _toolbox = new Pool(_world, "Toolbox", ToolboxSprite(), 8, Cutout());
             _chest = new Pool(_world, "Chest", ChestSprite(), 8, Cutout());
             _pools.Add(_chest);
+            _kit = new Pool(_world, "Kit", KitSprite(), 8, Cutout());
+            _pools.Add(_kit);
             _pools.Add(_toolbox);
             _pools.Add(_gems);
             _pools.Add(_gemCores);
@@ -4378,7 +4513,7 @@ namespace FireGame.Prototypes
             _pools.Add(_bats);
             _enemyCore = AddPool("EnemyCore", "Effects/fire_01", 10, true);
             // 픽셀 3D: 원래 서 있는 그림(불 몹·박쥐·지붕 불꽃·시민·상자)은 카메라를 보고 세운다.
-            foreach (Pool standing in new[] { _embers, _blazes, _darts, _bats, _enemyCore, _roofFire, _chest, _toolbox }) standing.Upright = true;
+            foreach (Pool standing in new[] { _embers, _blazes, _darts, _bats, _enemyCore, _roofFire, _chest, _toolbox, _kit }) standing.Upright = true;
             _bombShadows = AddPool("BombShadow", "Effects/glow", 11);
             _heliShadow = new Pool(_world, "HeliShadow", HeliSprite(), 11, null);
             _sprayLines = new Pool(_world, "SprayLine", Art.White, 14, null);
@@ -4746,29 +4881,19 @@ namespace FireGame.Prototypes
             _kills = UiKit.OutlinedLabel(_hud, "Kills", "", 30, new Color(1f, 0.85f, 0.6f), TextAnchor.UpperCenter);
             UiKit.Place(_kills.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -114f), new Vector2(900f, 40f));
             // 연속 진압 콤보: 체력 바 아래 왼쪽(가운데 위는 대화재 막대·알림이 쓴다). 3부터 보이고, 끊기기 전까지 남은 시간만큼 흐려진다.
+            // 체력 바는 소방관 머리 위에 있다(DrawPlayer). HUD 왼쪽 위는 레벨·콤보·바람만.
             _comboText = UiKit.OutlinedLabel(_hud, "Combo", "", 44, Color.white, TextAnchor.UpperLeft);
-            UiKit.Place(_comboText.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -150f), new Vector2(500f, 60f));
+            UiKit.Place(_comboText.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -110f), new Vector2(500f, 60f));
 
-            Image hpBack = UiKit.Image(_hud, "HpBack", Art.White, new Color(0f, 0f, 0f, 0.6f));
-            UiKit.Place(hpBack.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -110f), new Vector2(380f, 32f));
-            _hpFill = UiKit.Image(hpBack.transform, "HpFill", Art.White, new Color(0.9f, 0.25f, 0.2f));
-            _hpFill.rectTransform.anchorMin = Vector2.zero;
-            _hpFill.rectTransform.anchorMax = Vector2.one;
-            _hpFill.rectTransform.pivot = new Vector2(0f, 0.5f);
-            _hpFill.rectTransform.offsetMin = new Vector2(3f, 3f);
-            _hpFill.rectTransform.offsetMax = new Vector2(-3f, -3f);
-            _hpText = UiKit.OutlinedLabel(hpBack.transform, "HpText", "", 24, Color.white, TextAnchor.MiddleCenter);
-
-            // 산불 숲: 체력 아래 바람 화살표.
+            // 산불 숲: 콤보 아래 바람 화살표.
             _windLabel = UiKit.OutlinedLabel(_hud, "WindLabel", "바람", 28, new Color(0.85f, 0.92f, 1f), TextAnchor.MiddleLeft);
-            UiKit.Place(_windLabel.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -168f), new Vector2(120f, 50f));
+            UiKit.Place(_windLabel.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -128f), new Vector2(120f, 50f));
             _windArrow = UiKit.Image(_hud, "WindArrow", ArrowSprite(), new Color(0.85f, 0.92f, 1f));
             _windArrow.raycastTarget = false;
-            UiKit.Place(_windArrow.rectTransform, new Vector2(0f, 1f), new Vector2(160f, -168f), new Vector2(56f, 56f));
-            // 가운데를 축으로 돌게(모서리 축이면 돌 때 체력 막대로 올라간다).
+            UiKit.Place(_windArrow.rectTransform, new Vector2(0f, 1f), new Vector2(160f, -128f), new Vector2(56f, 56f));
+            // 가운데를 축으로 돌게(모서리 축이면 돌 때 위로 올라간다).
             _windArrow.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            _windArrow.rectTransform.anchoredPosition = new Vector2(160f, -193f);
-            UiKit.Stretch(_hpText.rectTransform);
+            _windArrow.rectTransform.anchoredPosition = new Vector2(160f, -153f);
 
             _build = UiKit.OutlinedLabel(_hud, "Build", "", 26, new Color(0.85f, 0.92f, 1f), TextAnchor.UpperRight);
             UiKit.Place(_build.rectTransform, new Vector2(1f, 1f), new Vector2(-30f, -54f), new Vector2(520f, 400f));
@@ -4883,9 +5008,8 @@ namespace FireGame.Prototypes
             _xpTease.text = yellowNext ? "다음 레벨: 특수 장비!" : "";
             if (yellowNext) _xpTease.color = Color.Lerp(new Color(1f, 0.85f, 0.25f), Color.white, 0.3f * (0.5f + (0.5f * Mathf.Sin(_time * 6f))));
 
+            // 체력 비율은 가장자리 붉은 비네트가 쓴다(바는 머리 위).
             float hp = Mathf.Clamp01(_sim.Hp / _sim.MaxHp);
-            _hpFill.rectTransform.localScale = new Vector3(hp, 1f, 1f);
-            _hpText.text = Mathf.CeilToInt(_sim.Hp) + " / " + Mathf.RoundToInt(_sim.MaxHp);
 
             var build = new System.Text.StringBuilder();
             foreach (UpgradeId id in _sim.Build.Owned())
