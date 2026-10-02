@@ -1,22 +1,25 @@
+using FireGame.Prototypes.Logic;
 using UnityEngine;
 
 namespace FireGame.Prototypes
 {
     /// <summary>
     /// 픽셀 3D 바닥 한 장: 타일 격자 대신 스테이지 전체를 그린 절차 텍스처(칸당 Ppu 픽셀).
-    /// 마을은 풀밭 + 도로 4줄(연석·가운데 점선) + 석판 광장, 숲은 짙은 풀 + 십자 흙길, 공단은 콘크리트 판 + 노란 차선 + 기름 얼룩.
-    /// 해시 노이즈라 같은 입력이면 같은 그림.
+    /// 마을은 풀밭 + 도로 3줄(연석·가운데 점선) + 세로 강과 판자 다리, 숲은 짙은 풀 + 십자 흙길,
+    /// 공단은 콘크리트 판 + 가운데 넓은 골목(노란 차선·안전선) + 기름 얼룩. 해시 노이즈라 같은 입력이면 같은 그림.
     /// </summary>
     public static class GroundArt
     {
         public const int Ppu = 16;
 
-        /// <summary>마을 도로 가운데 줄(칸): 가로 y=25·37, 세로 x=23·37.</summary>
-        private static readonly float[] RoadsY = { 25f, 37f };
-        private static readonly float[] RoadsX = { 23f, 37f };
+        /// <summary>마을 도로 가운데 줄(칸): 가로 y=30(다리를 지난다), 세로 x=18·42(블록 가운데). 덤불 배치도 이 줄을 피한다.</summary>
+        public static readonly float[] TownRoadsY = { 30f };
+        public static readonly float[] TownRoadsX = { 18f, 42f };
         private const float RoadHalf = 1.1f;
         private const float Curb = 0.25f;
-        private const float PlazaHalf = 8f;
+
+        /// <summary>공단 골목(y=30) 반폭에서 도로 반폭을 뺀 값: 골목은 폭 9의 아스팔트.</summary>
+        private const float AlleyExtra = SurvivorFactory.AlleyHalf - RoadHalf;
 
         /// <summary>스테이지 번호별로 한 장씩 만들어 둔다(0은 비움).</summary>
         private static readonly Sprite[] Cached = new Sprite[4];
@@ -56,12 +59,37 @@ namespace FireGame.Prototypes
 
         private static Color Town(int px, int py, float x, float y, float mid)
         {
-            // 도로: 가장 가까운 도로 가운데 줄까지 거리.
-            float roadY = Nearest(y, RoadsY);
-            float roadX = Nearest(x, RoadsX);
-            float road = Mathf.Min(Mathf.Abs(y - roadY), Mathf.Abs(x - roadX));
-            bool plaza = Mathf.Abs(x - mid) < PlazaHalf && Mathf.Abs(y - mid) < PlazaHalf;
             float grain = Hash(px, py);
+
+            // 강(세로, x=30)과 다리(가운데): 다리 판자가 도로 위에 놓인다.
+            float river = Mathf.Abs(x - SurvivorTown.RiverX);
+            bool bridgeRow = Mathf.Abs(y - mid) < SurvivorTown.BridgeHalf;
+            if (bridgeRow && river < SurvivorTown.RiverHalf + 0.5f)
+            {
+                // 판자: 가로 줄무늬, 0.5칸마다 줄눈, 양 끝은 난간(어둡게).
+                var plank = new Color(0.52f, 0.37f, 0.22f) * (0.9f + (0.1f * Noise(px, py, 14)) + (0.05f * grain));
+                if (Mathf.Repeat(y, 0.5f) < 0.07f) plank *= 0.7f;
+                if (river > SurvivorTown.RiverHalf + 0.3f) plank *= 0.75f;
+                return Opaque(plank);
+            }
+            if (river < SurvivorTown.RiverHalf)
+            {
+                // 물: 짙은 파랑에 흐르는 결(비스듬한 밝은 줄).
+                var water = new Color(0.16f, 0.38f, 0.62f) * (0.92f + (0.1f * Noise(px, py, 18)));
+                float ripple = Mathf.Repeat(y + (x * 0.35f) + (Noise(px, py, 9) * 0.4f), 1.4f);
+                if (ripple < 0.1f) water = Color.Lerp(water, new Color(0.45f, 0.68f, 0.9f), 0.7f);
+                return Opaque(water);
+            }
+            if (river < SurvivorTown.RiverHalf + 0.3f)
+            {
+                // 둑: 모래빛 띠.
+                return Opaque(new Color(0.62f, 0.56f, 0.42f) * (0.92f + (0.1f * grain)));
+            }
+
+            // 도로: 가장 가까운 도로 가운데 줄까지 거리.
+            float roadY = Nearest(y, TownRoadsY);
+            float roadX = Nearest(x, TownRoadsX);
+            float road = Mathf.Min(Mathf.Abs(y - roadY), Mathf.Abs(x - roadX));
 
             if (road < RoadHalf)
             {
@@ -82,35 +110,24 @@ namespace FireGame.Prototypes
                 if (road < RoadHalf + (1f / Ppu)) curb *= 0.7f;
                 return Opaque(curb);
             }
-            if (plaza)
-            {
-                // 석판: 0.5칸 줄눈, 판마다 밝기가 조금씩 다르다.
-                const int slab = Ppu / 2;
-                int tx = px / slab;
-                int sy = py + ((tx & 1) * (slab / 2));
-                int ty = sy / slab;
-                bool joint = (px % slab) == 0 || (sy % slab) == 0;
-                var stone = new Color(0.5f, 0.46f, 0.41f) * (0.9f + (0.12f * Hash(tx, ty)) + (0.04f * grain));
-                if (joint) stone *= 0.78f;
-                return Opaque(stone);
-            }
             return Grass(px, py, grain, 1f);
         }
 
-        /// <summary>공단: 2칸 콘크리트 판(줄눈·판마다 밝기) + 마을 자리의 아스팔트 길(노란 실선 두 줄) + 짙은 기름 얼룩.</summary>
+        /// <summary>공단: 2칸 콘크리트 판(줄눈·판마다 밝기) + 가운데 넓은 골목(y=30, 폭 9)과 저장소로 가는 세로 길(노란 실선 두 줄) + 골목 가장자리 안전선 + 짙은 기름 얼룩.</summary>
         private static Color Factory(int px, int py, float x, float y, float mid)
         {
             float grain = Hash(px, py);
-            float roadY = Nearest(y, RoadsY);
-            float roadX = Nearest(x, RoadsX);
-            float road = Mathf.Min(Mathf.Abs(y - roadY), Mathf.Abs(x - roadX));
+            // 골목은 폭 9: 가운데 줄에서 AlleyExtra만큼은 "거리 0"으로 친다.
+            float alley = Mathf.Max(Mathf.Abs(y - mid) - AlleyExtra, 0f);
+            float lane = Mathf.Abs(x - mid);
+            float road = Mathf.Min(alley, lane);
             Color c;
             if (road < RoadHalf + Curb)
             {
                 c = new Color(0.25f, 0.25f, 0.27f) * (0.92f + (0.1f * Noise(px, py, 24)) + (0.05f * grain));
-                bool alongY = Mathf.Abs(y - roadY) < Mathf.Abs(x - roadX);
-                float centre = alongY ? Mathf.Abs(y - roadY) : Mathf.Abs(x - roadX);
-                bool crossing = Mathf.Abs(y - roadY) < RoadHalf && Mathf.Abs(x - roadX) < RoadHalf;
+                bool alongY = alley < lane;
+                float centre = alongY ? Mathf.Abs(y - mid) : lane;
+                bool crossing = alley < RoadHalf && lane < RoadHalf;
                 // 가운데 노란 실선 두 줄(공장 지대 차선).
                 if (!crossing && centre > 0.06f && centre < 0.14f) c = new Color(0.85f, 0.7f, 0.2f);
             }
@@ -122,9 +139,8 @@ namespace FireGame.Prototypes
                 bool joint = (px % slab) == 0 || (py % slab) == 0;
                 c = new Color(0.56f, 0.56f, 0.54f) * (0.9f + (0.1f * Hash(tx, ty)) + (0.06f * Noise(px, py, 30)) + (0.04f * grain));
                 if (joint) c *= 0.8f;
-                // 광장 가장자리: 노랑·검정 빗금 안전선.
-                float edge = Mathf.Max(Mathf.Abs(x - mid), Mathf.Abs(y - mid));
-                if (Mathf.Abs(edge - PlazaHalf) < 0.18f) c = Mathf.Repeat(x + y, 1f) < 0.5f ? new Color(0.9f, 0.75f, 0.15f) : new Color(0.15f, 0.15f, 0.15f);
+                // 골목 가장자리(드럼 줄이 선 자리): 노랑·검정 빗금 안전선.
+                if (Mathf.Abs(Mathf.Abs(y - mid) - (SurvivorFactory.AlleyHalf + Curb)) < 0.18f) c = Mathf.Repeat(x + y, 1f) < 0.5f ? new Color(0.9f, 0.75f, 0.15f) : new Color(0.15f, 0.15f, 0.15f);
             }
             // 기름 얼룩: 큰 노이즈 봉우리만 어둡게.
             float stain = Noise(px + 431, py + 97, 40);

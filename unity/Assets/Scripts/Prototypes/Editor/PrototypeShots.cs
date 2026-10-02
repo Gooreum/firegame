@@ -246,6 +246,13 @@ namespace FireGame.Prototypes.EditorTools
                 near.HoseHold = SurvivorSim.SteamHold * 0.8f;
                 view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 3f);
             });
+            // 지형: 마을의 강과 다리(가운데를 넓게), 숲의 캠프 줄과 북쪽 숲(바람 화살표가 아래쪽), 공단 골목과 드럼 줄.
+            failures += SurvivorShot(dir, "c53_river_bridge", view => view.Sim.Time > 0.5f, 4, false,
+                view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, SurvivorSim.ArenaSize / 2f, 0f), 15f), 1);
+            failures += SurvivorShot(dir, "c54_forest_camp", view => view.Sim.Time > 1f, 4, false,
+                view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, SurvivorSim.ArenaSize / 2f - 2f, 0f), 17f), 2);
+            failures += SurvivorShot(dir, "c55_factory_alley", view => view.Sim.Time > 0.5f, 4, false,
+                view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, SurvivorSim.ArenaSize / 2f, 0f), 15f), 3);
             failures += SurvivorShot(dir, "c43_boots", view =>
             {
                 view.Sim.Enemies.Clear();
@@ -271,9 +278,9 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c27_fire_knock", view => view.Sim.Knocked.Count > 0 && view.Sim.PendingChoices == null, 6, true);
             // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
             failures += SurvivorShot(dir, "c19_forest_specials", view => view.Sim.RainAt.HasValue && view.Sim.Retardants.Count > 0, 45, true, null, 2);
-            // 3스테이지 공단: 공장·약품 드럼 무더기·컨테이너, 콘크리트 바닥과 노란 차선. 드럼 무더기와 이웃 공장이 보이게 잡는다.
+            // 3스테이지 공단: 북서 공장 둘과 그 앞 드럼 줄, 골목의 컨테이너, 콘크리트 바닥과 노란 차선.
             failures += SurvivorShot(dir, "c28_factory", view => view.Sim.Time >= 45f && view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.Oil), 10, false,
-                view => view.Frame(new Vector3(24f, 38f, 0f), 13f), 3);
+                view => view.Frame(new Vector3(14f, 32f, 0f), 13f), 3);
             // 공단 기름 방울과 기름 불: 소방관 옆에 방울 둘과 공장 곁 기름 불을 놓고 크게 잡는다.
             failures += SurvivorShot(dir, "c28b_oil", view => view.Sim.Time >= 3.5f, 4, false,
                 view => view.Frame(new Vector3(view.Sim.Player.X + 3f, view.Sim.Player.Y + 2f, 0f), 7f), 3,

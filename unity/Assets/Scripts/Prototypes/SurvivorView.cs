@@ -3960,14 +3960,16 @@ namespace FireGame.Prototypes
 
             if (!forest && !factory)
             {
-                // 마을 풀밭 덤불(판정 없음): 도로·광장·건물을 피해 흩어 세운다.
+                // 마을 풀밭 덤불(판정 없음): 도로·강·건물을 피해 흩어 세운다.
                 for (int i = 0; i < 30; i++)
                 {
                     var at = new Vector3(1f + (Hash01((i * 5) + 900) * (size - 2f)), 1f + (Hash01((i * 5) + 901) * (size - 2f)), 0f);
                     var p = new Vec2(at.x, at.y);
-                    bool road = Mathf.Abs(at.y - 25f) < 2f || Mathf.Abs(at.y - 37f) < 2f || Mathf.Abs(at.x - 23f) < 2f || Mathf.Abs(at.x - 37f) < 2f;
-                    bool plaza = Mathf.Abs(at.x - mid) < 9f && Mathf.Abs(at.y - mid) < 9f;
-                    if (road || plaza || _sim.Structures.Exists(st => st.Within(p, 1.2f))) continue;
+                    bool road = false;
+                    foreach (float ry in GroundArt.TownRoadsY) road |= Mathf.Abs(at.y - ry) < 2f;
+                    foreach (float rx in GroundArt.TownRoadsX) road |= Mathf.Abs(at.x - rx) < 2f;
+                    bool river = Mathf.Abs(at.x - SurvivorTown.RiverX) < SurvivorTown.RiverHalf + 1f;
+                    if (road || river || _sim.Structures.Exists(st => st.Within(p, 1.2f))) continue;
                     float width = 0.7f + (0.4f * Hash01((i * 5) + 902));
                     GameObject bush = Models3D.Place(i % 2 == 0 ? "Nature/plant_bush" : "Nature/plant_bushLarge", _root, at, width, width, Hash01((i * 5) + 903) * 360f, out _);
                     if (bush != null) _ground.Add(bush);
@@ -4249,6 +4251,8 @@ namespace FireGame.Prototypes
                     if (st.Kind != StructureKind.Gas) _houseShadows.Put(at, w * 0.8f, 0f, new Color(0.05f, 0.06f, 0.12f, 0.55f), null, h / w);
                     continue;
                 }
+                // 강은 바닥 그림이 그린다(모델·그림자·불 없음).
+                if (st.Kind == StructureKind.Water) continue;
 
                 Color tint = Color.Lerp(Color.white, new Color(0.25f, 0.2f, 0.2f), burnt);
                 if (wet > 0f) tint = Color.Lerp(tint, new Color(0.7f, 0.85f, 1f), 0.35f * wet);
