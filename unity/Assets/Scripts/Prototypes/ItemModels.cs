@@ -109,6 +109,27 @@ namespace FireGame.Prototypes
             return root;
         }
 
+        /// <summary>구급차: 흰 상자 차체 + 빨간 띠 + 파란 경광등 + 유리 앞창 + 바퀴 넷. 길이 약 2.2칸, 앞 +Z.</summary>
+        public static GameObject Ambulance(Transform parent)
+        {
+            GameObject root = Root("AmbulanceModel", parent);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.45f, -0.25f), new Vector3(1.1f, 0.9f, 1.6f), Paint);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.3f, 0.85f), new Vector3(1.05f, 0.55f, 0.7f), Paint);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.6f, 0.95f), new Vector3(0.95f, 0.3f, 0.45f), Glass, new Vector3(-20f, 0f, 0f));
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.3f, -0.25f), new Vector3(1.14f, 0.16f, 1.62f), FireRed);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.75f, -0.25f), new Vector3(0.14f, 0.5f, 0.14f), FireRed);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.75f, -0.25f), new Vector3(0.5f, 0.14f, 0.14f), FireRed);
+            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.96f, 0.1f), new Vector3(0.22f, 0.08f, 0.22f), Water);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                for (int k = -1; k <= 1; k += 2)
+                {
+                    Part(PrimitiveType.Cylinder, root, new Vector3(side * 0.56f, 0.1f, 0.45f + (k * 0.65f)), new Vector3(0.3f, 0.08f, 0.3f), Dark, new Vector3(0f, 0f, 90f));
+                }
+            }
+            return root;
+        }
+
         /// <summary>방염제 비행기: 흰 동체 + 빨간 날개·꼬리. 길이 약 3칸, 앞 +Z.</summary>
         public static GameObject Plane(Transform parent)
         {

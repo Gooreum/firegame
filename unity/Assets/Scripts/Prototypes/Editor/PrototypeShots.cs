@@ -177,6 +177,17 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.Ignite(near, 1f);
                 view.Sim.Player = near.Door;
             }, false);
+            // 구급차: 연기 짙은 건물 문 앞에 도착한 순간(1.2초 뒤).
+            failures += SurvivorShot(dir, "c44_ambulance", view => view.Sim.AmbulanceAt != null, 76, false,
+                view => view.Frame(view.AmbulanceSpot ?? new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), 8f), 1, view =>
+            {
+                Structure near = NearestHouse(view);
+                near.Residents = 2;
+                near.Smoke = 10f;
+                view.Sim.Ignite(near, 1f);
+                Pick(view, UpgradeId.Ambulance);
+                view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 4f);
+            });
             // 보조 재설계: 드론 투하, 도끼 문 부수기, 산소통 투척, 장화 발자국.
             failures += SurvivorShot(dir, "c40_drone_drop", view => view.Sim.DroneDrops.Count > 0, 6, false,
                 view => view.Frame(new Vector3(view.Sim.DroneCenter.X, view.Sim.DroneCenter.Y, 0f), 7f), 1, view =>

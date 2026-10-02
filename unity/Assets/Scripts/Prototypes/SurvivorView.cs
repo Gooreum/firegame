@@ -196,6 +196,19 @@ namespace FireGame.Prototypes
         private bool _truckShown;
         private float _planeAge = 99f;
         private Vector3 _planeFrom;
+
+        /// <summary>구급차: 화면 밖에서 문 앞까지 1.2초 달려와 2초 서 있다가 떠난다. 99면 없음.</summary>
+        private float _ambulanceAge = 99f;
+
+        /// <summary>캡처용: 구급차가 달려가는 곳(없으면 null).</summary>
+        public Vector3? AmbulanceSpot
+        {
+            get { return _ambulanceAge < 4.4f ? _ambulanceTo : (Vector3?)null; }
+        }
+        private Vector3 _ambulanceFrom;
+        private Vector3 _ambulanceTo;
+        private Vector3 _ambulanceRoof;
+        private bool _ambulanceArrived;
         private Vector3 _planeTo;
         private Pool _toolbox;
         private Pool _toolboxGlow;
@@ -309,6 +322,7 @@ namespace FireGame.Prototypes
         private ModelPool _heliModels;
         private ModelPool _planeModels;
         private ModelPool _truckModels;
+        private ModelPool _ambulanceModels;
         private readonly List<ModelPool> _modelPools = new List<ModelPool>();
         private static readonly string[] CivilianModels = { "People/Casual_Female", "People/OldClassy_Male", "People/Casual_Male" };
         private SpriteRenderer _playerGlow;
@@ -535,6 +549,7 @@ namespace FireGame.Prototypes
             _toolboxesShown = 0;
             _chestsShown = 0;
             _planeAge = 99f;
+            _ambulanceAge = 99f;
             _truckShown = false;
             _lastPlayer = new Vector3(_sim.Player.X, _sim.Player.Y, 0f);
             _stepClock = 0f;
@@ -1084,16 +1099,24 @@ namespace FireGame.Prototypes
             }
             foreach (Structure st in _sim.Sprinkled)
             {
-                // 스프링클러: 지붕에서 물 고리가 터지고 물방울이 사방으로 흩날린다.
-                Vector3 at = W(st.Pos) + new Vector3(0f, 0.4f, 0f);
-                Flare(at, 4f, new Color(0.65f, 0.92f, 1f), 2);
-                Shockwave(at, new Color(0.6f, 0.9f, 1f, 0.95f), 6f, 0.45f);
-                Splash(at, 16, 1.4f);
-                Steam(at, 4, 1.4f);
-                for (int i = 0; i < 12; i++)
+                // 스프링클러: 지붕 네 모서리에서 물 호가 바깥으로 뻗고 물방울이 떨어진다.
+                Vector3 at = W(st.Pos);
+                Steam(at, 3, 1.2f);
+                for (int c = 0; c < 4; c++)
                 {
-                    float a = i * Mathf.PI * 2f / 12f;
-                    EmitFalling("Effects/water_drop", at, new Vector3(Mathf.Cos(a) * 3.5f, 4f + Mathf.Sin(a), 0f), 0.6f, 0.3f, new Color(0.75f, 0.95f, 1f, 1f));
+                    float sx = c % 2 == 0 ? -1f : 1f;
+                    float sy = c < 2 ? -1f : 1f;
+                    Vector3 corner = at + new Vector3(sx * st.Half.X * 0.8f, sy * st.Half.Y * 0.8f + 0.6f, 0f);
+                    for (int i = 0; i < 3; i++)
+                    {
+                        var v = new Vector3(sx * Random.Range(2.5f, 4f), 3.5f + Random.Range(0f, 1.5f), 0f);
+                        EmitSprite(BeamSprite(), corner, v, 0f, 0.5f, 0.14f, 0.08f, new Color(0.75f, 0.95f, 1f, 0.9f), new Color(0.7f, 0.9f, 1f, 0f), 0f, true,
+                            12f, 4f, (Mathf.Atan2(v.y, v.x) * Mathf.Rad2Deg) - 90f);
+                    }
+                    for (int i = 0; i < 3; i++)
+                    {
+                        EmitFalling("Effects/water_drop", corner, new Vector3(sx * Random.Range(1f, 3f), Random.Range(2f, 4f), 0f), 0.6f, 0.26f, new Color(0.75f, 0.95f, 1f, 1f));
+                    }
                 }
             }
             if (_sim.Sprinkled.Count > 0) GameAudio.Play(Cue.SprayFoam);
@@ -1129,6 +1152,16 @@ namespace FireGame.Prototypes
                 {
                     float a = k * Mathf.PI / 8f;
                     EmitFalling("Effects/smoke_01", at, new Vector3(Mathf.Cos(a) * 4f, 3f + Mathf.Sin(a), 0f), 0.9f, 0.5f, new Color(1f, 1f, 1f, 0.95f));
+                }
+                // 거품 원반 스무 개가 깔개 위에 천천히 부풀며 폼이 걷힐 때까지 남는다.
+                for (int k = 0; k < 20; k++)
+                {
+                    float a = Random.value * Mathf.PI * 2f;
+                    float d = r * 0.85f * Mathf.Sqrt(Random.value);
+                    Vector3 o = new Vector3(Mathf.Cos(a) * d, Mathf.Sin(a) * d, 0f);
+                    float size = Random.Range(0.7f, 1.3f);
+                    EmitSprite(BubbleSprite(), at + o, Vector3.zero, 0f, SurvivorSim.FoamTime, size * 0.6f, size * 1.1f,
+                        new Color(1f, 1f, 1f, 0.9f), new Color(0.9f, 0.97f, 1f, 0f), Random.Range(-10f, 10f), false);
                 }
                 SpawnText(at + new Vector3(0f, 2.5f, 0f), "폼 살포!", new Color(0.9f, 1f, 1f), 1.4f);
                 _trauma = Mathf.Min(1f, _trauma + 0.15f);
@@ -1300,14 +1333,14 @@ namespace FireGame.Prototypes
 
             if (_sim.AmbulanceAt != null)
             {
-                // 구급차: 흰·빨강 번쩍, 연기가 걷힌다.
-                Vector3 at = W(_sim.AmbulanceAt.Door);
-                Shockwave(at, new Color(1f, 1f, 1f, 0.9f), 5f, 0.4f);
-                Shockwave(at, new Color(1f, 0.25f, 0.25f, 0.9f), 3.5f, 0.35f, 0.1f);
-                Sparkle(at, 14, Color.white);
-                Steam(W(_sim.AmbulanceAt.Pos), 8, 1.2f);
-                SpawnText(at + new Vector3(0f, 1.8f, 0f), "구급차! 연기 걷힘", new Color(1f, 0.9f, 0.9f), 1.5f);
-                GameAudio.Play(Cue.PickUp);
+                // 구급차가 화면 밖에서 문 앞까지 달려온다. 연기 걷힘 연출은 도착 순간(DrawAmbulance)에.
+                Vector3 door = W(_sim.AmbulanceAt.Door);
+                _ambulanceTo = door + new Vector3(-1.6f, -1.3f, 0f);
+                _ambulanceFrom = _ambulanceTo + new Vector3(-16f, -7f, 0f);
+                _ambulanceRoof = W(_sim.AmbulanceAt.Pos);
+                _ambulanceAge = 0f;
+                _ambulanceArrived = false;
+                GameAudio.Play(Cue.Critical);
             }
             _heatTextClock -= SurvivorSim.Dt;
             if (_sim.HeatHurt > 0f && _heatTextClock <= 0f)
@@ -1794,6 +1827,46 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>특수 장비 모습: 달리는 소방차, 먹구름과 빗줄기, 붉은 방염제 띠와 지나가는 비행기.</summary>
+        /// <summary>구급차: 1.2초 달려와 문 앞에 서서 경광등을 돌리고(도착 순간 연기가 걷힌다), 2초 뒤 떠난다.</summary>
+        private void DrawAmbulance(float dt)
+        {
+            if (_ambulanceAge >= 4.4f) return;
+            _ambulanceAge += dt;
+            Vector3 dir = (_ambulanceTo - _ambulanceFrom).normalized;
+            Vector3 at;
+            if (_ambulanceAge < 1.2f)
+            {
+                float f = 1f - Mathf.Pow(1f - Mathf.Clamp01(_ambulanceAge / 1.2f), 2f);
+                at = Vector3.Lerp(_ambulanceFrom, _ambulanceTo, f);
+            }
+            else if (_ambulanceAge < 3.2f) at = _ambulanceTo;
+            else
+            {
+                float f = Mathf.Clamp01((_ambulanceAge - 3.2f) / 1.2f);
+                at = _ambulanceTo + (dir * (f * f * 22f));
+            }
+            if (!_ambulanceArrived && _ambulanceAge >= 1.2f)
+            {
+                // 도착: 흰 김이 지붕에서 걷혀 올라가고 "구급차! 연기 걷힘".
+                _ambulanceArrived = true;
+                SteamPillar(_ambulanceRoof, 1.2f);
+                Steam(_ambulanceRoof, 8, 1.2f);
+                Shockwave(_ambulanceTo, new Color(1f, 1f, 1f, 0.9f), 5f, 0.4f);
+                SpawnText(_ambulanceTo + new Vector3(0f, 1.8f, 0f), "구급차! 연기 걷힘", new Color(1f, 0.9f, 0.9f), 1.5f);
+                GameAudio.Play(Cue.PickUp);
+            }
+            _shadows.Put(at + new Vector3(0f, -0.3f, 0f), 2.6f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.5f);
+            GameObject model = _ambulanceModels.Get();
+            if (model != null) ItemModels.Place(model, at, 0f, dir, 1f);
+            bool flip = Mathf.Repeat(_time * 6f, 1f) < 0.5f;
+            _siren.Put(at + new Vector3(0f, 0.95f, 0f), 1.6f, 0f, flip ? new Color(0.2f, 0.4f, 1f, 0.95f) : new Color(1f, 0.15f, 0.1f, 0.95f));
+            if (_ambulanceAge < 1.2f || _ambulanceAge > 3.2f)
+            {
+                // 달릴 때 뒤로 먼지.
+                Emit(Smokes[Random.Range(0, Smokes.Length)], at - (dir * 1.1f), -dir * 1.5f, 1.5f, 0.4f, 0.3f, 0.9f, new Color(0.8f, 0.78f, 0.7f, 0.4f), new Color(0.8f, 0.78f, 0.7f, 0f), 0f);
+            }
+        }
+
         private void DrawSpecials(float dt)
         {
             if ((_sim.Wind.X != 0f || _sim.Wind.Y != 0f) && _sim.Outcome == SOutcome.Playing && Random.value < 0.6f)
@@ -1837,26 +1910,34 @@ namespace FireGame.Prototypes
             }
             _truckShown = _sim.Truck.HasValue;
 
+            DrawAmbulance(dt);
+
             if (_sim.RainAt.HasValue)
             {
                 Vector3 at = W(_sim.RainAt.Value);
                 float r = SurvivorSim.RainRadius;
                 float fade = Mathf.Clamp01(_sim.RainLeft / 0.4f) * Mathf.Clamp01((SurvivorSim.RainTime - _sim.RainLeft) / 0.3f);
                 _rainShade.Put(at, r * 2.6f, 0f, new Color(0.05f, 0.1f, 0.2f, 0.45f * fade));
-                // 먹구름: 연기 덩어리 여섯이 천천히 꿈틀거린다(위로 조금 떠 있다).
-                for (int k = 0; k < 6; k++)
+                // 먹구름: 어두운 원반 셋이 겹치고 가장자리만 밝다. 연기 덩어리처럼 회색으로 번지지 않는다.
+                for (int k = 0; k < 3; k++)
                 {
-                    float a = (k * 1.05f) + (_time * 0.3f);
-                    Vector3 o = new Vector3(Mathf.Cos(a) * r * 0.45f, (Mathf.Sin(a) * r * 0.2f) + 3.2f, 0f);
-                    _cloud.Put(at + o, r * 1.1f, (k * 60f) + (_time * 8f), new Color(0.3f, 0.33f, 0.4f, 0.85f * fade));
+                    float a = (k * 2.1f) + (_time * 0.25f);
+                    Vector3 o = new Vector3(Mathf.Cos(a) * r * 0.35f, (Mathf.Sin(a) * r * 0.15f) + 3.2f, 0f);
+                    float size = r * (1.3f - (0.15f * k));
+                    _shadows.Put(at + o, size, 0f, new Color(0.12f, 0.14f, 0.2f, 0.9f * fade), DiscSprite(), 0.6f);
+                    _cloud.Put(at + o + new Vector3(0f, 0.35f, 0f), size * 0.9f, 0f, new Color(0.55f, 0.6f, 0.7f, 0.35f * fade), DiscSprite(), 0.6f);
                 }
-                // 빗줄기: 구름에서 비스듬히 떨어지는 짧은 선.
-                for (int k = 0; k < 6; k++)
+                // 빗줄기: 구름 밑에서 곧게 떨어지는 가는 선, 땅에 닿으면 물결.
+                for (int k = 0; k < 14; k++)
                 {
-                    var p = at + new Vector3(Random.Range(-r, r), Random.Range(-r * 0.6f, r * 0.6f) + 3f, 0f);
-                    EmitSprite(BeamSprite(), p, new Vector3(-2f, -16f, 0f), 0f, 0.22f, 0.08f, 0.08f, new Color(0.75f, 0.88f, 1f, 0.8f), new Color(0.75f, 0.88f, 1f, 0f), 0f, true, 0f, 8f, 7f);
+                    var p = at + new Vector3(Random.Range(-r, r) * 0.9f, Random.Range(-r * 0.5f, r * 0.5f) + 2.8f, 0f);
+                    EmitSprite(BeamSprite(), p, new Vector3(-1f, -18f, 0f), 0f, 0.18f, 0.06f, 0.06f, new Color(0.8f, 0.9f, 1f, 0.75f * fade), new Color(0.8f, 0.9f, 1f, 0f), 0f, true, 0f, 9f, 3f);
                 }
-                if (Random.value < 0.5f) Splash(at + new Vector3(Random.Range(-r, r) * 0.8f, Random.Range(-r, r) * 0.6f, 0f), 2, 0.3f);
+                for (int k = 0; k < 3; k++)
+                {
+                    var g = at + new Vector3(Random.Range(-r, r) * 0.85f, Random.Range(-r, r) * 0.6f, 0f);
+                    EmitSprite(RingSprite(), g, Vector3.zero, 0f, 0.35f, 0.2f, 0.9f, new Color(0.8f, 0.95f, 1f, 0.6f * fade), new Color(0.8f, 0.95f, 1f, 0f), 0f, true);
+                }
             }
 
             if (_sim.FoamAt.HasValue)
@@ -1865,16 +1946,8 @@ namespace FireGame.Prototypes
                 Vector3 at = W(_sim.FoamAt.Value);
                 float r = SurvivorSim.FoamRadius;
                 float fade = Mathf.Clamp01(_sim.FoamLeft / 1f) * Mathf.Clamp01((SurvivorSim.FoamTime - _sim.FoamLeft) / 0.25f);
-                for (int k = 0; k < 14; k++)
-                {
-                    float a = (k * 2.4f) + 0.3f;
-                    float d = r * 0.75f * Mathf.Sqrt((k + 0.5f) / 14f);
-                    float puff = 1f + (0.06f * Mathf.Sin((_time * 3f) + k));
-                    Vector3 o = new Vector3(Mathf.Cos(a) * d, Mathf.Sin(a) * d, 0f);
-                    // 거품 덩어리: 연기·원판 그림은 반투명 가장자리가 어둡게 섞여 회색으로 보여, 더하는 빛으로 겹쳐 하얗게 쌓는다.
-                    _groundGlow.Put(at + o, r * 0.8f * puff, 0f, new Color(0.9f, 0.95f, 1f, 0.4f * fade));
-                }
-                _groundGlow.Put(at, r * 2.2f, 0f, new Color(0.7f, 0.9f, 1f, 0.15f * fade));
+                // 깔개 바탕은 옅은 흰 원 하나. 거품 자체는 폼이 깔릴 때 뿌린 BubbleSprite 입자가 맡는다.
+                _groundGlow.Put(at, r * 2.2f, 0f, new Color(0.85f, 0.95f, 1f, 0.22f * fade));
                 if (Random.value < 0.3f * fade) Steam(at + new Vector3(Random.Range(-r, r) * 0.6f, Random.Range(-r, r) * 0.5f, 0f), 1, 0.4f);
             }
 
@@ -4441,6 +4514,7 @@ namespace FireGame.Prototypes
             _heliModels = ModelPoolOf(ItemModels.Heli);
             _planeModels = ModelPoolOf(ItemModels.Plane);
             _truckModels = ModelPoolOf(p => Models3D.Place("Cars/firetruck", p, Vector3.zero, 1.5f, 3.2f, 0f, out _));
+            _ambulanceModels = ModelPoolOf(ItemModels.Ambulance);
         }
 
         private ModelPool ModelPoolOf(System.Func<Transform, GameObject> make)
