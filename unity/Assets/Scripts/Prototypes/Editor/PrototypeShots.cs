@@ -199,6 +199,20 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.Ignite(near, 0.9f);
                 Pick(view, UpgradeId.Drone, UpgradeId.Drone, UpgradeId.Drone);
             });
+            // 발밑 안내 화살표: 가장 먼 집에 2명 갇힌 불이 나면 소방관 곁에서 그쪽으로 초록 화살표 + "이름 2명 갇힘".
+            failures += SurvivorShot(dir, "c46_guide_arrow", view => view.Sim.Time > 0.4f, 3, false,
+                view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 0.5f, 0f), 7f), 1, view =>
+            {
+                view.Sim.Enemies.Clear();
+                Structure far = null;
+                foreach (Structure st in view.Sim.Structures)
+                {
+                    if (st.IsBuilding && !st.Collapsed && (far == null || st.DistanceTo(view.Sim.Player) > far.DistanceTo(view.Sim.Player))) far = st;
+                }
+                far.Residents = 2;
+                view.Sim.Ignite(far, 1f);
+                view.PointAt(far, 6f);
+            });
             // 머리 위 체력 바: 체력 40%로 고정(KeepAlive 끔). 바가 붉게 줄어 있고 HUD 왼쪽 위엔 체력 바가 없다.
             failures += SurvivorShot(dir, "c45_head_hp", view =>
             {

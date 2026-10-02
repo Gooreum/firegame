@@ -315,6 +315,17 @@ namespace FireGame.Prototypes
         /// <summary>간판 판(x, y, 높이, 폭): 글자 뒤에 세우는 짙은 띠.</summary>
         private readonly List<Vector4> _signBoards = new List<Vector4>();
         private Pool _edgeArrows;
+        /// <summary>화살표 뒤 어두운 원반(가장자리·발밑 공통).</summary>
+        private Pool _arrowBacks;
+
+        /// <summary>발밑 안내 화살표: 새로 불난 건물·대형 신고·대화재 쪽을 몇 초 동안 가리킨다.</summary>
+        private struct Guide
+        {
+            public Structure At;
+            public float Ttl;
+        }
+
+        private readonly List<Guide> _guides = new List<Guide>();
         private readonly List<Image> _stars = new List<Image>();
         private static Sprite _arrowSprite;
 
@@ -558,6 +569,7 @@ namespace FireGame.Prototypes
             _toolboxesShown = 0;
             _chestsShown = 0;
             _kitsShown = 0;
+            _guides.Clear();
             foreach (TextMesh t in _tags)
             {
                 if (t != null) UiKit.Discard(t.gameObject);
@@ -1235,7 +1247,8 @@ namespace FireGame.Prototypes
 
             if (_sim.JustBigReport && _sim.BigReport != null)
             {
-                // 대형 신고: 그 건물에서 붉은 고리 + 불똥, 붉은 띠 "대형 화재! 3명 갇힘".
+                // 대형 신고: 그 건물에서 붉은 고리 + 불똥, 붉은 띠 "대형 화재! 3명 갇힘", 발밑 안내 화살표 5초.
+                PointAt(_sim.BigReport, 5f);
                 Vector3 at = W(_sim.BigReport.Pos);
                 var red = new Color(1f, 0.25f, 0.05f);
                 for (int k = 0; k < 2; k++) Shockwave(at, red, 8f + (5f * k), 0.6f, k * 0.15f);
@@ -1249,7 +1262,8 @@ namespace FireGame.Prototypes
 
             if (_sim.JustFinale)
             {
-                // 대화재: 랜드마크가 확 타오르고, 붉은 고리 세 겹 + 검은 연기, 카메라가 물러난다.
+                // 대화재: 랜드마크가 확 타오르고, 붉은 고리 세 겹 + 검은 연기, 카메라가 물러난다. 발밑 안내 화살표 5초.
+                PointAt(_sim.Landmark, 5f);
                 Vector3 at = _sim.Landmark != null ? W(_sim.Landmark.Pos) : W(_sim.Player);
                 var red = new Color(1f, 0.25f, 0.05f);
                 for (int k = 0; k < 3; k++) Shockwave(at, red, 10f + (5f * k), 0.6f, k * 0.15f);
@@ -1493,6 +1507,8 @@ namespace FireGame.Prototypes
             foreach (Structure st in _sim.Ignited)
             {
                 Vector3 at = W(st.Pos);
+                // 새로 불난 건물 쪽으로 발밑 안내 화살표 4초.
+                if (st.IsBuilding) PointAt(st, 4f);
                 if (st.IsBuilding && !_sim.Spread.Contains(st))
                 {
                     ShowAlert(st.Name + "에 불!" + (st.Residents > 0 ? "  " + st.Residents + "명 갇힘" : ""), new Color(1f, 0.6f, 0.25f));
@@ -1633,6 +1649,7 @@ namespace FireGame.Prototypes
             DrawGear(dt);
             DrawSpecials(dt);
             DrawEdgeArrows();
+            DrawGuides(dt);
             DrawWeather();
             foreach (Pool p in _pools) p.End();
             EndTags();
@@ -4472,6 +4489,8 @@ namespace FireGame.Prototypes
             _bars = new Pool(_world, "Bar", Art.White, 19, null);
             _edgeArrows = new Pool(_world, "EdgeArrow", ArrowSprite(), 22, null);
             _pools.Add(_edgeArrows);
+            _arrowBacks = new Pool(_world, "ArrowBack", DiscSprite(), 21, null);
+            _pools.Add(_arrowBacks);
             _pools.Add(_houseShadows);
             _pools.Add(_roofEdges);
             _pools.Add(_roofs);
@@ -5113,49 +5132,89 @@ namespace FireGame.Prototypes
             }
         }
 
-        /// <summary>화면 밖 타는 건물·가스통을 화면 가장자리 화살표로 가리킨다. 갇힌 사람이 있으면 초록으로 크게 뛴다.</summary>
+        /// <summary>화면 밖 타는 건물·가스통·상자를 화면 가장자리 화살표(어두운 원반 위, 라벨)로 가리킨다. 갇힌 사람이 있으면 초록으로 크게 뛴다.</summary>
         private void DrawEdgeArrows()
         {
             if (_sim.Outcome != SOutcome.Playing || _camera == null) return;
-            // 카메라가 따라갈 자리 기준으로 잡는다(이번 프레임 FollowCamera 전이라).
-            Vector3 eye = _cameraAt;
-            float halfH = _viewHalfH;
-            float halfW = _viewHalfW;
             foreach (Structure st in _sim.Structures)
             {
                 if (!st.Burning || !(st.IsBuilding || st.Kind == StructureKind.Gas)) continue;
-                float dx = st.Pos.X - eye.x;
-                float dy = st.Pos.Y - eye.y;
-                if (Mathf.Abs(dx) < halfW * 0.96f && Mathf.Abs(dy) < halfH * 0.96f) continue;
-                // 가장자리(위는 HUD를 피해 조금 더 안쪽)에 붙인다.
-                float k = Mathf.Min((halfW * 0.92f) / Mathf.Max(Mathf.Abs(dx), 0.001f), (halfH * (dy > 0f ? 0.72f : 0.84f)) / Mathf.Max(Mathf.Abs(dy), 0.001f));
-                var spot = new Vector3(eye.x + (dx * k), eye.y + (dy * k), 0f);
                 bool people = st.Residents > 0;
                 // 대형 신고·대화재 건물은 붉게, 가장 크게 뛴다.
                 bool big = people && (st == _sim.BigReport || st == _sim.Landmark);
                 float beat = 1f + ((people ? 0.25f : 0.1f) * Mathf.Abs(Mathf.Sin(_time * (people ? 8f : 5f))));
                 Color c = big ? new Color(1f, 0.25f, 0.2f) : people ? new Color(0.45f, 1f, 0.45f) : st.Kind == StructureKind.Gas ? new Color(1f, 0.3f, 0.25f) : new Color(1f, 0.55f, 0.2f);
-                _edgeArrows.Put(spot, 1.1f * beat * (big ? 1.6f : people ? 1.3f : 1f), Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, c);
+                string label = big ? "대형 화재 " + st.Residents + "명" : people ? st.Residents + "명 갇힘" : st.Kind == StructureKind.Gas ? "가스" : "불";
+                EdgeArrow(new Vector3(st.Pos.X, st.Pos.Y, 0f), c, 1.6f * beat * (big ? 1.5f : people ? 1.25f : 1f), label);
             }
-            foreach (Pickup chest in _sim.Chests)
+            foreach (Pickup chest in _sim.Chests) EdgeArrow(new Vector3(chest.Pos.X, chest.Pos.Y, 0f), new Color(1f, 0.85f, 0.3f), 1.9f * (1f + (0.2f * Mathf.Abs(Mathf.Sin(_time * 7f)))), "보물상자");
+            foreach (Pickup box in _sim.Toolboxes) EdgeArrow(new Vector3(box.Pos.X, box.Pos.Y, 0f), new Color(1f, 0.75f, 0.2f), 1.6f * (1f + (0.15f * Mathf.Abs(Mathf.Sin(_time * 6f)))), "공구상자");
+            foreach (Pickup kit in _sim.Kits) EdgeArrow(new Vector3(kit.Pos.X, kit.Pos.Y, 0f), new Color(1f, 0.55f, 0.55f), 1.6f * (1f + (0.15f * Mathf.Abs(Mathf.Sin(_time * 6f)))), "구급상자");
+        }
+
+        /// <summary>화면 안이면 안 그린다. 밖이면 가장자리(위는 HUD를 피해 조금 더 안쪽)에 원반·화살표·라벨. 카메라가 따라갈 자리 기준(이번 프레임 FollowCamera 전이라).</summary>
+        private void EdgeArrow(Vector3 target, Color c, float size, string label)
+        {
+            Vector3 eye = _cameraAt;
+            float halfH = _viewHalfH;
+            float halfW = _viewHalfW;
+            float dx = target.x - eye.x;
+            float dy = target.y - eye.y;
+            if (Mathf.Abs(dx) < halfW * 0.96f && Mathf.Abs(dy) < halfH * 0.96f) return;
+            float k = Mathf.Min((halfW * 0.92f) / Mathf.Max(Mathf.Abs(dx), 0.001f), (halfH * (dy > 0f ? 0.72f : 0.84f)) / Mathf.Max(Mathf.Abs(dy), 0.001f));
+            var spot = new Vector3(eye.x + (dx * k), eye.y + (dy * k), 0f);
+            float len = Mathf.Max(0.001f, Mathf.Sqrt((dx * dx) + (dy * dy)));
+            var dir = new Vector3(dx / len, dy / len, 0f);
+            _arrowBacks.Put(spot, size * 1.5f, 0f, new Color(0f, 0f, 0f, 0.45f));
+            _edgeArrows.Put(spot, size, Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, c);
+            // 라벨은 화살표에서 화면 안쪽으로.
+            Tag(spot - (dir * ((size * 0.6f) + 0.8f)) + new Vector3(0f, 0f, -0.05f), label, Color.Lerp(c, Color.white, 0.55f), 0.055f);
+        }
+
+        /// <summary>발밑 안내 화살표를 ttl초 동안 건다(이미 있으면 시간만 늘린다). 캡처 하니스도 부른다.</summary>
+        public void PointAt(Structure st, float ttl)
+        {
+            if (st == null) return;
+            for (int i = 0; i < _guides.Count; i++)
             {
-                // 화면 밖 보물상자는 금빛 화살표로 크게 가리킨다.
-                float dx = chest.Pos.X - eye.x;
-                float dy = chest.Pos.Y - eye.y;
-                if (Mathf.Abs(dx) < halfW * 0.96f && Mathf.Abs(dy) < halfH * 0.96f) continue;
-                float k = Mathf.Min((halfW * 0.92f) / Mathf.Max(Mathf.Abs(dx), 0.001f), (halfH * (dy > 0f ? 0.72f : 0.84f)) / Mathf.Max(Mathf.Abs(dy), 0.001f));
-                var spot = new Vector3(eye.x + (dx * k), eye.y + (dy * k), 0f);
-                _edgeArrows.Put(spot, 1.5f * (1f + (0.2f * Mathf.Abs(Mathf.Sin(_time * 7f)))), Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, new Color(1f, 0.85f, 0.3f));
+                if (_guides[i].At != st) continue;
+                _guides[i] = new Guide { At = st, Ttl = Mathf.Max(_guides[i].Ttl, ttl) };
+                return;
             }
-            foreach (Pickup box in _sim.Toolboxes)
+            _guides.Add(new Guide { At = st, Ttl = ttl });
+        }
+
+        /// <summary>새로 불난 건물·대형 신고·대화재 쪽으로 소방관 발밑에서 큰 화살표가 몇 초 동안 뛴다. 4칸 안이거나 꺼지면 사라지고, 마지막 1초에 옅어진다.</summary>
+        private void DrawGuides(float dt)
+        {
+            Vector3 me = W(_sim.Player);
+            for (int i = _guides.Count - 1; i >= 0; i--)
             {
-                // 화면 밖 공구상자는 주황 화살표로 가리킨다.
-                float dx = box.Pos.X - eye.x;
-                float dy = box.Pos.Y - eye.y;
-                if (Mathf.Abs(dx) < halfW * 0.96f && Mathf.Abs(dy) < halfH * 0.96f) continue;
-                float k = Mathf.Min((halfW * 0.92f) / Mathf.Max(Mathf.Abs(dx), 0.001f), (halfH * (dy > 0f ? 0.72f : 0.84f)) / Mathf.Max(Mathf.Abs(dy), 0.001f));
-                var spot = new Vector3(eye.x + (dx * k), eye.y + (dy * k), 0f);
-                _edgeArrows.Put(spot, 1.2f * (1f + (0.15f * Mathf.Abs(Mathf.Sin(_time * 6f)))), Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, new Color(1f, 0.75f, 0.2f));
+                Guide g = _guides[i];
+                g.Ttl -= dt;
+                Structure st = g.At;
+                float dx = st.Pos.X - _sim.Player.X;
+                float dy = st.Pos.Y - _sim.Player.Y;
+                float len = Mathf.Sqrt((dx * dx) + (dy * dy));
+                if (g.Ttl <= 0f || !st.Burning || st.Collapsed || len < 4f || _sim.Outcome != SOutcome.Playing)
+                {
+                    _guides.RemoveAt(i);
+                    continue;
+                }
+                _guides[i] = g;
+                bool people = st.Residents > 0;
+                bool big = people && (st == _sim.BigReport || st == _sim.Landmark);
+                Color c = big ? new Color(1f, 0.25f, 0.2f) : people ? new Color(0.45f, 1f, 0.45f) : new Color(1f, 0.55f, 0.2f);
+                float a = Mathf.Clamp01(g.Ttl);
+                c.a = a;
+                var dir = new Vector3(dx / len, dy / len, 0f);
+                float size = 1.6f * (1f + (0.2f * Mathf.Abs(Mathf.Sin(_time * 8f))));
+                Vector3 spot = new Vector3(_sim.Player.X, _sim.Player.Y, 0f) + (dir * 2.4f);
+                _arrowBacks.Put(spot, size * 1.4f, 0f, new Color(0f, 0f, 0f, 0.4f * a));
+                _edgeArrows.Put(spot, size, Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, c);
+                Color tagColor = Color.Lerp(c, Color.white, 0.55f);
+                tagColor.a = a;
+                Tag(spot + new Vector3(0f, -1.2f, -0.05f), st.Name + (people ? " " + st.Residents + "명 갇힘" : " 불!"), tagColor, 0.055f);
             }
         }
 
