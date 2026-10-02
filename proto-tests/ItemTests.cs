@@ -132,22 +132,58 @@ namespace FireGame.Prototypes.Tests
             Assert.True(shop.Fire < before, "물폭탄이 건물 불을 못 줄였다");
         }
 
+        /// <summary>드론 level로 seconds 동안 돌며 물폭탄을 몇 번 떨어뜨렸나. shop은 9칸 앞 불 0.8 가게.</summary>
+        private static int DroneDrops(int level, float seconds, out Structure shop, out SurvivorSim sim)
+        {
+            sim = Quiet();
+            shop = Shop(sim, 9f, 0f);
+            sim.Ignite(shop, 0.8f);
+            Take(sim, UpgradeId.Drone, level);
+            int drops = 0;
+            int ticks = (int)(seconds / SurvivorSim.Dt);
+            for (int i = 0; i < ticks; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(NoPartner(sim.PendingChoices));
+                sim.Step(0f, 0f);
+                drops += sim.DroneDrops.Count;
+            }
+            return drops;
+        }
+
         [Fact]
-        public void PatrolDrone_FliesToTheBurningBuilding_AndDousesIt()
+        public void PatrolDrone_DivesAndDropsWater()
         {
             SurvivorSim control = Quiet();
             Structure c = Shop(control, 9f, 0f);
             control.Ignite(c, 0.8f);
             Run(control, 4f);
 
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 9f, 0f);
-            sim.Ignite(shop, 0.8f);
-            Take(sim, UpgradeId.Drone, 3);
-            Run(sim, 4f);
+            int drops = DroneDrops(1, 4f, out Structure shop, out SurvivorSim sim);
             Assert.Same(shop, sim.DroneTarget);
-            Assert.True(sim.DroneCenter.DistanceTo(shop.Pos) < 0.6f, "드론이 건물 위로 안 갔다");
-            Assert.True(shop.Fire < c.Fire - 0.1f, "드론 불 " + shop.Fire + " / 없을 때 " + c.Fire);
+            Assert.True(drops >= 1, "4초 동안 물폭탄을 한 번도 안 떨어뜨렸다");
+            Assert.True(shop.Fire < c.Fire - 0.15f, "드론 불 " + shop.Fire + " / 없을 때 " + c.Fire);
+
+            // 드론이 많을수록 자주 떨어뜨린다.
+            int many = DroneDrops(5, 4f, out _, out _);
+            Assert.True(many > drops, "Lv5 투하 " + many + "회가 Lv1 " + drops + "회보다 많아야 한다");
+        }
+
+        [Fact]
+        public void PatrolDrone_WithoutAFire_CirclesThePlayer_AndDropsNothing()
+        {
+            int drops = 0;
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Drone);
+            for (int i = 0; i < 120; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+                drops += sim.DroneDrops.Count;
+            }
+            Assert.Null(sim.DroneTarget);
+            Assert.Equal(0, drops);
+            Assert.True(sim.Drones[0].DistanceTo(sim.Player) < 4f);
         }
 
         [Fact]
@@ -246,28 +282,60 @@ namespace FireGame.Prototypes.Tests
         }
 
         /// <summary>큰 불 속에 갇힌 한 명을 연기로 잃기까지 걸린 초.</summary>
-        private static float TimeToLose(int oxygen)
+        [Fact]
+        public void Oxygen_ThrowsATank_ThatResetsTheSmoke()
         {
             SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 20f, 0f, 1);
+            Structure shop = Shop(sim, 8f, 0f, 1);
             sim.Ignite(shop, 1f);
             shop.Integrity = 100f;
-            if (oxygen > 0) Take(sim, UpgradeId.Oxygen, oxygen);
-            for (int i = 0; i < 60 * 40 && sim.CiviliansLost == 0; i++)
+            shop.Smoke = 12f;
+            Take(sim, UpgradeId.Oxygen);
+            bool hit = false;
+            for (int i = 0; i < 60 * 6 && !hit; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                if (sim.OxygenHits.Contains(shop))
+                {
+                    hit = true;
+                    Assert.Equal(0f, shop.Smoke);
+                    Assert.True(shop.Shield > 0f);
+                }
+            }
+            Assert.True(hit, "6초 안에 산소통이 안 떨어졌다");
+            Assert.Equal(0, sim.CiviliansLost);
+            // 연기 시계가 되돌려졌으니 15초 동안은 아무도 잃지 않는다(원래는 3초 뒤에 잃었다).
+            for (int i = 0; i < 60 * 14; i++)
             {
                 sim.Enemies.Clear();
                 sim.Hp = sim.MaxHp;
                 sim.Step(0f, 0f);
             }
-            return sim.Time;
+            Assert.Equal(0, sim.CiviliansLost);
         }
 
         [Fact]
-        public void Oxygen_KeepsTrappedPeopleAliveLonger()
+        public void Oxygen_WaitsWhenNoOneIsTrapped()
         {
-            float plain = TimeToLose(0);
-            float oxygen = TimeToLose(1);
-            Assert.InRange(oxygen / plain, 1.15f, 1.25f);
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 8f, 0f, 0);
+            sim.Ignite(shop, 1f);
+            Take(sim, UpgradeId.Oxygen);
+            int hits = 0;
+            for (int i = 0; i < 60 * 10; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                hits += sim.OxygenHits.Count;
+            }
+            Assert.Equal(0, hits);
+            Assert.DoesNotContain(sim.Shots, s => s.Kind == ShotKind.Oxygen);
+            Assert.Equal(0f, new Loadout().OxygenEvery);
+            Take(sim, UpgradeId.Oxygen, 4);
+            Assert.Equal(4f, sim.Build.OxygenEvery, 3);
         }
 
         [Fact]

@@ -35,6 +35,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>소방 헬기가 쏟는 물. 폭탄처럼 날아가 떨어지지만 훨씬 크다.</summary>
         Heli,
+
+        /// <summary>산소통: 갇힌 건물 문 앞으로 던진다. 떨어지면 연기 시계를 되돌린다.</summary>
+        Oxygen,
     }
 
     public sealed class Enemy
@@ -102,6 +105,12 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>공중 소화탄(진화): 하늘에서 떨어진다.</summary>
         public bool Air;
+
+        /// <summary>순찰 드론이 급강하해 떨어뜨린 물폭탄. 저항 없이 DroneDropWater만큼 끈다.</summary>
+        public bool Drone;
+
+        /// <summary>산소통이 떨어질 건물.</summary>
+        public Structure At;
     }
 
     public sealed class Puddle
@@ -395,6 +404,12 @@ namespace FireGame.Prototypes.Logic
         public readonly List<Hit> Hits = new List<Hit>();
         public readonly List<Vec2> Explosions = new List<Vec2>();
 
+        /// <summary>이번 틱에 순찰 드론의 물폭탄이 떨어진 자리.</summary>
+        public readonly List<Vec2> DroneDrops = new List<Vec2>();
+
+        /// <summary>이번 틱에 산소통이 떨어져 연기를 걷어 낸 건물.</summary>
+        public readonly List<Structure> OxygenHits = new List<Structure>();
+
         /// <summary>이번 틱에 물·폭탄·거품에 꺼진 바닥 불 자리.</summary>
         public readonly List<Vec2> Extinguished = new List<Vec2>();
 
@@ -627,6 +642,9 @@ namespace FireGame.Prototypes.Logic
         private int _jetQueue;
         private float _jetAngle;
         private float _droneAngle;
+        private float _droneDrop;
+        private int _droneTurn;
+        private float _oxygenClock = 1f;
         private int _reportsDone;
         private int _bigDone;
         private bool _bigFailed;
@@ -855,6 +873,8 @@ namespace FireGame.Prototypes.Logic
         {
             Hits.Clear();
             Explosions.Clear();
+            DroneDrops.Clear();
+            OxygenHits.Clear();
             Extinguished.Clear();
             Reignited.Clear();
             Ignited.Clear();
@@ -1333,6 +1353,7 @@ namespace FireGame.Prototypes.Logic
             TickDrones();
             TickAirBombs();
             TickTurrets();
+            TickOxygen();
             if (Build.Level(UpgradeId.Ambulance) > 0) TickAmbulance();
 
             if (Build.Level(UpgradeId.Heli) > 0)
@@ -1447,8 +1468,15 @@ namespace FireGame.Prototypes.Logic
                 }
             }
             if (!over) return;
-            // 지붕 위: 드론 수와 레벨만큼 불을 줄인다(레벨마다 물 +20%).
-            Soak(target, DroneWater * drones * (1f + (0.2f * (drones - 1))) * Dt);
+            // 지붕 위: 드론이 번갈아 급강하해 물폭탄을 떨어뜨린다(저항 무시 한 방). 드론이 많을수록 자주.
+            _droneDrop -= Dt;
+            if (_droneDrop <= 0f && target.Burning)
+            {
+                _droneDrop = DroneDropEvery - (0.3f * (drones - 1));
+                Vec2 from = Drones[_droneTurn % Drones.Count];
+                _droneTurn++;
+                Shots.Add(new Shot { Kind = ShotKind.Bomb, From = from, Pos = from, Target = target.Pos, Life = 0.35f, Damage = 6f, Radius = 1.6f, Drone = true });
+            }
             if (rescue && target.Burning && target.Residents > 0)
             {
                 target.DroneRescue += Dt;
@@ -1458,6 +1486,24 @@ namespace FireGame.Prototypes.Logic
                     RescueOne(target);
                 }
             }
+        }
+
+        /// <summary>산소통: 몇 초마다 가까운 갇힌 건물(연기가 가장 짙은 곳)에 산소통을 던진다. 던질 데가 없으면 기다린다.</summary>
+        private void TickOxygen()
+        {
+            float every = Build.OxygenEvery;
+            if (every <= 0f) return;
+            _oxygenClock -= Dt;
+            if (_oxygenClock > 0f) return;
+            Structure target = null;
+            foreach (Structure s in Structures)
+            {
+                if (!s.Burning || s.Residents <= 0 || s.Fire < SmokeFire || s.Shield > 0f || s.DistanceTo(Player) > OxygenRange) continue;
+                if (target == null || s.Smoke > target.Smoke) target = s;
+            }
+            if (target == null) return;
+            _oxygenClock = every;
+            Shots.Add(new Shot { Kind = ShotKind.Oxygen, From = Player, Pos = Player, Target = target.Door, At = target, Life = 0.6f });
         }
 
         /// <summary>공중 소화탄: 3초마다 맵 어디든 불난 건물마다 소화탄이 떨어진다.</summary>
@@ -1820,6 +1866,14 @@ namespace FireGame.Prototypes.Logic
         public const float PartnerWaterBase = 0.05f;
         public const float PartnerHit = 4f;
         public const float DroneWater = 0.05f;
+
+        /// <summary>순찰 드론 투하 간격(초, Lv마다 −0.3)과 물폭탄 하나가 끄는 불 세기(저항 무시).</summary>
+        public const float DroneDropEvery = 2.5f;
+        public const float DroneDropWater = 0.2f;
+
+        /// <summary>산소통을 던지는 범위와 보호 시간(초).</summary>
+        public const float OxygenRange = 12f;
+        public const float OxygenShield = 2f;
         public const float DroneRange = 12f;
         public const float DroneRescueTime = 2f;
         public const float AirBombEvery = 3f;
@@ -1878,6 +1932,23 @@ namespace FireGame.Prototypes.Logic
                 if (s.Dead) continue;
                 s.Age += Dt;
 
+                if (s.Kind == ShotKind.Oxygen)
+                {
+                    float t = Math.Min(1f, s.Age / s.Life);
+                    s.Pos = new Vec2(s.From.X + ((s.Target.X - s.From.X) * t), s.From.Y + ((s.Target.Y - s.From.Y) * t));
+                    if (t >= 1f)
+                    {
+                        s.Dead = true;
+                        if (s.At != null && !s.At.Collapsed)
+                        {
+                            s.At.Smoke = 0f;
+                            s.At.Shield = OxygenShield;
+                            OxygenHits.Add(s.At);
+                        }
+                    }
+                    continue;
+                }
+
                 if (s.Kind == ShotKind.Bomb || s.Kind == ShotKind.Heli)
                 {
                     float t = Math.Min(1f, s.Age / s.Life);
@@ -1885,11 +1956,11 @@ namespace FireGame.Prototypes.Logic
                     if (t >= 1f)
                     {
                         s.Dead = true;
-                        (s.Kind == ShotKind.Heli ? HeliDrops : s.Air ? AirBlasts : Explosions).Add(s.Target);
+                        (s.Kind == ShotKind.Heli ? HeliDrops : s.Air ? AirBlasts : s.Drone ? DroneDrops : Explosions).Add(s.Target);
                         Douse(s.Target, s.Radius);
                         foreach (Structure st in Structures)
                         {
-                            if (st.Within(s.Target, s.Radius)) Soak(st, s.Damage * WaterPerDamage, false);
+                            if (st.Within(s.Target, s.Radius)) Soak(st, s.Drone ? DroneDropWater : s.Damage * WaterPerDamage, false);
                         }
                         Near(s.Target, s.Radius, _near);
                         HitSource source = s.Kind == ShotKind.Heli ? HitSource.Special : HitSource.Bomb;
@@ -2188,6 +2259,7 @@ namespace FireGame.Prototypes.Logic
             {
                 if (s.Collapsed) continue;
                 if (s.Wet > 0f) s.Wet -= Dt;
+                if (s.Shield > 0f) s.Shield -= Dt;
                 if (!s.Burning) continue;
 
                 if (s.Kind == StructureKind.Gas && s.Fuse >= 0f)
@@ -2653,7 +2725,7 @@ namespace FireGame.Prototypes.Logic
             foreach (Structure s in Structures)
             {
                 // 큰 불 속에 오래 갇혀 있으면 연기에 한 명씩 잃는다: 멀리서 끄기만 할 게 아니라 빨리 가야 한다.
-                if (s.Burning && s.Residents > 0 && s.Fire >= SmokeFire && !Sheltered(s))
+                if (s.Burning && s.Residents > 0 && s.Fire >= SmokeFire && s.Shield <= 0f && !Sheltered(s))
                 {
                     s.Smoke += Dt;
                     if (s.Smoke >= SmokeTime * Build.SmokeScale)

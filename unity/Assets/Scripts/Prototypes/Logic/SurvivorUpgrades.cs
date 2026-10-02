@@ -271,8 +271,11 @@ namespace FireGame.Prototypes.Logic
         /// 장화도 레벨마다 ×0.95: 빨리 뛰어 들어가 빨리 데리고 나온다(장화만 들면 구조가 줄어 쓰레기템이었다).
         public float RescueScale { get { return (float)(Math.Pow(0.82, Level(UpgradeId.Axe)) * Math.Pow(0.95, Level(UpgradeId.Boots))); } }
 
-        /// <summary>산소통: 갇힌 사람이 연기를 버티는 시간 배율(레벨마다 +20%).</summary>
-        public float SmokeScale { get { return 1f + (0.2f * Level(UpgradeId.Oxygen)); } }
+        /// <summary>연기 시계 배율. 산소통은 이제 수동 배율이 아니라 산소통을 던진다(OxygenEvery).</summary>
+        public float SmokeScale { get { return 1f; } }
+
+        /// <summary>산소통: 갇힌 건물에 산소통을 던지는 간격(초). Lv1 6초, 레벨마다 −0.5초. 없으면 0.</summary>
+        public float OxygenEvery { get { int l = Level(UpgradeId.Oxygen); return l > 0 ? 6f - (0.5f * (l - 1)) : 0f; } }
         public float BombRadius { get { return 1.5f * (1f + (0.15f * (PowerOf(UpgradeId.WaterBomb) - 1))); } }
 
         /// <summary>이 카드를 지금 뽑을 수 있나(최대 레벨·빈 슬롯·진화 조건).</summary>
