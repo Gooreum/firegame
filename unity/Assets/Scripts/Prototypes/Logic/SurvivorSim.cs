@@ -734,6 +734,7 @@ namespace FireGame.Prototypes.Logic
         {
             Stage = SurvivorStages.Get(stage);
             Structures = Stage.Map();
+            HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
             _rng = new Rng(seed == 0 ? 1 : seed);
             _kitRng = new Rng(((seed == 0 ? 1 : seed) * 7919) + 13);
             _kitClock = NextKitWait();
@@ -999,6 +1000,8 @@ namespace FireGame.Prototypes.Logic
             JustBats = false;
             JustPressureUp = false;
             GemsCollected = 0;
+            // 틱마다 한 번 센다(테스트가 판 도중 구조물을 넣는다).
+            HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
             ShotsFired = 0;
             PlayerHurt = 0f;
             HeatHurt = 0f;
@@ -1212,7 +1215,56 @@ namespace FireGame.Prototypes.Logic
         {
             double a = Rand() * Math.PI * 2;
             var at = new Vec2(Player.X + (float)(Math.Cos(a) * distance), Player.Y + (float)(Math.Sin(a) * distance));
-            return ClampToArena(at);
+            at = ClampToArena(at);
+            // 강에 떨어진 스폰은 둑으로 민다(물 위에 서 있는 불은 없다).
+            if (HasWater) PushOutOfWater(ref at, 0.5f);
+            return at;
+        }
+
+        /// <summary>강이 있는 맵인가(생성 때 한 번 센다).</summary>
+        public bool HasWater { get; private set; }
+
+        /// <summary>p가 물 사각형(반지름 r만큼 넓힌) 안이면 가장 가까운 축으로 밀어낸다(BlockPlayer와 같은 규칙, 물만).</summary>
+        private void PushOutOfWater(ref Vec2 p, float r)
+        {
+            foreach (Structure s in Structures)
+            {
+                if (s.Kind != StructureKind.Water) continue;
+                float dx = p.X - s.Pos.X;
+                float dy = p.Y - s.Pos.Y;
+                float ox = s.Half.X + r - Math.Abs(dx);
+                float oy = s.Half.Y + r - Math.Abs(dy);
+                if (ox <= 0f || oy <= 0f) continue;
+                if (ox < oy) p.X += dx >= 0f ? ox : -ox;
+                else p.Y += dy >= 0f ? oy : -oy;
+            }
+        }
+
+        /// <summary>a→b 선분이 물 사각형을 지나는가(slab 검사). 건물 불과 바람 번짐은 강을 못 건넌다.</summary>
+        private bool CrossesWater(Vec2 a, Vec2 b)
+        {
+            if (!HasWater) return false;
+            foreach (Structure s in Structures)
+            {
+                if (s.Kind != StructureKind.Water) continue;
+                float t0 = 0f;
+                float t1 = 1f;
+                if (!Slab(a.X, b.X - a.X, s.Pos.X - s.Half.X, s.Pos.X + s.Half.X, ref t0, ref t1)) continue;
+                if (!Slab(a.Y, b.Y - a.Y, s.Pos.Y - s.Half.Y, s.Pos.Y + s.Half.Y, ref t0, ref t1)) continue;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool Slab(float p, float d, float lo, float hi, ref float t0, ref float t1)
+        {
+            if (Math.Abs(d) < 1e-6f) return p >= lo && p <= hi;
+            float a = (lo - p) / d;
+            float b = (hi - p) / d;
+            if (a > b) { float tmp = a; a = b; b = tmp; }
+            t0 = Math.Max(t0, a);
+            t1 = Math.Min(t1, b);
+            return t0 <= t1;
         }
 
         private static Vec2 ClampToArena(Vec2 p)
@@ -1376,6 +1428,8 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
                 e.Pos = ClampToArena(e.Pos);
+                // 땅을 기는 불은 강을 못 건넌다(둑에 멈춘다). 불씨와 박쥐는 날아 건넌다.
+                if (HasWater && !e.Seeker && e.Kind != EnemyKind.Bat) PushOutOfWater(ref e.Pos, e.Radius);
                 // 건물에서 나온 불씨와 다람쥐만 옮겨붙인다. 소방관을 쫓는 불(가장자리 불씨·큰 불)은 발밑에 불을 흘릴 뿐이다.
                 if (e.Seeker) TouchStructures(e);
                 e.Knock.X *= knockDecay;
@@ -2119,7 +2173,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>구조물에 불을 붙인다(젖었거나 무너졌으면 안 붙는다). 새로 붙었으면 true.</summary>
         public bool Ignite(Structure s, float amount)
         {
-            if (s.Collapsed || s.Wet > 0f) return false;
+            if (s.Kind == StructureKind.Water || s.Collapsed || s.Wet > 0f) return false;
             bool fresh = s.Fire <= 0f;
             s.Fire = Math.Min(1f, Math.Max(s.Fire, amount));
             if (fresh)
@@ -2215,6 +2269,8 @@ namespace FireGame.Prototypes.Logic
             foreach (Structure st in Structures)
             {
                 if (st.Collapsed || st.Burning) continue;
+                // 물 위를 나는 불씨는 그대로 건넌다(붙을 것도, 사라질 일도 없다).
+                if (st.Kind == StructureKind.Water) continue;
                 // 다람쥐는 나무에만 불을 붙인다: 가는 길의 건물까지 태우면 건물당 불이 마을의 1.5배라 동네를 늘 잃었다.
                 // 나무 불은 바람을 타고 건물을 위협하므로 숲다운 압박은 남는다.
                 if (e.Kind == EnemyKind.Squirrel && st.Kind != StructureKind.Tree) continue;
@@ -2237,6 +2293,8 @@ namespace FireGame.Prototypes.Logic
             foreach (Structure t in Structures)
             {
                 if (t == s || !t.IsBuilding || !t.Flammable) continue;
+                // 강 건너로는 안 옮는다.
+                if (CrossesWater(s.Pos, t.Pos)) continue;
                 float dx = Math.Max(Math.Abs(t.Pos.X - s.Pos.X) - t.Half.X - s.Half.X, 0f);
                 float dy = Math.Max(Math.Abs(t.Pos.Y - s.Pos.Y) - t.Half.Y - s.Half.Y, 0f);
                 float gap = (float)Math.Sqrt((dx * dx) + (dy * dy));
@@ -2262,6 +2320,7 @@ namespace FireGame.Prototypes.Logic
                 float dy = t.Pos.Y - s.Pos.Y;
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
                 if (d < 0.01f || ((dx * Wind.X) + (dy * Wind.Y)) / d <= 0.3f) continue;
+                if (CrossesWater(s.Pos, t.Pos)) continue;
                 float gap = t.DistanceTo(s.Pos) - Math.Max(s.Half.X, s.Half.Y);
                 if (gap < bestD)
                 {

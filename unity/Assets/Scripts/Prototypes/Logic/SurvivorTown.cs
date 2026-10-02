@@ -10,6 +10,9 @@ namespace FireGame.Prototypes.Logic
         Tree,
         Car,
         Gas,
+
+        /// <summary>강: 소방관과 땅의 불 몹을 막고 절대 안 탄다. 건물 불도 못 건넌다(불씨·박쥐만 난다).</summary>
+        Water,
     }
 
     /// <summary>동네에 놓인 탈 것 하나. 판정은 축 정렬 사각형이다.</summary>
@@ -79,10 +82,10 @@ namespace FireGame.Prototypes.Logic
             get { return Kind == StructureKind.House || Kind == StructureKind.Depot; }
         }
 
-        /// <summary>안 타고, 안 무너지고, 안 젖었다 = 불씨가 노린다.</summary>
+        /// <summary>안 타고, 안 무너지고, 안 젖었다 = 불씨가 노린다. 물은 절대 아니다.</summary>
         public bool Flammable
         {
-            get { return !Collapsed && Fire <= 0f && Wet <= 0f; }
+            get { return Kind != StructureKind.Water && !Collapsed && Fire <= 0f && Wet <= 0f; }
         }
 
         /// <summary>아래쪽 문 앞.</summary>

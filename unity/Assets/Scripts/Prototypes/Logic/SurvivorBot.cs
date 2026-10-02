@@ -212,6 +212,9 @@ namespace FireGame.Prototypes.Logic
 
             if (goal.HasValue)
             {
+                // 강: 목표가 건너편이면 다리 가운데(30,30)를 먼저 밟는다. 다리 줄(|y-30|<3.5)에 있으면 그냥 간다.
+                float mid = SurvivorSim.ArenaSize / 2f;
+                if (_sim.HasWater && Math.Sign(goal.Value.X - mid) != Math.Sign(p.X - mid) && Math.Abs(p.Y - mid) > 3.5f) goal = new Vec2(mid, mid);
                 float dx = goal.Value.X - p.X;
                 float dy = goal.Value.Y - p.Y;
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
