@@ -69,10 +69,10 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Items_AreSixWeaponsSixPassivesSixEvolutions()
+        public void Items_AreSixWeaponsThreePassivesSixEvolutions()
         {
             UpgradeId[] weapons = { UpgradeId.Hose, UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Turret };
-            UpgradeId[] passives = { UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Radio, UpgradeId.Axe, UpgradeId.Oxygen, UpgradeId.Suit };
+            UpgradeId[] passives = { UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit };
             UpgradeId[] evolutions = { UpgradeId.Cannon, UpgradeId.Squad, UpgradeId.AirBomb, UpgradeId.RescueDrone, UpgradeId.WaterWall, UpgradeId.RescuePost };
             foreach (UpgradeId id in weapons)
             {
@@ -80,17 +80,45 @@ namespace FireGame.Prototypes.Tests
                 Assert.NotNull(Loadout.EvolutionOf(id));
             }
             foreach (UpgradeId id in passives) Assert.True(Loadout.IsPassive(id) && !Loadout.IsSpecial(id), id + "는 보조");
-            var pairs = new HashSet<UpgradeId>();
+            // 보조는 셋뿐: enum에서 IsPassive인 것은 이 셋이 전부다.
+            for (int i = 0; i <= (int)UpgradeId.Heal; i++)
+            {
+                var id = (UpgradeId)i;
+                Assert.Equal(System.Array.IndexOf(passives, id) >= 0, Loadout.IsPassive(id));
+            }
+            // 진화 짝: 보조 셋이 무기 둘씩 맡는다.
+            Assert.Equal(UpgradeId.Tank, Loadout.PairOf(UpgradeId.Cannon));
+            Assert.Equal(UpgradeId.Tank, Loadout.PairOf(UpgradeId.AirBomb));
+            Assert.Equal(UpgradeId.Boots, Loadout.PairOf(UpgradeId.Squad));
+            Assert.Equal(UpgradeId.Boots, Loadout.PairOf(UpgradeId.RescueDrone));
+            Assert.Equal(UpgradeId.Suit, Loadout.PairOf(UpgradeId.WaterWall));
+            Assert.Equal(UpgradeId.Suit, Loadout.PairOf(UpgradeId.RescuePost));
             foreach (UpgradeId id in evolutions)
             {
                 Assert.True(Loadout.IsEvolution(id) && Loadout.IsSpecial(id));
                 Assert.Contains(Loadout.BaseOf(id), weapons);
-                Assert.Contains(Loadout.PairOf(id), passives);
-                pairs.Add(Loadout.PairOf(id));
             }
-            Assert.Equal(6, pairs.Count);
-            Assert.Equal(Loadout.WeaponSlots, 4);
-            Assert.Equal(Loadout.PassiveSlots, 4);
+            Assert.Equal(4, Loadout.WeaponSlots);
+            Assert.Equal(3, Loadout.PassiveSlots);
+        }
+
+        [Fact]
+        public void Loadout_HoldsAtMostThreePassives()
+        {
+            var l = new Loadout();
+            l.Add(UpgradeId.Tank);
+            l.Add(UpgradeId.Boots);
+            l.Add(UpgradeId.Suit);
+            Assert.Equal(3, l.PassiveCount);
+            // 셋을 다 들면 올릴 수는 있어도 새로 들 보조는 없다.
+            Assert.True(l.CanTake(UpgradeId.Tank));
+            int passivesOffered = 0;
+            for (int i = 0; i <= (int)UpgradeId.Heal; i++)
+            {
+                var id = (UpgradeId)i;
+                if (Loadout.IsPassive(id) && l.Level(id) == 0 && l.CanTake(id)) passivesOffered++;
+            }
+            Assert.Equal(0, passivesOffered);
         }
 
         [Theory]
@@ -294,52 +322,6 @@ namespace FireGame.Prototypes.Tests
             Assert.InRange(b.Life / a.Life, 1.75f / 1.15f - 0.01f, 1.75f / 1.15f + 0.01f);
         }
 
-        /// <summary>무전기 Lv1로 첫 신고를 맞는다. near면 예보 건물 곁(문 앞 3칸)으로 미리 옮겨 둔다.</summary>
-        private static (Structure lit, float fire, int earlyCalls, int gemAtDoor) FirstReport(bool radio, bool near)
-        {
-            var sim = new SurvivorSim(1);
-            sim.Enemies.Clear();
-            if (radio) Take(sim, UpgradeId.Radio);
-            float report = sim.Stage.ReportTimes[0];
-            Structure lit = null;
-            float fire = 0f;
-            int gem = 0;
-            while (sim.Time < report + 0.5f && lit == null)
-            {
-                sim.Enemies.Clear();
-                sim.Hp = sim.MaxHp;
-                if (near && sim.ForecastAt != null) sim.Player = new Vec2(sim.ForecastAt.Door.X, sim.ForecastAt.Door.Y - 3f);
-                else if (!near) sim.Player = new Vec2(SurvivorSim.ArenaSize / 2f, SurvivorSim.ArenaSize / 2f);
-                sim.Step(0f, 0f);
-                if (sim.Ignited.Count > 0)
-                {
-                    lit = sim.Ignited[0];
-                    fire = lit.Fire;
-                    Gem g = sim.Gems.Find(x => x.Pos.DistanceTo(lit.Door) < 0.01f);
-                    gem = g != null ? g.Value : 0;
-                }
-            }
-            Assert.NotNull(lit);
-            return (lit, fire, sim.Stats.EarlyCalls, gem);
-        }
-
-        [Fact]
-        public void Radio_EarlyCall_ShrinksTheReportFire()
-        {
-            var near = FirstReport(true, true);
-            Assert.Equal(SurvivorSim.EarlyFire, near.fire, 2);
-            Assert.Equal(1, near.earlyCalls);
-            Assert.Equal(SurvivorSim.EarlyGem, near.gemAtDoor);
-
-            var far = FirstReport(true, false);
-            Assert.Equal(SurvivorSim.ReportFire, far.fire, 2);
-            Assert.Equal(0, far.earlyCalls);
-
-            var none = FirstReport(false, true);
-            Assert.Equal(SurvivorSim.ReportFire, none.fire, 2);
-            Assert.Equal(0, none.earlyCalls);
-        }
-
         [Fact]
         public void Describe_MentionsTheVisibleAction()
         {
@@ -349,102 +331,7 @@ namespace FireGame.Prototypes.Tests
             foreach (int lv in new[] { 2, 3, 4, 5 }) Assert.Contains("지속 +1초", SurvivorUpgrades.Describe(UpgradeId.Turret, lv));
             Assert.Contains("증기", SurvivorUpgrades.Describe(UpgradeId.Tank, 1));
             Assert.Contains("불 바닥", SurvivorUpgrades.Describe(UpgradeId.Boots, 1));
-            Assert.Contains("선제 출동", SurvivorUpgrades.Describe(UpgradeId.Radio, 1));
-            Assert.Contains("한 번에 2명", SurvivorUpgrades.Describe(UpgradeId.Axe, 1));
-            Assert.Contains("산소통을 던져", SurvivorUpgrades.Describe(UpgradeId.Oxygen, 1));
             Assert.Contains("튕겨", SurvivorUpgrades.Describe(UpgradeId.Suit, 1));
-        }
-
-        [Fact]
-        public void Radio_ForecastsTheNextReport()
-        {
-            var sim = new SurvivorSim(1);
-            sim.Enemies.Clear();
-            Take(sim, UpgradeId.Radio);
-            float report = sim.Stage.ReportTimes[0];
-            Structure told = null;
-            float lead = 0f;
-            Structure lit = null;
-            while (sim.Time < report + 0.5f && lit == null)
-            {
-                sim.Enemies.Clear();
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-                if (told == null && sim.ForecastAt != null)
-                {
-                    told = sim.ForecastAt;
-                    lead = report - sim.Time;
-                }
-                lit = sim.Ignited.Find(s => s.Kind == StructureKind.House);
-            }
-            Assert.NotNull(told);
-            Assert.InRange(lead, 1.9f, 2.05f);
-            Assert.Same(told, lit);
-        }
-
-        /// <summary>문 앞에 서서 첫 사람을 구하기까지 걸린 초.</summary>
-        private static float TimeToRescue(int axe)
-        {
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 0f, 5f, 2);
-            sim.Ignite(shop, 0.3f);
-            sim.Player = shop.Door;
-            if (axe > 0) Take(sim, UpgradeId.Axe, axe);
-            float start = sim.Time;
-            for (int i = 0; i < 600 && sim.Rescued == 0; i++)
-            {
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-            }
-            return sim.Time - start;
-        }
-
-        [Fact]
-        public void Axe_BringsOutTwoAtOnce()
-        {
-            // 도끼 없이는 한 명씩, 구조 시간은 그대로 1.2초.
-            float plain = TimeToRescue(0);
-            Assert.InRange(plain, SurvivorSim.RescueTime - 0.05f, SurvivorSim.RescueTime + 0.1f);
-            Assert.Equal(1f, new Loadout().RescueScale);
-
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 0f, 5f, 3);
-            sim.Ignite(shop, 0.3f);
-            sim.Player = shop.Door;
-            Take(sim, UpgradeId.Axe);
-            int xp = sim.Xp;
-            int level = sim.Level;
-            int need = sim.XpToNext;
-            bool burst = false;
-            for (int i = 0; i < 600 && sim.Rescued == 0; i++)
-            {
-                sim.Hp = sim.MaxHp;
-                xp = sim.Xp;
-                level = sim.Level;
-                need = sim.XpToNext;
-                sim.Step(0f, 0f);
-                burst = sim.DoorBursts.Contains(shop);
-            }
-            Assert.Equal(2, sim.Rescued);
-            Assert.Equal(1, shop.Residents);
-            Assert.True(burst, "문을 부순 신호가 없다");
-            Assert.Equal(40, sim.Xp - xp + (sim.Level > level ? need : 0));
-            Assert.Equal(2, sim.Civilians.Count);
-
-            // 남은 사람보다 많이 세지 않는다: Lv5 도끼(+3)라도 2명 남았으면 2명.
-            SurvivorSim two = Quiet();
-            Structure small = Shop(two, 0f, 5f, 2);
-            two.Ignite(small, 0.3f);
-            two.Player = small.Door;
-            Take(two, UpgradeId.Axe, 5);
-            for (int i = 0; i < 600 && two.Rescued == 0; i++)
-            {
-                two.Hp = two.MaxHp;
-                if (two.PendingChoices != null) two.Choose(NoPartner(two.PendingChoices));
-                two.Step(0f, 0f);
-            }
-            Assert.Equal(2, two.Rescued);
-            Assert.Equal(0, small.Residents);
         }
 
         [Fact]
@@ -504,63 +391,6 @@ namespace FireGame.Prototypes.Tests
             plain.Step(0f, 0f);
             Assert.Empty(plain.SuitBounces);
             Assert.Equal(0f, e2.Knock.X);
-        }
-
-        /// <summary>큰 불 속에 갇힌 한 명을 연기로 잃기까지 걸린 초.</summary>
-        [Fact]
-        public void Oxygen_ThrowsATank_ThatResetsTheSmoke()
-        {
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 8f, 0f, 1);
-            sim.Ignite(shop, 1f);
-            shop.Integrity = 100f;
-            shop.Smoke = 12f;
-            Take(sim, UpgradeId.Oxygen);
-            bool hit = false;
-            for (int i = 0; i < 60 * 6 && !hit; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-                if (sim.OxygenHits.Contains(shop))
-                {
-                    hit = true;
-                    Assert.Equal(0f, shop.Smoke);
-                    Assert.True(shop.Shield > 0f);
-                }
-            }
-            Assert.True(hit, "6초 안에 산소통이 안 떨어졌다");
-            Assert.Equal(0, sim.CiviliansLost);
-            // 연기 시계가 되돌려졌으니 15초 동안은 아무도 잃지 않는다(원래는 3초 뒤에 잃었다).
-            for (int i = 0; i < 60 * 14; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-            }
-            Assert.Equal(0, sim.CiviliansLost);
-        }
-
-        [Fact]
-        public void Oxygen_WaitsWhenNoOneIsTrapped()
-        {
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 8f, 0f, 0);
-            sim.Ignite(shop, 1f);
-            Take(sim, UpgradeId.Oxygen);
-            int hits = 0;
-            for (int i = 0; i < 60 * 10; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-                hits += sim.OxygenHits.Count;
-            }
-            Assert.Equal(0, hits);
-            Assert.DoesNotContain(sim.Shots, s => s.Kind == ShotKind.Oxygen);
-            Assert.Equal(0f, new Loadout().OxygenEvery);
-            Take(sim, UpgradeId.Oxygen, 4);
-            Assert.Equal(4f, sim.Build.OxygenEvery, 3);
         }
 
         [Fact]

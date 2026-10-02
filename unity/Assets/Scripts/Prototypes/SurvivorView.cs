@@ -244,7 +244,6 @@ namespace FireGame.Prototypes
         // 노란 특수 장비: 헬기(그림자·몸통·로터), 동료.
         private Pool _heliShadow;
         private TextMesh _partnerTag;
-        private TextMesh _forecastTag;
         private Pool _sprayLines;
         private Pool _airBombs;
         private Pool _wet;
@@ -1051,33 +1050,6 @@ namespace FireGame.Prototypes
                 WeaponSound(Cue.SprayWater);
             }
 
-            // 산소통 착탄: 파란 산소 구름이 문 앞에서 피어오르고 "산소!".
-            foreach (Structure st in _sim.OxygenHits)
-            {
-                Vector3 at = W(st.Door);
-                for (int k2 = 0; k2 < 10; k2++)
-                {
-                    Emit(Smokes[Random.Range(0, Smokes.Length)], at + new Vector3(Random.Range(-0.4f, 0.4f), Random.Range(-0.2f, 0.2f), 0f),
-                        new Vector3(Random.Range(-0.8f, 0.8f), Random.Range(1f, 2.2f), 0f), 1.2f, Random.Range(0.7f, 1.1f), 0.6f, 2.4f,
-                        new Color(0.5f, 0.75f, 1f, 0.8f), new Color(0.6f, 0.8f, 1f, 0f), Random.Range(-90f, 90f));
-                }
-                Shockwave(at, new Color(0.5f, 0.75f, 1f), 3f, 0.3f);
-                SpawnText(at + new Vector3(0f, 1.2f, 0f), "산소!", new Color(0.6f, 0.85f, 1f), 1.3f);
-                GameAudio.Play(Cue.PickUp);
-            }
-
-            // 구조 도끼: 문이 터지며 나무 파편, 쾅 흔들림.
-            foreach (Structure st in _sim.DoorBursts)
-            {
-                Vector3 at = W(st.Door);
-                Burst(at, 10, new Color(0.6f, 0.4f, 0.2f), 7f);
-                Burst(at, 6, new Color(0.9f, 0.8f, 0.6f), 4f);
-                Emit("Effects/glow", at, Vector3.zero, 0f, 0.08f, 1.2f, 2f, new Color(1f, 0.95f, 0.8f, 0.8f), new Color(1f, 0.9f, 0.6f, 0f), 0f, true);
-                _trauma = Mathf.Min(1f, _trauma + 0.2f);
-                HitStop(0.04f);
-                GameAudio.Play(Cue.Collapse);
-            }
-
             // 장화: 젖은 발자국이 남고, 밟아 끈 자리에선 김.
             foreach (Vec2 f in _sim.Footprints)
             {
@@ -1094,15 +1066,6 @@ namespace FireGame.Prototypes
                 Emit("Effects/glow", at, Vector3.zero, 0f, 0.06f, 0.6f, 1f, new Color(1f, 1f, 1f, 0.7f), new Color(1f, 0.8f, 0.4f, 0f), 0f, true);
             }
 
-            // 무전기 선제 출동: 작게 붙은 불 위에 파란 번쩍, "+10".
-            foreach (Structure st in _sim.EarlyCalls)
-            {
-                Vector3 at = W(st.Pos);
-                Flare(at, 5f, new Color(0.5f, 0.8f, 1f), 3);
-                Shockwave(at, new Color(0.5f, 0.8f, 1f), 7f, 0.4f);
-                SpawnText(at + new Vector3(0f, 2.6f, 0f), "선제 출동! +" + SurvivorSim.EarlyGem, new Color(0.6f, 0.9f, 1f), 1.6f);
-                GameAudio.Play(Cue.Rescued);
-            }
             foreach (Structure st in _sim.Sprinkled)
             {
                 // 스프링클러: 지붕 네 모서리에서 물 호가 바깥으로 뻗고 물방울이 떨어진다.
@@ -2145,22 +2108,6 @@ namespace FireGame.Prototypes
                     case ShotKind.Heli:
                         DrawHeli(s);
                         break;
-                    case ShotKind.Oxygen:
-                    {
-                        // 산소통: 파란 통이 포물선으로 날아간다. 땅엔 작은 그림자.
-                        float ot = Mathf.Clamp01(s.Age / s.Life);
-                        float olift = Mathf.Sin(ot * Mathf.PI) * 2.5f;
-                        _bombShadows.Put(at, 0.4f, 0f, new Color(0f, 0f, 0f, 0.3f));
-                        GameObject oxyModel = _bombModels.Get();
-                        if (oxyModel != null)
-                        {
-                            float spin = ot * 12f;
-                            ItemModels.Place(oxyModel, at, 0.4f + olift, new Vector3(Mathf.Cos(spin), Mathf.Sin(spin), 0f), 0.45f);
-                            Models3D.Tint(oxyModel, new Color(0.35f, 0.65f, 1f));
-                        }
-                        _dropGlow.Put(at + new Vector3(0f, olift, 0f), 0.9f, 0f, new Color(0.4f, 0.7f, 1f, 0.3f));
-                        break;
-                    }
                     case ShotKind.Bomb when s.Drone:
                     {
                         // 드론 물폭탄: 드론 밑에서 곧장 떨어진다. 청록 꼬리.
@@ -2296,7 +2243,6 @@ namespace FireGame.Prototypes
             DrawSpreadWarnings();
             DrawTracers();
             DrawCurtainCharge();
-            DrawForecast();
         }
 
         /// <summary>from에서 to로 곧은 물줄기(흰 막대를 늘여 돌린다).</summary>
@@ -2394,24 +2340,6 @@ namespace FireGame.Prototypes
                 }
                 if (tu.Life < 0.1f) Steam(at, 2, 0.8f);
             }
-        }
-
-        /// <summary>무전기: 곧 불날 건물 위에 주황 과녁과 "신고 예고 N"이 깜빡인다.</summary>
-        private void DrawForecast()
-        {
-            Structure st = _sim.ForecastAt;
-            bool show = st != null && !st.Burning && _sim.Outcome == SOutcome.Playing;
-            if (_forecastTag != null) _forecastTag.gameObject.SetActive(show);
-            if (!show) return;
-            Vector3 at = W(st.Pos);
-            float beat = 0.5f + (0.5f * Mathf.Abs(Mathf.Sin(_time * 6f)));
-            // 6칸 안에 미리 가 있으면 선제 출동: 고리와 글자가 파랗게 바뀐다.
-            bool ready = st.DistanceTo(_sim.Player) <= SurvivorSim.EarlyRange;
-            Color ringColor = ready ? new Color(0.4f, 0.8f, 1f, 0.35f + (0.35f * beat)) : new Color(1f, 0.6f, 0.1f, 0.3f + (0.3f * beat));
-            _civilianRings.Put(at, Mathf.Max(st.Half.X, st.Half.Y) * 2.8f * (1f + (0.1f * beat)), 0f, ringColor);
-            _forecastTag.text = (ready ? "선제 출동 준비 " : "신고 예고 ") + Mathf.CeilToInt(_sim.ForecastIn);
-            _forecastTag.color = Color.Lerp(ready ? new Color(0.5f, 0.85f, 1f) : new Color(1f, 0.75f, 0.2f), Color.white, beat * 0.4f);
-            _forecastTag.transform.localPosition = at + new Vector3(0f, st.Half.Y + 1.1f, -0.2f);
         }
 
         /// <summary>
@@ -2773,25 +2701,6 @@ namespace FireGame.Prototypes
                 {
                     _regenClock = 1f;
                     Sparkle(at, 2 + suit, new Color(0.45f, 1f, 0.5f));
-                }
-            }
-
-            int radio = build.Level(UpgradeId.Radio);
-            if (radio > 0)
-            {
-                float phase = Mathf.Repeat(_time / 1.6f, 1f);
-                float width = _sim.Magnet * 2f / 0.85f * Mathf.Lerp(0.2f, 1f, phase);
-                _auras.Put(at, width, 0f, new Color(0.45f, 1f, 0.55f, (1f - phase) * (0.15f + (0.07f * radio))));
-                if (radio >= Loadout.MaxLevel)
-                {
-                    // 무전기 MAX: 끌어오는 범위를 레이더 빛살이 빙빙 훑는다.
-                    float sweep = _time * 180f;
-                    for (int k = 0; k < 4; k++)
-                    {
-                        float deg = sweep - (k * 6f);
-                        Vector3 dir = new Vector3(Mathf.Cos(deg * Mathf.Deg2Rad), Mathf.Sin(deg * Mathf.Deg2Rad), 0f);
-                        _radar.Put(at + (dir * _sim.Magnet * 0.5f), 0.12f, deg - 90f, new Color(0.45f, 1f, 0.55f, 0.45f - (k * 0.1f)), null, _sim.Magnet / 0.12f);
-                    }
                 }
             }
 
@@ -4104,12 +4013,6 @@ namespace FireGame.Prototypes
             _partnerTag.characterSize = 0.04f;
             _partnerTag.color = new Color(1f, 0.9f, 0.35f);
             _partnerTag.gameObject.SetActive(false);
-            if (_forecastTag != null) UiKit.Discard(_forecastTag.gameObject);
-            _forecastTag = NewText();
-            _forecastTag.transform.SetParent(_root, false);
-            _forecastTag.GetComponent<MeshRenderer>().sortingOrder = 18;
-            _forecastTag.characterSize = 0.06f;
-            _forecastTag.gameObject.SetActive(false);
             for (int i = 0; i < _sim.Structures.Count; i++)
             {
                 Structure st = _sim.Structures[i];

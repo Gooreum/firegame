@@ -14,7 +14,7 @@ namespace FireGame.Prototypes.Logic
             UpgradeId.Cannon, UpgradeId.Squad, UpgradeId.AirBomb, UpgradeId.RescueDrone, UpgradeId.WaterWall, UpgradeId.RescuePost,
             UpgradeId.Heli, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Hose, UpgradeId.Ambulance, UpgradeId.Sprinkler, UpgradeId.Rain, UpgradeId.Truck, UpgradeId.Retardant,
             UpgradeId.Tank, UpgradeId.Drone, UpgradeId.WaterBomb, UpgradeId.Turret,
-            UpgradeId.Axe, UpgradeId.Oxygen, UpgradeId.Suit, UpgradeId.Boots, UpgradeId.Radio, UpgradeId.Heal,
+            UpgradeId.Suit, UpgradeId.Boots,
         };
 
         private readonly SurvivorSim _sim;

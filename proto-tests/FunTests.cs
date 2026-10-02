@@ -250,7 +250,7 @@ namespace FireGame.Prototypes.Tests
             UpgradeId[] items =
             {
                 UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Turret,
-                UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Radio, UpgradeId.Axe, UpgradeId.Oxygen, UpgradeId.Suit,
+                UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit,
             };
             (int won, float saved, float lost, float minHp, float damage, float fireCut) Both(UpgradeId? fav)
             {

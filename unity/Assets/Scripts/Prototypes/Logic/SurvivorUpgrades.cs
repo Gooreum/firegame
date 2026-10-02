@@ -25,18 +25,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>방수 포탑: 선 자리에 세우면 몇 초 동안 곁 불 몹과 건물에 물을 쏜다.</summary>
         Turret,
 
-        // --- 보조 6 ---
+        // --- 보조 3 ---
         Tank,
         Boots,
-
-        /// <summary>무전기: 다음 신고를 미리 알려 준다 + 구슬 범위.</summary>
-        Radio,
-
-        /// <summary>구조 도끼: 구조가 빨라진다.</summary>
-        Axe,
-
-        /// <summary>산소통: 갇힌 사람이 연기를 더 오래 버틴다.</summary>
-        Oxygen,
 
         /// <summary>방화복: 열기·바닥 불 피해를 줄이고 최대 체력을 올린다.</summary>
         Suit,
@@ -77,17 +68,17 @@ namespace FireGame.Prototypes.Logic
     {
         public const int MaxLevel = 5;
         public const int WeaponSlots = 4;
-        public const int PassiveSlots = 4;
+        public const int PassiveSlots = 3;
 
         /// <summary>진화 표: (진화, 원래 무기, 짝 보조).</summary>
         private static readonly UpgradeId[,] Evolutions =
         {
             { UpgradeId.Cannon, UpgradeId.Hose, UpgradeId.Tank },
             { UpgradeId.Squad, UpgradeId.Partner, UpgradeId.Boots },
-            { UpgradeId.AirBomb, UpgradeId.WaterBomb, UpgradeId.Radio },
-            { UpgradeId.RescueDrone, UpgradeId.Drone, UpgradeId.Axe },
+            { UpgradeId.AirBomb, UpgradeId.WaterBomb, UpgradeId.Tank },
+            { UpgradeId.RescueDrone, UpgradeId.Drone, UpgradeId.Boots },
             { UpgradeId.WaterWall, UpgradeId.Curtain, UpgradeId.Suit },
-            { UpgradeId.RescuePost, UpgradeId.Turret, UpgradeId.Oxygen },
+            { UpgradeId.RescuePost, UpgradeId.Turret, UpgradeId.Suit },
         };
 
         private readonly int[] _levels = new int[(int)UpgradeId.Heal + 1];
@@ -265,31 +256,12 @@ namespace FireGame.Prototypes.Logic
         /// <summary>장화: 이동 +12%/레벨.</summary>
         public float SpeedScale { get { return 1f + (0.12f * Level(UpgradeId.Boots)); } }
 
-        /// <summary>무전기: 구슬 범위 +20%/레벨.</summary>
-        public float MagnetScale { get { return 1f + (0.2f * Level(UpgradeId.Radio)); } }
-
-        /// <summary>무전기: 신고를 이만큼 먼저 알려 준다(초). 없으면 0.</summary>
-        public float Forecast { get { return Level(UpgradeId.Radio) > 0 ? 1f + Level(UpgradeId.Radio) : 0f; } }
-
-        /// <summary>구조 도끼: 구조 시간 배율(레벨마다 ×0.82: Lv1 −18%, Lv5 −63%). −15%씩 빼는 식은 아이템 측정에서 가장 약했다.</summary>
-        /// 장화도 레벨마다 ×0.95: 빨리 뛰어 들어가 빨리 데리고 나온다(장화만 들면 구조가 줄어 쓰레기템이었다).
-        /// <summary>구조 시간 배율. 도끼는 이제 시간을 줄이는 대신 한 번에 여럿을 데리고 나온다(AxeExtra).</summary>
-        public float RescueScale { get { return 1f; } }
-
-        /// <summary>구조 도끼: 문을 부수고 한 번 구조에 더 데리고 나오는 사람 수. Lv1 +1, Lv3 +2, Lv5 +3.</summary>
-        public int AxeExtra { get { int l = Level(UpgradeId.Axe); return l >= 5 ? 3 : l >= 3 ? 2 : l >= 1 ? 1 : 0; } }
-
         /// <summary>방화복: 닿은 불 몹을 튕겨 내는 힘. 없으면 0.</summary>
         public float SuitPush { get { int l = Level(UpgradeId.Suit); return l > 0 ? 3f + l : 0f; } }
 
         /// <summary>장화: 불 바닥을 밟아도 안 다치고 밟은 자리를 끈다.</summary>
         public bool WetBoots { get { return Level(UpgradeId.Boots) > 0; } }
 
-        /// <summary>연기 시계 배율. 산소통은 이제 수동 배율이 아니라 산소통을 던진다(OxygenEvery).</summary>
-        public float SmokeScale { get { return 1f; } }
-
-        /// <summary>산소통: 갇힌 건물에 산소통을 던지는 간격(초). Lv1 6초, 레벨마다 −0.5초. 없으면 0.</summary>
-        public float OxygenEvery { get { int l = Level(UpgradeId.Oxygen); return l > 0 ? 6f - (0.5f * (l - 1)) : 0f; } }
         public float BombRadius { get { return 1.5f * (1f + (0.15f * (PowerOf(UpgradeId.WaterBomb) - 1))); } }
 
         /// <summary>이 카드를 지금 뽑을 수 있나(최대 레벨·빈 슬롯·진화 조건).</summary>
@@ -376,9 +348,6 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Turret: return "방수 포탑";
                 case UpgradeId.Tank: return "고압 펌프";
                 case UpgradeId.Boots: return "장화";
-                case UpgradeId.Radio: return "무전기";
-                case UpgradeId.Axe: return "구조 도끼";
-                case UpgradeId.Oxygen: return "산소통";
                 case UpgradeId.Suit: return "방화복";
                 case UpgradeId.Cannon: return "고압 방수포";
                 case UpgradeId.Squad: return "구조 분대";
@@ -411,9 +380,6 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Turret: return fresh ? "7초마다 선 자리에 포탑을 세운다. 곁 불을 쏜다" : nextLevel == 3 || nextLevel == 5 ? "포탑 +1, 지속 +1초" : "포탑 지속 +1초";
                 case UpgradeId.Tank: return "물줄기 사거리·세기 +15%, 증기 폭발이 25% 빨리 차고 0.5칸 넓어진다";
                 case UpgradeId.Boots: return fresh ? "이동 +12%. 불 바닥을 밟아도 안 다치고 밟은 자리를 끈다" : "이동 속도 +12%";
-                case UpgradeId.Radio: return fresh ? "다음 신고를 2초 먼저 알려 준다. 그 건물 곁에 미리 가 있으면 선제 출동: 불이 작게 붙고 구슬 10" : "신고 예고 +1초, 구슬 범위 +20%";
-                case UpgradeId.Axe: return fresh ? "문을 부수고 한 번에 2명을 데리고 나온다" : nextLevel == 3 ? "한 번에 3명" : nextLevel == 5 ? "한 번에 4명" : "문이 더 세게 터진다";
-                case UpgradeId.Oxygen: return fresh ? "6초마다 가까운 갇힌 건물에 산소통을 던져 연기를 걷어 낸다" : "산소통 간격 −0.5초";
                 case UpgradeId.Suit: return fresh ? "불 피해 −15%, 최대 체력 +10. 닿은 불 몹이 튕겨 나간다" : "불 피해 −15%, 최대 체력 +10, 더 세게 튕긴다";
                 case UpgradeId.Cannon: return "진화! 관통하는 물줄기가 사방을 휩쓴다";
                 case UpgradeId.Squad: return "진화! 대원 4명이 흩어져 여러 건물을 동시에 구한다";

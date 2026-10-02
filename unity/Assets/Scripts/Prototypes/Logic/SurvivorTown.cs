@@ -54,8 +54,6 @@ namespace FireGame.Prototypes.Logic
         /// <summary>"곧 무너진다" 경고를 이미 띄웠다. 꺼지면 풀린다.</summary>
         public bool Warned;
 
-        /// <summary>산소통 보호(초). 0보다 크면 연기가 쌓이지 않는다.</summary>
-        public float Shield;
         public bool Collapsed;
 
         /// <summary>다음 불씨를 뱉기까지 남은 시간.</summary>

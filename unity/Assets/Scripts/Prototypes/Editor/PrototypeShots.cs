@@ -108,9 +108,6 @@ namespace FireGame.Prototypes.EditorTools
             // 여섯 진화를 모두 쥐고: 금빛 구조 분대, 하늘에서 떨어지는 공중 소화탄, 구조 드론의 구조 줄, 물의 방벽, 현장 구조소.
             failures += SurvivorShot(dir, "c23_evolutions", view => view.Sim.Time >= 14f && view.Sim.Turrets.Count > 0 && view.Sim.Shots.Exists(s => s.Kind == ShotKind.Bomb && s.From.Y > s.Target.Y + 5f), 2, false, null, 1,
                 view => view.Sim.Build.EvolveAll());
-            // 무전기 예고 + 열기: 곧 불날 건물 위 "신고 예고", 타는 건물 곁에서 "뜨거워!".
-            failures += SurvivorShot(dir, "c24_heat_forecast", view => view.Sim.ForecastAt != null && view.Sim.Time > 25f, 2, false, null, 1,
-                view => { view.Sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { UpgradeId.Radio }; view.Sim.Choose(0); });
             // 무기 타격감: 무기 하나를 Lv5로 쥐고 곁에 불 몹을 세워 발사·적중 순간을 찍는다.
             failures += SurvivorShot(dir, "c25a_bomb", view => view.Sim.Time > 3f && view.Sim.Explosions.Count > 0, 2, false, null, 1,
                 view => Armed(view, UpgradeId.WaterBomb));
@@ -195,29 +192,6 @@ namespace FireGame.Prototypes.EditorTools
                 Structure near = NearestHouse(view);
                 view.Sim.Ignite(near, 0.9f);
                 Pick(view, UpgradeId.Drone, UpgradeId.Drone, UpgradeId.Drone);
-            });
-            failures += SurvivorShot(dir, "c41_axe_door", view =>
-            {
-                Structure near = NearestHouse(view);
-                if (near.Residents > 0 && view.Sim.PendingChoices == null) view.Sim.Player = near.Door;
-                return view.Sim.DoorBursts.Count > 0;
-            }, 3, false, view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 2f, 0f), 7f), 1, view =>
-            {
-                Structure near = NearestHouse(view);
-                near.Residents = 3;
-                view.Sim.Ignite(near, 0.3f);
-                Pick(view, UpgradeId.Axe);
-                view.Sim.Player = near.Door;
-            });
-            failures += SurvivorShot(dir, "c42_oxygen", view => view.Sim.OxygenHits.Count > 0, 8, false,
-                view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 3f, 0f), 8f), 1, view =>
-            {
-                Structure near = NearestHouse(view);
-                near.Residents = 2;
-                near.Smoke = 10f;
-                view.Sim.Ignite(near, 1f);
-                Pick(view, UpgradeId.Oxygen);
-                view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 5f);
             });
             failures += SurvivorShot(dir, "c43_boots", view =>
             {

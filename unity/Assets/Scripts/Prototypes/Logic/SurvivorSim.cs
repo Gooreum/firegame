@@ -35,9 +35,6 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>소방 헬기가 쏟는 물. 폭탄처럼 날아가 떨어지지만 훨씬 크다.</summary>
         Heli,
-
-        /// <summary>산소통: 갇힌 건물 문 앞으로 던진다. 떨어지면 연기 시계를 되돌린다.</summary>
-        Oxygen,
     }
 
     public sealed class Enemy
@@ -239,9 +236,6 @@ namespace FireGame.Prototypes.Logic
         /// <summary>무너지기 직전에 구한 횟수(아슬아슬 구조).</summary>
         public int CloseCalls;
 
-        /// <summary>선제 출동 횟수(무전 예보 건물 곁에 미리 가 있던 신고).</summary>
-        public int EarlyCalls;
-
         /// <summary>방화복을 안 입었다면 받았을 불 피해(열기·바닥 불·불 몹 접촉의 원값). DamageTaken과 비교하면 방화복이 얼마나 막았는지 나온다.</summary>
         public float FireDamageRaw;
     }
@@ -304,10 +298,6 @@ namespace FireGame.Prototypes.Logic
         public Vec2 DroneCenter = new Vec2(ArenaSize / 2f, ArenaSize / 2f);
         public Structure DroneTarget;
         public readonly List<Turret> Turrets = new List<Turret>();
-
-        /// <summary>무전기: 곧 신고될 건물과 남은 시간. 없으면 null.</summary>
-        public Structure ForecastAt;
-        public float ForecastIn;
 
         /// <summary>구급차가 연기를 걷어 낸 건물(이번 틱 신호).</summary>
         public Structure AmbulanceAt;
@@ -413,20 +403,11 @@ namespace FireGame.Prototypes.Logic
         /// <summary>이번 틱에 순찰 드론의 물폭탄이 떨어진 자리.</summary>
         public readonly List<Vec2> DroneDrops = new List<Vec2>();
 
-        /// <summary>이번 틱에 산소통이 떨어져 연기를 걷어 낸 건물.</summary>
-        public readonly List<Structure> OxygenHits = new List<Structure>();
-
-        /// <summary>이번 틱에 구조 도끼로 문을 부수고 여럿을 한 번에 데리고 나온 건물.</summary>
-        public readonly List<Structure> DoorBursts = new List<Structure>();
-
         /// <summary>이번 틱에 장화가 남긴 젖은 발자국 자리(밟은 바닥 불을 끌 때, 걷는 동안 간간이).</summary>
         public readonly List<Vec2> Footprints = new List<Vec2>();
 
         /// <summary>이번 틱에 방화복에 닿아 튕겨 나간 불 몹 자리.</summary>
         public readonly List<Vec2> SuitBounces = new List<Vec2>();
-
-        /// <summary>이번 틱에 선제 출동으로 작게 붙은 신고 건물.</summary>
-        public readonly List<Structure> EarlyCalls = new List<Structure>();
 
         /// <summary>이번 틱에 물·폭탄·거품에 꺼진 바닥 불 자리.</summary>
         public readonly List<Vec2> Extinguished = new List<Vec2>();
@@ -652,7 +633,6 @@ namespace FireGame.Prototypes.Logic
         private float _turretClock = 1f;
         private float _airClock;
         private float _ambulanceClock = 5f;
-        private Structure _forecast;
         private float[] _partnerClocks = new float[4];
         private float _jetClock;
         private float _heliClock;
@@ -662,7 +642,6 @@ namespace FireGame.Prototypes.Logic
         private float _droneAngle;
         private float _droneDrop;
         private int _droneTurn;
-        private float _oxygenClock = 1f;
         private int _reportsDone;
         private int _bigDone;
         private bool _bigFailed;
@@ -724,7 +703,7 @@ namespace FireGame.Prototypes.Logic
 
         public float Magnet
         {
-            get { return BaseMagnet * Build.MagnetScale; }
+            get { return BaseMagnet; }
         }
 
         /// <summary>폰 조준 보정이 노릴 불: 살아 있는 적(보스 포함)과 타는 구조물 자리.</summary>
@@ -892,11 +871,8 @@ namespace FireGame.Prototypes.Logic
             Hits.Clear();
             Explosions.Clear();
             DroneDrops.Clear();
-            OxygenHits.Clear();
-            DoorBursts.Clear();
             Footprints.Clear();
             SuitBounces.Clear();
-            EarlyCalls.Clear();
             Extinguished.Clear();
             Reignited.Clear();
             Ignited.Clear();
@@ -1028,7 +1004,6 @@ namespace FireGame.Prototypes.Logic
                 if (!first) JustWindShift = true;
             }
 
-            Forecast();
             while (Reports && _reportsDone < Stage.ReportTimes.Length && Time >= Stage.ReportTimes[_reportsDone])
             {
                 _reportsDone++;
@@ -1069,24 +1044,6 @@ namespace FireGame.Prototypes.Logic
                     JustBurst = true;
                 }
             }
-        }
-
-        /// <summary>무전기: 다음 신고(신고 표·대화재)가 (1+레벨)초 안이면 그 건물을 미리 골라 알려 준다.</summary>
-        private void Forecast()
-        {
-            float ahead = Build.Forecast;
-            if (!Reports || ahead <= 0f)
-            {
-                ForecastAt = null;
-                return;
-            }
-            float next = float.MaxValue;
-            if (_reportsDone < Stage.ReportTimes.Length) next = Stage.ReportTimes[_reportsDone];
-            if (Finale) next = Math.Min(next, Time + _finaleClock);
-            if (next - Time > ahead) return;
-            if (_forecast == null || _forecast.Burning || _forecast.Collapsed) _forecast = PickUnburntHouse();
-            ForecastAt = _forecast;
-            ForecastIn = Math.Max(0f, next - Time);
         }
 
         /// <summary>대형 신고: 안 탄 가게 하나에 큰 불, 셋이 더 갇힌다. 모두 구하면 보물상자.</summary>
@@ -1131,28 +1088,12 @@ namespace FireGame.Prototypes.Logic
         /// <summary>신고: 안 타고 안 무너진 가게 하나에 불을 낸다(젖어 있어도 난다). 불낸 가게를 돌려준다.</summary>
         private Structure Report()
         {
-            // 무전기로 미리 알린 건물이 아직 멀쩡하면 거기서 난다.
-            Structure pick = _forecast != null && !_forecast.Burning && !_forecast.Collapsed ? _forecast : PickUnburntHouse();
-            // 선제 출동: 무전으로 알린 건물 곁에 미리 가 있으면 불이 작게 붙고 구슬을 받는다.
-            bool early = Build.Forecast > 0f && pick != null && pick == _forecast && pick.DistanceTo(Player) <= EarlyRange;
-            _forecast = null;
-            ForecastAt = null;
+            Structure pick = PickUnburntHouse();
             if (pick == null) return null;
             pick.Wet = 0f;
-            Ignite(pick, early ? EarlyFire : ReportFire);
-            if (early)
-            {
-                DropGem(pick.Door, EarlyGem * ComboMult);
-                EarlyCalls.Add(pick);
-                Stats.EarlyCalls++;
-            }
+            Ignite(pick, ReportFire);
             return pick;
         }
-
-        /// <summary>선제 출동: 예보 건물에서 이 거리 안에 있으면 신고 불이 EarlyFire로 작게 붙고 EarlyGem 구슬이 떨어진다.</summary>
-        public const float EarlyRange = 6f;
-        public const float EarlyFire = 0.15f;
-        public const int EarlyGem = 10;
 
         private EnemyKind PickKind()
         {
@@ -1403,7 +1344,6 @@ namespace FireGame.Prototypes.Logic
             TickDrones();
             TickAirBombs();
             TickTurrets();
-            TickOxygen();
             if (Build.Level(UpgradeId.Ambulance) > 0) TickAmbulance();
 
             if (Build.Level(UpgradeId.Heli) > 0)
@@ -1536,24 +1476,6 @@ namespace FireGame.Prototypes.Logic
                     RescueOne(target);
                 }
             }
-        }
-
-        /// <summary>산소통: 몇 초마다 가까운 갇힌 건물(연기가 가장 짙은 곳)에 산소통을 던진다. 던질 데가 없으면 기다린다.</summary>
-        private void TickOxygen()
-        {
-            float every = Build.OxygenEvery;
-            if (every <= 0f) return;
-            _oxygenClock -= Dt;
-            if (_oxygenClock > 0f) return;
-            Structure target = null;
-            foreach (Structure s in Structures)
-            {
-                if (!s.Burning || s.Residents <= 0 || s.Fire < SmokeFire || s.Shield > 0f || s.DistanceTo(Player) > OxygenRange) continue;
-                if (target == null || s.Smoke > target.Smoke) target = s;
-            }
-            if (target == null) return;
-            _oxygenClock = every;
-            Shots.Add(new Shot { Kind = ShotKind.Oxygen, From = Player, Pos = Player, Target = target.Door, At = target, Life = 0.6f });
         }
 
         /// <summary>공중 소화탄: 3초마다 맵 어디든 불난 건물마다 소화탄이 떨어진다.</summary>
@@ -1921,9 +1843,6 @@ namespace FireGame.Prototypes.Logic
         public const float DroneDropEvery = 2.5f;
         public const float DroneDropWater = 0.25f;
 
-        /// <summary>산소통을 던지는 범위와 보호 시간(초).</summary>
-        public const float OxygenRange = 12f;
-        public const float OxygenShield = 2f;
         public const float DroneRange = 12f;
         public const float DroneRescueTime = 2f;
         public const float AirBombEvery = 3f;
@@ -1981,23 +1900,6 @@ namespace FireGame.Prototypes.Logic
             {
                 if (s.Dead) continue;
                 s.Age += Dt;
-
-                if (s.Kind == ShotKind.Oxygen)
-                {
-                    float t = Math.Min(1f, s.Age / s.Life);
-                    s.Pos = new Vec2(s.From.X + ((s.Target.X - s.From.X) * t), s.From.Y + ((s.Target.Y - s.From.Y) * t));
-                    if (t >= 1f)
-                    {
-                        s.Dead = true;
-                        if (s.At != null && !s.At.Collapsed)
-                        {
-                            s.At.Smoke = 0f;
-                            s.At.Shield = OxygenShield;
-                            OxygenHits.Add(s.At);
-                        }
-                    }
-                    continue;
-                }
 
                 if (s.Kind == ShotKind.Bomb || s.Kind == ShotKind.Heli)
                 {
@@ -2324,7 +2226,6 @@ namespace FireGame.Prototypes.Logic
             {
                 if (s.Collapsed) continue;
                 if (s.Wet > 0f) s.Wet -= Dt;
-                if (s.Shield > 0f) s.Shield -= Dt;
                 if (!s.Burning) continue;
 
                 if (s.Kind == StructureKind.Gas && s.Fuse >= 0f)
@@ -2803,10 +2704,10 @@ namespace FireGame.Prototypes.Logic
             foreach (Structure s in Structures)
             {
                 // 큰 불 속에 오래 갇혀 있으면 연기에 한 명씩 잃는다: 멀리서 끄기만 할 게 아니라 빨리 가야 한다.
-                if (s.Burning && s.Residents > 0 && s.Fire >= SmokeFire && s.Shield <= 0f && !Sheltered(s))
+                if (s.Burning && s.Residents > 0 && s.Fire >= SmokeFire && !Sheltered(s))
                 {
                     s.Smoke += Dt;
-                    if (s.Smoke >= SmokeTime * Build.SmokeScale)
+                    if (s.Smoke >= SmokeTime)
                     {
                         s.Smoke = 0f;
                         s.Residents--;
@@ -2823,8 +2724,8 @@ namespace FireGame.Prototypes.Logic
                     s.RescueHold = 0f;
                     continue;
                 }
-                // 도끼는 구조 시간을 줄이고, 문 앞에 대원이 있으면 대원 레벨만큼 더 빠르다.
-                s.RescueHold += Dt / Build.RescueScale * (partner ? PartnerRescueBoost : 1f);
+                // 문 앞에 대원이 있으면 대원 레벨만큼 더 빠르다.
+                s.RescueHold += Dt * (partner ? PartnerRescueBoost : 1f);
                 if (s.RescueHold < RescueTime) continue;
                 s.RescueHold = 0f;
                 RescueOne(s);
@@ -2844,12 +2745,11 @@ namespace FireGame.Prototypes.Logic
         /// <summary>갇힌 사람을 데리고 나온다(문 앞 구조·구조 드론). 구조 도끼가 있으면 문을 부수고 한 번에 여럿.</summary>
         private void RescueOne(Structure s)
         {
-            int n = Math.Min(s.Residents, 1 + Build.AxeExtra);
+            int n = 1;
             if (n <= 0) return;
             s.Residents -= n;
             Rescued += n;
             Xp += 20 * n;
-            if (n > 1) DoorBursts.Add(s);
             // 무너지기 직전의 구조는 더 값지다.
             if (TimeToFall(s) <= CloseCallAt)
             {

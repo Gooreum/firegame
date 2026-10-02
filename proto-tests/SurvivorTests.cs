@@ -212,7 +212,6 @@ namespace FireGame.Prototypes.Tests
             full.Add(UpgradeId.Tank);
             full.Add(UpgradeId.Suit);
             full.Add(UpgradeId.Boots);
-            full.Add(UpgradeId.Radio);
             full.Add(UpgradeId.Hose);
             full.Add(UpgradeId.WaterBomb);
             full.Add(UpgradeId.Drone);
@@ -845,7 +844,7 @@ namespace FireGame.Prototypes.Tests
             var sim = new SurvivorSim(1);
             sim.GiveMaxGear();
 
-            UpgradeId[] maxed = { UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Turret, UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Radio, UpgradeId.Axe, UpgradeId.Oxygen, UpgradeId.Suit };
+            UpgradeId[] maxed = { UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Turret, UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit };
             foreach (UpgradeId id in maxed) Assert.Equal(Loadout.MaxLevel, sim.Build.Level(id));
             Assert.Equal(1, sim.Build.Level(UpgradeId.Cannon));
             Assert.Equal(0, sim.Build.Level(UpgradeId.Hose));
