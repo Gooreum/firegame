@@ -524,7 +524,8 @@ namespace FireGame.Prototypes.Logic
         /// <summary>이번 틱에 기름 불이 옮겨붙은 탈 것.</summary>
         public readonly List<Structure> OilCaught = new List<Structure>();
         public const float RescueRange = 1.3f;
-        public const float RescueTime = 1.2f;
+        /// <summary>문 앞에서 한 명을 데리고 나오는 시간. 이 동안 열기를 몸으로 받는다(예전 1.2).</summary>
+        public const float RescueTime = 2f;
 
         /// <summary>큰 불(이 세기 이상) 속에 갇힌 사람은 SmokeTime마다 한 명씩 잃는다.</summary>
         public const float SmokeFire = 0.6f;
@@ -870,6 +871,9 @@ namespace FireGame.Prototypes.Logic
             if (id == UpgradeId.Turret) _turretClock = 0.3f;
         }
 
+        /// <summary>작은 불 몹(불씨·다트·다람쥐·박쥐)이 닿아 있을 때 초당 피해. 큰 불·기름 방울은 10.</summary>
+        public const float SmallTouch = 5f;
+
         /// <summary>테스트용: 적을 직접 놓는다.</summary>
         public Enemy Spawn(EnemyKind kind, Vec2 at)
         {
@@ -877,11 +881,12 @@ namespace FireGame.Prototypes.Logic
             float scale = Stage.EnemyHp * (1f + ((Time / 120f) * (Time / 120f)));
             switch (kind)
             {
-                case EnemyKind.Ember: e.MaxHp = 2f * scale; e.Speed = 2.4f; e.Radius = 0.35f; e.Touch = 3f; e.Xp = 1; break;
+                // 작은 불 몹의 접촉은 초당 SmallTouch(예전 3): 건물을 오래 끄느라 서 있으면 뒤에서 닿는다.
+                case EnemyKind.Ember: e.MaxHp = 2f * scale; e.Speed = 2.4f; e.Radius = 0.35f; e.Touch = SmallTouch; e.Xp = 1; break;
                 case EnemyKind.Blaze: e.MaxHp = 14f * scale; e.Speed = 1.5f; e.Radius = 0.6f; e.Touch = 10f; e.Xp = 5; break;
-                case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
-                case EnemyKind.Squirrel: e.MaxHp = 3f * scale; e.Speed = 3.6f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; e.Seeker = true; break;
-                case EnemyKind.Bat: e.MaxHp = 1.5f * scale; e.Speed = 3.2f; e.Radius = 0.3f; e.Touch = 3f; e.Xp = 1; break;
+                case EnemyKind.Dart: e.MaxHp = 2f * scale; e.Speed = 4.2f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; break;
+                case EnemyKind.Squirrel: e.MaxHp = 3f * scale; e.Speed = 3.6f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; e.Seeker = true; break;
+                case EnemyKind.Bat: e.MaxHp = 1.5f * scale; e.Speed = 3.2f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; break;
                 case EnemyKind.Oil: e.MaxHp = 6f * scale; e.Speed = 1.3f; e.Radius = 0.55f; e.Touch = 10f; e.Xp = 3; break;
             }
             e.Hp = e.MaxHp;
@@ -1896,9 +1901,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>한 명 구할 때 차는 체력(예전 20: 구조만 하면 체력이 늘 차서 방화복이 쓸모없었다).</summary>
         public const float RescueHeal = 5f;
 
-        /// <summary>열기: 타는 건물 가장자리 이 칸 안에서 불 세기만큼 초당 피해를 받는다(방화복이 줄인다).</summary>
-        public const float HeatRange = 2.5f;
-        public const float HeatDps = 5f;
+        /// <summary>열기: 타는 건물 가장자리 이 칸 안에서 불 세기 × HeatDps만큼 초당 피해를 받는다(방화복이 줄인다). 오래 끄느라 서 있는 자리가 뜨겁다(예전 2.5칸·5).</summary>
+        public const float HeatRange = 4f;
+        public const float HeatDps = 7f;
         public const float TreeHeatRange = 1.5f;
 
         /// <summary>12칸 안에서 가장 크게 타는 건물 → 불이 몰린 곳 → 소방관 앞.</summary>

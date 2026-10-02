@@ -246,8 +246,9 @@ namespace FireGame.Prototypes.Tests
             shop.Integrity = 0.15f;
             Assert.True(sim.TimeToFall(shop) <= SurvivorSim.CloseCallAt);
             int gain = 0;
-            for (int i = 0; i < 90 && !sim.JustRescued; i++) gain = XpGained(sim);
-            Assert.True(sim.JustRescued, "1.5초 안에 못 구했다");
+            int limit = (int)((SurvivorSim.RescueTime + 0.5f) / SurvivorSim.Dt);
+            for (int i = 0; i < limit && !sim.JustRescued; i++) gain = XpGained(sim);
+            Assert.True(sim.JustRescued, "구조 시간 + 0.5초 안에 못 구했다");
             Assert.Equal(new[] { shop }, sim.CloseCalls);
             Assert.Equal(1, sim.Stats.CloseCalls);
             Assert.Equal(20 + SurvivorSim.CloseCallXp, gain);
@@ -260,7 +261,8 @@ namespace FireGame.Prototypes.Tests
             Structure shop = Shop(sim, 0f, 3.2f, 1);
             sim.Ignite(shop, 0.3f);
             int gain = 0;
-            for (int i = 0; i < 90 && !sim.JustRescued; i++) gain = XpGained(sim);
+            int limit = (int)((SurvivorSim.RescueTime + 0.5f) / SurvivorSim.Dt);
+            for (int i = 0; i < limit && !sim.JustRescued; i++) gain = XpGained(sim);
             Assert.True(sim.JustRescued);
             Assert.Empty(sim.CloseCalls);
             Assert.Equal(0, sim.Stats.CloseCalls);

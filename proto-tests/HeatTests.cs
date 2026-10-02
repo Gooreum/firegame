@@ -56,7 +56,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void OutsideTheHeatRange_NoHarm()
         {
-            Assert.Equal(0f, HeatFor(3f, 0), 3);
+            Assert.Equal(0f, HeatFor(SurvivorSim.HeatRange + 0.5f, 0), 3);
         }
 
         [Fact]
@@ -77,7 +77,8 @@ namespace FireGame.Prototypes.Tests
             sim.Ignite(shop, 0.2f);
             sim.Player = shop.Door;
             sim.Hp = 50f;
-            for (int i = 0; i < 120 && sim.Rescued == 0; i++)
+            int limit = (int)((SurvivorSim.RescueTime + 0.5f) / SurvivorSim.Dt);
+            for (int i = 0; i < limit && sim.Rescued == 0; i++)
             {
                 sim.Enemies.Clear();
                 sim.Step(0f, 0f);

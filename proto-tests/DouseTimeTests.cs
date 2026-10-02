@@ -119,6 +119,52 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void SmallMobs_TouchForFive()
+        {
+            // 불씨 한 마리가 1초 닿아 있으면 SmallTouch(5)만큼 닳는다(방화복 없음).
+            SurvivorSim sim = Quiet();
+            Enemy ember = sim.Spawn(EnemyKind.Ember, sim.Player);
+            ember.Speed = 0f;
+            ember.MaxHp = 999f;
+            ember.Hp = 999f;
+            float hp = sim.Hp;
+            for (int i = 0; i < 60; i++)
+            {
+                for (int k = sim.Enemies.Count - 1; k >= 0; k--) if (sim.Enemies[k] != ember) sim.Enemies.RemoveAt(k);
+                ember.Pos = sim.Player;
+                ember.Knock = default;
+                sim.Spraying = false;
+                sim.Step(0f, 0f);
+            }
+            Assert.InRange(hp - sim.Hp, SurvivorSim.SmallTouch * 0.9f, SurvivorSim.SmallTouch * 1.1f);
+            Assert.Equal(5f, SurvivorSim.SmallTouch);
+        }
+
+        [Fact]
+        public void Rescue_TakesTwoSeconds()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = ShopAbove(sim, 0.2f, 2);
+            sim.Player = new Vec2(shop.Door.X, shop.Door.Y);
+            sim.Ignite(shop, 0.2f);
+            Assert.Equal(2f, SurvivorSim.RescueTime);
+            int before = (int)((SurvivorSim.RescueTime - 0.1f) / SurvivorSim.Dt);
+            for (int i = 0; i < before; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+            }
+            Assert.Equal(0, sim.Rescued);
+            for (int i = 0; i < 12; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+            }
+            Assert.Equal(1, sim.Rescued);
+            Assert.Equal(1, shop.Residents);
+        }
+
+        [Fact]
         public void Forest_UsesHalfBuildingWater_OtherStagesUseTheDefault()
         {
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(1).BuildingWater);
