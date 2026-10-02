@@ -576,11 +576,19 @@ namespace FireGame.Prototypes.Tests
         public void Town_HasShopsDepotGasAndAClearCenter()
         {
             var sim = new SurvivorSim(1);
-            Assert.Equal(8, sim.Structures.FindAll(s => s.Kind == StructureKind.House).Count);
+            var houses = sim.Structures.FindAll(s => s.Kind == StructureKind.House);
+            Assert.Equal(12, houses.Count);
             Assert.Single(sim.Structures.FindAll(s => s.Kind == StructureKind.Depot));
             Assert.Equal(3, sim.Structures.FindAll(s => s.Kind == StructureKind.Gas).Count);
-            Assert.Equal(9, sim.HousesTotal);
-            Assert.All(sim.Structures, s => Assert.True(s.DistanceTo(sim.Player) > 6f, s.Name + "가 출발점에 너무 가깝다"));
+            Assert.Equal(13, sim.HousesTotal);
+            // 강이 둘로 가른다: 서쪽 여섯, 동쪽 여섯. 강은 다리(가운데)만 비운다.
+            Assert.Equal(6, houses.FindAll(h => h.Pos.X < SurvivorTown.RiverX).Count);
+            Assert.Equal(6, houses.FindAll(h => h.Pos.X > SurvivorTown.RiverX).Count);
+            var river = sim.Structures.FindAll(s => s.Kind == StructureKind.Water);
+            Assert.Equal(2, river.Count);
+            Assert.True(sim.HasWater);
+            Assert.All(river, w => Assert.False(w.Within(sim.Player, 0f)));
+            Assert.All(sim.Structures, s => Assert.True(s.Kind == StructureKind.Water || s.DistanceTo(sim.Player) > 6f, s.Name + "가 출발점에 너무 가깝다"));
             Assert.All(sim.Structures, s => Assert.False(s.Burning));
         }
 
@@ -805,17 +813,19 @@ namespace FireGame.Prototypes.Tests
             var sim = new SurvivorSim(1);
             sim.Enemies.Clear();
             List<Structure> shops = sim.Structures.FindAll(s => s.Kind == StructureKind.House);
-            for (int k = 0; k < 4; k++)
+            // 딱 절반(13채면 6채)까지는 버티고, 한 채 더 잃으면 진다.
+            int half = sim.HousesTotal / 2;
+            for (int k = 0; k < half; k++)
             {
                 sim.Ignite(shops[k], 1f);
                 shops[k].Integrity = 0.0001f;
             }
             sim.Step(0f, 0f);
-            Assert.Equal(4, sim.HousesLost);
+            Assert.Equal(half, sim.HousesLost);
             Assert.Equal(SOutcome.Playing, sim.Outcome);
 
-            sim.Ignite(shops[4], 1f);
-            shops[4].Integrity = 0.0001f;
+            sim.Ignite(shops[half], 1f);
+            shops[half].Integrity = 0.0001f;
             sim.Step(0f, 0f);
             Assert.Equal(SOutcome.Lost, sim.Outcome);
             Assert.True(sim.LostTown);

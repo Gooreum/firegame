@@ -1085,8 +1085,18 @@ namespace FireGame.Prototypes.Logic
                 // 바람: 판 시작에 한 번 정하고 60초마다 여덟 방향 중 하나로 바뀐다.
                 bool first = _nextWind <= 0f;
                 _nextWind = (first ? 0f : Time) + WindShiftEvery;
-                // 바뀔 때는 늘 다른 방향으로(여덟 방향 중 지금 것 빼고).
-                _windIndex = first ? _rng.Next(8) : (_windIndex + 1 + _rng.Next(7)) % 8;
+                // 바뀔 때는 늘 다른 방향으로(지금 것 빼고). 스테이지가 방향을 정해 두면(WindArc) 그 안에서만.
+                int[] arc = Stage.WindArc;
+                if (arc != null && arc.Length > 0)
+                {
+                    int at = Math.Max(0, Array.IndexOf(arc, _windIndex));
+                    int k = first ? _rng.Next(arc.Length) : arc.Length == 1 ? 0 : (at + 1 + _rng.Next(arc.Length - 1)) % arc.Length;
+                    _windIndex = arc[k];
+                }
+                else
+                {
+                    _windIndex = first ? _rng.Next(8) : (_windIndex + 1 + _rng.Next(7)) % 8;
+                }
                 double a = _windIndex * Math.PI / 4;
                 Wind = new Vec2((float)Math.Cos(a), (float)Math.Sin(a));
                 if (!first) JustWindShift = true;

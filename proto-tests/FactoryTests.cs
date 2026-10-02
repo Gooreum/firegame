@@ -36,9 +36,13 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(8, sim.Structures.FindAll(s => s.Kind == StructureKind.House).Count);
             Structure depot = Assert.Single(sim.Structures.FindAll(s => s.Kind == StructureKind.Depot));
             Assert.Equal("정유 저장소", depot.Name);
-            Assert.Equal(12, sim.Structures.FindAll(s => s.Kind == StructureKind.Gas).Count);
+            Assert.Equal(16, sim.Structures.FindAll(s => s.Kind == StructureKind.Gas).Count);
             Assert.All(sim.Structures, s => Assert.True(s.DistanceTo(sim.Player) > 6f, s.Name + "가 출발점에 너무 가깝다"));
             Assert.All(sim.Structures, s => Assert.False(s.Burning));
+            // 가운데 골목(y 25.5~34.5)엔 공장이 없고, 드럼 줄이 공장 앞 골목 가장자리에 있다.
+            float mid = SurvivorSim.ArenaSize / 2f;
+            Assert.Empty(sim.Structures.FindAll(s => s.IsBuilding && System.Math.Abs(s.Pos.Y - mid) < SurvivorFactory.AlleyHalf));
+            Assert.All(sim.Structures.FindAll(s => s.Kind == StructureKind.Gas), d => Assert.InRange(System.Math.Abs(d.Pos.Y - mid), SurvivorFactory.AlleyHalf - 0.01f, SurvivorFactory.AlleyHalf + 0.01f));
         }
 
         [Fact]
@@ -47,8 +51,12 @@ namespace FireGame.Prototypes.Tests
             var sim = new SurvivorSim(1, 3);
             sim.Reports = false;
             Structure first = sim.Structures.Find(s => s.Kind == StructureKind.Gas);
+            // 줄의 끝 드럼: 3칸 안엔 둘(1.2·2.4), 넷째는 3.6이지만 연쇄로 터진다.
             var pile = sim.Structures.FindAll(s => s.Kind == StructureKind.Gas && s.Pos.DistanceTo(first.Pos) < 3f);
             Assert.Equal(3, pile.Count);
+            var line = sim.Structures.FindAll(s => s.Kind == StructureKind.Gas && System.Math.Abs(s.Pos.Y - first.Pos.Y) < 0.01f && System.Math.Abs(s.Pos.X - first.Pos.X) < 4f);
+            Assert.Equal(SurvivorFactory.DrumsPerLine, line.Count);
+            pile = line;
             sim.Ignite(first, 0.5f);
             bool spilled = false;
             for (int i = 0; i < (int)(8f / SurvivorSim.Dt); i++)

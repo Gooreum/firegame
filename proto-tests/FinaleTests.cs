@@ -346,9 +346,11 @@ namespace FireGame.Prototypes.Tests
             var sim = new SurvivorSim(1);
             sim.Reports = false;
             int n = 0;
+            // 절반을 넘기는 수(13채면 7채).
+            int half = (sim.HousesTotal / 2) + 1;
             foreach (Structure s in sim.Structures)
             {
-                if (!s.IsBuilding || n >= 5) continue;
+                if (!s.IsBuilding || n >= half) continue;
                 sim.Ignite(s, 1f);
                 s.Integrity = 0.0001f;
                 n++;

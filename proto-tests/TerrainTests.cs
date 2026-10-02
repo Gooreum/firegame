@@ -149,6 +149,81 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void Forest_WindAlwaysBlowsSouthward()
+        {
+            for (int seed = 1; seed <= 6; seed++)
+            {
+                var sim = new SurvivorSim(seed, 2);
+                sim.Reports = false;
+                int shifts = 0;
+                Vec2 last = default;
+                while (sim.Time < (SurvivorSim.WindShiftEvery * 3f) + 1f)
+                {
+                    sim.Enemies.Clear();
+                    sim.Hp = sim.MaxHp;
+                    if (sim.PendingChoices != null) sim.Choose(0);
+                    sim.Step(0f, 0f);
+                    Assert.True(sim.Wind.Y < -0.5f, "바람이 캠프 쪽이 아니다: " + sim.Wind.X + "," + sim.Wind.Y);
+                    if (sim.JustWindShift)
+                    {
+                        shifts++;
+                        Assert.False(sim.Wind.X == last.X && sim.Wind.Y == last.Y, "바뀌었는데 같은 방향");
+                    }
+                    last = sim.Wind;
+                }
+                Assert.Equal(3, shifts);
+            }
+        }
+
+        [Fact]
+        public void Factory_OneDrumLine_IgnitesItsPlant()
+        {
+            var sim = new SurvivorSim(1, 3);
+            sim.Reports = false;
+            // 북서 줄(인쇄소 앞): 끝 드럼 하나에 불을 붙이면 줄이 다 터지고 인쇄소에 불이 붙는다.
+            Structure plant = sim.Structures.Find(s => s.Name == "인쇄소");
+            var line = sim.Structures.FindAll(s => s.Kind == StructureKind.Gas && Math.Abs(s.Pos.X - plant.Pos.X) < 4f && s.Pos.Y < plant.Pos.Y);
+            Assert.Equal(SurvivorFactory.DrumsPerLine, line.Count);
+            sim.Ignite(line[0], 0.5f);
+            for (int i = 0; i < (int)(12f / SurvivorSim.Dt); i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+            }
+            Assert.All(line, d => Assert.True(d.Collapsed, "줄 드럼이 안 터졌다"));
+            Assert.True(plant.Fire > 0f || plant.Collapsed, "인쇄소에 불이 안 붙었다");
+            // 반대편 줄은 멀쩡하다(골목 건너 32칸).
+            Assert.All(sim.Structures.FindAll(s => s.Kind == StructureKind.Gas && s.Pos.X > 40f), d => Assert.False(d.Collapsed));
+        }
+
+        [Fact]
+        public void Bot_CrossesTheBridge()
+        {
+            var sim = new SurvivorSim(1);
+            sim.Reports = false;
+            var bot = new SurvivorBot(sim);
+            // 봇은 강 서쪽 빵집 밑, 불은 동쪽 서점(1.0, 주민 있음 → 문 앞으로 간다).
+            sim.Player = new Vec2(16f, 40f);
+            Structure shop = sim.Structures.Find(s => s.Name == "서점");
+            sim.Ignite(shop, 1f);
+            bool crossed = false;
+            for (int i = 0; i < (int)(60f / SurvivorSim.Dt) && !crossed; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                shop.Fire = 1f;
+                shop.Integrity = 1f;
+                Vec2 m = bot.Move();
+                sim.Step(m.X, m.Y);
+                crossed = sim.Player.X > SurvivorTown.RiverX + SurvivorTown.RiverHalf;
+            }
+            Assert.True(crossed, "봇이 60초 안에 강을 못 건넜다: " + sim.Player.X + "," + sim.Player.Y);
+        }
+
+        [Fact]
         public void EdgeSpawns_NeverLandInWater()
         {
             var sim = Quiet();

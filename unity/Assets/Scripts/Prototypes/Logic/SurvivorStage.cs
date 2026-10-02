@@ -56,6 +56,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>산불: 바람이 불어 타는 나무가 바람 쪽 이웃에 불을 옮긴다.</summary>
         public bool Wind;
 
+        /// <summary>바람이 고를 수 있는 방향(여덟 방향 번호, 0=동 … 2=북 … 6=남). null이면 여덟 방향 모두.</summary>
+        public int[] WindArc;
+
         /// <summary>공단: 가장자리 스폰에서 기름 방울 비율(SurvivorSim.OilFrom초부터).</summary>
         public float OilShare;
 
@@ -115,6 +118,8 @@ namespace FireGame.Prototypes.Logic
             SquirrelShare = 0.01f,
             BatFlockEvery = 20f,
             Wind = true,
+            // 숲은 북쪽, 캠프는 남쪽: 바람은 늘 남서·남·남동으로만 분다(산불이 캠프를 향한다).
+            WindArc = new[] { 5, 6, 7 },
             // 숲은 바람이 나무·건물로 불을 옮기므로 건물끼리 직접 번지는 규칙은 끈다(둘 다 켜면 봇 0/10).
             SpreadEvery = 0f,
             // 숲의 압력은 번짐이다. 건물 물을 마을만큼 줄이면 집 7채 중 4채가 금방 무너져 봇이 0승이었다(docs §13) → 마을의 두 배.

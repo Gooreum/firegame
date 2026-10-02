@@ -38,9 +38,17 @@ namespace FireGame.Prototypes.Tests
         {
             var sim = new SurvivorSim(1, 2);
             Assert.Equal("산불 숲", sim.Stage.Name);
-            Assert.Equal(8, sim.HousesTotal);
+            Assert.Equal(9, sim.HousesTotal);
             Assert.Single(sim.Structures.FindAll(s => s.Kind == StructureKind.Depot));
-            Assert.True(sim.Structures.FindAll(s => s.Kind == StructureKind.Tree).Count >= 60, "나무 " + sim.Structures.FindAll(s => s.Kind == StructureKind.Tree).Count);
+            var trees = sim.Structures.FindAll(s => s.Kind == StructureKind.Tree);
+            Assert.True(trees.Count >= 60, "나무 " + trees.Count);
+            // 숲은 북쪽, 캠프는 남쪽: 나무는 모두 y ≥ 33, 건물은 모두 y ≤ 30.
+            Assert.All(trees, t => Assert.True(t.Pos.Y >= SurvivorForest.ForestFrom, "나무가 캠프 쪽에 있다: " + t.Pos.Y));
+            Assert.All(sim.Structures.FindAll(s => s.IsBuilding), b => Assert.True(b.Pos.Y <= 30f, b.Name + "이 숲 쪽에 있다"));
+            // 첫 줄 지붕과 첫 나무 줄 틈은 바람 사거리 안(산불이 캠프로 넘어온다).
+            float lowestTree = 99f;
+            foreach (Structure t in trees) lowestTree = System.Math.Min(lowestTree, t.Pos.Y);
+            Assert.InRange(lowestTree - 29.5f - 0.6f, 2f, SurvivorSim.WindSpreadRange);
             Assert.All(sim.Structures, s => Assert.True(s.DistanceTo(sim.Player) > 6f, s.Name + "가 출발점에 너무 가깝다"));
             Assert.All(sim.Structures, s => Assert.False(s.Burning));
         }
@@ -107,14 +115,16 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void ForestBuildings_SitOnTheTownRing()
+        public void ForestBuildings_FormACampWithinReach()
         {
+            // 캠프는 남쪽 두 줄(y=28·16) + 제재소: 출발점에서 걸어서 7~24칸(멀리 흩어 두면 걷기만 하는 시간이 늘어 지루하다).
             var sim = new SurvivorSim(1, 2);
             foreach (Structure s in sim.Structures)
             {
                 if (!s.IsBuilding) continue;
                 float d = s.Pos.DistanceTo(sim.Player);
-                Assert.True(d >= 12f && d <= 16f, s.Name + " 거리 " + d);
+                Assert.True(d >= 7f && d <= 24f, s.Name + " 거리 " + d);
+                Assert.True(s.Pos.Y < 30f, s.Name + "이 숲 쪽에 있다");
             }
             Assert.True(sim.Stage.ReportTimes.Length >= 12, "숲 신고 " + sim.Stage.ReportTimes.Length);
         }

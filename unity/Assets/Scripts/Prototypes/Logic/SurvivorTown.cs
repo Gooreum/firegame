@@ -115,32 +115,50 @@ namespace FireGame.Prototypes.Logic
 
     /// <summary>
     /// 시험판 C의 동네. 시드와 상관없이 늘 같은 자리다.
+    /// 강(x=30, 폭 2.4)이 동네를 둘로 가르고 다리는 가운데(y 26~34) 하나뿐이다: 건너편 신고는 멀고, 불도 강을 못 건넌다.
+    /// 서쪽 가게 여섯 + 물류창고, 동쪽 가게 여섯. 같은 블록 안 가게는 4칸 간격이라 번진다(사거리 9).
     /// 가운데(소방관 출발점) 반경 6칸은 비워 둔다.
     /// </summary>
     public static class SurvivorTown
     {
+        /// <summary>강 가운데 x와 반폭, 다리 반폭(y 방향).</summary>
+        public const float RiverX = 30f;
+        public const float RiverHalf = 1.2f;
+        public const float BridgeHalf = 4f;
+
         public static List<Structure> Build()
         {
             var list = new List<Structure>();
 
-            House(list, "빵집", 19f, 41f, 2);
-            House(list, "꽃집", 30f, 42f, 1);
-            House(list, "문구점", 41f, 41f, 1);
-            House(list, "세탁소", 43f, 30f, 2);
-            House(list, "약국", 41f, 19f, 1);
-            House(list, "분식집", 30f, 18f, 2);
-            House(list, "편의점", 19f, 19f, 1);
-            House(list, "이발소", 17f, 30f, 1);
-            list.Add(new Structure { Kind = StructureKind.Depot, Name = "물류창고", Pos = new Vec2(30f, 52f), Half = new Vec2(3.5f, 2.5f) });
+            // 강: 다리 자리(y 26~34)만 비우고 위아래로 둘.
+            Add(list, StructureKind.Water, "강", RiverX, 47f, RiverHalf, 13f);
+            Add(list, StructureKind.Water, "강", RiverX, 13f, RiverHalf, 13f);
 
-            Add(list, StructureKind.Gas, "가스통", 24.5f, 41.5f, 0.4f, 0.4f);
-            Add(list, StructureKind.Gas, "가스통", 35.5f, 18.5f, 0.4f, 0.4f);
-            Add(list, StructureKind.Gas, "가스통", 43f, 33.3f, 0.4f, 0.4f);
+            // 서쪽 블록(세로 길 x=18 양쪽).
+            House(list, "빵집", 14f, 44f, 2);
+            House(list, "꽃집", 22f, 44f, 1);
+            House(list, "이발소", 12f, 34f, 1);
+            House(list, "편의점", 22f, 36f, 2);
+            House(list, "세탁소", 12f, 24f, 1);
+            House(list, "분식집", 22f, 22f, 2);
+            // 동쪽 블록(세로 길 x=42 양쪽).
+            House(list, "카페", 38f, 44f, 1);
+            House(list, "서점", 46f, 44f, 2);
+            House(list, "정육점", 38f, 36f, 1);
+            House(list, "미용실", 48f, 34f, 2);
+            House(list, "철물점", 38f, 22f, 2);
+            House(list, "치킨집", 48f, 24f, 1);
+            list.Add(new Structure { Kind = StructureKind.Depot, Name = "물류창고", Pos = new Vec2(18f, 54f), Half = new Vec2(3.5f, 2.5f) });
 
-            float[] trees = { 12f, 46f, 24f, 48f, 36f, 48f, 48f, 46f, 48f, 12f, 36f, 12f, 24f, 12f, 12f, 14f };
+            Add(list, StructureKind.Gas, "가스통", 26f, 44.5f, 0.4f, 0.4f);
+            Add(list, StructureKind.Gas, "가스통", 34.5f, 22f, 0.4f, 0.4f);
+            Add(list, StructureKind.Gas, "가스통", 10f, 29f, 0.4f, 0.4f);
+
+            // 강둑 나무.
+            float[] trees = { 27f, 8f, 33f, 8f, 27f, 20f, 33f, 20f, 27f, 40f, 33f, 40f, 27f, 50f, 33f, 50f };
             for (int i = 0; i < trees.Length; i += 2) Add(list, StructureKind.Tree, "나무", trees[i], trees[i + 1], 0.6f, 0.6f);
 
-            float[] cars = { 13f, 37f, 47f, 24f, 37f, 36f, 23f, 24f, 25f, 46f };
+            float[] cars = { 18f, 30f, 42f, 30f, 16f, 48f, 44f, 16f, 10f, 38f };
             for (int i = 0; i < cars.Length; i += 2) Add(list, StructureKind.Car, "차", cars[i], cars[i + 1], 1f, 0.55f);
 
             return list;
