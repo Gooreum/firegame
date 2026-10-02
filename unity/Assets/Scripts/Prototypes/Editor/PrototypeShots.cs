@@ -177,6 +177,46 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.Ignite(near, 1f);
                 view.Sim.Player = near.Door;
             }, false);
+            // 보조 재설계: 드론 투하, 도끼 문 부수기, 산소통 투척, 장화 발자국.
+            failures += SurvivorShot(dir, "c40_drone_drop", view => view.Sim.DroneDrops.Count > 0, 6, false,
+                view => view.Frame(new Vector3(view.Sim.DroneCenter.X, view.Sim.DroneCenter.Y, 0f), 7f), 1, view =>
+            {
+                Structure near = NearestHouse(view);
+                view.Sim.Ignite(near, 0.9f);
+                Pick(view, UpgradeId.Drone, UpgradeId.Drone, UpgradeId.Drone);
+            });
+            failures += SurvivorShot(dir, "c41_axe_door", view =>
+            {
+                Structure near = NearestHouse(view);
+                if (near.Residents > 0 && view.Sim.PendingChoices == null) view.Sim.Player = near.Door;
+                return view.Sim.DoorBursts.Count > 0;
+            }, 3, false, view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 2f, 0f), 7f), 1, view =>
+            {
+                Structure near = NearestHouse(view);
+                near.Residents = 3;
+                view.Sim.Ignite(near, 0.3f);
+                Pick(view, UpgradeId.Axe);
+                view.Sim.Player = near.Door;
+            });
+            failures += SurvivorShot(dir, "c42_oxygen", view => view.Sim.OxygenHits.Count > 0, 8, false,
+                view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 3f, 0f), 8f), 1, view =>
+            {
+                Structure near = NearestHouse(view);
+                near.Residents = 2;
+                near.Smoke = 10f;
+                view.Sim.Ignite(near, 1f);
+                Pick(view, UpgradeId.Oxygen);
+                view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 5f);
+            });
+            failures += SurvivorShot(dir, "c43_boots", view =>
+            {
+                view.Sim.Enemies.Clear();
+                return view.Sim.Footprints.Count > 0 && view.Sim.Time > 0.5f;
+            }, 20, false, view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), 6f), 1, view =>
+            {
+                Pick(view, UpgradeId.Boots);
+                for (int k = 0; k < 6; k++) view.Sim.BurningGround.Add(new Puddle { Pos = new Vec2(view.Sim.Player.X + 1f + k, view.Sim.Player.Y), Radius = 0.8f, Life = 30f, MaxLife = 30f });
+            });
             // 증기 폭발: 큰 불에 물줄기를 버틴 끝에 지붕에서 김이 터지는 순간. 적을 치워 봇이 건물만 쏘게 한다.
             failures += SurvivorShot(dir, "c30_steam_burst", view =>
             {

@@ -1017,6 +1017,71 @@ namespace FireGame.Prototypes
                 HitStop(0.05f);
                 PlaySteam();
             }
+
+            // 드론 물폭탄 착탄: 청록 물기둥 + 물결 + 물방울.
+            foreach (Vec2 d in _sim.DroneDrops)
+            {
+                Vector3 at = W(d);
+                Pillar(at, DroneTint);
+                Shockwave(at, DroneTint, 3.6f, 0.3f);
+                Splash(at, 10, 0.6f);
+                AddWet(at, 1.6f, 1.5f, false);
+                if (RoofAt(d)) Steam(at, 4, 1f);
+                WeaponSound(Cue.SprayWater);
+            }
+
+            // 산소통 착탄: 파란 산소 구름이 문 앞에서 피어오르고 "산소!".
+            foreach (Structure st in _sim.OxygenHits)
+            {
+                Vector3 at = W(st.Door);
+                for (int k2 = 0; k2 < 10; k2++)
+                {
+                    Emit(Smokes[Random.Range(0, Smokes.Length)], at + new Vector3(Random.Range(-0.4f, 0.4f), Random.Range(-0.2f, 0.2f), 0f),
+                        new Vector3(Random.Range(-0.8f, 0.8f), Random.Range(1f, 2.2f), 0f), 1.2f, Random.Range(0.7f, 1.1f), 0.6f, 2.4f,
+                        new Color(0.5f, 0.75f, 1f, 0.8f), new Color(0.6f, 0.8f, 1f, 0f), Random.Range(-90f, 90f));
+                }
+                Shockwave(at, new Color(0.5f, 0.75f, 1f), 3f, 0.3f);
+                SpawnText(at + new Vector3(0f, 1.2f, 0f), "산소!", new Color(0.6f, 0.85f, 1f), 1.3f);
+                GameAudio.Play(Cue.PickUp);
+            }
+
+            // 구조 도끼: 문이 터지며 나무 파편, 쾅 흔들림.
+            foreach (Structure st in _sim.DoorBursts)
+            {
+                Vector3 at = W(st.Door);
+                Burst(at, 10, new Color(0.6f, 0.4f, 0.2f), 7f);
+                Burst(at, 6, new Color(0.9f, 0.8f, 0.6f), 4f);
+                Emit("Effects/glow", at, Vector3.zero, 0f, 0.08f, 1.2f, 2f, new Color(1f, 0.95f, 0.8f, 0.8f), new Color(1f, 0.9f, 0.6f, 0f), 0f, true);
+                _trauma = Mathf.Min(1f, _trauma + 0.2f);
+                HitStop(0.04f);
+                GameAudio.Play(Cue.Collapse);
+            }
+
+            // 장화: 젖은 발자국이 남고, 밟아 끈 자리에선 김.
+            foreach (Vec2 f in _sim.Footprints)
+            {
+                Vector3 at = W(f);
+                AddWet(at + new Vector3(-0.12f, 0f, 0f), 0.28f, 1.5f, false);
+                AddWet(at + new Vector3(0.12f, 0.1f, 0f), 0.28f, 1.5f, false);
+            }
+
+            // 방화복: 닿은 불 몹이 튕기며 불똥.
+            foreach (Vec2 b in _sim.SuitBounces)
+            {
+                Vector3 at = W(b);
+                Burst(at, 4, new Color(1f, 0.6f, 0.2f), 5f);
+                Emit("Effects/glow", at, Vector3.zero, 0f, 0.06f, 0.6f, 1f, new Color(1f, 1f, 1f, 0.7f), new Color(1f, 0.8f, 0.4f, 0f), 0f, true);
+            }
+
+            // 무전기 선제 출동: 작게 붙은 불 위에 파란 번쩍, "+10".
+            foreach (Structure st in _sim.EarlyCalls)
+            {
+                Vector3 at = W(st.Pos);
+                Flare(at, 5f, new Color(0.5f, 0.8f, 1f), 3);
+                Shockwave(at, new Color(0.5f, 0.8f, 1f), 7f, 0.4f);
+                SpawnText(at + new Vector3(0f, 2.6f, 0f), "선제 출동! +" + SurvivorSim.EarlyGem, new Color(0.6f, 0.9f, 1f), 1.6f);
+                GameAudio.Play(Cue.Rescued);
+            }
             foreach (Structure st in _sim.Sprinkled)
             {
                 // 스프링클러: 지붕에서 물 고리가 터지고 물방울이 사방으로 흩날린다.
@@ -1079,7 +1144,8 @@ namespace FireGame.Prototypes
                 Flare(at, _sim.Build.BombRadius * 2.2f, new Color(0.8f, 0.95f, 1f), 3);
                 // 착지 순간: 흰 번쩍 + 땅에 남는 물 자국 + 건물이면 지붕에서 김 기둥.
                 Emit("Effects/glow", at, Vector3.zero, 0f, 0.1f, _sim.Build.BombRadius * 2.6f, _sim.Build.BombRadius * 3.2f, new Color(1f, 1f, 1f, 0.95f), new Color(0.6f, 0.9f, 1f, 0f), 0f, true);
-                AddWet(at, _sim.Build.BombRadius * 2.2f, 1.2f, false);
+                // 착탄 자리는 3초 동안 젖은 웅덩이로 남는다.
+                AddWet(at, _sim.Build.BombRadius * 2.2f, 3f, false);
                 if (RoofAt(e)) SteamPillar(at, 1f);
                 _trauma = Mathf.Min(1f, _trauma + 0.18f);
                 _zoomKick = Mathf.Max(_zoomKick, 0.12f);
@@ -1995,6 +2061,42 @@ namespace FireGame.Prototypes
                     case ShotKind.Heli:
                         DrawHeli(s);
                         break;
+                    case ShotKind.Oxygen:
+                    {
+                        // 산소통: 파란 통이 포물선으로 날아간다. 땅엔 작은 그림자.
+                        float ot = Mathf.Clamp01(s.Age / s.Life);
+                        float olift = Mathf.Sin(ot * Mathf.PI) * 2.5f;
+                        _bombShadows.Put(at, 0.4f, 0f, new Color(0f, 0f, 0f, 0.3f));
+                        GameObject oxyModel = _bombModels.Get();
+                        if (oxyModel != null)
+                        {
+                            float spin = ot * 12f;
+                            ItemModels.Place(oxyModel, at, 0.4f + olift, new Vector3(Mathf.Cos(spin), Mathf.Sin(spin), 0f), 0.45f);
+                            Models3D.Tint(oxyModel, new Color(0.35f, 0.65f, 1f));
+                        }
+                        _dropGlow.Put(at + new Vector3(0f, olift, 0f), 0.9f, 0f, new Color(0.4f, 0.7f, 1f, 0.3f));
+                        break;
+                    }
+                    case ShotKind.Bomb when s.Drone:
+                    {
+                        // 드론 물폭탄: 드론 밑에서 곧장 떨어진다. 청록 꼬리.
+                        float dt = Mathf.Clamp01(s.Age / s.Life);
+                        float dlift = Mathf.Lerp(2.2f, 0f, dt * dt);
+                        _bombShadows.Put(W(s.Target), Mathf.Lerp(0.5f, 0.9f, dt), 0f, new Color(0f, 0f, 0f, 0.2f + (0.25f * dt)));
+                        GameObject drop = _bombModels.Get();
+                        if (drop != null)
+                        {
+                            ItemModels.Place(drop, at, 0.4f + dlift, Vector3.right, 0.5f);
+                            Models3D.Tint(drop, DroneTint);
+                        }
+                        _dropGlow.Put(at + new Vector3(0f, dlift, 0f), 0.8f, 0f, new Color(DroneTint.r, DroneTint.g, DroneTint.b, 0.3f));
+                        if (Random.value < 0.6f)
+                        {
+                            Emit("Effects/water_drop", at + new Vector3(0f, dlift, 0f), new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(0.5f, 1.5f), 0f), 3f, 0.25f,
+                                0.18f, 0.04f, DroneTint, new Color(DroneTint.r, DroneTint.g, DroneTint.b, 0f), 0f);
+                        }
+                        break;
+                    }
                     case ShotKind.Bomb when s.Air:
                     {
                         // 공중 소화탄: 하늘에서 비스듬히 떨어진다. 땅 그림자는 점점 작고 짙어진다.
@@ -2219,9 +2321,12 @@ namespace FireGame.Prototypes
             if (!show) return;
             Vector3 at = W(st.Pos);
             float beat = 0.5f + (0.5f * Mathf.Abs(Mathf.Sin(_time * 6f)));
-            _civilianRings.Put(at, Mathf.Max(st.Half.X, st.Half.Y) * 2.8f * (1f + (0.1f * beat)), 0f, new Color(1f, 0.6f, 0.1f, 0.3f + (0.3f * beat)));
-            _forecastTag.text = "신고 예고 " + Mathf.CeilToInt(_sim.ForecastIn);
-            _forecastTag.color = Color.Lerp(new Color(1f, 0.75f, 0.2f), Color.white, beat * 0.4f);
+            // 6칸 안에 미리 가 있으면 선제 출동: 고리와 글자가 파랗게 바뀐다.
+            bool ready = st.DistanceTo(_sim.Player) <= SurvivorSim.EarlyRange;
+            Color ringColor = ready ? new Color(0.4f, 0.8f, 1f, 0.35f + (0.35f * beat)) : new Color(1f, 0.6f, 0.1f, 0.3f + (0.3f * beat));
+            _civilianRings.Put(at, Mathf.Max(st.Half.X, st.Half.Y) * 2.8f * (1f + (0.1f * beat)), 0f, ringColor);
+            _forecastTag.text = (ready ? "선제 출동 준비 " : "신고 예고 ") + Mathf.CeilToInt(_sim.ForecastIn);
+            _forecastTag.color = Color.Lerp(ready ? new Color(0.5f, 0.85f, 1f) : new Color(1f, 0.75f, 0.2f), Color.white, beat * 0.4f);
             _forecastTag.transform.localPosition = at + new Vector3(0f, st.Half.Y + 1.1f, -0.2f);
         }
 
