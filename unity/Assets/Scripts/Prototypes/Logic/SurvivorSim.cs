@@ -239,6 +239,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>무너지기 직전에 구한 횟수(아슬아슬 구조).</summary>
         public int CloseCalls;
 
+        /// <summary>선제 출동 횟수(무전 예보 건물 곁에 미리 가 있던 신고).</summary>
+        public int EarlyCalls;
+
         /// <summary>방화복을 안 입었다면 받았을 불 피해(열기·바닥 불·불 몹 접촉의 원값). DamageTaken과 비교하면 방화복이 얼마나 막았는지 나온다.</summary>
         public float FireDamageRaw;
     }
@@ -421,6 +424,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이번 틱에 방화복에 닿아 튕겨 나간 불 몹 자리.</summary>
         public readonly List<Vec2> SuitBounces = new List<Vec2>();
+
+        /// <summary>이번 틱에 선제 출동으로 작게 붙은 신고 건물.</summary>
+        public readonly List<Structure> EarlyCalls = new List<Structure>();
 
         /// <summary>이번 틱에 물·폭탄·거품에 꺼진 바닥 불 자리.</summary>
         public readonly List<Vec2> Extinguished = new List<Vec2>();
@@ -890,6 +896,7 @@ namespace FireGame.Prototypes.Logic
             DoorBursts.Clear();
             Footprints.Clear();
             SuitBounces.Clear();
+            EarlyCalls.Clear();
             Extinguished.Clear();
             Reignited.Clear();
             Ignited.Clear();
@@ -1126,13 +1133,26 @@ namespace FireGame.Prototypes.Logic
         {
             // 무전기로 미리 알린 건물이 아직 멀쩡하면 거기서 난다.
             Structure pick = _forecast != null && !_forecast.Burning && !_forecast.Collapsed ? _forecast : PickUnburntHouse();
+            // 선제 출동: 무전으로 알린 건물 곁에 미리 가 있으면 불이 작게 붙고 구슬을 받는다.
+            bool early = Build.Forecast > 0f && pick != null && pick == _forecast && pick.DistanceTo(Player) <= EarlyRange;
             _forecast = null;
             ForecastAt = null;
             if (pick == null) return null;
             pick.Wet = 0f;
-            Ignite(pick, ReportFire);
+            Ignite(pick, early ? EarlyFire : ReportFire);
+            if (early)
+            {
+                DropGem(pick.Door, EarlyGem * ComboMult);
+                EarlyCalls.Add(pick);
+                Stats.EarlyCalls++;
+            }
             return pick;
         }
+
+        /// <summary>선제 출동: 예보 건물에서 이 거리 안에 있으면 신고 불이 EarlyFire로 작게 붙고 EarlyGem 구슬이 떨어진다.</summary>
+        public const float EarlyRange = 6f;
+        public const float EarlyFire = 0.15f;
+        public const int EarlyGem = 10;
 
         private EnemyKind PickKind()
         {
@@ -1334,7 +1354,7 @@ namespace FireGame.Prototypes.Logic
                 if (cannon)
                 {
                     // 진화 후: 한 줄기로 모든 불을 꿰뚫는 고압 제트.
-                    FireDrop(baseAngle, 13.2f * (HoseInterval / 0.4f), 18f, 0.55f, 999, 0.6f, ShotKind.Jet, true);
+                    FireDrop(baseAngle, 13.2f * (HoseInterval / 0.4f) * Build.HosePower, 18f, 0.55f, 999, 0.6f * Build.HoseRange, ShotKind.Jet, true);
                 }
                 else
                 {
@@ -1357,7 +1377,7 @@ namespace FireGame.Prototypes.Logic
                     // 한 틱에 한 줄기씩, 18줄기로 한 바퀴를 휩쓴다.
                     _jetAngle += (float)(Math.PI * 2 / 18);
                     _jetQueue--;
-                    FireDrop(_jetAngle, 2.2f * 2f * 3f, 16f, 0.55f, 999, 0.8f, ShotKind.Jet);
+                    FireDrop(_jetAngle, 2.2f * 2f * 3f * Build.HosePower, 16f, 0.55f, 999, 0.8f * Build.HoseRange, ShotKind.Jet);
                 }
             }
 
@@ -2169,16 +2189,17 @@ namespace FireGame.Prototypes.Logic
         private void Warm(Structure st)
         {
             if (!st.IsBuilding || !st.Burning) return;
-            st.HoseHold += HoseInterval;
+            st.HoseHold += HoseInterval * Build.SteamScale;
             if (st.HoseHold < SteamHold) return;
             st.HoseHold = 0f;
             Soak(st, SteamDouse, false);
             SteamBursts.Add(st);
             Stats.SteamBursts++;
-            // 곁의 불 몹을 데우고 바깥으로 민다.
+            // 곁의 불 몹을 데우고 바깥으로 민다(펌프가 반경을 넓힌다).
+            float reach = SteamRadius + Build.SteamRadiusBonus;
             foreach (Enemy e in Enemies)
             {
-                if (e.Dead || st.DistanceTo(e.Pos) > SteamRadius) continue;
+                if (e.Dead || st.DistanceTo(e.Pos) > reach) continue;
                 Damage(e, SteamHit, Knockback(st.Pos, e.Pos, SteamPush), true, HitSource.Steam, st.Pos);
             }
         }

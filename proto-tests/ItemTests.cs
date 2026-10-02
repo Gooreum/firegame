@@ -229,6 +229,117 @@ namespace FireGame.Prototypes.Tests
             Assert.True(blaze.Hp < blaze.MaxHp || blaze.Dead, "포탑이 곁 불을 안 쐈다");
         }
 
+        /// <summary>펌프 level로 세기 1.0 가게에 물대포를 쏴 첫 증기 폭발까지 걸린 틱. 폭발 틱에 dx칸 밖 불씨가 맞았는지도 돌려준다.</summary>
+        private static int TicksToSteam(int tank, float emberDx, out bool emberHit)
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 6f, 0f);
+            sim.Ignite(shop, 1f);
+            if (tank > 0) Take(sim, UpgradeId.Tank, tank);
+            Enemy ember = sim.Spawn(EnemyKind.Ember, new Vec2(shop.Pos.X + shop.Half.X + emberDx, shop.Pos.Y));
+            ember.Speed = 0f;
+            ember.MaxHp = 999f;
+            ember.Hp = 999f;
+            emberHit = false;
+            for (int i = 0; i < 600; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.Aim = new Vec2(shop.Pos.X - sim.Player.X, shop.Pos.Y - sim.Player.Y);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+                if (sim.SteamBursts.Count > 0)
+                {
+                    // 스폰된 다른 불씨가 맞은 것과 구분하려고 우리 불씨의 체력으로 본다.
+                    emberHit = ember.Hp < 999f;
+                    return i;
+                }
+            }
+            return int.MaxValue;
+        }
+
+        [Fact]
+        public void Tank_ChargesSteamFaster_AndWidensTheBurst()
+        {
+            int plain = TicksToSteam(0, 5f, out bool plainHit);
+            int pump = TicksToSteam(3, 5f, out bool pumpHit);
+            Assert.True(pump < plain, "펌프 Lv3 " + pump + "틱이 펌프 없음 " + plain + "틱보다 빨라야 한다");
+            Assert.False(plainHit, "펌프 없이는 5칸 밖 불씨에 증기가 안 닿아야 한다(반경 4)");
+            Assert.True(pumpHit, "펌프 Lv3이면 5칸 밖 불씨에 증기가 닿아야 한다(반경 5.5)");
+            Assert.Equal(1f, new Loadout().SteamScale);
+            Assert.Equal(0f, new Loadout().SteamRadiusBonus);
+        }
+
+        [Fact]
+        public void Tank_AlsoPowersTheCannon()
+        {
+            SurvivorSim plain = Quiet();
+            Evolve(plain, UpgradeId.Cannon);
+            SurvivorSim pumped = Quiet();
+            Evolve(pumped, UpgradeId.Cannon);
+            Take(pumped, UpgradeId.Tank, 4);   // Evolve가 짝 보조를 하나 준다 → Lv5
+            Assert.Equal(5, pumped.Build.Level(UpgradeId.Tank));
+            foreach (SurvivorSim sim in new[] { plain, pumped })
+            {
+                sim.Enemies.Clear();
+                sim.Aim = new Vec2(1f, 0f);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+            }
+            Shot a = plain.Shots.Find(sh => sh.Hose);
+            Shot b = pumped.Shots.Find(sh => sh.Hose);
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+            // Evolve가 짝 보조(펌프)를 하나 주므로 plain은 Lv1(1.15), pumped는 Lv5(1.75).
+            Assert.InRange(b.Damage / a.Damage, 1.75f / 1.15f - 0.01f, 1.75f / 1.15f + 0.01f);
+            Assert.InRange(b.Life / a.Life, 1.75f / 1.15f - 0.01f, 1.75f / 1.15f + 0.01f);
+        }
+
+        /// <summary>무전기 Lv1로 첫 신고를 맞는다. near면 예보 건물 곁(문 앞 3칸)으로 미리 옮겨 둔다.</summary>
+        private static (Structure lit, float fire, int earlyCalls, int gemAtDoor) FirstReport(bool radio, bool near)
+        {
+            var sim = new SurvivorSim(1);
+            sim.Enemies.Clear();
+            if (radio) Take(sim, UpgradeId.Radio);
+            float report = sim.Stage.ReportTimes[0];
+            Structure lit = null;
+            float fire = 0f;
+            int gem = 0;
+            while (sim.Time < report + 0.5f && lit == null)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                if (near && sim.ForecastAt != null) sim.Player = new Vec2(sim.ForecastAt.Door.X, sim.ForecastAt.Door.Y - 3f);
+                else if (!near) sim.Player = new Vec2(SurvivorSim.ArenaSize / 2f, SurvivorSim.ArenaSize / 2f);
+                sim.Step(0f, 0f);
+                if (sim.Ignited.Count > 0)
+                {
+                    lit = sim.Ignited[0];
+                    fire = lit.Fire;
+                    Gem g = sim.Gems.Find(x => x.Pos.DistanceTo(lit.Door) < 0.01f);
+                    gem = g != null ? g.Value : 0;
+                }
+            }
+            Assert.NotNull(lit);
+            return (lit, fire, sim.Stats.EarlyCalls, gem);
+        }
+
+        [Fact]
+        public void Radio_EarlyCall_ShrinksTheReportFire()
+        {
+            var near = FirstReport(true, true);
+            Assert.Equal(SurvivorSim.EarlyFire, near.fire, 2);
+            Assert.Equal(1, near.earlyCalls);
+            Assert.Equal(SurvivorSim.EarlyGem, near.gemAtDoor);
+
+            var far = FirstReport(true, false);
+            Assert.Equal(SurvivorSim.ReportFire, far.fire, 2);
+            Assert.Equal(0, far.earlyCalls);
+
+            var none = FirstReport(false, true);
+            Assert.Equal(SurvivorSim.ReportFire, none.fire, 2);
+            Assert.Equal(0, none.earlyCalls);
+        }
+
         [Fact]
         public void Radio_ForecastsTheNextReport()
         {

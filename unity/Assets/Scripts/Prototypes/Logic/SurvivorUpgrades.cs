@@ -252,6 +252,10 @@ namespace FireGame.Prototypes.Logic
         /// <summary>고압 펌프: 물대포 위력.</summary>
         public float HosePower { get { return 1f + (0.15f * Level(UpgradeId.Tank)); } }
 
+        /// <summary>고압 펌프: 증기 충전 속도 배율(레벨마다 +25%)과 증기 폭발 반경 보너스(레벨마다 +0.5칸).</summary>
+        public float SteamScale { get { return 1f + (0.25f * Level(UpgradeId.Tank)); } }
+        public float SteamRadiusBonus { get { return 0.5f * Level(UpgradeId.Tank); } }
+
         /// <summary>방화복: 최대 체력 +10/레벨.</summary>
         public float MaxHpBonus { get { return 10f * Level(UpgradeId.Suit); } }
 
@@ -342,7 +346,8 @@ namespace FireGame.Prototypes.Logic
             var picks = new List<UpgradeId>(3);
             List<UpgradeId> ready = loadout.ReadyEvolutions();
             if (ready.Count > 0) picks.Add(ready[rng.Next(ready.Count)]);
-            else if (specials.Count > 0 && (forceSpecial || SpecialDue(level) || rng.Next(100) < SpecialChance)) picks.Add(specials[rng.Next(specials.Count)]);
+            // 진화 카드가 떠도 노란 카드는 막지 않는다(상자 첫 장·5의 배수 레벨은 약속이다).
+            if (specials.Count > 0 && (forceSpecial || SpecialDue(level) || rng.Next(100) < SpecialChance)) picks.Add(specials[rng.Next(specials.Count)]);
             while (picks.Count < 3 && pool.Count > 0)
             {
                 int k = rng.Next(pool.Count);

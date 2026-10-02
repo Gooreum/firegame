@@ -152,6 +152,24 @@ namespace FireGame.Prototypes.Tests
             }
         }
 
+        [Fact]
+        public void Roll_OffersSpecialBesideEvolution()
+        {
+            var l = new Loadout();
+            for (int i = 0; i < Loadout.MaxLevel; i++) l.Add(UpgradeId.Hose);
+            l.Add(UpgradeId.Tank);
+            var rng = new Rng(7);
+            var pool = new List<UpgradeId> { UpgradeId.Heli, UpgradeId.Ambulance };
+            // 상자 첫 장(forceSpecial)과 5의 배수 레벨: 진화와 노란 카드가 함께 나온다.
+            List<UpgradeId> chest = SurvivorUpgrades.Roll(l, 2, ref rng, pool, true);
+            Assert.Contains(UpgradeId.Cannon, chest);
+            Assert.Contains(chest, Loadout.IsSpecial);
+            Assert.Equal(3, chest.Count);
+            List<UpgradeId> due = SurvivorUpgrades.Roll(l, 5, ref rng, pool);
+            Assert.Contains(UpgradeId.Cannon, due);
+            Assert.Contains(due, id => Loadout.IsSpecial(id) && !Loadout.IsEvolution(id));
+        }
+
         // --- TC-6 ---
         [Fact]
         public void NothingLeft_OffersOnlyHeal_ThatCapsAtMaxHp()
@@ -1106,7 +1124,8 @@ namespace FireGame.Prototypes.Tests
             List<Shot> jets = big.Shots.FindAll(s => s.Kind == ShotKind.Jet);
             Assert.Contains(jets, s => s.Hose);
             Assert.Contains(jets, s => !s.Hose);
-            Assert.All(jets.FindAll(s => !s.Hose), s => Assert.Equal(0.8f, s.Life));
+            // 사방 제트 수명 0.8초 × 펌프 사거리(Lv1 1.15).
+            Assert.All(jets.FindAll(s => !s.Hose), s => Assert.Equal(0.8f * big.Build.HoseRange, s.Life, 3));
         }
     }
 }
