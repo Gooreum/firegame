@@ -539,7 +539,7 @@ namespace FireGame.Prototypes
         public void Restart(int seed)
         {
             _seed = seed;
-            _sim = new SurvivorSim(seed, _stage, _station != null ? _station.Current.Start : null);
+            _sim = new SurvivorSim(seed, _stage, _station != null ? _station.StartFor(SurvivorStages.Get(_stage)) : null);
             if (_maxGear) _sim.GiveMaxGear();
             _earned = 0;
             if (_groundStage != _sim.Stage.Number)
@@ -665,8 +665,21 @@ namespace FireGame.Prototypes
             Text stars = UiKit.OutlinedLabel(_stationLayer, "Stars", "모은 별 ★ " + _station.Stars + "      최고  " + best, 36, Color.white, TextAnchor.MiddleCenter);
             UiKit.Place(stars.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 318f), new Vector2(1500f, 50f));
 
-            Text next = UiKit.OutlinedLabel(_stationLayer, "Next", "다음 출동: STAGE " + _stage + " · " + SurvivorStages.Get(_stage).Name, 32, new Color(0.7f, 0.85f, 1f), TextAnchor.MiddleCenter);
+            StageRules rules = SurvivorStages.Get(_stage);
+            Text next = UiKit.OutlinedLabel(_stationLayer, "Next", "다음 출동: STAGE " + _stage + " · " + rules.Name, 32, new Color(0.7f, 0.85f, 1f), TextAnchor.MiddleCenter);
             UiKit.Place(next.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 268f), new Vector2(1000f, 44f));
+
+            // 브리핑: 다음 스테이지의 위협 한 줄과, 그 위협을 막는 대비 장비 둘(하나를 골라 Lv1로 들고 간다).
+            Text threat = UiKit.OutlinedLabel(_stationLayer, "Threat", "위협: " + rules.Threat, 30, new Color(1f, 0.75f, 0.55f), TextAnchor.MiddleCenter);
+            UiKit.Place(threat.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 226f), new Vector2(1400f, 42f));
+            UpgradeId[] counters = rules.Counters ?? new UpgradeId[0];
+            for (int k = 0; k < counters.Length; k++)
+            {
+                UpgradeId c = counters[k];
+                bool on = _station.Prep == c;
+                Button prep = UiKit.Button(_stationLayer, "Prep" + k, Art.Get(on ? "UI/button_yellow" : "UI/button_blue"), (on ? "대비 ✓ " : "대비: ") + SurvivorUpgrades.Name(c), 30, () => TapPrep(c));
+                UiKit.Place(prep.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2((k - ((counters.Length - 1) / 2f)) * 420f, 176f), new Vector2(400f, 56f));
+            }
 
             Firefighter[] roster = Roster.All;
             for (int i = 0; i < roster.Length; i++)
@@ -680,7 +693,7 @@ namespace FireGame.Prototypes
                 Button card = UiKit.Button(_stationLayer, "Firefighter" + i, Art.Get(sprite), "", 0, () => TapFirefighter(id));
                 RectTransform rect = card.GetComponent<RectTransform>();
                 float x = (i - ((roster.Length - 1) / 2f)) * 330f;
-                UiKit.Place(rect, new Vector2(0.5f, 0.5f), new Vector2(x, -20f), new Vector2(310f, 440f));
+                UiKit.Place(rect, new Vector2(0.5f, 0.5f), new Vector2(x, -70f), new Vector2(310f, 440f));
 
                 Text name = UiKit.OutlinedLabel(rect, "Name", f.Name, 42, Color.white, TextAnchor.MiddleCenter);
                 UiKit.Place(name.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -60f), new Vector2(290f, 60f));
@@ -699,9 +712,17 @@ namespace FireGame.Prototypes
             }
 
             Button go = UiKit.Button(_stationLayer, "Go", Art.Get("UI/button_red"), "출동!", 56, CloseStation);
-            UiKit.Place(go.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(0f, -340f), new Vector2(460f, 110f));
-            Text hint = UiKit.OutlinedLabel(_stationLayer, "Hint", "소방관을 골라 탭  ·  출동은 버튼 또는 Enter", 26, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
-            UiKit.Place(hint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -430f), new Vector2(1000f, 40f));
+            UiKit.Place(go.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(0f, -375f), new Vector2(460f, 110f));
+            Text hint = UiKit.OutlinedLabel(_stationLayer, "Hint", "대비 장비 하나 + 소방관을 골라 탭  ·  출동은 버튼 또는 Enter", 26, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
+            UiKit.Place(hint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -455f), new Vector2(1000f, 40f));
+        }
+
+        /// <summary>대비 장비 칸을 눌렀다: 같은 걸 누르면 내려놓고, 다른 걸 누르면 바꿔 든다. 판을 그 장비로 다시 연다.</summary>
+        public void TapPrep(UpgradeId id)
+        {
+            _station.Prep = _station.Prep == id ? (UpgradeId?)null : id;
+            Restart(_seed);
+            OpenStation();
         }
 
         /// <summary>소방관 칸을 눌렀다: 해금했으면 고르고, 별이 모자라지 않으면 해금한다. 판을 그 장비로 다시 연다.</summary>
@@ -741,6 +762,8 @@ namespace FireGame.Prototypes
         private void GoToStage(int stage)
         {
             _stage = stage;
+            // 대비 장비는 스테이지마다 다시 고른다(위협이 다르다).
+            if (_station != null) _station.Prep = null;
             PlayerPrefs.SetInt(StageKey, stage);
             PlayerPrefs.Save();
             Restart(_seed + 1);
