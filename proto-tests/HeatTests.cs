@@ -62,9 +62,10 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Suit_CutsTheHeat()
         {
+            // 방화복 Lv2: 레벨마다 −10%라 80%.
             float plain = HeatFor(2f, 0);
             float suit = HeatFor(2f, 2);
-            Assert.InRange(suit / plain, 0.68f, 0.72f);
+            Assert.InRange(suit / plain, 0.78f, 0.82f);
         }
 
         [Fact]

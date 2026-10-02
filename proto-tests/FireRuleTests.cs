@@ -16,18 +16,18 @@ namespace FireGame.Prototypes.Tests
             return sim;
         }
 
-        private static Structure Shop(SurvivorSim sim, float dx, float dy)
+        private static Structure Shop(SurvivorSim sim, float dx, float dy, StructureKind kind = StructureKind.House)
         {
-            var s = new Structure { Kind = StructureKind.House, Name = "가게", Pos = new Vec2(sim.Player.X + dx, sim.Player.Y + dy), Half = new Vec2(2f, 1.5f), Residents = 1 };
+            var s = new Structure { Kind = kind, Name = "가게", Pos = new Vec2(sim.Player.X + dx, sim.Player.Y + dy), Half = new Vec2(2f, 1.5f), Residents = kind == StructureKind.House ? 1 : 0 };
             sim.Structures.Add(s);
             return s;
         }
 
-        /// <summary>불 세기 start인 가게에 물대포를 ticks만큼 쏘고 줄어든 양을 돌려준다(적은 매 틱 치운다).</summary>
-        private static float Knockdown(float start, int ticks)
+        /// <summary>불 세기 start인 가게(또는 나무)에 물대포를 ticks만큼 쏘고 줄어든 양을 돌려준다(적은 매 틱 치운다).</summary>
+        private static float Knockdown(float start, int ticks, StructureKind kind = StructureKind.House)
         {
             SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 6f, 0f);
+            Structure shop = Shop(sim, 6f, 0f, kind);
             sim.Ignite(shop, start);
             for (int i = 0; i < ticks; i++)
             {
@@ -46,6 +46,51 @@ namespace FireGame.Prototypes.Tests
             float big = Knockdown(1f, 40);
             Assert.True(big < small, "같은 물로 큰 불(" + big + ")이 작은 불(" + small + ")보다 덜 줄어야 한다");
             Assert.True(big > 0f, "큰 불도 물을 맞으면 줄어야 한다");
+        }
+
+        [Fact]
+        public void Building_TakesLessSteadyWater_ThanATree()
+        {
+            // 같은 호스 물(1.5초, 증기 폭발 전)로 건물은 나무보다 덜 줄어든다: BuildingWater(60%)에 불 성장이 똑같이 빠진 비율.
+            float tree = Knockdown(0.5f, 90, StructureKind.Tree);
+            float house = Knockdown(0.5f, 90, StructureKind.House);
+            Assert.True(house > 0f, "건물 불도 호스에 줄어야 한다: " + house);
+            Assert.InRange(house / tree, 0.3f, 0.8f);
+        }
+
+        [Fact]
+        public void Forest_KeepsFullBuildingWater_OtherStagesUseTheDefault()
+        {
+            // 숲의 압력은 번짐이라 건물 물은 그대로, 마을·공단은 BuildingWater.
+            Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(1).BuildingWater);
+            Assert.Equal(1f, SurvivorStages.Get(2).BuildingWater);
+            Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(3).BuildingWater);
+            Assert.True(SurvivorSim.BuildingWater < 1f, "건물 물 비율은 1보다 작아야 '건물 불이 쉽다'에 답한다");
+        }
+
+        [Fact]
+        public void OneShotWater_IgnoresBuildingWater()
+        {
+            // 드론 투하(한 방, resist=false)는 건물에도 DroneDropWater 전량이 먹힌다.
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 8f, 0f);
+            sim.Ignite(shop, 1f);
+            shop.Integrity = 100f;
+            sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { UpgradeId.Drone };
+            sim.Choose(0);
+            FireKnock? knock = null;
+            for (int i = 0; i < 60 * 6 && knock == null; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                foreach (FireKnock k in sim.Knocked)
+                {
+                    if (k.At == shop) knock = k;
+                }
+            }
+            Assert.NotNull(knock);
+            Assert.Equal(SurvivorSim.DroneDropWater, knock.Value.Amount, 3);
         }
 
         [Fact]

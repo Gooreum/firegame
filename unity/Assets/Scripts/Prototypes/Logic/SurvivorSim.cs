@@ -453,6 +453,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>큰 불일수록 물이 덜 먹힌다: 물 효과 = 1 − FireResist × 불 세기(0.3이면 83%, 1.0이면 45%).</summary>
         public const float FireResist = 0.55f;
 
+        /// <summary>건물이 꾸준한 물(호스·대원·포탑 적중)을 먹는 비율. 한 방 물(물폭탄·투하·증기·헬기)은 영향 없다. "건물 불이 너무 쉽다"에 대한 손잡이.</summary>
+        public const float BuildingWater = 0.75f;
+
         /// <summary>물대포 한 방울이 불 몹을 미는 힘(예전 2.5). 큰 불·기름 방울은 무거워서 절반.</summary>
         public const float HoseKnock = 4f;
 
@@ -522,7 +525,7 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>큰 불(이 세기 이상) 속에 갇힌 사람은 SmokeTime마다 한 명씩 잃는다.</summary>
         public const float SmokeFire = 0.6f;
-        public const float SmokeTime = 15f;
+        public const float SmokeTime = 13f;
 
         /// <summary>이번 틱에 사람을 잃은 건물(연기·무너짐).</summary>
         public readonly List<Structure> PeopleLost = new List<Structure>();
@@ -2077,7 +2080,9 @@ namespace FireGame.Prototypes.Logic
             if (s.Burning)
             {
                 // 큰 불일수록 물이 덜 먹힌다: 일찍 잡으면 쉽고, 놓치면 오래 걸린다.
+                // 건물은 꾸준한 물(호스·대원·포탑)이 BuildingWater만큼만 먹힌다. 한 방(물폭탄·투하·증기·헬기, resist=false)은 그대로.
                 float before = s.Fire;
+                if (resist && s.IsBuilding) water *= Stage.BuildingWater;
                 s.Fire -= resist ? water * (1f - (FireResist * s.Fire)) : water;
                 if (before - Math.Max(0f, s.Fire) > KnockShown && s.IsBuilding) Knocked.Add(new FireKnock { At = s, Amount = before - Math.Max(0f, s.Fire) });
                 if (s.Fire > 0f) return;

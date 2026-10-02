@@ -136,10 +136,10 @@ namespace FireGame.Prototypes.Tests
             }
         }
 
-        /// <summary>측정 판 수. 기본 10, 환경변수 FIREGAME_SEEDS로 늘려 편차를 줄인다(문서의 60판 측정).</summary>
+        /// <summary>측정 판 수. 기본 30(10판은 승·위기가 ±2판 흔들려 판정에 못 쓴다 — docs §13), 환경변수 FIREGAME_SEEDS로 바꾼다.</summary>
         public static int Seeds
         {
-            get { return int.TryParse(Environment.GetEnvironmentVariable("FIREGAME_SEEDS"), out int n) && n > 0 ? n : 10; }
+            get { return int.TryParse(Environment.GetEnvironmentVariable("FIREGAME_SEEDS"), out int n) && n > 0 ? n : 30; }
         }
 
         public static FunRow Measure(int stage, int seeds, UpgradeId? favorite = null, UpgradeId[] start = null)

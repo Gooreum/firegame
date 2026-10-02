@@ -54,12 +54,12 @@ namespace FireGame.Prototypes.Tests
             return s;
         }
 
-        /// <summary>무기를 Lv5까지, 짝 보조를 하나 고른 뒤, 구슬을 먹어 레벨업한 카드에서 진화를 고른다.</summary>
+        /// <summary>무기를 Lv5까지, 짝 보조를 Lv3까지 고른 뒤, 구슬을 먹어 레벨업한 카드에서 진화를 고른다.</summary>
         private static void Evolve(SurvivorSim sim, UpgradeId evolution)
         {
             UpgradeId weapon = Loadout.BaseOf(evolution);
             while (sim.Build.Level(weapon) < Loadout.MaxLevel) Take(sim, weapon);
-            Take(sim, Loadout.PairOf(evolution));
+            while (sim.Build.Level(Loadout.PairOf(evolution)) < Loadout.EvolvePair) Take(sim, Loadout.PairOf(evolution));
             sim.DropGem(sim.Player, sim.XpToNext);
             for (int i = 0; i < 3 && sim.PendingChoices == null; i++) sim.Step(0f, 0f);
             Assert.NotNull(sim.PendingChoices);
@@ -304,7 +304,7 @@ namespace FireGame.Prototypes.Tests
             Evolve(plain, UpgradeId.Cannon);
             SurvivorSim pumped = Quiet();
             Evolve(pumped, UpgradeId.Cannon);
-            Take(pumped, UpgradeId.Tank, 4);   // Evolve가 짝 보조를 하나 준다 → Lv5
+            Take(pumped, UpgradeId.Tank, Loadout.MaxLevel - Loadout.EvolvePair);   // Evolve가 짝 보조를 EvolvePair까지 준다 → Lv5
             Assert.Equal(5, pumped.Build.Level(UpgradeId.Tank));
             foreach (SurvivorSim sim in new[] { plain, pumped })
             {
@@ -317,9 +317,10 @@ namespace FireGame.Prototypes.Tests
             Shot b = pumped.Shots.Find(sh => sh.Hose);
             Assert.NotNull(a);
             Assert.NotNull(b);
-            // Evolve가 짝 보조(펌프)를 하나 주므로 plain은 Lv1(1.15), pumped는 Lv5(1.75).
-            Assert.InRange(b.Damage / a.Damage, 1.75f / 1.15f - 0.01f, 1.75f / 1.15f + 0.01f);
-            Assert.InRange(b.Life / a.Life, 1.75f / 1.15f - 0.01f, 1.75f / 1.15f + 0.01f);
+            // Evolve가 짝 보조(펌프)를 EvolvePair까지 주므로 plain은 1 + 0.15·EvolvePair, pumped는 Lv5(1.75).
+            float ratio = 1.75f / (1f + (0.15f * Loadout.EvolvePair));
+            Assert.InRange(b.Damage / a.Damage, ratio - 0.01f, ratio + 0.01f);
+            Assert.InRange(b.Life / a.Life, ratio - 0.01f, ratio + 0.01f);
         }
 
         [Fact]

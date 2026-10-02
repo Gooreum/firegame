@@ -29,6 +29,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>건물 불이 초당 커지는 양.</summary>
         public float FireGrowth = SurvivorSim.FireGrowth;
 
+        /// <summary>건물이 꾸준한 물(호스·대원·포탑)을 먹는 비율. 한 방 물은 영향 없다.</summary>
+        public float BuildingWater = SurvivorSim.BuildingWater;
+
         /// <summary>대화재(3:00~) 동안 바람 번짐 확률. 바람이 없는 스테이지에선 쓰지 않는다.</summary>
         public float FinaleWindChance = SurvivorSim.WindSpreadChance;
 
@@ -102,6 +105,8 @@ namespace FireGame.Prototypes.Logic
             Wind = true,
             // 숲은 바람이 나무·건물로 불을 옮기므로 건물끼리 직접 번지는 규칙은 끈다(둘 다 켜면 봇 0/10).
             SpreadEvery = 0f,
+            // 숲의 압력은 번짐이다. 건물 물까지 줄이면(0.75) 집 7채 중 4채가 금방 무너져 봇이 시드 1~10에서 0승이었다(docs §13).
+            BuildingWater = 1f,
             // 나무 수십 그루가 보통(×2) 간격으로 뱉으면 불씨 떼가 동네를 덮는다.
             TreeSpit = 4f,
             Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Rain, UpgradeId.Retardant },

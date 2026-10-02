@@ -136,9 +136,10 @@ namespace FireGame.Prototypes.Tests
         {
             var l = new Loadout();
             for (int i = 0; i < Loadout.MaxLevel; i++) l.Add(UpgradeId.Hose);
-            l.Add(UpgradeId.Tank);
-
+            // 짝 보조가 EvolvePair 레벨 미만이면 진화 카드가 안 나오고, 채우면 반드시 나온다.
             var rng = new Rng(3);
+            for (int i = 0; i < 50; i++) Assert.DoesNotContain(UpgradeId.Cannon, SurvivorUpgrades.Roll(l, 2, ref rng));
+            for (int i = 0; i < Loadout.EvolvePair; i++) l.Add(UpgradeId.Tank);
             for (int i = 0; i < 200; i++) Assert.Contains(UpgradeId.Cannon, SurvivorUpgrades.Roll(l, 2, ref rng));
 
             l.Add(UpgradeId.Cannon);
@@ -157,7 +158,7 @@ namespace FireGame.Prototypes.Tests
         {
             var l = new Loadout();
             for (int i = 0; i < Loadout.MaxLevel; i++) l.Add(UpgradeId.Hose);
-            l.Add(UpgradeId.Tank);
+            for (int i = 0; i < Loadout.EvolvePair; i++) l.Add(UpgradeId.Tank);
             var rng = new Rng(7);
             var pool = new List<UpgradeId> { UpgradeId.Heli, UpgradeId.Ambulance };
             // 상자 첫 장(forceSpecial)과 5의 배수 레벨: 진화와 노란 카드가 함께 나온다.
@@ -334,7 +335,7 @@ namespace FireGame.Prototypes.Tests
         {
             SurvivorSim sim = Quiet();
             for (int i = 0; i < Loadout.MaxLevel; i++) sim.Build.Add(UpgradeId.Hose);
-            sim.Build.Add(UpgradeId.Tank);
+            for (int i = 0; i < Loadout.EvolvePair; i++) sim.Build.Add(UpgradeId.Tank);
             sim.DropGem(sim.Player, sim.XpToNext);
             for (int i = 0; i < 3 && sim.PendingChoices == null; i++) sim.Step(0f, 0f);
             sim.Choose(sim.PendingChoices.IndexOf(UpgradeId.Cannon));
@@ -409,11 +410,16 @@ namespace FireGame.Prototypes.Tests
             Assert.True(finale);
             Assert.NotNull(sim.Landmark);
 
-            // 끝까지 버틴다: 불은 치우고 체력은 채워 규칙(4:00 승리)만 본다.
+            // 끝까지 버틴다: 불은 치우고 체력은 채우고 건물도 무너지지 않게 붙들어 규칙(4:00 승리)만 본다.
+            // (건물 불이 더 오래 버티게 된 뒤로는 봇 혼자 마지막 1분을 지키지 못하는 시드가 있다.)
             while (sim.Outcome == SOutcome.Playing)
             {
                 sim.Enemies.Clear();
                 sim.Hp = sim.MaxHp;
+                foreach (Structure st in sim.Structures)
+                {
+                    if (st.IsBuilding && !st.Collapsed && st.Integrity < 0.5f) st.Integrity = 0.5f;
+                }
                 bot.Play();
             }
             Assert.Equal(SOutcome.Won, sim.Outcome);

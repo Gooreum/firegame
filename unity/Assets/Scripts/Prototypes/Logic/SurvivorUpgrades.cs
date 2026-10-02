@@ -161,10 +161,13 @@ namespace FireGame.Prototypes.Logic
             get { return Ready(UpgradeId.Cannon); }
         }
 
+        /// <summary>진화에 필요한 짝 보조 레벨(보유). Lv3을 요구해 봤더니 봇이 진화를 늦게 받아 마을이 무너졌다(10판 1승) — docs §13.</summary>
+        public const int EvolvePair = 1;
+
         /// <summary>이 진화를 지금 할 수 있나: 원래 무기 Lv5 + 짝 보조 보유 + 아직 안 함.</summary>
         public bool Ready(UpgradeId evolution)
         {
-            return IsEvolution(evolution) && Level(evolution) == 0 && Level(BaseOf(evolution)) >= MaxLevel && Level(PairOf(evolution)) >= 1;
+            return IsEvolution(evolution) && Level(evolution) == 0 && Level(BaseOf(evolution)) >= MaxLevel && Level(PairOf(evolution)) >= EvolvePair;
         }
 
         /// <summary>지금 할 수 있는 진화들.</summary>
@@ -250,8 +253,8 @@ namespace FireGame.Prototypes.Logic
         /// <summary>방화복: 최대 체력 +10/레벨.</summary>
         public float MaxHpBonus { get { return 10f * Level(UpgradeId.Suit); } }
 
-        /// <summary>방화복: 불에 받는 피해 배율(열기·바닥 불·불 몹 접촉, 레벨마다 −15%).</summary>
-        public float HeatScale { get { return 1f - (0.15f * Level(UpgradeId.Suit)); } }
+        /// <summary>방화복: 불에 받는 피해 배율(열기·바닥 불·불 몹 접촉, 레벨마다 −10%). 보조가 셋뿐이라 모든 판에 들어오므로 −15%면 체력 압력이 사라졌다(봇 위기 판 6 → 1).</summary>
+        public float HeatScale { get { return 1f - (0.10f * Level(UpgradeId.Suit)); } }
 
         /// <summary>장화: 이동 +12%/레벨.</summary>
         public float SpeedScale { get { return 1f + (0.12f * Level(UpgradeId.Boots)); } }
@@ -380,7 +383,7 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Turret: return fresh ? "7초마다 선 자리에 포탑을 세운다. 곁 불을 쏜다" : nextLevel == 3 || nextLevel == 5 ? "포탑 +1, 지속 +1초" : "포탑 지속 +1초";
                 case UpgradeId.Tank: return "물줄기 사거리·세기 +15%, 증기 폭발이 25% 빨리 차고 0.5칸 넓어진다";
                 case UpgradeId.Boots: return fresh ? "이동 +12%. 불 바닥을 밟아도 안 다치고 밟은 자리를 끈다" : "이동 속도 +12%";
-                case UpgradeId.Suit: return fresh ? "불 피해 −15%, 최대 체력 +10. 닿은 불 몹이 튕겨 나간다" : "불 피해 −15%, 최대 체력 +10, 더 세게 튕긴다";
+                case UpgradeId.Suit: return fresh ? "불 피해 −10%, 최대 체력 +10. 닿은 불 몹이 튕겨 나간다" : "불 피해 −10%, 최대 체력 +10, 더 세게 튕긴다";
                 case UpgradeId.Cannon: return "진화! 관통하는 물줄기가 사방을 휩쓴다";
                 case UpgradeId.Squad: return "진화! 대원 4명이 흩어져 여러 건물을 동시에 구한다";
                 case UpgradeId.AirBomb: return "진화! 맵 어디든 불난 건물마다 소화탄이 떨어진다";
