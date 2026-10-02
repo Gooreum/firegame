@@ -650,13 +650,16 @@ namespace FireGame.Prototypes.Tests
             Structure shop = Shop(sim, 6f, 0f);
             sim.Ignite(shop, 1f);
             bool doused = false;
-            // 큰 불은 물이 덜 먹혀(FireResist) Lv1 물대포로 다 탄 가게를 끄는 데 5초 넘게 걸린다.
-            for (int i = 0; i < 60 * 10 && shop.Burning; i++)
+            // 큰 불은 물이 덜 먹히고(FireResist) 건물은 꾸준한 물을 BuildingWater만큼만 먹어, Lv1 물대포로 다 탄 가게를 끄는 데 15초쯤 걸린다.
+            // 그동안 가장자리에서 오는 불 몹이 물줄기를 가로채지 않게 매 틱 치운다.
+            for (int i = 0; i < 60 * 25 && shop.Burning; i++)
             {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
                 Spray(sim, shop.Pos, 1);
                 if (sim.Doused.Contains(shop)) doused = true;
             }
-            Assert.False(shop.Burning, "다 탄 가게를 10초 뿌려도 안 꺼졌다");
+            Assert.False(shop.Burning, "다 탄 가게를 25초 뿌려도 안 꺼졌다");
             Assert.True(doused);
             Assert.True(shop.Wet > 0f);
             Assert.False(sim.Ignite(shop, 0.5f), "젖은 가게에 불이 다시 붙었다");

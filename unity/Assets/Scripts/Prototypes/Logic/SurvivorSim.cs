@@ -442,9 +442,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>끄지 않은 바닥 불이 수명을 다했을 때 불씨로 다시 일어날 확률.</summary>
         public const float ReigniteChance = 0.5f;
 
-        /// <summary>물 1 피해가 건물 불 세기를 줄이는 양. 물대포 Lv1이면 다 탄 가게를 약 3초에 끈다.</summary>
+        /// <summary>물 1 피해가 건물 불 세기를 줄이는 양. 나무는 Lv1 물대포로 금방 꺼지고, 건물은 BuildingWater만큼만 먹어 오래 걸린다.</summary>
         public const float WaterPerDamage = 0.035f;
-        /// <summary>건물 불이 초당 커지는 양. 신고 불(0.5)이 약 8초면 다 탄다.</summary>
+        /// <summary>건물 불이 초당 커지는 양. 신고 불(0.35)이 약 16초면 다 탄다.</summary>
         public const float FireGrowth = 0.04f;
 
         /// <summary>끈 자리가 젖어 있는 시간. 짧아서 끄고 떠나면 금방 다시 탈 수 있다.</summary>
@@ -453,14 +453,17 @@ namespace FireGame.Prototypes.Logic
         /// <summary>큰 불일수록 물이 덜 먹힌다: 물 효과 = 1 − FireResist × 불 세기(0.3이면 83%, 1.0이면 45%).</summary>
         public const float FireResist = 0.55f;
 
-        /// <summary>건물이 꾸준한 물(호스·대원·포탑 적중)을 먹는 비율. 한 방 물(물폭탄·투하·증기·헬기)은 영향 없다. "건물 불이 너무 쉽다"에 대한 손잡이.</summary>
-        public const float BuildingWater = 0.75f;
+        /// <summary>
+        /// 건물이 꾸준한 물(호스·대원·포탑 적중)을 먹는 비율. 한 방 물(물폭탄·투하·증기·헬기)은 영향 없다.
+        /// "건물 불 끄는 시간"의 손잡이 1: 0.3이면 Lv1 물대포로 신고 불(0.35)이 약 6초, 다 탄 건물이 약 15초(증기 포함). 아직 쉬우면 0.25, 지루하면 0.4.
+        /// </summary>
+        public const float BuildingWater = 0.3f;
 
         /// <summary>물대포 한 방울이 불 몹을 미는 힘(예전 2.5). 큰 불·기름 방울은 무거워서 절반.</summary>
         public const float HoseKnock = 4f;
 
-        /// <summary>건물 불에 물대포 물을 이만큼(초 분량) 맞히면 증기 폭발. 저항은 이렇게 뚫는다.</summary>
-        public const float SteamHold = 2f;
+        /// <summary>건물 불에 물대포 물을 이만큼(초 분량) 맞히면 증기 폭발. 저항은 이렇게 뚫는다. 끄는 시간의 손잡이 2: 3이면 식는 것까지 약 6초마다 한 번(예전 2는 3초).</summary>
+        public const float SteamHold = 3f;
 
         /// <summary>맞은 물이 식는 속도(초당). 코앞 불씨를 잡고 돌아와도 쌓인 게 남는다.</summary>
         public const float SteamCool = 0.25f;

@@ -42,8 +42,10 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void BigFire_TakesLessFromTheSameWater()
         {
-            float small = Knockdown(0.5f, 40);
-            float big = Knockdown(1f, 40);
+            // 2초(증기 폭발 전). 불 성장(둘 다 똑같이 큰다)을 되돌려 물만의 효과를 비교한다.
+            float grow = SurvivorSim.FireGrowth * 120 * SurvivorSim.Dt;
+            float small = Knockdown(0.5f, 120) + grow;
+            float big = Knockdown(1f, 120) + grow;
             Assert.True(big < small, "같은 물로 큰 불(" + big + ")이 작은 불(" + small + ")보다 덜 줄어야 한다");
             Assert.True(big > 0f, "큰 불도 물을 맞으면 줄어야 한다");
         }
@@ -51,19 +53,20 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Building_TakesLessSteadyWater_ThanATree()
         {
-            // 같은 호스 물(1.5초, 증기 폭발 전)로 건물은 나무보다 덜 줄어든다: BuildingWater(60%)에 불 성장이 똑같이 빠진 비율.
-            float tree = Knockdown(0.5f, 90, StructureKind.Tree);
-            float house = Knockdown(0.5f, 90, StructureKind.House);
-            Assert.True(house > 0f, "건물 불도 호스에 줄어야 한다: " + house);
-            Assert.InRange(house / tree, 0.3f, 0.8f);
+            // 같은 호스 물(1.5초, 증기 폭발 전)로 건물은 나무보다 덜 줄어든다. 불 성장(둘 다 똑같이 큰다)을 되돌리면 물만의 비율 ≈ BuildingWater(30%).
+            float grow = SurvivorSim.FireGrowth * 90 * SurvivorSim.Dt;
+            float tree = Knockdown(0.5f, 90, StructureKind.Tree) + grow;
+            float house = Knockdown(0.5f, 90, StructureKind.House) + grow;
+            Assert.True(house > grow, "건물 불도 호스에 줄어야 한다: " + (house - grow));
+            Assert.InRange(house / tree, 0.15f, 0.35f);
         }
 
         [Fact]
-        public void Forest_KeepsFullBuildingWater_OtherStagesUseTheDefault()
+        public void Forest_UsesHalfBuildingWater_OtherStagesUseTheDefault()
         {
-            // 숲의 압력은 번짐이라 건물 물은 그대로, 마을·공단은 BuildingWater.
+            // 숲의 압력은 번짐이라 건물 물은 마을의 두 배, 마을·공단은 BuildingWater.
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(1).BuildingWater);
-            Assert.Equal(1f, SurvivorStages.Get(2).BuildingWater);
+            Assert.Equal(0.5f, SurvivorStages.Get(2).BuildingWater);
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(3).BuildingWater);
             Assert.True(SurvivorSim.BuildingWater < 1f, "건물 물 비율은 1보다 작아야 '건물 불이 쉽다'에 답한다");
         }
@@ -204,16 +207,16 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Steam_BurstsAfterTwoSecondsOfHose_AndIgnoresResist()
+        public void Steam_BurstsAfterFourSecondsOfHose_AndIgnoresResist()
         {
             SurvivorSim sim = Quiet();
             Structure shop = Shop(sim, 6f, 0f);
             sim.Ignite(shop, 1f);
             int bursts = 0;
             float knock = 0f;
-            // 물이 닿기까지 0.4초, 맞는 동안에도 초당 SteamCool만큼 식어 2초 분량을 채우려면 3초 남짓 걸린다.
-            Hose(sim, shop, 240, true, ref bursts, ref knock);
-            Assert.True(bursts >= 1, "4초를 이어 쐈는데 증기 폭발이 없다");
+            // 물이 닿기까지 0.4초, 맞는 동안에도 초당 SteamCool만큼 식어 3초 분량(SteamHold)을 채우려면 6초 남짓 걸린다.
+            Hose(sim, shop, 480, true, ref bursts, ref knock);
+            Assert.True(bursts >= 1, "8초를 이어 쐈는데 증기 폭발이 없다");
             Assert.True(knock >= 0.3f, "증기 폭발은 저항을 무시하고 한 번에 크게 줄여야 한다: " + knock);
             Assert.Equal(bursts, sim.Stats.SteamBursts);
         }
@@ -221,15 +224,15 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Steam_CoolsSlowly_SoAShortBreakKeepsTheCharge()
         {
-            // 코앞 불씨를 잡으러 1초 손을 떼도 쌓인 물은 남는다: 2초 + 1초 쉼 + 2초면 터진다.
+            // 코앞 불씨를 잡으러 1초 손을 떼도 쌓인 물은 남는다: 4초 + 1초 쉼 + 4초면 터진다(SteamHold 3, 쌓이는 속도 약 0.55/s).
             SurvivorSim sim = Quiet();
             Structure shop = Shop(sim, 6f, 0f);
             sim.Ignite(shop, 1f);
             int bursts = 0;
             float knock = 0f;
-            Hose(sim, shop, 120, true, ref bursts, ref knock);
+            Hose(sim, shop, 240, true, ref bursts, ref knock);
             Hose(sim, shop, 60, false, ref bursts, ref knock);
-            Hose(sim, shop, 120, true, ref bursts, ref knock);
+            Hose(sim, shop, 240, true, ref bursts, ref knock);
             Assert.True(bursts >= 1, "짧게 쉬었다고 쌓인 물이 날아갔다");
 
             // 오래 쉬면 다 식는다: 1.5초 + 8초 쉼 + 1.5초로는 안 터진다.
@@ -255,7 +258,7 @@ namespace FireGame.Prototypes.Tests
             ember.MaxHp = 999f;
             ember.Hp = 999f;
             bool scalded = false;
-            for (int i = 0; i < 240 && !scalded; i++)
+            for (int i = 0; i < 480 && !scalded; i++)
             {
                 sim.Aim = new Vec2(shop.Pos.X - sim.Player.X, shop.Pos.Y - sim.Player.Y);
                 sim.Spraying = true;
