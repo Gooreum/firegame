@@ -58,6 +58,12 @@ namespace FireGame.Prototypes
         private static readonly Color TurretTint = new Color(0.5f, 0.85f, 1f, 1f);
         private static readonly Color GoldTint = new Color(1f, 0.88f, 0.45f, 1f);
 
+        // 불꽃 플립북(코드로 만든다): 불씨·큰 불·다트·기름. 둥근 구름 텍스처 대신 아래 둥글고 위 뾰족한 불꽃이 흔들린다.
+        private Sprite[] _emberSheet;
+        private Sprite[] _blazeSheet;
+        private Sprite[] _dartSheet;
+        private Sprite[] _oilSheet;
+
         private readonly Transform _root;
         private readonly Transform _world;
         private readonly Camera _camera;
@@ -1747,8 +1753,8 @@ namespace FireGame.Prototypes
                 {
                     case EnemyKind.Ember:
                         _enemyGlow.Put(at, 1.4f * flicker * life, 0f, new Color(1f, 0.4f, 0.08f, 0.25f));
-                        _embers.Put(at + new Vector3(0f, 0.15f, 0f), 1.9f * flicker * punch, 0f, hit ? water : new Color(1f, 0.45f, 0.1f));
-                        if (!hit) _enemyCore.Put(at + new Vector3(0f, 0.08f, 0f), 1.1f * flicker * life, 0f, new Color(1f, 0.8f, 0.35f, 0.9f));
+                        // 흔들리는 불꽃 한 장(심은 그림에 들어 있다). 물을 맞으면 파랗게.
+                        _embers.Put(at + new Vector3(0f, 0.05f, 0f), 1.25f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_emberSheet, _time, i));
                         break;
                     case EnemyKind.Blaze:
                         _enemyGlow.Put(at, 2.4f * flicker * life, 0f, new Color(1f, 0.3f, 0.05f, 0.35f));
@@ -1762,8 +1768,11 @@ namespace FireGame.Prototypes
                             Emit(Sparks[Random.Range(0, Sparks.Length)], at, new Vector3(Random.Range(-0.8f, 0.8f), Random.Range(1.5f, 3f), 0f), 1f, 0.6f,
                                 0.35f, 0.05f, new Color(1f, 0.8f, 0.3f), new Color(1f, 0.3f, 0.05f, 0f), 0f, true);
                         }
-                        _blazes.Put(at + new Vector3(0f, 0.25f, 0f), 3.1f * flicker * punch, 0f, hit ? water : new Color(0.95f, 0.28f, 0.06f));
-                        if (!hit) _enemyCore.Put(at + new Vector3(0f, 0.12f, 0f), 1.8f * flicker * life, 0f, new Color(1f, 0.7f, 0.25f, 0.9f));
+                        // 큰 불: 어두운 밑동 위에 큰 불꽃 하나와 양옆 작은 불꽃 둘이 서로 다른 프레임으로 흔들린다.
+                        _shadows.Put(at + new Vector3(0f, 0.05f, 0f), 1.9f * life, 0f, new Color(0.18f, 0.08f, 0.04f, 0.8f), null, 0.45f);
+                        _blazes.Put(at + new Vector3(-0.55f * life, 0.05f, 0f), 1.5f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i + 3));
+                        _blazes.Put(at + new Vector3(0.55f * life, 0.05f, 0f), 1.4f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i + 5));
+                        _blazes.Put(at + new Vector3(0f, 0.1f, 0f), 2.2f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i));
                         break;
                     case EnemyKind.Squirrel:
                     {
@@ -1800,8 +1809,7 @@ namespace FireGame.Prototypes
                         float wob = 1f + (0.08f * Mathf.Sin((_time * 5f) + i));
                         _foam.Put(at + new Vector3(0f, 0.05f, 0f), 2.2f * life * wob, 0f, hit ? water : new Color(0.08f, 0.05f, 0.1f, 1f), Art.Get("Effects/glow"), 0.75f);
                         _enemyGlow.Put(at, 2.2f * flicker * life, 0f, new Color(0.85f, 0.25f, 0.75f, 0.4f));
-                        _blazes.Put(at + new Vector3(0f, 0.35f, 0f), 3.2f * flicker * punch, 0f, hit ? water : new Color(1f, 0.4f, 0.75f));
-                        if (!hit) _enemyCore.Put(at + new Vector3(0f, 0.15f, 0f), 1.2f * flicker * life, 0f, new Color(1f, 0.6f, 0.25f, 0.9f));
+                        _blazes.Put(at + new Vector3(0f, 0.15f, 0f), 1.9f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_oilSheet, _time, i));
                         if (Random.value < 0.05f)
                         {
                             Emit(Smokes[Random.Range(0, Smokes.Length)], at + new Vector3(0f, 0.7f, 0f), new Vector3(Random.Range(-0.3f, 0.3f), 1f, 0f), 0.4f, 1.4f,
@@ -1812,7 +1820,7 @@ namespace FireGame.Prototypes
                     case EnemyKind.Dart:
                         float toward = Mathf.Atan2(_sim.Player.Y - e.Pos.Y, _sim.Player.X - e.Pos.X) * Mathf.Rad2Deg;
                         _enemyGlow.Put(at, 1.5f, 0f, new Color(1f, 0.8f, 0.2f, 0.45f));
-                        _darts.Put(at, 0.9f * flicker * punch, toward + 90f, hit ? water : new Color(1f, 0.9f, 0.35f));
+                        _darts.Put(at, 0.8f * flicker * punch, toward + 90f, hit ? water : Color.white, FlameArt.Frame(_dartSheet, _time, i, 18f));
                         break;
                 }
             }
@@ -4456,6 +4464,10 @@ namespace FireGame.Prototypes
             _pools.Add(_gems);
             _pools.Add(_gemCores);
             _enemyGlow = AddPool("EnemyGlow", "Effects/glow", 8, true);
+            _emberSheet = FlameArt.Sheet("EmberFlame", 8, 0.72f, 0.35f, new Color(1f, 0.42f, 0.08f), new Color(1f, 0.85f, 0.35f));
+            _blazeSheet = FlameArt.Sheet("BlazeFlame", 12, 0.95f, 0.3f, new Color(0.95f, 0.28f, 0.06f), new Color(1f, 0.75f, 0.25f), new Color(0.3f, 0.1f, 0.05f));
+            _dartSheet = FlameArt.Sheet("DartFlame", 8, 0.45f, 0.12f, new Color(1f, 0.75f, 0.15f), new Color(1f, 1f, 0.65f));
+            _oilSheet = FlameArt.Sheet("OilFlame", 8, 0.9f, 0.3f, new Color(0.8f, 0.3f, 0.8f), new Color(1f, 0.6f, 0.3f), new Color(0.12f, 0.06f, 0.14f));
             _embers = AddPool("Ember", "Effects/fire_01", 9);
             _blazes = AddPool("Blaze", "Effects/fire_02", 9);
             _darts = AddPool("Dart", "Effects/flame_05", 9, true);
