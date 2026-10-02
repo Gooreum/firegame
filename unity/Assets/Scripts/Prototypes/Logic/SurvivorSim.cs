@@ -241,6 +241,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>주운 구급상자 수.</summary>
         public int KitsPicked;
+
+        /// <summary>대화재 감독이 올린 가장 높은 압력 단계(0~3). 높을수록 그 판은 여유가 있었다.</summary>
+        public int PressurePeak;
     }
 
     /// <summary>
@@ -261,6 +264,43 @@ namespace FireGame.Prototypes.Logic
         public const int FinalePeople = 5;
         public const float FinaleBurstEvery = 4f;
         public const int FinaleBurst = 8;
+
+        /// <summary>
+        /// 대화재 감독: 신고 틱마다 여유를 보고 압력 단계를 한 칸 올리거나 내린다(0~PressureMax).
+        /// 여유 = 체력 PressureHp 이상이고 건물을 둘 이상 더 잃어도 되는 상태. 위험 = 체력 PressureLowHp 밑이거나 한 채만 더 잃으면 패배.
+        /// 단계가 오르면 신고가 둘씩(2단계부터), 간격이 8→6.5→5→3.5초, 불씨가 8→12→16→20, 숲은 바람이 +0.1씩 거세진다.
+        /// 잘하는 사람에겐 몰아붙이고 무너질 사람에겐 숨을 주어, 누가 하든 "한두 채 여유·체력 간당간당"으로 끝나게 한다.
+        /// </summary>
+        public const int PressureMax = 3;
+        public const float PressureHp = 0.6f;
+        public const float PressureLowHp = 0.3f;
+        public const float PressureGapStep = 1.5f;
+        public const int PressureBurstStep = 4;
+        public const float PressureWindStep = 0.1f;
+
+        /// <summary>지금 압력 단계(0~PressureMax). 대화재 밖에선 0.</summary>
+        public int FinalePressure;
+
+        /// <summary>이번 틱에 압력 단계가 올랐다(알림용).</summary>
+        public bool JustPressureUp;
+
+        /// <summary>이 단계에서 대화재 신고 사이 간격(초).</summary>
+        public float FinaleReportGap
+        {
+            get { return FinaleReportEvery - (PressureGapStep * FinalePressure); }
+        }
+
+        /// <summary>이 단계에서 랜드마크가 한 번에 뿜는 불씨 수.</summary>
+        public int FinaleBurstCount
+        {
+            get { return FinaleBurst + (PressureBurstStep * FinalePressure); }
+        }
+
+        /// <summary>건물을 몇 채 더 잃어도 되는지. 패배 조건(HousesLost*2 > HousesTotal)에서 거꾸로 센다: 0이면 한 채만 더 잃어도 패배.</summary>
+        public int HousesRoom
+        {
+            get { return (HousesTotal / 2) - HousesLost; }
+        }
 
         /// <summary>이번 틱에 랜드마크가 불씨를 뿜었다.</summary>
         public bool JustBurst;
@@ -957,6 +997,7 @@ namespace FireGame.Prototypes.Logic
             ComboEnded = 0;
             JustWindShift = false;
             JustBats = false;
+            JustPressureUp = false;
             GemsCollected = 0;
             ShotsFired = 0;
             PlayerHurt = 0f;
@@ -1064,23 +1105,38 @@ namespace FireGame.Prototypes.Logic
             if (Reports && !Finale && Time >= FinaleAt) StartFinale();
             if (Finale)
             {
-                // 대화재: 8초마다 신고가 들어오고, 그 가게엔 한 명이 더 갇힌다.
+                // 대화재: 신고 틱마다 감독이 압력 단계를 정하고, 그 단계만큼 신고가 들어온다. 신고 난 가게엔 한 명이 더 갇힌다.
                 _finaleClock -= Dt;
                 if (_finaleClock <= 0f)
                 {
-                    _finaleClock = FinaleReportEvery;
-                    Structure hit = Report();
-                    if (hit != null) hit.Residents++;
-                    Stats.Events++;
+                    // 감독: 여유가 있으면 한 단계 올리고, 위험하면 한 단계 내린다. 그 단계로 다음 간격을 정한다.
+                    float hp = Hp / MaxHp;
+                    int before = FinalePressure;
+                    if (hp >= PressureHp && HousesRoom >= 2) FinalePressure = Math.Min(PressureMax, FinalePressure + 1);
+                    else if (hp < PressureLowHp || HousesRoom <= 1) FinalePressure = Math.Max(0, FinalePressure - 1);
+                    if (FinalePressure > before)
+                    {
+                        JustPressureUp = true;
+                        Stats.PressurePeak = Math.Max(Stats.PressurePeak, FinalePressure);
+                    }
+                    _finaleClock = FinaleReportGap;
+                    int reports = FinalePressure >= 2 ? 2 : 1;
+                    for (int r = 0; r < reports; r++)
+                    {
+                        Structure hit = Report();
+                        if (hit != null) hit.Residents++;
+                        Stats.Events++;
+                    }
                 }
-                // 불타는 랜드마크가 사방으로 불씨를 뿜는다(예전 보스가 하던 절정의 몸 압박).
+                // 불타는 랜드마크가 사방으로 불씨를 뿜는다(예전 보스가 하던 절정의 몸 압박). 단계가 오르면 더 많이.
                 _burstClock -= Dt;
                 if (_burstClock <= 0f && Landmark != null && Landmark.Burning)
                 {
                     _burstClock = FinaleBurstEvery;
-                    for (int k = 0; k < FinaleBurst && Enemies.Count < MaxEnemies; k++)
+                    int burst = FinaleBurstCount;
+                    for (int k = 0; k < burst && Enemies.Count < MaxEnemies; k++)
                     {
-                        double a = Math.PI * 2 * k / FinaleBurst;
+                        double a = Math.PI * 2 * k / burst;
                         Vec2 at = EdgePoint(Landmark, 0.5f);
                         Enemy e = Spawn(EnemyKind.Ember, at);
                         e.Knock = new Vec2((float)Math.Cos(a) * 6f, (float)Math.Sin(a) * 6f);
@@ -1109,6 +1165,7 @@ namespace FireGame.Prototypes.Logic
         {
             Finale = true;
             JustFinale = true;
+            FinalePressure = 0;
             _finaleClock = FinaleReportEvery;
             Stats.Events++;
             Structure mark = Structures.Find(x => x.Kind == StructureKind.Depot && !x.Collapsed) ?? PickUnburntHouse();
@@ -2307,8 +2364,8 @@ namespace FireGame.Prototypes.Logic
                         s.WindClock = WindSpreadEvery;
                         // 반쯤만 옮는다: 늘 옮기면 한 그루가 두세 그루를 태워 숲 전체가 순식간에 탄다.
                         Structure next = Downwind(s);
-                        // 대화재 동안 숲은 바람이 거세진다(캠프를 덮치는 산불).
-                        float chance = Finale ? Stage.FinaleWindChance : WindSpreadChance;
+                        // 대화재 동안 숲은 바람이 거세진다(캠프를 덮치는 산불). 감독 단계마다 더.
+                        float chance = Finale ? Stage.FinaleWindChance + (PressureWindStep * FinalePressure) : WindSpreadChance;
                         if (next != null && Rand() < chance) Ignite(next, 0.3f);
                     }
                 }

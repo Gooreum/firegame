@@ -124,6 +124,9 @@ namespace FireGame.Prototypes.Tests
             public float HousesLost;
             public float Levels;
 
+            /// <summary>대화재 감독 최고 단계 평균(0~3). 봇은 서서 못 끄므로 낮게 나온다 — 사람 판의 여유를 재는 건 폰이다.</summary>
+            public float Pressure;
+
             public override string ToString()
             {
                 return "스테이지 " + Stage + " " + SurvivorStages.Get(Stage).Name + ": 승 " + Won + " (대화재 도달 " + Reached + ")"
@@ -133,7 +136,8 @@ namespace FireGame.Prototypes.Tests
                     + " | 나무만 탄 시간 " + (TreeOnlyShare * 100f).ToString("0") + "%"
                     + " | 분당 처치 " + KillsPerMin.ToString("0")
                     + " | 최저 체력 " + (MinHp * 100f).ToString("0") + "% (위기 판 " + Crises + ")"
-                    + " | 구조 " + Rescued.ToString("0.0") + " 잃음 " + PeopleLost.ToString("0.0") + " | 무너진 건물 " + HousesLost.ToString("0.0");
+                    + " | 구조 " + Rescued.ToString("0.0") + " 잃음 " + PeopleLost.ToString("0.0") + " | 무너진 건물 " + HousesLost.ToString("0.0")
+                    + " | 감독 단계 " + Pressure.ToString("0.0");
             }
         }
 
@@ -169,6 +173,7 @@ namespace FireGame.Prototypes.Tests
                 row.Rescued += sim.Rescued;
                 row.PeopleLost += sim.CiviliansLost;
                 row.HousesLost += sim.HousesLost;
+                row.Pressure += sim.Stats.PressurePeak;
             }
             float k = 1f / seeds;
             row.LevelGap *= k;
@@ -183,6 +188,7 @@ namespace FireGame.Prototypes.Tests
             row.Rescued *= k;
             row.PeopleLost *= k;
             row.HousesLost *= k;
+            row.Pressure *= k;
             return row;
         }
 
