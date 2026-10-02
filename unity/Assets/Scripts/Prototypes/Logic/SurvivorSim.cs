@@ -53,6 +53,9 @@ namespace FireGame.Prototypes.Logic
         public int Xp;
         public float HitFlash;
         public float DroneCooldown;
+
+        /// <summary>방화복에 튕긴 뒤 다시 튕기기까지(초).</summary>
+        public float BounceCool;
         public float Slowed;
         public float Dot;
 
@@ -409,6 +412,15 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이번 틱에 산소통이 떨어져 연기를 걷어 낸 건물.</summary>
         public readonly List<Structure> OxygenHits = new List<Structure>();
+
+        /// <summary>이번 틱에 구조 도끼로 문을 부수고 여럿을 한 번에 데리고 나온 건물.</summary>
+        public readonly List<Structure> DoorBursts = new List<Structure>();
+
+        /// <summary>이번 틱에 장화가 남긴 젖은 발자국 자리(밟은 바닥 불을 끌 때, 걷는 동안 간간이).</summary>
+        public readonly List<Vec2> Footprints = new List<Vec2>();
+
+        /// <summary>이번 틱에 방화복에 닿아 튕겨 나간 불 몹 자리.</summary>
+        public readonly List<Vec2> SuitBounces = new List<Vec2>();
 
         /// <summary>이번 틱에 물·폭탄·거품에 꺼진 바닥 불 자리.</summary>
         public readonly List<Vec2> Extinguished = new List<Vec2>();
@@ -875,6 +887,9 @@ namespace FireGame.Prototypes.Logic
             Explosions.Clear();
             DroneDrops.Clear();
             OxygenHits.Clear();
+            DoorBursts.Clear();
+            Footprints.Clear();
+            SuitBounces.Clear();
             Extinguished.Clear();
             Reignited.Clear();
             Ignited.Clear();
@@ -938,7 +953,21 @@ namespace FireGame.Prototypes.Logic
             float speed = BaseSpeed * Build.SpeedScale;
             Player.X = Clamp(Player.X + (mx * speed * Dt), 0.5f, ArenaSize - 0.5f);
             Player.Y = Clamp(Player.Y + (my * speed * Dt), 0.5f, ArenaSize - 0.5f);
+            // 장화: 걷는 동안 젖은 발자국을 남긴다(연출용, 한 칸마다).
+            if (Build.WetBoots && len > 0.01f)
+            {
+                _stepDist += speed * Dt;
+                if (_stepDist >= FootprintEvery)
+                {
+                    _stepDist = 0f;
+                    Footprints.Add(Player);
+                }
+            }
         }
+
+        /// <summary>장화 발자국 간격(칸).</summary>
+        public const float FootprintEvery = 1.2f;
+        private float _stepDist;
 
         /// <summary>스폰 감독: 시간이 갈수록 많이, 1·2·3분엔 포위, 4분엔 보스.</summary>
         private void Direct()
@@ -1180,6 +1209,7 @@ namespace FireGame.Prototypes.Logic
                 if (e.Dead) continue;
                 if (e.HitFlash > 0f) e.HitFlash -= Dt;
                 if (e.DroneCooldown > 0f) e.DroneCooldown -= Dt;
+                if (e.BounceCool > 0f) e.BounceCool -= Dt;
                 if (e.Slowed > 0f) e.Slowed -= Dt;
 
                 Vec2 chase = Player;
@@ -1468,11 +1498,11 @@ namespace FireGame.Prototypes.Logic
                 }
             }
             if (!over) return;
-            // 지붕 위: 드론이 번갈아 급강하해 물폭탄을 떨어뜨린다(저항 무시 한 방). 드론이 많을수록 자주.
+            // 지붕 위: 드론마다 DroneDropEvery에 한 번씩, 번갈아 급강하해 물폭탄을 떨어뜨린다(저항 무시 한 방).
             _droneDrop -= Dt;
             if (_droneDrop <= 0f && target.Burning)
             {
-                _droneDrop = DroneDropEvery - (0.3f * (drones - 1));
+                _droneDrop = DroneDropEvery / drones;
                 Vec2 from = Drones[_droneTurn % Drones.Count];
                 _droneTurn++;
                 Shots.Add(new Shot { Kind = ShotKind.Bomb, From = from, Pos = from, Target = target.Pos, Life = 0.35f, Damage = 6f, Radius = 1.6f, Drone = true });
@@ -1867,9 +1897,9 @@ namespace FireGame.Prototypes.Logic
         public const float PartnerHit = 4f;
         public const float DroneWater = 0.05f;
 
-        /// <summary>순찰 드론 투하 간격(초, Lv마다 −0.3)과 물폭탄 하나가 끄는 불 세기(저항 무시).</summary>
+        /// <summary>순찰 드론 한 대의 투하 간격(초. 드론이 n대면 n배 자주)과 물폭탄 하나가 끄는 불 세기(저항 무시).</summary>
         public const float DroneDropEvery = 2.5f;
-        public const float DroneDropWater = 0.2f;
+        public const float DroneDropWater = 0.25f;
 
         /// <summary>산소통을 던지는 범위와 보호 시간(초).</summary>
         public const float OxygenRange = 12f;
@@ -2008,7 +2038,21 @@ namespace FireGame.Prototypes.Logic
             foreach (Puddle p in BurningGround)
             {
                 p.Life -= Dt;
-                if (p.Pos.DistanceTo(Player) <= p.Radius + PlayerRadius) Burn(10f * Dt);
+                if (p.Pos.DistanceTo(Player) <= p.Radius + PlayerRadius)
+                {
+                    // 장화: 불 바닥을 밟아도 안 다치고, 밟은 자리는 꺼진다.
+                    if (Build.WetBoots)
+                    {
+                        if (!p.Out)
+                        {
+                            p.Out = true;
+                            p.Life = 0f;
+                            Extinguished.Add(p.Pos);
+                            Footprints.Add(Player);
+                        }
+                    }
+                    else Burn(10f * Dt);
+                }
                 if (!p.Oil || p.Out || p.Life <= 0f) continue;
                 // 기름 불은 닿은 탈 것에 옮겨붙는다: 건물 곁에서 기름 방울을 터뜨리면 건물이 탄다.
                 foreach (Structure st in Structures)
@@ -2401,9 +2445,22 @@ namespace FireGame.Prototypes.Logic
         private void TouchPlayer()
         {
             Near(Player, PlayerRadius, _near);
-            // 적은 전부 불이다: 방화복이 닿는 피해도 줄인다.
-            foreach (Enemy e in _near) Burn(e.Touch * Dt);
+            // 적은 전부 불이다: 방화복이 닿는 피해도 줄이고, 닿은 불 몹을 튕겨 낸다.
+            float push = Build.SuitPush;
+            foreach (Enemy e in _near)
+            {
+                Burn(e.Touch * Dt);
+                if (push <= 0f || e.BounceCool > 0f) continue;
+                e.BounceCool = SuitBounceCool;
+                Vec2 k = Knockback(Player, e.Pos, push);
+                e.Knock.X += k.X;
+                e.Knock.Y += k.Y;
+                SuitBounces.Add(e.Pos);
+            }
         }
+
+        /// <summary>방화복에 튕긴 불 몹이 다시 튕기기까지(초).</summary>
+        public const float SuitBounceCool = 0.3f;
 
         /// <summary>이번 틱 열기로 받은 피해(그림용).</summary>
         public float HeatHurt;
@@ -2763,11 +2820,15 @@ namespace FireGame.Prototypes.Logic
             return s.Integrity * (s.IsBuilding ? BurnBuilding : BurnSmall) / s.Fire;
         }
 
+        /// <summary>갇힌 사람을 데리고 나온다(문 앞 구조·구조 드론). 구조 도끼가 있으면 문을 부수고 한 번에 여럿.</summary>
         private void RescueOne(Structure s)
         {
-            s.Residents--;
-            Rescued++;
-            Xp += 20;
+            int n = Math.Min(s.Residents, 1 + Build.AxeExtra);
+            if (n <= 0) return;
+            s.Residents -= n;
+            Rescued += n;
+            Xp += 20 * n;
+            if (n > 1) DoorBursts.Add(s);
             // 무너지기 직전의 구조는 더 값지다.
             if (TimeToFall(s) <= CloseCallAt)
             {
@@ -2788,7 +2849,7 @@ namespace FireGame.Prototypes.Logic
             JustRescued = true;
             Stats.Events++;
             RescuedFrom.Add(s);
-            Civilians.Add(new Civilian { Pos = s.Door, Life = 1.5f });
+            for (int k = 0; k < n; k++) Civilians.Add(new Civilian { Pos = new Vec2(s.Door.X + ((k - ((n - 1) / 2f)) * 0.5f), s.Door.Y), Life = 1.5f });
         }
 
         private void Damage(Enemy e, float amount, Vec2 knock, bool show, HitSource source = HitSource.Hose, Vec2 from = default)

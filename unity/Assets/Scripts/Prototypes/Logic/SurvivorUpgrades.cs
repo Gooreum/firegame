@@ -269,7 +269,17 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>구조 도끼: 구조 시간 배율(레벨마다 ×0.82: Lv1 −18%, Lv5 −63%). −15%씩 빼는 식은 아이템 측정에서 가장 약했다.</summary>
         /// 장화도 레벨마다 ×0.95: 빨리 뛰어 들어가 빨리 데리고 나온다(장화만 들면 구조가 줄어 쓰레기템이었다).
-        public float RescueScale { get { return (float)(Math.Pow(0.82, Level(UpgradeId.Axe)) * Math.Pow(0.95, Level(UpgradeId.Boots))); } }
+        /// <summary>구조 시간 배율. 도끼는 이제 시간을 줄이는 대신 한 번에 여럿을 데리고 나온다(AxeExtra).</summary>
+        public float RescueScale { get { return 1f; } }
+
+        /// <summary>구조 도끼: 문을 부수고 한 번 구조에 더 데리고 나오는 사람 수. Lv1 +1, Lv3 +2, Lv5 +3.</summary>
+        public int AxeExtra { get { int l = Level(UpgradeId.Axe); return l >= 5 ? 3 : l >= 3 ? 2 : l >= 1 ? 1 : 0; } }
+
+        /// <summary>방화복: 닿은 불 몹을 튕겨 내는 힘. 없으면 0.</summary>
+        public float SuitPush { get { int l = Level(UpgradeId.Suit); return l > 0 ? 3f + l : 0f; } }
+
+        /// <summary>장화: 불 바닥을 밟아도 안 다치고 밟은 자리를 끈다.</summary>
+        public bool WetBoots { get { return Level(UpgradeId.Boots) > 0; } }
 
         /// <summary>연기 시계 배율. 산소통은 이제 수동 배율이 아니라 산소통을 던진다(OxygenEvery).</summary>
         public float SmokeScale { get { return 1f; } }

@@ -100,6 +100,9 @@ namespace FireGame.Prototypes.Tests
         {
             public int Stage;
             public int Won;
+
+            /// <summary>대화재(3:00)까지 간 판 수.</summary>
+            public int Reached;
             public float LevelGap;
             public float IdleShare;
             public float EventsPerMin;
@@ -122,7 +125,7 @@ namespace FireGame.Prototypes.Tests
 
             public override string ToString()
             {
-                return "스테이지 " + Stage + " " + SurvivorStages.Get(Stage).Name + ": 승 " + Won
+                return "스테이지 " + Stage + " " + SurvivorStages.Get(Stage).Name + ": 승 " + Won + " (대화재 도달 " + Reached + ")"
                     + " | 레벨업 간격 " + LevelGap.ToString("0.0") + "초 (Lv " + Levels.ToString("0.0") + ")"
                     + " | 빈 시간 " + (IdleShare * 100f).ToString("0") + "%"
                     + " | 분당 사건 " + EventsPerMin.ToString("0.0")
@@ -149,6 +152,7 @@ namespace FireGame.Prototypes.Tests
                 int guard = 0;
                 while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) bot.Play();
                 if (sim.Outcome == SOutcome.Won) row.Won++;
+                if (sim.Finale) row.Reached++;
                 float minutes = Math.Max(sim.Time, 1f) / 60f;
                 int n = sim.Stats.LevelTimes.Count;
                 row.LevelGap += n > 0 ? sim.Stats.LevelTimes[n - 1] / n : sim.Time;

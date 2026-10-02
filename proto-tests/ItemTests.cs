@@ -274,11 +274,110 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Axe_MakesRescueFaster()
+        public void Axe_BringsOutTwoAtOnce()
         {
+            // 도끼 없이는 한 명씩, 구조 시간은 그대로 1.2초.
             float plain = TimeToRescue(0);
-            float axe = TimeToRescue(2);
-            Assert.InRange(axe / plain, 0.62f, 0.72f);
+            Assert.InRange(plain, SurvivorSim.RescueTime - 0.05f, SurvivorSim.RescueTime + 0.1f);
+            Assert.Equal(1f, new Loadout().RescueScale);
+
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 0f, 5f, 3);
+            sim.Ignite(shop, 0.3f);
+            sim.Player = shop.Door;
+            Take(sim, UpgradeId.Axe);
+            int xp = sim.Xp;
+            int level = sim.Level;
+            int need = sim.XpToNext;
+            bool burst = false;
+            for (int i = 0; i < 600 && sim.Rescued == 0; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                xp = sim.Xp;
+                level = sim.Level;
+                need = sim.XpToNext;
+                sim.Step(0f, 0f);
+                burst = sim.DoorBursts.Contains(shop);
+            }
+            Assert.Equal(2, sim.Rescued);
+            Assert.Equal(1, shop.Residents);
+            Assert.True(burst, "문을 부순 신호가 없다");
+            Assert.Equal(40, sim.Xp - xp + (sim.Level > level ? need : 0));
+            Assert.Equal(2, sim.Civilians.Count);
+
+            // 남은 사람보다 많이 세지 않는다: Lv5 도끼(+3)라도 2명 남았으면 2명.
+            SurvivorSim two = Quiet();
+            Structure small = Shop(two, 0f, 5f, 2);
+            two.Ignite(small, 0.3f);
+            two.Player = small.Door;
+            Take(two, UpgradeId.Axe, 5);
+            for (int i = 0; i < 600 && two.Rescued == 0; i++)
+            {
+                two.Hp = two.MaxHp;
+                if (two.PendingChoices != null) two.Choose(NoPartner(two.PendingChoices));
+                two.Step(0f, 0f);
+            }
+            Assert.Equal(2, two.Rescued);
+            Assert.Equal(0, small.Residents);
+        }
+
+        [Fact]
+        public void Boots_WalkOverGroundFire_PutsItOutUnharmed()
+        {
+            SurvivorSim sim = Quiet();
+            sim.BurningGround.Add(new Puddle { Pos = sim.Player, Radius = 0.9f, Life = 5f, MaxLife = 5f });
+            Take(sim, UpgradeId.Boots);
+            int prints = 0;
+            int outs = 0;
+            for (int i = 0; i < 60; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+                prints += sim.Footprints.Count;
+                outs += sim.Extinguished.Count;
+            }
+            Assert.Equal(0f, sim.Stats.DamageTaken);
+            Assert.True(prints >= 1, "발자국이 없다");
+            Assert.True(outs >= 1, "밟은 바닥 불이 꺼졌다는 신호가 없다");
+            Assert.DoesNotContain(sim.BurningGround, p => !p.Out && p.Life > 0f);
+
+            // 장화 없이는 데고, 불도 남는다.
+            SurvivorSim plain = Quiet();
+            plain.BurningGround.Add(new Puddle { Pos = plain.Player, Radius = 0.9f, Life = 5f, MaxLife = 5f });
+            for (int i = 0; i < 60; i++)
+            {
+                plain.Enemies.Clear();
+                plain.Step(0f, 0f);
+            }
+            Assert.True(plain.Stats.DamageTaken > 0f);
+            Assert.Contains(plain.BurningGround, p => !p.Out && p.Life > 0f);
+        }
+
+        [Fact]
+        public void Suit_BouncesTouchingEmbers()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Suit);
+            Enemy ember = sim.Spawn(EnemyKind.Ember, new Vec2(sim.Player.X + 0.3f, sim.Player.Y));
+            ember.Speed = 0f;
+            ember.MaxHp = 999f;
+            ember.Hp = 999f;
+            sim.Step(0f, 0f);
+            Assert.Single(sim.SuitBounces);
+            Assert.True(ember.Knock.X > 0f, "불씨가 플레이어 반대쪽으로 튕겨야 한다");
+            // 0.3초 안에는 같은 불씨를 다시 안 튕긴다.
+            ember.Pos = new Vec2(sim.Player.X + 0.3f, sim.Player.Y);
+            sim.Step(0f, 0f);
+            Assert.Empty(sim.SuitBounces);
+
+            SurvivorSim plain = Quiet();
+            Enemy e2 = plain.Spawn(EnemyKind.Ember, new Vec2(plain.Player.X + 0.3f, plain.Player.Y));
+            e2.Speed = 0f;
+            e2.MaxHp = 999f;
+            e2.Hp = 999f;
+            plain.Step(0f, 0f);
+            Assert.Empty(plain.SuitBounces);
+            Assert.Equal(0f, e2.Knock.X);
         }
 
         /// <summary>큰 불 속에 갇힌 한 명을 연기로 잃기까지 걸린 초.</summary>
