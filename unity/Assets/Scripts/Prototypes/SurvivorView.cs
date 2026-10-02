@@ -1754,7 +1754,7 @@ namespace FireGame.Prototypes
                     case EnemyKind.Ember:
                         _enemyGlow.Put(at, 1.4f * flicker * life, 0f, new Color(1f, 0.4f, 0.08f, 0.25f));
                         // 흔들리는 불꽃 한 장(심은 그림에 들어 있다). 물을 맞으면 파랗게.
-                        _embers.Put(at + new Vector3(0f, 0.05f, 0f), 1.25f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_emberSheet, _time, i));
+                        _embers.Put(at + new Vector3(0f, 0.05f, 0f), 1.05f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_emberSheet, _time, i));
                         break;
                     case EnemyKind.Blaze:
                         _enemyGlow.Put(at, 2.4f * flicker * life, 0f, new Color(1f, 0.3f, 0.05f, 0.35f));
@@ -1772,7 +1772,7 @@ namespace FireGame.Prototypes
                         _shadows.Put(at + new Vector3(0f, 0.05f, 0f), 1.9f * life, 0f, new Color(0.18f, 0.08f, 0.04f, 0.8f), null, 0.45f);
                         _blazes.Put(at + new Vector3(-0.55f * life, 0.05f, 0f), 1.5f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i + 3));
                         _blazes.Put(at + new Vector3(0.55f * life, 0.05f, 0f), 1.4f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i + 5));
-                        _blazes.Put(at + new Vector3(0f, 0.1f, 0f), 2.2f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i));
+                        _blazes.Put(at + new Vector3(0f, 0.1f, 0f), 2f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i));
                         break;
                     case EnemyKind.Squirrel:
                     {
@@ -2075,7 +2075,7 @@ namespace FireGame.Prototypes
                     _foam.Put(at, p.Radius * 3.4f, 0f, new Color(0.07f, 0.05f, 0.09f, 0.95f * Mathf.Max(t, 0.5f)), Art.Get("Effects/glow"), 0.8f);
                     _groundGlow.Put(at, p.Radius * 3f * warn, 0f, new Color(0.9f, 0.2f, 0.8f, 0.45f * t));
                     float flick = 0.55f + (0.15f * Mathf.Sin((_time * 14f) + i));
-                    _groundFire.Put(at, flick * (0.8f + (0.4f * t)) * big * 1.3f, 0f, new Color(1f, 0.45f, 0.85f, t), Art.Get("Effects/fire_01"));
+                    _groundFire.Put(at + new Vector3(0f, 0.25f * big, 0f), flick * (0.7f + (0.4f * t)) * big, 0f, new Color(1f, 1f, 1f, t), FlameArt.Frame(_oilSheet, _time, i), 0.8f);
                     continue;
                 }
                 _groundGlow.Put(at, p.Radius * 2.4f * warn, 0f, new Color(1f, 0.3f, 0.05f, 0.4f * t));
@@ -2084,7 +2084,8 @@ namespace FireGame.Prototypes
                     float a = (k * 2.1f) + i;
                     Vector3 o = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.4f;
                     float f = 0.6f + (0.15f * Mathf.Sin((_time * 16f) + (k * 2f) + i));
-                    _groundFire.Put(at + (o * big), f * (0.6f + (0.5f * t)) * big, 0f, new Color(1f, 0.62f, 0.25f, t), Art.Get(k == 0 ? "Effects/fire_01" : "Effects/fire_02"));
+                    // 납작하게 누운 불꽃 플립북 셋(불씨 시트). 세로를 눌러 바닥에 깔린 듯 보인다.
+                    _groundFire.Put(at + (o * big) + new Vector3(0f, 0.2f * big, 0f), f * (0.55f + (0.45f * t)) * big, 0f, new Color(1f, 1f, 1f, t), FlameArt.Frame(_emberSheet, _time, i + (k * 3)), 0.75f);
                 }
             }
         }
@@ -4388,9 +4389,8 @@ namespace FireGame.Prototypes
                 float oy = (Hash01((seed * 17) + (k * 5)) - 0.5f) * h * 0.75f;
                 float flick = 0.85f + (0.2f * Mathf.Sin((_time * (11f + k)) + (k * 1.9f)));
                 float size = (0.8f + (1.3f * f)) * flick * (st.IsBuilding ? 1f : 0.8f);
-                // 밝은 속불(더해 그리기)을 겹쳐 도트 화면에서도 주황으로 타오르게.
-                _enemyCore.Put(at + new Vector3(ox, oy, 0f), size * 0.7f, 0f, new Color(1f, 0.75f, 0.3f, 0.9f));
-                _roofFire.Put(at + new Vector3(ox, oy, 0f), size, 0f, new Color(1f, 0.5f + (0.2f * Hash01(k + seed)), 0.12f), Art.Get(k % 2 == 0 ? "Effects/fire_02" : "Effects/fire_01"));
+                // 지붕 위에 선 불꽃 플립북(큰 불 시트). 프레임은 불마다 다른 위상으로 돈다.
+                _roofFire.Put(at + new Vector3(ox, oy, 0f), size * 0.8f, 0f, Color.white, FlameArt.Frame(_blazeSheet, _time, seed + (k * 5), 10f + k));
             }
             if (Random.value < 0.04f + (0.12f * f))
             {
