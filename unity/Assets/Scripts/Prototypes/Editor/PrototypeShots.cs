@@ -226,7 +226,7 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.Enemies.Clear();
                 view.Sim.Kits.Add(new Pickup { Pos = new Vec2(view.Sim.Player.X + 3f, view.Sim.Player.Y), Life = 20f });
             });
-            // 마감 게이지: 큰 불 속 2명, 연기가 6초 쌓여 "7초 · 2명"이 붉게.
+            // 진압 게이지 + 마감 바: 불 0.7(게이지 30%) 속 2명, 연기가 6초 쌓여 밑의 마감 바에 "7초 · 2명"이 붉게.
             failures += SurvivorShot(dir, "c48_deadline", view => view.Sim.Time > 0.5f, 4, false,
                 view => { Structure near = NearestHouse(view); view.Frame(new Vector3(near.Pos.X, near.Pos.Y - 1f, 0f), 7f); }, 1, view =>
             {
@@ -235,6 +235,16 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.Ignite(near, 0.7f);
                 near.Smoke = 6f;
                 view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 4f);
+            });
+            // 진압 게이지: 다 탄 건물(0%, 주황 일렁임)에 증기 충전이 80%쯤 찬 흰 금.
+            failures += SurvivorShot(dir, "c52_douse_gauge", view => view.Sim.Time > 0.5f, 4, false,
+                view => { Structure near = NearestHouse(view); view.Frame(new Vector3(near.Pos.X, near.Pos.Y - 1f, 0f), 7f); }, 1, view =>
+            {
+                Structure near = NearestHouse(view);
+                near.Residents = 0;
+                view.Sim.Ignite(near, 1f);
+                near.HoseHold = SurvivorSim.SteamHold * 0.8f;
+                view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 3f);
             });
             failures += SurvivorShot(dir, "c43_boots", view =>
             {

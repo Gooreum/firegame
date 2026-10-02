@@ -4317,24 +4317,36 @@ namespace FireGame.Prototypes
 
             if (st.Burning) DrawRoofFire(st, at, w, h, seed, hgt);
 
-            // 타는 동안은 마감 게이지(언제까지 꺼야 하나: 사람이 있으면 첫 사람을 잃기까지, 없으면 무너지기까지 ÷ 30초).
-            // 꺼진 뒤 손상이 남았으면 튼튼함 막대(초록→빨강). 둘 다 카메라를 보고 선다.
+            // 타는 동안은 위에 진압 게이지(파란 물이 차오른다 = 1 − 불 세기, 다 차면 꺼진다), 그 밑에 증기 충전 금,
+            // 맨 밑에 얇은 마감 바(언제까지 꺼야 하나: 사람이 있으면 첫 사람을 잃기까지, 없으면 무너지기까지 ÷ 30초).
+            // 꺼진 뒤 손상이 남았으면 튼튼함 막대(초록→빨강). 모두 카메라를 보고 선다.
             float bw = w * 0.8f;
             Vector3 bar = at + new Vector3(0f, st.Half.Y * 0.6f, 0f) + Up(hgt + 0.9f);
             if (st.Burning)
             {
+                Vector3 front = Billboard * new Vector3(0f, 0f, -0.01f);
+                float put = Mathf.Clamp01(1f - st.Fire);
+                _bars.PutRot(bar, Billboard, bw + 0.08f, 0.3f, new Color(0f, 0f, 0f, 0.8f));
+                _bars.PutRot(bar + new Vector3(-(bw * (1f - put)) / 2f, 0f, 0f) + front, Billboard, Mathf.Max(0.01f, bw * put), 0.22f,
+                    Color.Lerp(new Color(0.3f, 0.6f, 1f), new Color(0.55f, 0.9f, 1f), put));
+                // 안 찬 자리는 불빛으로 일렁인다: "아직 이만큼 탄다". 한 방 물(증기·물폭탄)이 들어오면 한 칸이 확 찬다.
+                float rest = bw * (1f - put);
+                if (rest > 0.02f) _bars.PutRot(bar + new Vector3((bw * put) / 2f, 0f, 0f) + front, Billboard, rest, 0.22f,
+                    new Color(1f, 0.45f + (0.2f * Mathf.Sin((_time * 9f) + seed)), 0.15f, 0.9f));
+                // 마감: 얇은 바(초록→빨강), 5초 밑이면 깜빡. 글자는 게이지 안 한 줄("30%", 10초 밑이면 "30% · 7초 · 2명" — 밑엔 "살려줘!" 말풍선이 있다).
                 float left = _sim.Deadline(st);
                 float fill = Mathf.Clamp01(left / DeadlineShown);
+                bool urgent = left < 10f;
+                string label = Mathf.RoundToInt(put * 100f) + "%" + (urgent ? " · " + Mathf.CeilToInt(left) + "초" + (st.Residents > 0 ? " · " + st.Residents + "명" : "") : "");
+                Tag(bar + (Billboard * new Vector3(0f, 0f, -0.03f)), label, urgent ? new Color(1f, 0.75f, 0.65f) : Color.white, 0.032f);
+                // 증기 충전: 게이지 바로 밑 흰 금. 다 차면 증기 폭발로 한 칸이 찬다.
+                float charge = Mathf.Clamp01(st.HoseHold / SurvivorSim.SteamHold);
+                if (charge > 0.02f) _bars.PutRot(bar + Up(-0.2f) + new Vector3(-(bw * (1f - charge)) / 2f, 0f, 0f) + front, Billboard, bw * charge, 0.07f, new Color(1f, 1f, 1f, 0.85f));
+                Vector3 dl = bar + Up(-0.34f);
                 bool blink = left < 5f && Mathf.Sin(_time * 10f) < 0f;
-                _bars.PutRot(bar, Billboard, bw + 0.08f, 0.26f, new Color(0f, 0f, 0f, 0.75f));
-                _bars.PutRot(bar + new Vector3(-(bw * (1f - fill)) / 2f, 0f, 0f) + (Billboard * new Vector3(0f, 0f, -0.01f)), Billboard, Mathf.Max(0.01f, bw * fill), 0.18f,
+                _bars.PutRot(dl, Billboard, bw + 0.08f, 0.14f, new Color(0f, 0f, 0f, 0.7f));
+                _bars.PutRot(dl + new Vector3(-(bw * (1f - fill)) / 2f, 0f, 0f) + front, Billboard, Mathf.Max(0.01f, bw * fill), 0.09f,
                     blink ? Color.white : Color.Lerp(new Color(1f, 0.2f, 0.1f), new Color(0.45f, 0.95f, 0.4f), fill));
-                if (!float.IsInfinity(left))
-                {
-                    // 글자는 막대 안에(위엔 "살려줘!" 말풍선이 있다).
-                    string label = Mathf.CeilToInt(left) + "초" + (st.Residents > 0 ? " · " + st.Residents + "명" : "");
-                    Tag(bar + (Billboard * new Vector3(0f, 0f, -0.03f)), label, fill < 0.3f ? new Color(1f, 0.75f, 0.65f) : Color.white, 0.032f);
-                }
             }
             else if (st.Integrity < 0.999f)
             {
