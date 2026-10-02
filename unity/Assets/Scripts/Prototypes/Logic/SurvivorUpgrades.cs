@@ -405,16 +405,16 @@ namespace FireGame.Prototypes.Logic
             {
                 case UpgradeId.Hose: return fresh ? "겨눈 쪽으로 물줄기를 뿜는다" : "물줄기 굵기·세기 +45%, 사거리 +10%";
                 case UpgradeId.WaterBomb: return fresh ? "불난 건물(없으면 불 떼)에 물폭탄을 던진다" : "폭탄 +1, 범위 +15%";
-                case UpgradeId.Drone: return fresh ? "드론이 가까운 불난 건물로 날아가 물을 뿌린다" : "드론 +1, 물 +20%";
-                case UpgradeId.Partner: return fresh ? "대원이 갇힌 사람에게 달려가 불을 끄며 구한다" : nextLevel == 3 ? "대원 +1 (2명)" : nextLevel == 5 ? "대원 +1 (3명)" : "구조·물줄기 +25%";
+                case UpgradeId.Drone: return fresh ? "드론이 가장 센 불난 건물로 날아가 2.5초마다 물폭탄을 투하한다" : "드론 +1 (투하가 그만큼 잦아진다)";
+                case UpgradeId.Partner: return fresh ? "대원이 갇힌 사람에게 달려가 불을 끄며 구한다" : nextLevel == 3 ? "대원 +1 (2명)" : nextLevel == 5 ? "대원 +1 (3명)" : nextLevel == 2 ? "구조·물줄기 +25%" : "물줄기 +25%";
                 case UpgradeId.Curtain: return fresh ? "몇 초마다 몸 주위로 물 고리가 터져 불을 밀어낸다" : "고리 범위 +0.5칸, 간격 −0.4초";
-                case UpgradeId.Turret: return fresh ? "7초마다 선 자리에 포탑을 세운다. 곁 불을 쏜다" : nextLevel == 3 || nextLevel == 5 ? "포탑 +1" : "포탑 지속 +1초";
-                case UpgradeId.Tank: return "물줄기가 더 멀리, 더 세게 (+15%)";
-                case UpgradeId.Boots: return "이동 속도 +12%, 구조 시간 −5%";
-                case UpgradeId.Radio: return fresh ? "다음 신고를 2초 먼저 알려 준다. 구슬 범위 +20%" : "신고 예고 +1초, 구슬 범위 +20%";
-                case UpgradeId.Axe: return "구조 시간 −18%";
-                case UpgradeId.Oxygen: return "갇힌 사람이 연기를 20% 더 오래 버틴다";
-                case UpgradeId.Suit: return "불에 받는 피해(열기·불 몹) −15%, 최대 체력 +10";
+                case UpgradeId.Turret: return fresh ? "7초마다 선 자리에 포탑을 세운다. 곁 불을 쏜다" : nextLevel == 3 || nextLevel == 5 ? "포탑 +1, 지속 +1초" : "포탑 지속 +1초";
+                case UpgradeId.Tank: return "물줄기 사거리·세기 +15%, 증기 폭발이 25% 빨리 차고 0.5칸 넓어진다";
+                case UpgradeId.Boots: return fresh ? "이동 +12%. 불 바닥을 밟아도 안 다치고 밟은 자리를 끈다" : "이동 속도 +12%";
+                case UpgradeId.Radio: return fresh ? "다음 신고를 2초 먼저 알려 준다. 그 건물 곁에 미리 가 있으면 선제 출동: 불이 작게 붙고 구슬 10" : "신고 예고 +1초, 구슬 범위 +20%";
+                case UpgradeId.Axe: return fresh ? "문을 부수고 한 번에 2명을 데리고 나온다" : nextLevel == 3 ? "한 번에 3명" : nextLevel == 5 ? "한 번에 4명" : "문이 더 세게 터진다";
+                case UpgradeId.Oxygen: return fresh ? "6초마다 가까운 갇힌 건물에 산소통을 던져 연기를 걷어 낸다" : "산소통 간격 −0.5초";
+                case UpgradeId.Suit: return fresh ? "불 피해 −15%, 최대 체력 +10. 닿은 불 몹이 튕겨 나간다" : "불 피해 −15%, 최대 체력 +10, 더 세게 튕긴다";
                 case UpgradeId.Cannon: return "진화! 관통하는 물줄기가 사방을 휩쓴다";
                 case UpgradeId.Squad: return "진화! 대원 4명이 흩어져 여러 건물을 동시에 구한다";
                 case UpgradeId.AirBomb: return "진화! 맵 어디든 불난 건물마다 소화탄이 떨어진다";

@@ -341,6 +341,21 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void Describe_MentionsTheVisibleAction()
+        {
+            Assert.Contains("투하", SurvivorUpgrades.Describe(UpgradeId.Drone, 1));
+            Assert.Contains("물줄기 +25%", SurvivorUpgrades.Describe(UpgradeId.Partner, 4));
+            Assert.DoesNotContain("구조", SurvivorUpgrades.Describe(UpgradeId.Partner, 4));
+            foreach (int lv in new[] { 2, 3, 4, 5 }) Assert.Contains("지속 +1초", SurvivorUpgrades.Describe(UpgradeId.Turret, lv));
+            Assert.Contains("증기", SurvivorUpgrades.Describe(UpgradeId.Tank, 1));
+            Assert.Contains("불 바닥", SurvivorUpgrades.Describe(UpgradeId.Boots, 1));
+            Assert.Contains("선제 출동", SurvivorUpgrades.Describe(UpgradeId.Radio, 1));
+            Assert.Contains("한 번에 2명", SurvivorUpgrades.Describe(UpgradeId.Axe, 1));
+            Assert.Contains("산소통을 던져", SurvivorUpgrades.Describe(UpgradeId.Oxygen, 1));
+            Assert.Contains("튕겨", SurvivorUpgrades.Describe(UpgradeId.Suit, 1));
+        }
+
+        [Fact]
         public void Radio_ForecastsTheNextReport()
         {
             var sim = new SurvivorSim(1);
