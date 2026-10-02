@@ -1345,6 +1345,7 @@ namespace FireGame.Prototypes
                 SpawnText(W(_sim.Player) + new Vector3(0f, 1.3f, 0f), suit ? "방화복이 막는다" : "뜨거워!", suit ? new Color(1f, 0.85f, 0.4f) : new Color(1f, 0.4f, 0.2f), 1f);
             }
             if (_sim.JustWindShift) ShowAlert("바람이 " + WindName(_sim.Wind) + "쪽으로!", new Color(0.8f, 0.9f, 1f));
+            if (_sim.JustPressureUp) ShowAlert("불길이 거세진다!", new Color(1f, 0.5f, 0.2f));
             if (_sim.JustBats)
             {
                 ShowAlert("재 박쥐 떼가 날아온다!", new Color(1f, 0.55f, 0.4f));
@@ -5097,7 +5098,8 @@ namespace FireGame.Prototypes
                 }
                 else
                 {
-                    _bossName.text = "대화재 · 끝까지 지켜라";
+                    // 감독 단계가 오르면 이름 칸에 보인다: "지금 몰아붙이는 중"을 알아야 버틸 각오가 선다.
+                    _bossName.text = _sim.FinalePressure > 0 ? "대화재 · 불길 " + _sim.FinalePressure + "단계 · 끝까지 지켜라" : "대화재 · 끝까지 지켜라";
                     float left = Mathf.Clamp01((SurvivorSim.RunTime - _sim.Time) / (SurvivorSim.RunTime - SurvivorSim.FinaleAt));
                     _bossFill.rectTransform.localScale = new Vector3(left, 1f, 1f);
                     _bossFill.color = new Color(1f, 0.45f, 0.1f);
