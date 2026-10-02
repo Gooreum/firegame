@@ -300,7 +300,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>
         /// 카드 3장을 뽑는다. 진화할 수 있으면 그 진화 하나를 반드시 넣는다.
         /// 아니면 <paramref name="level"/>(새 레벨)이 5의 배수일 때 노란 특수 장비를 반드시 한 장 넣는다.
-        /// 뽑을 게 모자라면 회복으로 채운다. <paramref name="specialPool"/>가 있으면 노란 카드는 그 안에서만 나온다.
+        /// 뽑을 게 모자라면 그만큼만 준다(0장일 수도). <paramref name="specialPool"/>가 있으면 노란 카드는 그 안에서만 나온다.
         /// <paramref name="forceSpecial"/>이면(보물상자 첫 장) 노란 카드를 반드시 넣는다.
         /// </summary>
         public static List<UpgradeId> Roll(Loadout loadout, int level, ref Rng rng, IList<UpgradeId> specialPool = null, bool forceSpecial = false)
@@ -326,7 +326,7 @@ namespace FireGame.Prototypes.Logic
                 picks.Add(pool[k]);
                 pool.RemoveAt(k);
             }
-            if (picks.Count < 3) picks.Add(UpgradeId.Heal);
+            // 뽑을 게 모자라면 그만큼만. 회복으로 채우지 않는다(회복은 바닥 구급상자로).
             return picks;
         }
 

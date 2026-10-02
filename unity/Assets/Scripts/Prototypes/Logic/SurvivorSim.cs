@@ -238,6 +238,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>방화복을 안 입었다면 받았을 불 피해(열기·바닥 불·불 몹 접촉의 원값). DamageTaken과 비교하면 방화복이 얼마나 막았는지 나온다.</summary>
         public float FireDamageRaw;
+
+        /// <summary>주운 구급상자 수.</summary>
+        public int KitsPicked;
     }
 
     /// <summary>
@@ -376,6 +379,23 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이번 틱에 공구상자를 주웠다(고칠 건물이 없어 체력을 채운 경우도).</summary>
         public bool JustPickedToolbox;
+
+        /// <summary>
+        /// 구급상자: 40~80초 무작위 간격으로, 바닥에 없고 체력이 90% 미만일 때만 소방관 5~10칸 빈 땅에 떨어진다.
+        /// 25초 뒤 사라지고 밟으면 체력 +35. 카드로는 안 나온다(레벨업 공짜 회복을 없앤 자리).
+        /// </summary>
+        public const float KitMin = 40f;
+        public const float KitMax = 80f;
+        public const float KitLife = 25f;
+        public const float KitHeal = 35f;
+        public const float KitBelow = 0.9f;
+        public readonly List<Pickup> Kits = new List<Pickup>();
+
+        /// <summary>이번 틱에 구급상자를 주웠다.</summary>
+        public bool JustPickedKit;
+        private float _kitClock;
+        /// <summary>구급상자 타이머 전용 난수. 본 난수를 건드리면 같은 시드의 판이 바뀌어 측정·캡처가 흔들린다.</summary>
+        private Rng _kitRng;
         /// <summary>지금 진행 중인 대형 신고 건물(없으면 null).</summary>
         public Structure BigReport;
 
@@ -668,6 +688,8 @@ namespace FireGame.Prototypes.Logic
             Stage = SurvivorStages.Get(stage);
             Structures = Stage.Map();
             _rng = new Rng(seed == 0 ? 1 : seed);
+            _kitRng = new Rng(((seed == 0 ? 1 : seed) * 7919) + 13);
+            _kitClock = NextKitWait();
             foreach (UpgradeId id in start ?? DefaultStart) Build.Add(id);
             // 방화복으로 시작하면 최대 체력이 다르다.
             Hp = MaxHp;
@@ -743,6 +765,7 @@ namespace FireGame.Prototypes.Logic
             TickHeat();
             CollectGems();
             TickToolboxes();
+            TickKits();
             TickRescue();
             TickChests();
             if (Combo > 0)
@@ -785,7 +808,9 @@ namespace FireGame.Prototypes.Logic
                 Xp -= XpToNext;
                 Level++;
                 Stats.LevelTimes.Add(Time);
-                PendingChoices = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials);
+                // 고를 게 없으면 카드 화면을 열지 않는다(레벨업 밀치기·연출은 그대로).
+                List<UpgradeId> cards = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials);
+                PendingChoices = cards.Count > 0 ? cards : null;
                 ChoosingChest = false;
                 JustLeveled = true;
                 PushAway(Player, 4f, 3f);
@@ -805,10 +830,17 @@ namespace FireGame.Prototypes.Logic
         /// <summary>보물상자 카드 한 번. 상자의 첫 장은 노란 카드를 보장한다.</summary>
         private void OpenBonusPick()
         {
-            bool special = _bonusPicks == ChestPicks;
-            _bonusPicks--;
-            ChoosingChest = true;
-            PendingChoices = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials, special);
+            // 뽑을 게 없으면 남은 상자 카드를 버린다.
+            while (_bonusPicks > 0)
+            {
+                bool special = _bonusPicks == ChestPicks;
+                _bonusPicks--;
+                List<UpgradeId> cards = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials, special);
+                if (cards.Count == 0) continue;
+                ChoosingChest = true;
+                PendingChoices = cards;
+                return;
+            }
         }
 
         private void Take(UpgradeId id)
@@ -902,6 +934,7 @@ namespace FireGame.Prototypes.Logic
             JustMaxed = null;
             Repaired.Clear();
             JustPickedToolbox = false;
+            JustPickedKit = false;
             JustBigReport = false;
             JustFinale = false;
             JustBurst = false;
@@ -2450,6 +2483,42 @@ namespace FireGame.Prototypes.Logic
 
         private float _toolboxClock = ToolboxEvery;
 
+        private float NextKitWait()
+        {
+            return KitMin + ((_kitRng.Next(1000) / 1000f) * (KitMax - KitMin));
+        }
+
+        /// <summary>구급상자: 무작위 간격(40~80초)마다, 바닥에 없고 다쳤을 때만 소방관 5~10칸 빈 땅에 떨군다. 25초 뒤 사라지고 밟으면 +35.</summary>
+        private void TickKits()
+        {
+            _kitClock -= Dt;
+            if (_kitClock <= 0f)
+            {
+                _kitClock = NextKitWait();
+                if (Kits.Count == 0 && Hp < MaxHp * KitBelow)
+                {
+                    Vec2? at = FreeSpot(5f, 10f);
+                    if (at.HasValue) Kits.Add(new Pickup { Pos = at.Value, Life = KitLife });
+                }
+            }
+
+            for (int i = Kits.Count - 1; i >= 0; i--)
+            {
+                Pickup kit = Kits[i];
+                kit.Life -= Dt;
+                if (Player.DistanceTo(kit.Pos) <= PickupRange + PlayerRadius)
+                {
+                    Kits.RemoveAt(i);
+                    Hp = Math.Min(MaxHp, Hp + KitHeal);
+                    JustPickedKit = true;
+                    Stats.KitsPicked++;
+                    Stats.Events++;
+                    continue;
+                }
+                if (kit.Life <= 0f) Kits.RemoveAt(i);
+            }
+        }
+
         /// <summary>공구상자: 40초마다 부서진 건물이 있고 떨어진 상자가 없으면 소방관 6~12칸 빈 땅에 떨군다. 20초 뒤 사라진다.</summary>
         private void TickToolboxes()
         {
@@ -2740,6 +2809,18 @@ namespace FireGame.Prototypes.Logic
         {
             if (s.Collapsed || s.Fire <= 0f) return float.PositiveInfinity;
             return s.Integrity * (s.IsBuilding ? BurnBuilding : BurnSmall) / s.Fire;
+        }
+
+        /// <summary>
+        /// 이 건물을 언제까지 꺼야 하나(초). 사람이 있으면 첫 사람을 연기로 잃기까지(연기가 아직이면 연기 시작까지 + 첫 사람),
+        /// 없으면 무너지기까지. 둘 중 빠른 쪽. 안 타면 무한. 화면의 마감 게이지가 쓴다.
+        /// </summary>
+        public float Deadline(Structure s)
+        {
+            float fall = TimeToFall(s);
+            if (s.Collapsed || !s.Burning || s.Residents <= 0) return fall;
+            float smoke = s.Fire >= SmokeFire ? SmokeTime - s.Smoke : ((SmokeFire - s.Fire) / Stage.FireGrowth) + SmokeTime;
+            return Math.Min(fall, Math.Max(0f, smoke));
         }
 
         /// <summary>갇힌 사람을 데리고 나온다(문 앞 구조·구조 드론). 구조 도끼가 있으면 문을 부수고 한 번에 여럿.</summary>

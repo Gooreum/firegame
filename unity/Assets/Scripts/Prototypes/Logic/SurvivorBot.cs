@@ -185,6 +185,11 @@ namespace FireGame.Prototypes.Logic
                 // 대형 신고를 다 구해 떨어진 보물상자: 카드 두 장이라 무엇보다 먼저 줍는다(30초면 사라진다).
                 goal = _sim.Chests[0].Pos;
             }
+            else if (_sim.Kits.Count > 0 && _sim.Hp < _sim.MaxHp * 0.75f && danger < 1.2f)
+            {
+                // 다쳤으면 구급상자부터(25초면 사라진다). 체력이 넉넉하면 그냥 둔다.
+                goal = _sim.Kits[0].Pos;
+            }
             else if (fire != null && fire.Residents > 0 && danger < 1.5f)
             {
                 // 활활 타는데 체력이 모자라면(열기) 문 앞 대신 4칸 밖에서 먼저 끈다(AimHose가 건물을 겨눈다).

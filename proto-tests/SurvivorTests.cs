@@ -172,7 +172,7 @@ namespace FireGame.Prototypes.Tests
 
         // --- TC-6 ---
         [Fact]
-        public void NothingLeft_OffersOnlyHeal_ThatCapsAtMaxHp()
+        public void NothingLeft_SkipsTheCardScreen()
         {
             SurvivorSim sim = Quiet();
             // 여섯 무기를 모두 진화시키고(보조도 최대) 노란 특수도 전부 쥔다.
@@ -180,14 +180,39 @@ namespace FireGame.Prototypes.Tests
             foreach (UpgradeId id in new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Truck, UpgradeId.Sprinkler, UpgradeId.Rain, UpgradeId.Retardant }) sim.Build.Add(id);
 
             var rng = new Rng(5);
-            Assert.Equal(new List<UpgradeId> { UpgradeId.Heal }, SurvivorUpgrades.Roll(sim.Build, 2, ref rng));
+            Assert.Empty(SurvivorUpgrades.Roll(sim.Build, 2, ref rng));
 
+            // 레벨은 오르지만 카드 화면은 안 열리고, 체력도 그대로다(레벨업 공짜 회복 없음).
             sim.Hp = sim.MaxHp - 10f;
             sim.DropGem(sim.Player, sim.XpToNext);
-            for (int i = 0; i < 3 && sim.PendingChoices == null; i++) sim.Step(0f, 0f);
-            Assert.Equal(new List<UpgradeId> { UpgradeId.Heal }, sim.PendingChoices);
-            sim.Choose(0);
-            Assert.Equal(sim.MaxHp, sim.Hp);
+            bool leveled = false;
+            for (int i = 0; i < 3 && !leveled; i++)
+            {
+                sim.Step(0f, 0f);
+                leveled = sim.JustLeveled;
+            }
+            Assert.True(leveled);
+            Assert.Equal(2, sim.Level);
+            Assert.Null(sim.PendingChoices);
+            Assert.Equal(sim.MaxHp - 10f, sim.Hp);
+        }
+
+        [Fact]
+        public void Roll_NeverPadsWithHeal()
+        {
+            // 무기 4칸·보조 3칸이 다 찼고 노란 특수도 전부 쥐어 진화만 남았다: 진화 한 장만 나온다. 전엔 회복 카드가 끼어 두 장이었다.
+            var l = new Loadout();
+            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit })
+                for (int k = 0; k < Loadout.MaxLevel; k++) l.Add(id);
+            foreach (UpgradeId id in new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Truck, UpgradeId.Sprinkler, UpgradeId.Rain, UpgradeId.Retardant, UpgradeId.Foam }) l.Add(id);
+            var rng = new Rng(3);
+            for (int i = 0; i < 50; i++)
+            {
+                List<UpgradeId> cards = SurvivorUpgrades.Roll(l, 7, ref rng);
+                Assert.Single(cards);
+                Assert.True(Loadout.IsEvolution(cards[0]));
+                Assert.DoesNotContain(UpgradeId.Heal, cards);
+            }
         }
 
         // --- TC-7 ---
