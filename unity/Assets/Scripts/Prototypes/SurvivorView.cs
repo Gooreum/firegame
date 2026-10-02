@@ -889,7 +889,7 @@ namespace FireGame.Prototypes
                 _trauma = Mathf.Min(1f, _trauma + 0.8f);
                 _slowmo = 0.8f;
                 _zoomKick = 1f;
-                Flash(gold, 0.7f);
+                Flash(gold, 0.3f);
                 GameAudio.Play(Cue.Won);
                 ShowAlert("진화! 고압 방수포", gold);
             }
@@ -909,7 +909,7 @@ namespace FireGame.Prototypes
                 Vector3 at = W(_sim.Player);
                 Pillar(at, gold);
                 Shockwave(at, gold, 6f, 0.4f);
-                Flash(gold, 0.35f);
+                Flash(gold, 0.12f);
                 _zoomKick = Mathf.Max(_zoomKick, 0.5f);
                 ShowAlert(joined ? "구조대원 합류!" : SurvivorUpgrades.Name(_lastPick) + " 출동!", gold);
             }
@@ -930,7 +930,7 @@ namespace FireGame.Prototypes
             _trauma = Mathf.Min(1f, _trauma + 0.5f);
             _slowmo = Mathf.Max(_slowmo, 0.5f);
             _zoomKick = Mathf.Max(_zoomKick, 0.7f);
-            Flash(gold, 0.45f);
+            Flash(gold, 0.2f);
             GameAudio.Play(Cue.Won);
             ShowAlert(SurvivorUpgrades.Name(id) + " MAX!", gold);
         }
@@ -1208,7 +1208,7 @@ namespace FireGame.Prototypes
             {
                 // 빛기둥 + 고리 + 위로 솟는 반짝이. 카드는 0.3초 뒤에 떠서 터지는 걸 먼저 보여 준다.
                 Vector3 at = W(_sim.Player);
-                Flash(Color.white, 0.45f);
+                Flash(Color.white, 0.15f);
                 Pillar(at, new Color(0.8f, 0.95f, 1f));
                 Shockwave(at, Color.white, 10f, 0.45f);
                 Sparkle(at, 20, new Color(1f, 0.95f, 0.6f));
@@ -1284,7 +1284,7 @@ namespace FireGame.Prototypes
                 Shockwave(at, gold, 9f, 0.5f);
                 Sparkle(at, 30, gold);
                 Burst(at, 40, gold, 9f);
-                Flash(gold, 0.4f);
+                Flash(gold, 0.2f);
                 SpawnText(at + new Vector3(0f, 1.6f, 0f), "보물상자! 카드 " + SurvivorSim.ChestPicks + "장", gold, 1.6f);
                 _slowmo = Mathf.Max(_slowmo, 0.4f);
                 // 상자 카드도 레벨업 카드처럼 잠깐 뒤 튀어 오른다(안 띄우면 카드 대기로 판이 멈춘다).
@@ -1407,7 +1407,9 @@ namespace FireGame.Prototypes
                     SaveStation();
                     // 4:00까지 지켜 냈다: 번쩍 → (잠깐 뒤) 고리 세 겹 + 거대한 김 + 불똥 비.
                     Vector3 at = W(_sim.Player);
-                    Flash(Color.white, 0.9f);
+                    // 승리는 하얗게 덮어도 된다(한 판에 한 번). Flash의 0.5 상한을 넘기려고 직접 넣는다.
+                    _flashColor = Color.white;
+                    _flash = 0.9f;
                     for (int k = 0; k < 3; k++) Shockwave(at, new Color(0.6f, 0.9f, 1f), 12f + (6f * k), 0.9f, 0.15f + (k * 0.15f));
                     Steam(at, 20, 2.2f);
                     Burst(at, 120, new Color(1f, 0.7f, 0.3f), 14f);
@@ -3460,10 +3462,11 @@ namespace FireGame.Prototypes
             }
         }
 
+        /// <summary>전면 번쩍임. 화면이 덮이지 않게 0.5를 넘지 않는다(승리만 직접 0.9).</summary>
         private void Flash(Color color, float strength)
         {
             _flashColor = color;
-            _flash = Mathf.Max(_flash, strength);
+            _flash = Mathf.Max(_flash, Mathf.Min(strength, 0.5f));
         }
 
         private void Scorch(Vector3 at, float size)
@@ -4924,7 +4927,7 @@ namespace FireGame.Prototypes
                 _vignette.color = new Color(0.8f, 0.05f, 0f, Mathf.Clamp01(danger));
             }
 
-            _flashImage.color = new Color(_flashColor.r, _flashColor.g, _flashColor.b, _flash * 0.8f);
+            _flashImage.color = new Color(_flashColor.r, _flashColor.g, _flashColor.b, _flash * 0.55f);
 
             _alert.color = new Color(_alert.color.r, _alert.color.g, _alert.color.b, _alertAge < 2f ? 1f : Mathf.Max(0f, 1f - ((_alertAge - 2f) * 2f)));
             float s = _alertAge < 0.15f ? Mathf.Lerp(1.6f, 1f, _alertAge / 0.15f) : 1f;
@@ -5156,7 +5159,7 @@ namespace FireGame.Prototypes
             // 제목 뒤에서 천천히 도는 빛살.
             for (int i = 0; i < 4; i++)
             {
-                Image ray = UiKit.Image(_cardLayer, "Ray" + i, BeamSprite(), new Color(1f, 0.9f, 0.5f, 0.35f));
+                Image ray = UiKit.Image(_cardLayer, "Ray" + i, BeamSprite(), new Color(1f, 0.9f, 0.5f, 0.12f));
                 ray.raycastTarget = false;
                 UiKit.Place(ray.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 360f), new Vector2(90f, 900f));
                 _rays.Add(ray.rectTransform);
@@ -5165,7 +5168,7 @@ namespace FireGame.Prototypes
             bool yellow = choices.Exists(Loadout.IsSpecial);
             if (yellow)
             {
-                Flash(new Color(1f, 0.85f, 0.3f), 0.35f);
+                Flash(new Color(1f, 0.85f, 0.3f), 0.12f);
                 GameAudio.Play(Cue.Rescued);
             }
             string head = _sim.ChoosingChest ? "보물상자!" : "레벨 업!";
@@ -5181,9 +5184,9 @@ namespace FireGame.Prototypes
                 bool toMax = !Loadout.IsSpecial(id) && id != UpgradeId.Heal && next == Loadout.MaxLevel;
                 if (Loadout.IsSpecial(id) || toMax)
                 {
-                    Image glow = UiKit.Image(_cardLayer, "YellowGlow" + i, Art.Get("Effects/glow"), new Color(1f, 0.8f, 0.2f, 0.8f));
+                    Image glow = UiKit.Image(_cardLayer, "YellowGlow" + i, Art.Get("Effects/glow"), new Color(1f, 0.8f, 0.2f, 0.3f));
                     glow.raycastTarget = false;
-                    UiKit.Place(glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2((i - ((choices.Count - 1) / 2f)) * 470f, -20f), new Vector2(720f, 820f));
+                    UiKit.Place(glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2((i - ((choices.Count - 1) / 2f)) * 470f, -20f), new Vector2(520f, 600f));
                     _yellowGlows.Add(glow);
                 }
                 string sprite = Loadout.IsSpecial(id) ? "UI/button_yellow" : id == UpgradeId.Heal ? "UI/button_green" : Loadout.IsWeapon(id) ? "UI/button_red" : "UI/button_blue";
@@ -5236,7 +5239,7 @@ namespace FireGame.Prototypes
             foreach (Image g in _yellowGlows)
             {
                 float beat = 0.5f + (0.5f * Mathf.Sin(_time * 5f));
-                g.color = new Color(1f, 0.8f, 0.2f, 0.45f + (0.4f * beat));
+                g.color = new Color(1f, 0.8f, 0.2f, 0.18f + (0.12f * beat));
                 g.rectTransform.localScale = Vector3.one * Mathf.Clamp01(_cardAge / 0.3f) * (0.95f + (0.08f * beat));
             }
             if (_cards.Count > 1) _cards[1].localScale = Vector3.one * (1f + (0.05f * Mathf.Sin(_time * 6f)));
