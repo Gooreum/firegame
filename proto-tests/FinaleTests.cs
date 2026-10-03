@@ -113,7 +113,8 @@ namespace FireGame.Prototypes.Tests
             Assert.Empty(sim.Chests);
             Assert.True(opened);
             Assert.NotNull(sim.PendingChoices);
-            Assert.Contains(sim.PendingChoices, id => Loadout.IsSpecial(id));
+            // 상자 첫 장은 노란 보장 — 단 노란은 한 판에 하나라, 걸어오는 동안 이미 하나 집었으면 일반 카드 셋이 된다.
+            Assert.True(sim.Build.SpecialCount >= Loadout.SpecialSlots || sim.PendingChoices.Exists(id => Loadout.IsSpecial(id)), "상자 첫 장에 노란 카드가 없다");
             sim.Choose(0);
             Assert.NotNull(sim.PendingChoices);
             sim.Choose(0);

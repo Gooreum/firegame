@@ -67,8 +67,12 @@ namespace FireGame.Prototypes.Logic
     public sealed class Loadout
     {
         public const int MaxLevel = 5;
-        public const int WeaponSlots = 4;
-        public const int PassiveSlots = 3;
+        /// <summary>무기 6 중 3, 보조 3 중 2. 넷·셋이면 3:00에 모든 판이 같은 풀장비가 됐다(docs §16).</summary>
+        public const int WeaponSlots = 3;
+        public const int PassiveSlots = 2;
+
+        /// <summary>노란 특수 장비는 한 판에 하나.</summary>
+        public const int SpecialSlots = 1;
 
         /// <summary>진화 표: (진화, 원래 무기, 짝 보조).</summary>
         private static readonly UpgradeId[,] Evolutions =
@@ -153,6 +157,21 @@ namespace FireGame.Prototypes.Logic
         public int PassiveCount
         {
             get { return Count(false); }
+        }
+
+        /// <summary>쥔 노란 특수 장비 수(진화는 세지 않는다).</summary>
+        public int SpecialCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < _levels.Length; i++)
+                {
+                    var id = (UpgradeId)i;
+                    if (_levels[i] > 0 && IsSpecial(id) && !IsEvolution(id)) n++;
+                }
+                return n;
+            }
         }
 
         /// <summary>물대포 최대 + 탱크 보유 + 아직 진화 전(방수포 하나만 볼 때).</summary>
@@ -273,7 +292,7 @@ namespace FireGame.Prototypes.Logic
             if (id == UpgradeId.Heal) return false;
             if (IsEvolution(id)) return Ready(id);
             int level = Level(id);
-            if (IsSpecial(id)) return level == 0;
+            if (IsSpecial(id)) return level == 0 && SpecialCount < SpecialSlots;
             if (level >= MaxLevelOf(id)) return false;
             if (level > 0) return true;
             UpgradeId? evo = EvolutionOf(id);

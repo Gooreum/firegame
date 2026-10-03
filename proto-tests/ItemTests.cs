@@ -98,20 +98,22 @@ namespace FireGame.Prototypes.Tests
                 Assert.True(Loadout.IsEvolution(id) && Loadout.IsSpecial(id));
                 Assert.Contains(Loadout.BaseOf(id), weapons);
             }
-            Assert.Equal(4, Loadout.WeaponSlots);
-            Assert.Equal(3, Loadout.PassiveSlots);
+            Assert.Equal(3, Loadout.WeaponSlots);
+            Assert.Equal(2, Loadout.PassiveSlots);
+            Assert.Equal(1, Loadout.SpecialSlots);
         }
 
         [Fact]
-        public void Loadout_HoldsAtMostThreePassives()
+        public void Loadout_HoldsAtMostTwoPassives()
         {
             var l = new Loadout();
             l.Add(UpgradeId.Tank);
+            Assert.True(l.CanTake(UpgradeId.Boots), "보조 하나일 땐 둘째를 들 수 있어야 한다");
             l.Add(UpgradeId.Boots);
-            l.Add(UpgradeId.Suit);
-            Assert.Equal(3, l.PassiveCount);
-            // 셋을 다 들면 올릴 수는 있어도 새로 들 보조는 없다.
+            Assert.Equal(2, l.PassiveCount);
+            // 둘을 들면 올릴 수는 있어도 새로 들 보조는 없다: 셋 중 둘을 고른다.
             Assert.True(l.CanTake(UpgradeId.Tank));
+            Assert.False(l.CanTake(UpgradeId.Suit));
             int passivesOffered = 0;
             for (int i = 0; i <= (int)UpgradeId.Heal; i++)
             {

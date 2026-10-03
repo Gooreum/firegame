@@ -224,27 +224,26 @@ namespace FireGame.Prototypes.Tests
             l.Add(UpgradeId.Hose);
             l.Add(UpgradeId.WaterBomb);
             l.Add(UpgradeId.Drone);
-            l.Add(UpgradeId.Turret);
-            Assert.Equal(4, l.WeaponCount);
+            Assert.Equal(3, l.WeaponCount);
 
             var rng = new Rng(11);
             var seen = new HashSet<UpgradeId>();
             for (int i = 0; i < 500; i++) foreach (UpgradeId id in SurvivorUpgrades.Roll(l, 2, ref rng)) seen.Add(id);
             Assert.DoesNotContain(UpgradeId.Cannon, seen);
+            Assert.DoesNotContain(UpgradeId.Turret, seen);
             Assert.Contains(UpgradeId.Tank, seen);
             Assert.Contains(UpgradeId.Hose, seen);
 
             var full = new Loadout();
             full.Add(UpgradeId.Tank);
             full.Add(UpgradeId.Suit);
-            full.Add(UpgradeId.Boots);
             full.Add(UpgradeId.Hose);
             full.Add(UpgradeId.WaterBomb);
+            Assert.True(full.CanTake(UpgradeId.Drone), "무기 2개일 땐 세 번째 무기를 얻을 수 있어야 한다");
             full.Add(UpgradeId.Drone);
-            Assert.True(full.CanTake(UpgradeId.Turret), "무기 3개일 땐 네 번째 무기를 얻을 수 있어야 한다");
-            full.Add(UpgradeId.Turret);
-            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Turret }) Assert.True(full.CanTake(id));
-            // 칸보다 종류가 많다: 무기 4칸이 차면 구조대원·물의 장막은 못 얻는다.
+            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.WaterBomb, UpgradeId.Drone }) Assert.True(full.CanTake(id));
+            // 칸보다 종류가 많다: 무기 3칸이 차면 포탑·구조대원·물의 장막은 못 얻는다.
+            Assert.False(full.CanTake(UpgradeId.Turret));
             Assert.False(full.CanTake(UpgradeId.Partner));
             Assert.False(full.CanTake(UpgradeId.Curtain));
         }
@@ -948,7 +947,9 @@ namespace FireGame.Prototypes.Tests
                     for (int i = 0; i < 3 && sim.PendingChoices == null; i++) sim.Step(0f, 0f);
                     Assert.NotNull(sim.PendingChoices);
                     if (sim.Level == 5) Assert.Contains(sim.PendingChoices, Loadout.IsSpecial);
-                    sim.Choose(0);
+                    // 노란은 한 판에 하나다: 5 전에 섞여 나온 노란을 집으면 5에서 안 나오는 게 맞다. 여기선 일반 카드만 고른다.
+                    int pick = sim.PendingChoices.FindIndex(id => !Loadout.IsSpecial(id));
+                    sim.Choose(pick < 0 ? 0 : pick);
                 }
             }
         }
