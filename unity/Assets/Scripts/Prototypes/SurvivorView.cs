@@ -669,15 +669,18 @@ namespace FireGame.Prototypes
             Text stars = UiKit.OutlinedLabel(_stationLayer, "Stars", "모은 별 ★ " + _station.Stars, 36, Color.white, TextAnchor.MiddleCenter);
             UiKit.Place(stars.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 318f), new Vector2(1500f, 50f));
 
-            // 스테이지 선택: 셋 다 열려 있다. 고른 것은 노란 버튼, 각 버튼에 이름과 최고 별. 탭하면 그 스테이지의 브리핑·대비 장비로 다시 연다.
+            // 스테이지 선택: 다섯 다 열려 있다. 고른 것은 노란 버튼, 각 버튼에 이름과 최고 별. 탭하면 그 스테이지의 브리핑·대비 장비로 다시 연다.
+            // 280폭 × 5, 간격 290, 가운데 정렬: 4:3(폭 1440)에도 들어간다.
             StageRules rules = SurvivorStages.Get(_stage);
+            const float stageStep = 290f;
+            float stageX0 = -(SurvivorStages.Count - 1) * stageStep / 2f;
             for (int n = 1; n <= SurvivorStages.Count; n++)
             {
                 int stage = n;
                 bool on = stage == _stage;
-                string label = "STAGE " + n + " · " + SurvivorStages.Get(n).Name + "  ★" + _station.Best[n];
-                Button pick = UiKit.Button(_stationLayer, "Stage" + n, Art.Get(on ? "UI/button_yellow" : "UI/button_blue"), label, 30, () => TapStage(stage));
-                UiKit.Place(pick.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2((n - 2) * 440f, 268f), new Vector2(420f, 56f));
+                string label = n + " " + SurvivorStages.Get(n).Name + "  ★" + _station.Best[n];
+                Button pick = UiKit.Button(_stationLayer, "Stage" + n, Art.Get(on ? "UI/button_yellow" : "UI/button_blue"), label, 28, () => TapStage(stage));
+                UiKit.Place(pick.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(stageX0 + ((n - 1) * stageStep), 268f), new Vector2(280f, 56f));
             }
 
             // 브리핑: 다음 스테이지의 위협 한 줄과, 그 위협을 막는 대비 장비 둘(하나를 골라 Lv1로 들고 간다).

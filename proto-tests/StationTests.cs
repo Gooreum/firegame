@@ -94,7 +94,7 @@ namespace FireGame.Prototypes.Tests
             station.Unlock("pump");
             station.Select("rescue");
             string text = station.Serialize();
-            Assert.Equal("stars=0;best=3,2,0;unlocked=rookie,rescue,pump;selected=rescue", text);
+            Assert.Equal("stars=0;best=3,2,0,0,0;unlocked=rookie,rescue,pump;selected=rescue", text);
 
             FireStation back = FireStation.Parse(text);
             Assert.Equal(station.Stars, back.Stars);

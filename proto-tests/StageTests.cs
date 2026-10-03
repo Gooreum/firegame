@@ -87,7 +87,9 @@ namespace FireGame.Prototypes.Tests
         {
             Assert.Equal(2, SurvivorStages.Next(1));
             Assert.Equal(3, SurvivorStages.Next(2));
-            Assert.Equal(1, SurvivorStages.Next(3));
+            Assert.Equal(4, SurvivorStages.Next(3));
+            Assert.Equal(5, SurvivorStages.Next(4));
+            Assert.Equal(1, SurvivorStages.Next(5));
             Assert.Equal(1, SurvivorStages.Next(SurvivorStages.Count));
             Assert.Equal(1, SurvivorStages.Get(99).Number);
         }

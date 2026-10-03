@@ -143,6 +143,22 @@ namespace FireGame.Prototypes.Tests
             Assert.DoesNotContain(UpgradeId.Foam, SurvivorStages.Get(1).Specials);
             Assert.DoesNotContain(UpgradeId.Foam, SurvivorStages.Get(2).Specials);
             foreach (UpgradeId id in SurvivorStages.Get(3).Specials) Assert.True(Loadout.IsSpecial(id));
+            // 4 항구·5 야시장: 공통 둘 + 전용 둘. 전용은 그 스테이지에만 있다.
+            Assert.Equal(4, SurvivorStages.Get(4).Specials.Length);
+            Assert.Equal(4, SurvivorStages.Get(5).Specials.Length);
+            Assert.Contains(UpgradeId.Fireboat, SurvivorStages.Get(4).Specials);
+            Assert.Contains(UpgradeId.Wave, SurvivorStages.Get(4).Specials);
+            Assert.Contains(UpgradeId.Shells, SurvivorStages.Get(5).Specials);
+            Assert.Contains(UpgradeId.Mist, SurvivorStages.Get(5).Specials);
+            for (int stage = 1; stage <= SurvivorStages.Count; stage++)
+            {
+                UpgradeId[] pool = SurvivorStages.Get(stage).Specials;
+                Assert.Contains(UpgradeId.Heli, pool);
+                Assert.Contains(UpgradeId.Ambulance, pool);
+                foreach (UpgradeId id in pool) Assert.True(Loadout.IsSpecial(id) && !Loadout.IsEvolution(id));
+                if (stage != 4) { Assert.DoesNotContain(UpgradeId.Fireboat, pool); Assert.DoesNotContain(UpgradeId.Wave, pool); }
+                if (stage != 5) { Assert.DoesNotContain(UpgradeId.Shells, pool); Assert.DoesNotContain(UpgradeId.Mist, pool); }
+            }
         }
     }
 }

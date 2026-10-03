@@ -68,6 +68,8 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(1).BuildingWater);
             Assert.Equal(0.5f, SurvivorStages.Get(2).BuildingWater);
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(3).BuildingWater);
+            Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(4).BuildingWater);
+            Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(5).BuildingWater);
             Assert.True(SurvivorSim.BuildingWater < 1f, "건물 물 비율은 1보다 작아야 '건물 불이 쉽다'에 답한다");
         }
 
