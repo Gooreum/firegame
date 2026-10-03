@@ -41,6 +41,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>소방 헬기가 쏟는 물. 폭탄처럼 날아가 떨어지지만 훨씬 크다.</summary>
         Heli,
+
+        /// <summary>야시장 물 불꽃: 무대에서 솟아 타는 것 위에서 터지는 물 포탄(폭탄 꼴, 저항 없음).</summary>
+        Shell,
     }
 
     public sealed class Enemy
@@ -787,6 +790,16 @@ namespace FireGame.Prototypes.Logic
         public const float MistInterval = 18f;
         public const float MistTime = 6f;
         public const float MistRadius = 8f;
+        public const float MistSoak = 0.12f;
+
+        /// <summary>야시장 노란: 이번 틱에 물 불꽃을 쏘아 올렸다 / 물 불꽃이 터진 자리.</summary>
+        public bool JustShells;
+        public readonly List<Vec2> ShellBursts = new List<Vec2>();
+        public const float ShellInterval = 14f;
+        public const int ShellCount = 6;
+        public const float ShellFlight = 1f;
+        public const float ShellRadius = 3f;
+        public const float ShellDamage = 12f;
 
         /// <summary>이번 틱에 스프링클러가 터진 건물.</summary>
         public readonly List<Structure> Sprinkled = new List<Structure>();
@@ -1163,6 +1176,9 @@ namespace FireGame.Prototypes.Logic
             LanternDoused.Clear();
             RocketBursts.Clear();
             JustLaunching = null;
+            JustShells = false;
+            ShellBursts.Clear();
+            JustMist = false;
             GemsCollected = 0;
             // 틱마다 한 번 센다(테스트가 판 도중 구조물을 넣는다).
             HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
@@ -1762,6 +1778,8 @@ namespace FireGame.Prototypes.Logic
             if (Build.Level(UpgradeId.Foam) > 0) TickFoam();
             if (Build.Level(UpgradeId.Fireboat) > 0) TickFireboat();
             if (Build.Level(UpgradeId.Wave) > 0) TickWave();
+            if (Build.Level(UpgradeId.Shells) > 0) TickShells();
+            if (Build.Level(UpgradeId.Mist) > 0) TickMist();
         }
 
         private float _truckClock = 2f;
@@ -2124,6 +2142,73 @@ namespace FireGame.Prototypes.Logic
             if (y <= WaveEnd) WaveY = null;
         }
 
+        private float _shellClock = 3f;
+
+        /// <summary>물 불꽃놀이: 14초마다(탈 불이 있을 때만) 무대(대화재 창고 → 창고 → 소방관)에서 물 불꽃을 쏘아 올린다.
+        /// 가장 센 불부터 최대 ShellCount 발, 모자라면 바닥 불이 몰린 곳에 한 발. 폭탄처럼 날아가 반경 ShellRadius에 저항 없이 물을 쏟고 적 ShellDamage.</summary>
+        private void TickShells()
+        {
+            _shellClock -= Dt;
+            if (_shellClock > 0f) return;
+            var targets = new List<Structure>();
+            foreach (Structure st in Structures)
+            {
+                if (st.Burning && st.Kind != StructureKind.Water) targets.Add(st);
+            }
+            targets.Sort((a, b) => b.Fire.CompareTo(a.Fire));
+            var aims = new List<Vec2>();
+            for (int i = 0; i < targets.Count && aims.Count < ShellCount; i++) aims.Add(targets[i].Pos);
+            if (aims.Count < ShellCount)
+            {
+                Vec2? ground = GroundFireCenter(ArenaSize);
+                if (ground.HasValue) aims.Add(ground.Value);
+            }
+            if (aims.Count == 0) return;
+            _shellClock = ShellInterval;
+            JustShells = true;
+            Structure depot = Structures.Find(s => s.Kind == StructureKind.Depot && !s.Collapsed);
+            Vec2 from = Landmark != null && !Landmark.Collapsed ? Landmark.Pos : depot != null ? depot.Pos : Player;
+            for (int k = 0; k < aims.Count; k++)
+            {
+                Shots.Add(new Shot { Kind = ShotKind.Shell, From = from, Pos = from, Target = aims[k], Life = ShellFlight + (0.12f * k), Damage = ShellDamage, Radius = ShellRadius });
+            }
+        }
+
+        private float _mistClock = 2f;
+
+        /// <summary>물안개: 18초마다(14칸 안 불이 있을 때만) 불이 몰린 곳에 6초 동안 반경 8 안개. 안은 늘 젖어 불이 안 붙고, 타는 것은 천천히 꺼지고,
+        /// 등줄은 젖고, 적은 느려진다. 로켓이 안개 안에 떨어지면 꺼진다(TickRockets).</summary>
+        private void TickMist()
+        {
+            if (!MistAt.HasValue)
+            {
+                _mistClock -= Dt;
+                if (_mistClock > 0f) return;
+                // 14칸 안 가장 센 불(없으면 기다린다: 빈 땅에 안개를 피우면 아무 일도 없다).
+                Vec2? centre = BurningCenter(14f);
+                if (!centre.HasValue) return;
+                _mistClock = MistInterval;
+                MistAt = centre;
+                MistLeft = MistTime;
+                JustMist = true;
+            }
+            // 피는 틱부터 바로 적신다.
+            Vec2 at = MistAt.Value;
+            Douse(at, MistRadius);
+            if (Lanterns.Count > 0) WetLanterns(at, MistRadius);
+            foreach (Structure st in Structures)
+            {
+                if (st.Collapsed || st.Kind == StructureKind.Water || !st.Within(at, MistRadius)) continue;
+                if (st.Burning) Soak(st, MistSoak * Dt);
+                // Soak은 꺼질 때 WetTime을 주지만 타는 동안엔 안 준다: 안개 안은 늘 젖어 있다.
+                st.Wet = Math.Max(st.Wet, 1f);
+            }
+            Near(at, MistRadius, _near);
+            foreach (Enemy e in _near) e.Slowed = Math.Max(e.Slowed, 0.5f);
+            MistLeft -= Dt;
+            if (MistLeft <= 0f) MistAt = null;
+        }
+
         private float _rainClock = 2f;
 
         /// <summary>비구름: 12초마다 14칸 안에서 불이 가장 몰린 곳에 3초 동안 비. 바닥 불을 끄고, 구조물을 적시고, 적에게 초당 6 피해.</summary>
@@ -2398,14 +2483,14 @@ namespace FireGame.Prototypes.Logic
                 if (s.Dead) continue;
                 s.Age += Dt;
 
-                if (s.Kind == ShotKind.Bomb || s.Kind == ShotKind.Heli)
+                if (s.Kind == ShotKind.Bomb || s.Kind == ShotKind.Heli || s.Kind == ShotKind.Shell)
                 {
                     float t = Math.Min(1f, s.Age / s.Life);
                     s.Pos = new Vec2(s.From.X + ((s.Target.X - s.From.X) * t), s.From.Y + ((s.Target.Y - s.From.Y) * t));
                     if (t >= 1f)
                     {
                         s.Dead = true;
-                        (s.Kind == ShotKind.Heli ? HeliDrops : s.Air ? AirBlasts : s.Drone ? DroneDrops : Explosions).Add(s.Target);
+                        (s.Kind == ShotKind.Heli ? HeliDrops : s.Kind == ShotKind.Shell ? ShellBursts : s.Air ? AirBlasts : s.Drone ? DroneDrops : Explosions).Add(s.Target);
                         Douse(s.Target, s.Radius);
                         if (Lanterns.Count > 0) WetLanterns(s.Target, s.Radius);
                         foreach (Structure st in Structures)
@@ -2413,7 +2498,7 @@ namespace FireGame.Prototypes.Logic
                             if (st.Within(s.Target, s.Radius)) Soak(st, s.Drone ? DroneDropWater : s.Damage * WaterPerDamage, false);
                         }
                         Near(s.Target, s.Radius, _near);
-                        HitSource source = s.Kind == ShotKind.Heli ? HitSource.Special : HitSource.Bomb;
+                        HitSource source = s.Kind == ShotKind.Heli || s.Kind == ShotKind.Shell ? HitSource.Special : HitSource.Bomb;
                         foreach (Enemy e in _near) Damage(e, s.Damage, Knockback(s.Target, e.Pos, 7f), true, source, s.Target);
                     }
                     continue;
