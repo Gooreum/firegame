@@ -344,6 +344,12 @@ namespace FireGame.Prototypes.EditorTools
                     view.Sim.Player = new Vec2(24f, 30f);
                 }, true, true);
 
+            // 야시장 전용 노란 카드(풀장비): 무대에서 올라간 물 불꽃이 터지는 순간, 불 위에 깔린 물안개.
+            failures += SurvivorShot(dir, "c59c_shells", view => view.Sim.ShellBursts.Count > 0, 3, true,
+                view => view.Frame(new Vector3(view.Sim.ShellBursts.Count > 0 ? view.Sim.ShellBursts[0].X : view.Sim.Player.X, (view.Sim.ShellBursts.Count > 0 ? view.Sim.ShellBursts[0].Y : view.Sim.Player.Y) + 1f, 0f), 9f), 5, null, true, true);
+            failures += SurvivorShot(dir, "c59d_mist", view => view.Sim.MistAt.HasValue && view.Sim.MistLeft < SurvivorSim.MistTime - 1f, 4, true,
+                view => view.Frame(new Vector3(view.Sim.MistAt.Value.X, view.Sim.MistAt.Value.Y + 1f, 0f), 10f), 5, null, true, true);
+
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
         }

@@ -1457,6 +1457,38 @@ namespace FireGame.Prototypes
                 Scorch(at, 1.4f);
                 _trauma = Mathf.Min(1f, _trauma + 0.12f);
             }
+            // 물 불꽃놀이: 쏘아 올리는 순간 배너, 터지는 자리마다 청백 플레어·물방울 방사·젖은 자국.
+            if (_sim.JustShells)
+            {
+                SpecialBanner("물 불꽃놀이!", new Color(0.55f, 0.9f, 1f));
+                Structure stage = _sim.Landmark ?? _sim.Structures.Find(s => s.Kind == StructureKind.Depot && !s.Collapsed);
+                if (stage != null) Flare(W(stage.Pos) + Up(2f), 6f, new Color(0.8f, 0.95f, 1f), 3);
+                GameAudio.Play(Cue.Critical);
+            }
+            foreach (Vec2 p in _sim.ShellBursts)
+            {
+                Vector3 at = W(p);
+                Flare(at + Up(1.5f), 8f, new Color(0.75f, 0.95f, 1f), 5);
+                for (int i = 0; i < 24; i++)
+                {
+                    float a = i * Mathf.PI * 2f / 24f;
+                    float sp = Random.Range(4f, 7f);
+                    EmitFalling("Effects/water_drop", at + Up(1.5f), new Vector3(Mathf.Cos(a) * sp, (Mathf.Sin(a) * sp * 0.6f) + 3f, 0f), 0.7f, 0.4f, new Color(0.8f, 0.95f, 1f, 1f));
+                }
+                WaterBlast(at, SurvivorSim.ShellRadius, 3);
+                Shockwave(at, new Color(0.8f, 0.95f, 1f, 0.9f), SurvivorSim.ShellRadius * 2.3f, 0.45f);
+                Sparkle(at + Up(1.5f), 12, new Color(0.85f, 0.97f, 1f));
+                AddWet(at, SurvivorSim.ShellRadius, 5f, true);
+                _trauma = Mathf.Min(1f, _trauma + 0.2f);
+                PlaySplash();
+            }
+            // 물안개: 피는 순간 흰 배너, 안개가 걷힐 때까지 DrawMist가 그린다.
+            if (_sim.JustMist)
+            {
+                SpecialBanner("물안개 분무!", Color.white);
+                Shockwave(W(_sim.MistAt.Value), new Color(1f, 1f, 1f, 0.8f), SurvivorSim.MistRadius * 2.2f, 0.5f);
+                GameAudio.Play(Cue.SprayFoam);
+            }
             // 큰 파도: 금색 배너 + 큰 흔들림 + 멈칫(바다가 통째로 밀려온다).
             if (_sim.JustSurge)
             {
@@ -2132,6 +2164,7 @@ namespace FireGame.Prototypes
             DrawAmbulance(dt);
             DrawHarborSpecials();
             if (_sim.Rockets.Count > 0) DrawRockets();
+            DrawMist();
 
             if (_sim.RainAt.HasValue)
             {
@@ -2449,6 +2482,9 @@ namespace FireGame.Prototypes
                     }
                     case ShotKind.Heli:
                         DrawHeli(s);
+                        break;
+                    case ShotKind.Shell:
+                        DrawShell(s);
                         break;
                     case ShotKind.Bomb when s.Drone:
                     {
@@ -4656,6 +4692,50 @@ namespace FireGame.Prototypes
                     }
                 }
             }
+        }
+
+        /// <summary>물 불꽃(야시장 노란): 무대에서 높이 솟아 표적 위로 떨어지는 청백 포탄. 흰 줄기 꼬리와 반짝임, 표적엔 하늘색 고리가 조여 든다.</summary>
+        private void DrawShell(Shot s)
+        {
+            float t = Mathf.Clamp01(s.Age / s.Life);
+            Vector3 from = W(s.From);
+            Vector3 to = W(s.Target);
+            Vector3 ground = Vector3.Lerp(from, to, t);
+            float lift = 9f * Mathf.Sin(t * Mathf.PI);
+            Vector3 at = ground + Up(lift);
+            _shadows.Put(ground, 0.6f + (0.5f * t), 0f, new Color(0f, 0f, 0f, 0.2f + (0.2f * t)));
+            _enemyCore.Put(at, 0.7f, 0f, new Color(0.85f, 0.97f, 1f, 1f));
+            _enemyGlow.Put(at, 2.2f, 0f, new Color(0.5f, 0.85f, 1f, 0.4f));
+            Vector3 vel = (to - from) / Mathf.Max(0.01f, s.Life);
+            float ang = (Mathf.Atan2(vel.y, vel.x) * Mathf.Rad2Deg) - 90f;
+            EmitSprite(BeamSprite(), at - new Vector3(0f, 0.6f, 0f), Vector3.zero, 0f, 0.2f, 0.25f, 0.1f, new Color(1f, 1f, 1f, 0.9f), new Color(0.7f, 0.9f, 1f, 0f), 0f, true, 0f, 1.3f / 0.25f, ang);
+            if (Random.value < 0.6f) Sparkle(at, 1, new Color(0.8f, 0.95f, 1f));
+            float ring = Mathf.Lerp(SurvivorSim.ShellRadius * 3f, SurvivorSim.ShellRadius * 1.6f, t);
+            _reticle.Put(to + Up(0.05f), ring, _time * 120f, new Color(0.6f, 0.9f, 1f, 0.3f + (0.5f * t)));
+        }
+
+        /// <summary>물안개(야시장 노란): 낮게 깔린 흰 구름 여덟 장이 천천히 돌며 숨 쉬고, 바닥은 희게, 가장자리 흰 고리, 물방울이 듣는다.</summary>
+        private void DrawMist()
+        {
+            if (!_sim.MistAt.HasValue) return;
+            Vector3 at = W(_sim.MistAt.Value);
+            float r = SurvivorSim.MistRadius;
+            float fade = Mathf.Clamp01(_sim.MistLeft / 0.6f) * Mathf.Clamp01((SurvivorSim.MistTime - _sim.MistLeft) / 0.4f);
+            _groundGlow.Put(at, r * 2.1f, 0f, new Color(0.9f, 0.95f, 1f, 0.25f * fade));
+            _auras.Put(at, r * 2f, 0f, new Color(1f, 1f, 1f, 0.5f * fade));
+            for (int k = 0; k < 8; k++)
+            {
+                float a = (k * 0.8f) + (_time * (0.15f + (0.03f * k)));
+                float breathe = 1f + (0.08f * Mathf.Sin((_time * 1.3f) + k));
+                Vector3 o = new Vector3(Mathf.Cos(a) * r * 0.55f, Mathf.Sin(a) * r * 0.4f, 0f);
+                _cloud.Put(at + o + Up(0.8f), r * 0.9f * breathe, k * 45f + (_time * 8f), new Color(1f, 1f, 1f, 0.35f * fade), DiscSprite(), 0.8f);
+            }
+            for (int k = 0; k < 10; k++)
+            {
+                var p = at + new Vector3(Random.Range(-r, r) * 0.9f, Random.Range(-r, r) * 0.7f, 0f) + Up(1.5f);
+                EmitFalling("Effects/water_drop", p, new Vector3(0f, -0.5f, 0f), 0.5f, 0.2f, new Color(0.8f, 0.92f, 1f, 0.7f * fade));
+            }
+            if (Random.value < 0.4f * fade) Steam(at + new Vector3(Random.Range(-r, r) * 0.6f, Random.Range(-r, r) * 0.5f, 0f), 1, 0.5f);
         }
 
         /// <summary>불꽃 가판대 로켓: 포물선으로 솟아 떨어지며 금색 꼬리를 끈다.</summary>
