@@ -112,6 +112,8 @@ namespace FireGame.Prototypes
         private float _cardAge;
         private float _overAge;
         private float _alertAge = 99f;
+        /// <summary>배너 팝인 배율(보통 1.6, 노란 장비 출동은 2.2).</summary>
+        private float _alertScale = 1.6f;
         private float _bossBannerAge = 99f;
         private float _xpPunch;
         private float _shownXp;
@@ -1073,14 +1075,26 @@ namespace FireGame.Prototypes
                 }
             }
 
+            // 헬기 출동: 막 뜬 헬기(나이 한 틱)마다 금색 배너.
+            if (_sim.Shots.Exists(s => s.Kind == ShotKind.Heli && s.Age < SurvivorSim.Dt * 1.5f)) SpecialBanner("소방 헬기 급수 투하!", new Color(0.5f, 0.85f, 1f));
+
             foreach (Vec2 e in _sim.HeliDrops)
             {
                 Vector3 at = W(e);
-                WaterBlast(at, SurvivorSim.HeliRadius, Loadout.MaxLevel);
-                Flare(at, SurvivorSim.HeliRadius * 2.4f, new Color(0.75f, 0.95f, 1f), 4);
-                Shockwave(at, new Color(0.9f, 0.97f, 1f, 0.9f), SurvivorSim.HeliRadius * 3f, 0.5f, 0.08f);
-                _trauma = Mathf.Min(1f, _trauma + 0.35f);
-                HitStop(0.04f);
+                // 임팩트: 큰 물기둥·플레어·충격파 두 겹·흔들림·멈칫, 물보라 고리, 바닥에 오래 남는 큰 젖은 자국.
+                WaterBlast(at, SurvivorSim.HeliRadius * 1.3f, Loadout.MaxLevel);
+                Flare(at, SurvivorSim.HeliRadius * 3.1f, new Color(0.75f, 0.95f, 1f), 5);
+                Shockwave(at, new Color(0.9f, 0.97f, 1f, 0.9f), SurvivorSim.HeliRadius * 4f, 0.6f, 0.08f);
+                Shockwave(at, new Color(0.7f, 0.9f, 1f, 0.8f), SurvivorSim.HeliRadius * 2.7f, 0.5f, 0.23f);
+                for (int i = 0; i < 24; i++)
+                {
+                    float a = i * Mathf.PI * 2f / 24f;
+                    float sp = Random.Range(6f, 9f);
+                    EmitFalling("Effects/water_drop", at + new Vector3(0f, 0.4f, 0f), new Vector3(Mathf.Cos(a) * sp, (Mathf.Sin(a) * sp * 0.6f) + 4f, 0f), 0.7f, 0.45f, new Color(0.8f, 0.95f, 1f, 1f));
+                }
+                AddWet(at, SurvivorSim.HeliRadius * 2f, 6f, true);
+                _trauma = Mathf.Min(1f, _trauma + 0.5f);
+                HitStop(0.06f);
                 PlaySplash();
                 // 헬기는 쏟고 나서 같은 방향으로 계속 날아가 화면 밖으로 빠진다.
                 _heliExitFrom = at + HeliLift;
@@ -1130,25 +1144,30 @@ namespace FireGame.Prototypes
                 Emit("Effects/glow", at, Vector3.zero, 0f, 0.06f, 0.6f, 1f, new Color(1f, 1f, 1f, 0.7f), new Color(1f, 0.8f, 0.4f, 0f), 0f, true);
             }
 
+            if (_sim.Sprinkled.Count > 0) SpecialBanner("스프링클러 작동!", new Color(0.5f, 0.85f, 1f), quiet: true);
             foreach (Structure st in _sim.Sprinkled)
             {
-                // 스프링클러: 지붕 네 모서리에서 물 호가 바깥으로 뻗고 물방울이 떨어진다.
+                // 스프링클러: 지붕 가운데에서 8방향으로 물 돔이 솟고, 지붕 폭만큼 충격파가 퍼지고, 바닥이 파랗게 물들며 김이 오른다.
                 Vector3 at = W(st.Pos);
-                Steam(at, 3, 1.2f);
-                for (int c = 0; c < 4; c++)
+                float width = Mathf.Max(st.Half.X, st.Half.Y) * 2f;
+                Vector3 roof = at + new Vector3(0f, 0.6f, 0f);
+                SteamPillar(roof, 1.4f);
+                Steam(at, 6, 1.4f);
+                Shockwave(roof, new Color(0.6f, 0.9f, 1f, 0.9f), width * 1.2f, 0.5f);
+                _groundGlow.Put(at, width * 1.4f, 0f, new Color(0.5f, 0.8f, 1f, 0.3f));
+                for (int c = 0; c < 8; c++)
                 {
-                    float sx = c % 2 == 0 ? -1f : 1f;
-                    float sy = c < 2 ? -1f : 1f;
-                    Vector3 corner = at + new Vector3(sx * st.Half.X * 0.8f, sy * st.Half.Y * 0.8f + 0.6f, 0f);
+                    float a = c * Mathf.PI * 2f / 8f;
+                    Vector3 d = new Vector3(Mathf.Cos(a), Mathf.Sin(a) * 0.6f, 0f);
                     for (int i = 0; i < 3; i++)
                     {
-                        var v = new Vector3(sx * Random.Range(2.5f, 4f), 3.5f + Random.Range(0f, 1.5f), 0f);
-                        EmitSprite(BeamSprite(), corner, v, 0f, 0.5f, 0.14f, 0.08f, new Color(0.75f, 0.95f, 1f, 0.9f), new Color(0.7f, 0.9f, 1f, 0f), 0f, true,
-                            12f, 4f, (Mathf.Atan2(v.y, v.x) * Mathf.Rad2Deg) - 90f);
+                        var v = (d * Random.Range(4f, 6.5f)) + new Vector3(0f, 5f + Random.Range(0f, 2f), 0f);
+                        EmitSprite(BeamSprite(), roof, v, 0f, 0.6f, 0.16f, 0.08f, new Color(0.75f, 0.95f, 1f, 0.95f), new Color(0.7f, 0.9f, 1f, 0f), 0f, true,
+                            12f, 6f, (Mathf.Atan2(v.y, v.x) * Mathf.Rad2Deg) - 90f);
                     }
                     for (int i = 0; i < 3; i++)
                     {
-                        EmitFalling("Effects/water_drop", corner, new Vector3(sx * Random.Range(1f, 3f), Random.Range(2f, 4f), 0f), 0.6f, 0.26f, new Color(0.75f, 0.95f, 1f, 1f));
+                        EmitFalling("Effects/water_drop", roof, (d * Random.Range(1.5f, 4f)) + new Vector3(0f, Random.Range(2f, 5f), 0f), 0.7f, 0.3f, new Color(0.75f, 0.95f, 1f, 1f));
                     }
                 }
             }
@@ -1375,6 +1394,7 @@ namespace FireGame.Prototypes
                 _ambulanceRoof = W(_sim.AmbulanceAt.Pos);
                 _ambulanceAge = 0f;
                 _ambulanceArrived = false;
+                SpecialBanner("구급차 출동!", new Color(1f, 0.3f, 0.3f));
                 GameAudio.Play(Cue.Critical);
             }
             _heatTextClock -= SurvivorSim.Dt;
@@ -1905,21 +1925,31 @@ namespace FireGame.Prototypes
             {
                 // 도착: 흰 김이 지붕에서 걷혀 올라가고 "구급차! 연기 걷힘".
                 _ambulanceArrived = true;
-                SteamPillar(_ambulanceRoof, 1.2f);
-                Steam(_ambulanceRoof, 8, 1.2f);
-                Shockwave(_ambulanceTo, new Color(1f, 1f, 1f, 0.9f), 5f, 0.4f);
-                SpawnText(_ambulanceTo + new Vector3(0f, 1.8f, 0f), "구급차! 연기 걷힘", new Color(1f, 0.9f, 0.9f), 1.5f);
+                // 도착: 큰 흰 김이 지붕에서 걷혀 올라가고, 녹색 십자 플레어, 충격파, "연기 걷힘!".
+                SteamPillar(_ambulanceRoof, 2f);
+                Steam(_ambulanceRoof, 16, 1.5f);
+                Flare(_ambulanceRoof, 6f, new Color(0.4f, 1f, 0.5f), 3, 0.3f);
+                Shockwave(_ambulanceTo, new Color(1f, 1f, 1f, 0.9f), 9f, 0.5f);
+                SpawnText(_ambulanceTo + new Vector3(0f, 2f, 0f), "연기 걷힘!", new Color(0.6f, 1f, 0.7f), 2.2f);
+                _trauma = Mathf.Min(1f, _trauma + 0.2f);
                 GameAudio.Play(Cue.PickUp);
             }
             _shadows.Put(at + new Vector3(0f, -0.3f, 0f), 2.6f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.5f);
             GameObject model = _ambulanceModels.Get();
             if (model != null) ItemModels.Place(model, at, 0f, dir, 1f);
+            // 사이렌 둘이 번갈아 번쩍이고 그 빛이 바닥을 빨강·파랑으로 물들인다.
             bool flip = Mathf.Repeat(_time * 6f, 1f) < 0.5f;
-            _siren.Put(at + new Vector3(0f, 0.95f, 0f), 1.6f, 0f, flip ? new Color(0.2f, 0.4f, 1f, 0.95f) : new Color(1f, 0.15f, 0.1f, 0.95f));
+            Color sirenA = flip ? new Color(0.2f, 0.4f, 1f, 0.95f) : new Color(1f, 0.15f, 0.1f, 0.95f);
+            Color sirenB = flip ? new Color(1f, 0.15f, 0.1f, 0.9f) : new Color(0.2f, 0.4f, 1f, 0.9f);
+            _siren.Put(at + new Vector3(-0.35f, 0.95f, 0f), 2.4f, 0f, sirenA);
+            _siren.Put(at + new Vector3(0.35f, 0.95f, 0f), 2f, 0f, sirenB);
+            _groundGlow.Put(at, 7f, 0f, new Color(sirenA.r, sirenA.g, sirenA.b, 0.3f));
             if (_ambulanceAge < 1.2f || _ambulanceAge > 3.2f)
             {
-                // 달릴 때 뒤로 먼지.
+                // 달릴 때 뒤로 먼지와 타이어 자국.
                 Emit(Smokes[Random.Range(0, Smokes.Length)], at - (dir * 1.1f), -dir * 1.5f, 1.5f, 0.4f, 0.3f, 0.9f, new Color(0.8f, 0.78f, 0.7f, 0.4f), new Color(0.8f, 0.78f, 0.7f, 0f), 0f);
+                Emit(Smokes[Random.Range(0, Smokes.Length)], at - (dir * 0.8f) + new Vector3(0f, -0.4f, 0f), -dir * 2.5f, 1.5f, 0.5f, 0.4f, 1.2f, new Color(0.75f, 0.72f, 0.65f, 0.35f), new Color(0.75f, 0.72f, 0.65f, 0f), 0f);
+                if (Random.value < 0.6f) AddWet(at + new Vector3(0f, -0.5f, 0f), 0.8f, 4f, false);
             }
         }
 
@@ -1941,7 +1971,14 @@ namespace FireGame.Prototypes
             {
                 Vector3 at = W(_sim.Truck.Value);
                 float dir = _sim.TruckDir;
-                if (!_truckShown) GameAudio.Play(Cue.Critical);
+                if (!_truckShown)
+                {
+                    SpecialBanner("소방차 출동!", new Color(1f, 0.3f, 0.3f));
+                    GameAudio.Play(Cue.Critical);
+                }
+                // 차선 예고: 달릴 줄 앞쪽에 붉은 띠가 깔려 있다(지나간 쪽은 사라진다).
+                float ahead = 14f;
+                _band.Put(at + new Vector3(dir * ahead * 0.5f, 0f, 0f), 3.5f, -90f, new Color(1f, 0.3f, 0.25f, 0.18f + (0.06f * Mathf.Sin(_time * 10f))), null, ahead / 3.5f);
                 _shadows.Put(at + new Vector3(0f, -0.45f, 0f), 5f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.4f);
                 GameObject truckModel = _truckModels.Get();
                 if (truckModel != null)
@@ -1949,20 +1986,28 @@ namespace FireGame.Prototypes
                     truckModel.transform.localPosition = new Vector3(at.x, at.y, 0f);
                     truckModel.transform.localRotation = Models3D.Stand * Quaternion.Euler(0f, dir > 0f ? -90f : 90f, 0f);
                 }
-                // 사이렌: 지붕 앞뒤가 빨강·파랑으로 번갈아 번쩍인다.
+                // 사이렌: 지붕 앞뒤가 빨강·파랑으로 번갈아 번쩍이고 그 빛이 바닥을 물들인다.
                 bool flip = Mathf.Repeat(_time * 6f, 1f) < 0.5f;
-                _siren.Put(at + new Vector3(dir * 0.7f, 0.15f, 0f), 2.2f, 0f, flip ? new Color(1f, 0.15f, 0.1f, 0.95f) : new Color(0.2f, 0.4f, 1f, 0.95f));
-                _siren.Put(at + new Vector3(-dir * 0.1f, 0.15f, 0f), 1.7f, 0f, flip ? new Color(0.2f, 0.4f, 1f, 0.85f) : new Color(1f, 0.15f, 0.1f, 0.85f));
-                // 양옆 물대포: 위아래로 물줄기가 뻗는다.
+                Color sirenA = flip ? new Color(1f, 0.15f, 0.1f, 0.95f) : new Color(0.2f, 0.4f, 1f, 0.95f);
+                _siren.Put(at + new Vector3(dir * 0.7f, 0.15f, 0f), 3f, 0f, sirenA);
+                _siren.Put(at + new Vector3(-dir * 0.1f, 0.15f, 0f), 2.4f, 0f, flip ? new Color(0.2f, 0.4f, 1f, 0.85f) : new Color(1f, 0.15f, 0.1f, 0.85f));
+                _groundGlow.Put(at, 8f, 0f, new Color(sirenA.r, sirenA.g, sirenA.b, 0.28f));
+                // 양옆 물대포: 위아래로 굵은 물줄기 리본이 뻗고 끝에서 물이 튄다. 지나간 자리는 젖는다.
                 for (int side = -1; side <= 1; side += 2)
                 {
+                    Vector3 hand = at + new Vector3(0f, side * 0.5f, 0f);
+                    Vector3 tip = hand + new Vector3(-dir * 1.2f, side * SurvivorSim.TruckSoakRange * 1.4f, 0f);
+                    SmallRibbon(hand, tip, 0.55f, new Color(0.75f, 0.95f, 1f, 0.95f), 0.3f);
+                    Splash(tip, 2, 0.5f);
                     for (int k = 0; k < 2; k++)
                     {
                         var v = new Vector3((-dir * Random.Range(0.5f, 2f)) + Random.Range(-1f, 1f), side * Random.Range(7f, 10f), 0f);
-                        Emit("Effects/water_drop", at + new Vector3(0f, side * 0.4f, 0f), v, 3f, 0.3f, 0.4f, 0.12f, new Color(0.75f, 0.95f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
+                        Emit("Effects/water_drop", hand, v, 3f, 0.3f, 0.4f, 0.12f, new Color(0.75f, 0.95f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
                     }
                 }
+                if (Random.value < 0.5f) AddWet(at, 2.5f, 5f, false);
                 if (Random.value < 0.4f) Splash(at - new Vector3(dir * 1.4f, 0f, 0f), 1, 0.4f);
+                _trauma = Mathf.Max(_trauma, 0.08f);
             }
             _truckShown = _sim.Truck.HasValue;
 
@@ -2940,16 +2985,26 @@ namespace FireGame.Prototypes
             Vector3 ground = Vector3.Lerp(from, to, 1f - ((1f - t) * (1f - t)));
             Vector3 dir = (to - from).normalized;
             DrawHeliAt(ground, dir, 1f);
-            // 목표 표시: 떨어질 자리가 옅은 파란 원으로 조여 든다.
-            _reticle.Put(to, Mathf.Lerp(SurvivorSim.HeliRadius * 3f, SurvivorSim.HeliRadius * 2f, t), 0f, new Color(0.5f, 0.85f, 1f, 0.35f + (0.4f * t)));
+            // 목표 표시: 금색 큰 고리가 조여 들고, 그 안에서 두 번째 고리가 반대로 돈다. 헬기 밑으론 탐조등이 바닥을 비춘다.
+            float ring = Mathf.Lerp(SurvivorSim.HeliRadius * 4.4f, SurvivorSim.HeliRadius * 2.2f, t);
+            _reticle.Put(to, ring, _time * 90f, new Color(1f, 0.85f, 0.35f, 0.45f + (0.45f * t)));
+            _reticle.Put(to, ring * 0.72f, -_time * 140f, new Color(0.6f, 0.9f, 1f, 0.3f + (0.5f * t)));
+            _groundGlow.Put(ground, 7f, 0f, new Color(1f, 0.98f, 0.9f, 0.3f));
+            // 하강풍: 헬기 밑 바닥에서 연기가 바깥으로 밀린다.
+            for (int i = 0; i < 6; i++)
+            {
+                float a = Random.Range(0f, Mathf.PI * 2f);
+                Vector3 o = new Vector3(Mathf.Cos(a), Mathf.Sin(a) * 0.5f, 0f);
+                Emit("Effects/smoke_02", ground + (o * 1.2f), o * Random.Range(4f, 7f), 3f, 0.45f, 0.5f, 1.1f, new Color(0.9f, 0.9f, 0.9f, 0.25f), new Color(0.9f, 0.9f, 0.9f, 0f), Random.Range(-2f, 2f));
+            }
             if (t > 0.6f)
             {
                 // 쏟기 직전: 헬기 배에서 물이 쏟아진다.
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < 10; i++)
                 {
-                    Vector3 belly = ground + HeliLift + new Vector3(Random.Range(-0.6f, 0.6f), -0.3f, 0f);
-                    Emit("Effects/water_drop", belly, new Vector3(Random.Range(-1f, 1f), -Random.Range(6f, 9f), 0f), 0f, 0.3f,
-                        0.5f, 0.3f, new Color(0.75f, 0.93f, 1f, 0.95f), new Color(0.6f, 0.9f, 1f, 0.2f), 0f);
+                    Vector3 belly = ground + HeliLift + new Vector3(Random.Range(-0.9f, 0.9f), -0.3f, 0f);
+                    Emit("Effects/water_drop", belly, new Vector3(Random.Range(-1.5f, 1.5f), -Random.Range(7f, 11f), 0f), 0f, 0.3f,
+                        0.6f, 0.3f, new Color(0.75f, 0.93f, 1f, 0.95f), new Color(0.6f, 0.9f, 1f, 0.2f), 0f);
                 }
             }
         }
@@ -5120,7 +5175,7 @@ namespace FireGame.Prototypes
             _flashImage.color = new Color(_flashColor.r, _flashColor.g, _flashColor.b, _flash * 0.55f);
 
             _alert.color = new Color(_alert.color.r, _alert.color.g, _alert.color.b, _alertAge < 2f ? 1f : Mathf.Max(0f, 1f - ((_alertAge - 2f) * 2f)));
-            float s = _alertAge < 0.15f ? Mathf.Lerp(1.6f, 1f, _alertAge / 0.15f) : 1f;
+            float s = _alertAge < 0.15f ? Mathf.Lerp(_alertScale, 1f, _alertAge / 0.15f) : 1f;
             _alert.rectTransform.localScale = Vector3.one * s;
             float shake = _alertAge < 0.6f ? Mathf.Sin(_alertAge * 60f) * 14f * (1f - (_alertAge / 0.6f)) : 0f;
             _alert.rectTransform.anchoredPosition = new Vector2(shake, 250f);
@@ -5374,6 +5429,23 @@ namespace FireGame.Prototypes
             _alert.text = text;
             _alert.color = color;
             _alertAge = 0f;
+            _alertScale = 1.6f;
+        }
+
+        private static readonly Color SpecialGold = new Color(1f, 0.84f, 0.3f);
+
+        /// <summary>
+        /// 노란 장비 출동 배너: 금색 큰 글자가 2.2배로 튀어오르고, 금빛 화면 플래시·줌 펀치·작은 흔들림이 따른다.
+        /// 7종이 모두 이걸로 시작한다("출동 배너 → 예고 표식 → 임팩트"). quiet면 자주 오는 장비(스프링클러)라 글자만.
+        /// </summary>
+        private void SpecialBanner(string text, Color tint, bool quiet = false)
+        {
+            ShowAlert(text, SpecialGold);
+            _alertScale = 2.2f;
+            if (quiet) return;
+            Flash(Color.Lerp(SpecialGold, tint, 0.5f), 0.25f);
+            _zoomKick = Mathf.Max(_zoomKick, 0.06f);
+            _trauma = Mathf.Min(1f, _trauma + 0.12f);
         }
 
         private void ShowCards()
