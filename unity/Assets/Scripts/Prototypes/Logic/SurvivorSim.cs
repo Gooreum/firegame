@@ -2092,7 +2092,8 @@ namespace FireGame.Prototypes.Logic
             if (_fireboatLeft <= 0f) Fireboat = null;
         }
 
-        private float _waveClock = 4f;
+        /// <summary>소방정(3초)과 같은 틱에 뜨지 않게 2초 늦게 시작한다(배너가 겹친다).</summary>
+        private float _waveClock = 6f;
         private readonly List<Structure> _waveSoaked = new List<Structure>();
         private readonly List<Enemy> _waveHit = new List<Enemy>();
 

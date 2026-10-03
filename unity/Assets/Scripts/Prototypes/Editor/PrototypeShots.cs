@@ -322,6 +322,12 @@ namespace FireGame.Prototypes.EditorTools
                     view.Frame(new Vector3(x, (boat != null ? boat.Pos.Y : 40f) - 2f, 0f), 10f);
                 }, 4, null, true, true);
 
+            // 항구 전용 노란 카드(풀장비): 바다 줄을 달리며 부두 쪽으로 물을 뿜는 소방정, 바다를 쓸어 내려오는 큰 파도.
+            failures += SurvivorShot(dir, "c58c_fireboat", view => view.Sim.Fireboat.HasValue && Mathf.Abs(view.Sim.Fireboat.Value.X - (SurvivorSim.ArenaSize / 2f)) < 10f, 2, true,
+                view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, 44f, 0f), 14f), 4, null, true, true);
+            failures += SurvivorShot(dir, "c58b_harbor_wave", view => view.Sim.WaveY.HasValue && view.Sim.WaveY.Value < 50f, 2, true,
+                view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, 44f, 0f), 16f), 4, null, true, true);
+
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
         }

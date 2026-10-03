@@ -202,6 +202,10 @@ namespace FireGame.Prototypes
         private Pool _rainShade;
         private Pool _band;
         private bool _truckShown;
+        private bool _fireboatShown;
+
+        /// <summary>큰 파도가 이번에 부두선에 닿는 충격파를 이미 냈다.</summary>
+        private bool _waveHitQuay;
         /// <summary>비구름 번개까지 남은 시간, 거품 매트의 다음 거품 터짐까지 남은 시간.</summary>
         private float _lightningClock;
         private float _foamPopClock;
@@ -586,6 +590,8 @@ namespace FireGame.Prototypes
             _planeAge = 99f;
             _ambulanceAge = 99f;
             _truckShown = false;
+            _fireboatShown = false;
+            _waveHitQuay = false;
             _lastPlayer = new Vector3(_sim.Player.X, _sim.Player.Y, 0f);
             _stepClock = 0f;
             _regenClock = 0f;
@@ -1417,6 +1423,14 @@ namespace FireGame.Prototypes
                 bool suit = _sim.Build.Level(UpgradeId.Suit) > 0;
                 SpawnText(W(_sim.Player) + new Vector3(0f, 1.3f, 0f), suit ? "방화복이 막는다" : "뜨거워!", suit ? new Color(1f, 0.85f, 0.4f) : new Color(1f, 0.4f, 0.2f), 1f);
             }
+            // 큰 파도: 금색 배너 + 큰 흔들림 + 멈칫(바다가 통째로 밀려온다).
+            if (_sim.JustSurge)
+            {
+                SpecialBanner("큰 파도!", new Color(0.5f, 0.85f, 1f));
+                _trauma = Mathf.Min(1f, _trauma + 0.4f);
+                HitStop(0.04f);
+                GameAudio.Play(Cue.Backfire);
+            }
             // 항구: 불배가 뜨면 알림, 닿으면 충격파·글자, 물 위에서 끄면 김·글자.
             if (_sim.JustBoat != null)
             {
@@ -2066,6 +2080,7 @@ namespace FireGame.Prototypes
             _truckShown = _sim.Truck.HasValue;
 
             DrawAmbulance(dt);
+            DrawHarborSpecials();
 
             if (_sim.RainAt.HasValue)
             {
@@ -4493,6 +4508,88 @@ namespace FireGame.Prototypes
                         break;
                 }
                 if (st.Burning && st.Kind != StructureKind.Gas) DrawRoofFire(st, at, w, h, i, st.Kind == StructureKind.Car ? RoofHeight(i) : st.Kind == StructureKind.Tree ? RoofHeight(i) * 0.55f : 0f);
+            }
+        }
+
+        /// <summary>항구 노란 둘. 소방정: 바다 줄 예고 띠 + 흰 선체 모델 + 남쪽으로 두 물줄기 + 사이렌 + 뒤 물결. 큰 파도: 폭 60 흰·파랑 띠가 남쪽으로 쓸며 거품·젖은 자국을 남기고 부두선에서 충격파.</summary>
+        private void DrawHarborSpecials()
+        {
+            if (_sim.Fireboat.HasValue)
+            {
+                Vector3 at = W(_sim.Fireboat.Value);
+                float dir = _sim.FireboatDir;
+                var sea = new Color(0.35f, 0.75f, 1f);
+                if (!_fireboatShown)
+                {
+                    SpecialBanner("소방정 출동!", sea);
+                    GameAudio.Play(Cue.Critical);
+                }
+                float ahead = 16f;
+                _band.Put(at + new Vector3(dir * ahead * 0.5f, 0f, 0f), 3f, -90f, new Color(0.4f, 0.75f, 1f, 0.16f + (0.05f * Mathf.Sin(_time * 10f))), null, ahead / 3f);
+                var heading = new Vector3(dir, 0f, 0f);
+                _shadows.Put(at + new Vector3(0.15f, -0.3f, 0f), 2.6f, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
+                GameObject boat = _fireboatModels.Get();
+                if (boat != null) ItemModels.Place(boat, at, 0.06f * Mathf.Sin(_time * 3f), heading, 1.15f);
+                bool flip = Mathf.Repeat(_time * 6f, 1f) < 0.5f;
+                _siren.Put(at + Up(1.2f), 2.6f, 0f, flip ? new Color(0.3f, 0.5f, 1f, 0.95f) : new Color(1f, 0.2f, 0.15f, 0.95f));
+                _groundGlow.Put(at, 7f, 0f, flip ? new Color(0.3f, 0.5f, 1f, 0.22f) : new Color(1f, 0.2f, 0.15f, 0.22f));
+                // 물대포 둘: 부두 쪽(남쪽)으로 길게 뿜는다.
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    Vector3 hand = at + new Vector3(side * 0.45f, -0.3f, 0f) + Up(0.9f);
+                    Vector3 tip = at + new Vector3((side * 2f) - (dir * 2.5f), -SurvivorHarbor.FireboatSpray, 0f);
+                    SmallRibbon(hand, tip, 0.6f, new Color(0.75f, 0.95f, 1f, 0.95f), 0.5f);
+                    Splash(tip, 2, 0.6f);
+                    for (int k = 0; k < 2; k++)
+                    {
+                        var v = new Vector3((side * Random.Range(1f, 3f)) - (dir * Random.Range(1f, 3f)), -Random.Range(9f, 13f), 0f);
+                        Emit("Effects/water_drop", hand, v, 3f, 0.4f, 0.4f, 0.12f, new Color(0.75f, 0.95f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
+                    }
+                }
+                // 뒤 물결: 흰 거품이 바다에 남는다.
+                if (Random.value < 0.7f) AddWet(at - (heading * 1.4f) + new Vector3(Random.Range(-0.3f, 0.3f), Random.Range(-0.5f, 0.5f), 0f), 1.6f, 2f, false);
+                if (Random.value < 0.5f) Emit("Effects/smoke_01", at - (heading * 1.6f), -heading * 1f, 1.5f, 0.7f, 0.5f, 1.2f, new Color(1f, 1f, 1f, 0.55f), new Color(1f, 1f, 1f, 0f), 0f);
+                _trauma = Mathf.Max(_trauma, 0.06f);
+            }
+            _fireboatShown = _sim.Fireboat.HasValue;
+
+            if (_sim.WaveY.HasValue)
+            {
+                float y = _sim.WaveY.Value;
+                float mid = SurvivorSim.ArenaSize / 2f;
+                float width = SurvivorSim.ArenaSize + 4f;
+                var crest = new Vector3(mid, y, 0f);
+                // 두 겹 띠: 앞머리 흰 거품, 뒤로 넓은 파란 물마루(띠는 -90°로 눕혀 x로 늘인다: 소방차 차선과 같은 규칙).
+                _band.Put(crest + new Vector3(0f, 1.6f, 0f), 3.5f, -90f, new Color(0.35f, 0.62f, 0.95f, 0.5f), null, width / 3.5f);
+                _band.Put(crest, 1.2f, -90f, new Color(1f, 1f, 1f, 0.9f), null, width / 1.2f);
+                _band.Put(crest + new Vector3(0f, 0.9f, 0f), 0.5f, -90f, new Color(0.8f, 0.95f, 1f, 0.8f), null, width / 0.5f);
+                _groundGlow.Put(crest + new Vector3(0f, 1f, 0f), 6f, -90f, new Color(0.6f, 0.85f, 1f, 0.25f), null, width / 6f);
+                for (int k = 0; k < 20; k++)
+                {
+                    float x = Random.Range(0f, SurvivorSim.ArenaSize);
+                    Emit("Effects/smoke_01", new Vector3(x, y + Random.Range(-0.3f, 0.5f), 0f) + Up(0.4f), new Vector3(Random.Range(-0.5f, 0.5f), -Random.Range(2f, 5f), 0f), 2f, 0.45f, 0.5f, 1.3f,
+                        new Color(1f, 1f, 1f, 0.75f), new Color(1f, 1f, 1f, 0f), Random.Range(-90f, 90f));
+                }
+                for (int k = 0; k < 6; k++) Splash(new Vector3(Random.Range(0f, SurvivorSim.ArenaSize), y, 0f), 1, 0.8f);
+                for (int k = 0; k < 4; k++) AddWet(new Vector3(Random.Range(0f, SurvivorSim.ArenaSize), y + Random.Range(1.5f, 4f), 0f), Random.Range(1.5f, 3f), 4f, false);
+                if (!_waveHitQuay && y <= SurvivorHarbor.SeaFrom + 0.5f)
+                {
+                    // 부두선에 부딪히는 순간: 폭 전체 충격파와 큰 물보라.
+                    _waveHitQuay = true;
+                    Shockwave(new Vector3(mid, SurvivorHarbor.SeaFrom, 0f), new Color(0.9f, 0.97f, 1f, 0.9f), SurvivorSim.ArenaSize, 0.6f);
+                    for (int k = 0; k < 40; k++)
+                    {
+                        float x = Random.Range(0f, SurvivorSim.ArenaSize);
+                        EmitFalling("Effects/water_drop", new Vector3(x, SurvivorHarbor.SeaFrom, 0f) + Up(0.3f), new Vector3(Random.Range(-2f, 2f), Random.Range(0f, 3f), 0f), 0.7f, 0.45f, new Color(0.8f, 0.95f, 1f, 1f));
+                    }
+                    _trauma = Mathf.Min(1f, _trauma + 0.3f);
+                    PlaySplash();
+                }
+                _trauma = Mathf.Max(_trauma, 0.12f);
+            }
+            else
+            {
+                _waveHitQuay = false;
             }
         }
 

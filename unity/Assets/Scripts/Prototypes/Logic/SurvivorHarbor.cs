@@ -29,6 +29,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>부둣가 줄 y(이 위 건물이 배의 표적이다).</summary>
         public const float QuayRow = 36f;
 
+        /// <summary>소방정 물줄기가 남쪽으로 닿는 길이(그림용: 바다 줄 50에서 부둣가 지붕 37.5까지).</summary>
+        public const float FireboatSpray = 13f;
+
         public static List<Structure> Build()
         {
             var list = new List<Structure>();
