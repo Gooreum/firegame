@@ -13,6 +13,12 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>강: 소방관과 땅의 불 몹을 막고 절대 안 탄다. 건물 불도 못 건넌다(불씨·박쥐만 난다).</summary>
         Water,
+
+        /// <summary>항구: 바다 위를 떠내려오는 불배. 유일하게 움직이는 구조물이고, 부두에 닿으면 곁 탈 것에 불을 옮긴다. 물 위에서 끄면 바다로 돌아간다.</summary>
+        Boat,
+
+        /// <summary>야시장: 불꽃 가판대. 불이 붙으면 퓨즈 뒤 하늘로 로켓을 쏘아 아무 데나 불을 낸다. 끄면 멈춘다.</summary>
+        Fireworks,
     }
 
     /// <summary>동네에 놓인 탈 것 하나. 판정은 축 정렬 사각형이다.</summary>
@@ -70,6 +76,21 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>크게 타는 건물이 옆 건물로 불을 옮기기까지 남은 시간.</summary>
         public float SpreadClock;
+
+        /// <summary>배: 지금 떠가는 속도(칸/초).</summary>
+        public Vec2 Drift;
+
+        /// <summary>배: 부두에 닿아 멈췄다.</summary>
+        public bool Docked;
+
+        /// <summary>배: 노리는 부둣가 건물(그 x에서 남쳐 꺾는다).</summary>
+        public Structure Target;
+
+        /// <summary>불꽃 가판대: 퓨즈가 다 타서 로켓을 쏘고 있다.</summary>
+        public bool Launching;
+
+        /// <summary>불꽃 가판대: 다음 로켓까지 남은 시간.</summary>
+        public float LaunchClock;
 
         public bool Burning
         {

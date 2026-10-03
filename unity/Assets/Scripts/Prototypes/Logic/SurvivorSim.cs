@@ -25,6 +25,12 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>공단: 불붙은 폐유 덩어리. 느리고 튼튼하며, 걸어온 자리와 죽은 자리에 건물을 태우는 기름 불을 남긴다.</summary>
         Oil,
+
+        /// <summary>항구: 불 갈매기. 바다 쪽에서 날아와(물을 건넌다) 크게 출렁이며 소방관을 쫓는다.</summary>
+        Gull,
+
+        /// <summary>야시장: 폭죽. 깡충깡충 뛰어오고, 잡으면 불씨 둘이 튀어 점포를 노린다(점포 곁에서 터뜨리지 마라).</summary>
+        Popper,
     }
 
     public enum ShotKind
@@ -967,6 +973,9 @@ namespace FireGame.Prototypes.Logic
                 case EnemyKind.Squirrel: e.MaxHp = 3f * scale; e.Speed = 3.6f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; e.Seeker = true; break;
                 case EnemyKind.Bat: e.MaxHp = 1.5f * scale; e.Speed = 3.2f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; break;
                 case EnemyKind.Oil: e.MaxHp = 6f * scale; e.Speed = 1.3f; e.Radius = 0.55f; e.Touch = 10f; e.Xp = 3; break;
+                case EnemyKind.Gull: e.MaxHp = 2.5f * scale; e.Speed = 3.4f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; break;
+                // 폭죽의 Speed는 뛰는 순간 속도(한 주기 1초 중 0.35초만 움직인다 → 평균 2.6).
+                case EnemyKind.Popper: e.MaxHp = 2f * scale; e.Speed = 7.5f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; break;
             }
             e.Hp = e.MaxHp;
             Enemies.Add(e);

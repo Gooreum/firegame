@@ -22,7 +22,7 @@ namespace FireGame.Prototypes
         private const float AlleyExtra = SurvivorFactory.AlleyHalf - RoadHalf;
 
         /// <summary>스테이지 번호별로 한 장씩 만들어 둔다(0은 비움).</summary>
-        private static readonly Sprite[] Cached = new Sprite[4];
+        private static readonly Sprite[] Cached = new Sprite[FireGame.Prototypes.Logic.SurvivorStages.Count + 1];
 
         /// <summary>스테이지 바닥 한 장(가운데 = mid). 스테이지마다 한 번만 만들고 재사용한다. 모르는 번호는 마을.</summary>
         public static Sprite Paint(int stage, int size, float mid, float pathHalf)
@@ -38,6 +38,7 @@ namespace FireGame.Prototypes
                 {
                     float x = (px + 0.5f) / Ppu;
                     float y = (py + 0.5f) / Ppu;
+                    // 4 항구·5 야시장은 뷰 패스에서 그린다(그 전까지 마을 바닥).
                     Color c = stage == 2 ? Forest(px, py, x, y, mid, pathHalf) : stage == 3 ? Factory(px, py, x, y, mid) : Town(px, py, x, y, mid);
                     pixels[(py * n) + px] = c;
                 }

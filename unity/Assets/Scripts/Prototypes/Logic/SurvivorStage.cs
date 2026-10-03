@@ -65,6 +65,18 @@ namespace FireGame.Prototypes.Logic
         /// <summary>공단: 가스통(약품 드럼)이 터질 때 흩뿌리는 기름 불 수. 0이면 안 흩뿌린다.</summary>
         public int DrumSpill;
 
+        /// <summary>항구: 이 간격마다 불붙은 배가 바다 가장자리에서 떠내려온다(0이면 안 온다). 첫 배는 SurvivorSim.FirstBoat초.</summary>
+        public float BoatEvery;
+
+        /// <summary>항구: 가장자리 스폰에서 불 갈매기 비율(바다 쪽에서 날아온다).</summary>
+        public float GullShare;
+
+        /// <summary>야시장: 가장자리 스폰에서 폭죽 비율(30초부터).</summary>
+        public float PopperShare;
+
+        /// <summary>야시장: 등줄. 맵을 깐 뒤 (구조물 인덱스 a, b) 쌍을 돌려준다. null이면 등줄 없음.</summary>
+        public Func<List<Structure>, List<int[]>> Links;
+
         /// <summary>이 스테이지 레벨업에서 나오는 노란 특수 카드들.</summary>
         public UpgradeId[] Specials;
 
@@ -84,7 +96,7 @@ namespace FireGame.Prototypes.Logic
     /// </summary>
     public static class SurvivorStages
     {
-        public const int Count = 3;
+        public const int Count = 5;
 
         private static readonly StageRules Town = new StageRules
         {
@@ -154,10 +166,56 @@ namespace FireGame.Prototypes.Logic
             Excluded = new[] { UpgradeId.Drone },
         };
 
+        private static readonly StageRules Harbor = new StageRules
+        {
+            Number = 4,
+            Name = "항구",
+            Map = SurvivorHarbor.Build,
+            // 부둣가 8채 + 창고: 마을과 같은 신고 표.
+            ReportTimes = SurvivorSim.ReportTimes,
+            SpawnRate = 1.3f,
+            BlazeMax = 0.3f,
+            DartShare = 0.1f,
+            // 항구의 난이도는 새 규칙(불배·갈매기)에서 온다. 수치는 측정 전 초깃값(docs §17).
+            GullShare = 0.08f,
+            BoatEvery = 18f,
+            // 부둣가 줄은 서로 가까워 번진다(바다는 못 건넌다: CrossesWater).
+            SpreadEvery = 8f,
+            Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Fireboat, UpgradeId.Wave },
+            // 불배는 물 위에 있다: 멀리 던지는 물폭탄과 부두 끝에 세우는 포탑이 답이고, 몸 둘레 장막은 배에 못 닿는다.
+            Threat = "불붙은 배가 떠내려와 부두에 닿는다 · 바다에서 불 갈매기",
+            Counters = new[] { UpgradeId.WaterBomb, UpgradeId.Turret },
+            Excluded = new[] { UpgradeId.Curtain },
+        };
+
+        private static readonly StageRules Market = new StageRules
+        {
+            Number = 5,
+            Name = "야시장",
+            Map = SurvivorMarket.Build,
+            Links = SurvivorMarket.Links,
+            ReportTimes = SurvivorSim.ReportTimes,
+            SpawnRate = 1.3f,
+            BlazeMax = 0.3f,
+            DartShare = 0.1f,
+            PopperShare = 0.1f,
+            // 점포끼리는 등줄로만 옮긴다(둘 다 켜면 다닥다닥 붙은 점포가 한 번에 탄다).
+            SpreadEvery = 0f,
+            TreeSpit = 0f,
+            Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Shells, UpgradeId.Mist },
+            // 등줄을 적시며 골목을 걷는 장막과 사람 많은 점포를 구하는 대원이 답이고, 선 자리만 지키는 포탑은 줄 따라 달리는 불을 못 쫓는다.
+            Threat = "등줄을 타고 불이 점포를 건넌다 · 불꽃 가판대가 하늘로 불을 쏜다",
+            Counters = new[] { UpgradeId.Curtain, UpgradeId.Partner },
+            Excluded = new[] { UpgradeId.Turret },
+        };
+
+        /// <summary>번호순. 정적 초기화 순서상 위 다섯 뒤에 있어야 한다.</summary>
+        private static readonly StageRules[] All = { Town, Forest, Factory, Harbor, Market };
+
         /// <summary>n번 스테이지(1부터). 범위를 벗어나면 1스테이지.</summary>
         public static StageRules Get(int n)
         {
-            return n == 3 ? Factory : n == 2 ? Forest : Town;
+            return n >= 1 && n <= Count ? All[n - 1] : Town;
         }
 
         /// <summary>깬 뒤 넘어갈 스테이지. 마지막을 깨면 처음으로 돌아간다.</summary>

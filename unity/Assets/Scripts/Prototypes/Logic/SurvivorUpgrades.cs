@@ -60,6 +60,18 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>3스테이지 전용: 바닥 불이 몰린 곳에 소화 폼을 깔아 기름 불을 덮고 한동안 막는다.</summary>
         Foam,
+
+        /// <summary>4스테이지 전용: 소방정이 바다를 가로지르며 부두 쪽으로 물을 뿜어 배와 부둣가 건물을 적신다.</summary>
+        Fireboat,
+
+        /// <summary>4스테이지 전용: 큰 파도가 바다를 쓸어 불배를 끄고 북쪽으로 밀어내며 부둣가를 적신다.</summary>
+        Wave,
+
+        /// <summary>5스테이지 전용: 무대에서 물 불꽃 여섯 발이 올라가 가장 큰 불 위에서 터진다.</summary>
+        Shells,
+
+        /// <summary>5스테이지 전용: 불이 몰린 곳에 물안개를 피운다. 안개 안은 불이 안 붙고 등줄 불이 꺼진다.</summary>
+        Mist,
         Heal,
     }
 
@@ -389,6 +401,10 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Rain: return "비구름";
                 case UpgradeId.Retardant: return "방염제 살포";
                 case UpgradeId.Foam: return "폼 살포";
+                case UpgradeId.Fireboat: return "소방정";
+                case UpgradeId.Wave: return "큰 파도";
+                case UpgradeId.Shells: return "물 불꽃놀이";
+                case UpgradeId.Mist: return "물안개";
                 default: return "응급 처치";
             }
         }
@@ -421,6 +437,10 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Rain: return "12초마다 불이 몰린 곳에 먹구름이 3초 동안 비를 뿌린다";
                 case UpgradeId.Retardant: return "15초마다 비행기가 방염제 띠를 뿌린다. 띠 안은 20초 동안 불이 안 붙는다";
                 case UpgradeId.Foam: return "10초마다 바닥 불이 몰린 곳에 소화 폼을 깐다. 기름 불을 덮고 8초 동안 막는다";
+                case UpgradeId.Fireboat: return "14초마다 소방정이 바다를 가로지르며 부두 쪽으로 물을 뿜어 배와 부둣가 건물을 적신다";
+                case UpgradeId.Wave: return "20초마다 큰 파도가 바다를 쓸어 불배를 끄고 북쪽으로 밀어내며 부둣가를 적신다";
+                case UpgradeId.Shells: return "14초마다 무대에서 물 불꽃 6발이 올라가 가장 큰 불 위에서 터진다";
+                case UpgradeId.Mist: return "18초마다 불이 몰린 곳에 물안개를 6초 피운다. 안개 안은 불이 안 붙고 등줄 불이 꺼진다";
                 default: return "체력 30 회복";
             }
         }
