@@ -202,6 +202,9 @@ namespace FireGame.Prototypes
         private Pool _rainShade;
         private Pool _band;
         private bool _truckShown;
+        /// <summary>비구름 번개까지 남은 시간, 거품 매트의 다음 거품 터짐까지 남은 시간.</summary>
+        private float _lightningClock;
+        private float _foamPopClock;
         private float _planeAge = 99f;
         private Vector3 _planeFrom;
 
@@ -1174,11 +1177,12 @@ namespace FireGame.Prototypes
             if (_sim.Sprinkled.Count > 0) GameAudio.Play(Cue.SprayFoam);
             if (_sim.JustRain)
             {
-                // 먹구름이 오면 번개가 한 번 번쩍한다.
+                // 먹구름이 오면 금색 배너와 함께 번개가 번쩍한다. 그 뒤로는 0.7초마다 친다(DrawSpecials).
+                SpecialBanner("비구름 소환!", new Color(0.4f, 0.6f, 1f));
                 Flash(new Color(0.9f, 0.95f, 1f), 0.3f);
                 _trauma = Mathf.Min(1f, _trauma + 0.2f);
+                _lightningClock = 0.35f;
                 GameAudio.Play(Cue.Backfire);
-                if (_sim.RainAt.HasValue) SpawnText(W(_sim.RainAt.Value) + new Vector3(0f, 2.5f, 0f), "비구름!", new Color(0.7f, 0.85f, 1f), 1.4f);
             }
             if (_sim.JustRetardant && _sim.Retardants.Count > 0)
             {
@@ -1190,7 +1194,8 @@ namespace FireGame.Prototypes
                 _planeFrom = a - (dir * 10f);
                 _planeTo = c + (dir * 10f);
                 _planeAge = 0f;
-                ShowAlert("방염제 살포!", new Color(1f, 0.45f, 0.45f));
+                SpecialBanner("방염제 살포!", new Color(1f, 0.4f, 0.5f));
+                _trauma = Mathf.Min(1f, _trauma + 0.2f);
                 GameAudio.Play(Cue.SprayFoam);
             }
             if (_sim.JustFoam && _sim.FoamAt.HasValue)
@@ -1198,25 +1203,27 @@ namespace FireGame.Prototypes
                 // 폼 포탄이 떨어져 터진다: 흰 번쩍 + 흰 거품이 사방으로 튄다.
                 Vector3 at = W(_sim.FoamAt.Value);
                 float r = SurvivorSim.FoamRadius;
-                Flare(at, r * 1.8f, new Color(0.95f, 1f, 1f), 3);
-                Shockwave(at, new Color(1f, 1f, 1f, 0.9f), r * 2.4f, 0.5f);
-                for (int k = 0; k < 16; k++)
-                {
-                    float a = k * Mathf.PI / 8f;
-                    EmitFalling("Effects/smoke_01", at, new Vector3(Mathf.Cos(a) * 4f, 3f + Mathf.Sin(a), 0f), 0.9f, 0.5f, new Color(1f, 1f, 1f, 0.95f));
-                }
-                // 거품 원반 스무 개가 깔개 위에 천천히 부풀며 폼이 걷힐 때까지 남는다.
+                SpecialBanner("소화 거품 살포!", new Color(0.9f, 1f, 1f));
+                Flare(at, r * 2.2f, new Color(0.95f, 1f, 1f), 4);
+                Shockwave(at, new Color(1f, 1f, 1f, 0.9f), r * 3.1f, 0.5f);
+                Shockwave(at, new Color(0.9f, 0.97f, 1f, 0.8f), r * 2f, 0.45f, 0.15f);
                 for (int k = 0; k < 20; k++)
                 {
+                    float a = k * Mathf.PI / 10f;
+                    EmitFalling("Effects/smoke_01", at, new Vector3(Mathf.Cos(a) * 4.5f, 3.5f + Mathf.Sin(a), 0f), 0.9f, 0.6f, new Color(1f, 1f, 1f, 0.95f));
+                }
+                // 큰 거품 원반 48개가 깔개 위에 천천히 부풀며 폼이 걷힐 때까지 남는다.
+                for (int k = 0; k < 48; k++)
+                {
                     float a = Random.value * Mathf.PI * 2f;
-                    float d = r * 0.85f * Mathf.Sqrt(Random.value);
+                    float d = r * 0.9f * Mathf.Sqrt(Random.value);
                     Vector3 o = new Vector3(Mathf.Cos(a) * d, Mathf.Sin(a) * d, 0f);
                     float size = Random.Range(0.7f, 1.3f);
-                    EmitSprite(BubbleSprite(), at + o, Vector3.zero, 0f, SurvivorSim.FoamTime, size * 0.6f, size * 1.1f,
-                        new Color(1f, 1f, 1f, 0.9f), new Color(0.9f, 0.97f, 1f, 0f), Random.Range(-10f, 10f), false);
+                    EmitSprite(BubbleSprite(), at + o, Vector3.zero, 0f, SurvivorSim.FoamTime, size * 0.8f, size * 1.5f,
+                        new Color(1f, 1f, 1f, 0.92f), new Color(0.9f, 0.97f, 1f, 0f), Random.Range(-10f, 10f), false);
                 }
-                SpawnText(at + new Vector3(0f, 2.5f, 0f), "폼 살포!", new Color(0.9f, 1f, 1f), 1.4f);
-                _trauma = Mathf.Min(1f, _trauma + 0.15f);
+                _foamPopClock = 0.2f;
+                _trauma = Mathf.Min(1f, _trauma + 0.3f);
                 GameAudio.Play(Cue.SprayFoam);
             }
             if (_sim.JustCurtain) CurtainBurst();
@@ -2018,26 +2025,46 @@ namespace FireGame.Prototypes
                 Vector3 at = W(_sim.RainAt.Value);
                 float r = SurvivorSim.RainRadius;
                 float fade = Mathf.Clamp01(_sim.RainLeft / 0.4f) * Mathf.Clamp01((SurvivorSim.RainTime - _sim.RainLeft) / 0.3f);
-                _rainShade.Put(at, r * 2.6f, 0f, new Color(0.05f, 0.1f, 0.2f, 0.45f * fade));
-                // 먹구름: 어두운 원반 셋이 겹치고 가장자리만 밝다. 연기 덩어리처럼 회색으로 번지지 않는다.
+                _rainShade.Put(at, r * 3.2f, 0f, new Color(0.05f, 0.1f, 0.2f, 0.5f * fade));
+                // 먹구름: 크고 어두운 원반 셋이 겹치고 가장자리만 밝다. 연기 덩어리처럼 회색으로 번지지 않는다.
                 for (int k = 0; k < 3; k++)
                 {
                     float a = (k * 2.1f) + (_time * 0.25f);
-                    Vector3 o = new Vector3(Mathf.Cos(a) * r * 0.35f, (Mathf.Sin(a) * r * 0.15f) + 3.2f, 0f);
-                    float size = r * (1.3f - (0.15f * k));
-                    _shadows.Put(at + o, size, 0f, new Color(0.12f, 0.14f, 0.2f, 0.9f * fade), DiscSprite(), 0.6f);
-                    _cloud.Put(at + o + new Vector3(0f, 0.35f, 0f), size * 0.9f, 0f, new Color(0.55f, 0.6f, 0.7f, 0.35f * fade), DiscSprite(), 0.6f);
+                    Vector3 o = new Vector3(Mathf.Cos(a) * r * 0.4f, (Mathf.Sin(a) * r * 0.15f) + 3.4f, 0f);
+                    float size = r * (1.8f - (0.2f * k));
+                    _shadows.Put(at + o, size, 0f, new Color(0.08f, 0.1f, 0.16f, 0.92f * fade), DiscSprite(), 0.6f);
+                    _cloud.Put(at + o + new Vector3(0f, 0.4f, 0f), size * 0.92f, 0f, new Color(0.6f, 0.65f, 0.75f, 0.5f * fade), DiscSprite(), 0.6f);
+                }
+                // 번개: 0.7초마다 구름에서 바닥으로 흰 줄기가 꽂히고 화면이 번쩍, 바닥 충격파.
+                _lightningClock -= dt;
+                if (_lightningClock <= 0f && fade > 0.5f)
+                {
+                    _lightningClock = 0.7f;
+                    Vector3 g = at + new Vector3(Random.Range(-r, r) * 0.7f, Random.Range(-r, r) * 0.4f, 0f);
+                    Vector3 top = g + new Vector3(Random.Range(-1f, 1f), 3.4f + (r * 0.3f), 0f);
+                    Vector3 mid = Vector3.Lerp(top, g, 0.5f) + new Vector3(Random.Range(-1.2f, 1.2f), 0f, 0f);
+                    Vector3[] pts = { top, mid, g };
+                    for (int k = 0; k < 2; k++)
+                    {
+                        Vector3 seg = pts[k + 1] - pts[k];
+                        float ang = (Mathf.Atan2(seg.y, seg.x) * Mathf.Rad2Deg) - 90f;
+                        EmitSprite(BeamSprite(), (pts[k] + pts[k + 1]) * 0.5f, Vector3.zero, 0f, 0.14f, 0.3f, 0.12f, new Color(1f, 1f, 1f, 1f), new Color(0.8f, 0.9f, 1f, 0f), 0f, true, 0f, seg.magnitude / 0.3f, ang);
+                        EmitSprite(BeamSprite(), (pts[k] + pts[k + 1]) * 0.5f, Vector3.zero, 0f, 0.2f, 0.9f, 0.3f, new Color(0.7f, 0.85f, 1f, 0.6f), new Color(0.7f, 0.85f, 1f, 0f), 0f, true, 0f, seg.magnitude / 0.9f, ang);
+                    }
+                    Flash(new Color(0.9f, 0.95f, 1f), 0.15f);
+                    Shockwave(g, new Color(0.9f, 0.97f, 1f, 0.9f), 4f, 0.25f);
+                    _trauma = Mathf.Min(1f, _trauma + 0.08f);
                 }
                 // 빗줄기: 구름 밑에서 곧게 떨어지는 가는 선, 땅에 닿으면 물결.
-                for (int k = 0; k < 14; k++)
+                for (int k = 0; k < 30; k++)
                 {
-                    var p = at + new Vector3(Random.Range(-r, r) * 0.9f, Random.Range(-r * 0.5f, r * 0.5f) + 2.8f, 0f);
-                    EmitSprite(BeamSprite(), p, new Vector3(-1f, -18f, 0f), 0f, 0.18f, 0.06f, 0.06f, new Color(0.8f, 0.9f, 1f, 0.75f * fade), new Color(0.8f, 0.9f, 1f, 0f), 0f, true, 0f, 9f, 3f);
+                    var p = at + new Vector3(Random.Range(-r, r) * 0.95f, Random.Range(-r * 0.5f, r * 0.5f) + 2.8f, 0f);
+                    EmitSprite(BeamSprite(), p, new Vector3(-1f, -18f, 0f), 0f, 0.18f, 0.07f, 0.07f, new Color(0.8f, 0.9f, 1f, 0.8f * fade), new Color(0.8f, 0.9f, 1f, 0f), 0f, true, 0f, 9f, 3f);
                 }
-                for (int k = 0; k < 3; k++)
+                for (int k = 0; k < 8; k++)
                 {
-                    var g = at + new Vector3(Random.Range(-r, r) * 0.85f, Random.Range(-r, r) * 0.6f, 0f);
-                    EmitSprite(RingSprite(), g, Vector3.zero, 0f, 0.35f, 0.2f, 0.9f, new Color(0.8f, 0.95f, 1f, 0.6f * fade), new Color(0.8f, 0.95f, 1f, 0f), 0f, true);
+                    var g = at + new Vector3(Random.Range(-r, r) * 0.9f, Random.Range(-r, r) * 0.6f, 0f);
+                    EmitSprite(RingSprite(), g, Vector3.zero, 0f, 0.35f, 0.2f, 1.1f, new Color(0.8f, 0.95f, 1f, 0.6f * fade), new Color(0.8f, 0.95f, 1f, 0f), 0f, true);
                 }
             }
 
@@ -2048,8 +2075,20 @@ namespace FireGame.Prototypes
                 float r = SurvivorSim.FoamRadius;
                 float fade = Mathf.Clamp01(_sim.FoamLeft / 1f) * Mathf.Clamp01((SurvivorSim.FoamTime - _sim.FoamLeft) / 0.25f);
                 // 깔개 바탕은 옅은 흰 원 하나. 거품 자체는 폼이 깔릴 때 뿌린 BubbleSprite 입자가 맡는다.
-                _groundGlow.Put(at, r * 2.2f, 0f, new Color(0.85f, 0.95f, 1f, 0.22f * fade));
+                _groundGlow.Put(at, r * 2.2f, 0f, new Color(0.85f, 0.95f, 1f, 0.4f * fade));
+                // 매트 가장자리 흰 테가 폼이 걷힐 때까지 남고, 0.2초마다 작은 거품이 떠올라 터진다.
+                _auras.Put(at, r * 2f, 0f, new Color(1f, 1f, 1f, 0.6f * fade));
                 if (Random.value < 0.3f * fade) Steam(at + new Vector3(Random.Range(-r, r) * 0.6f, Random.Range(-r, r) * 0.5f, 0f), 1, 0.4f);
+                _foamPopClock -= dt;
+                if (_foamPopClock <= 0f)
+                {
+                    _foamPopClock = 0.2f;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        Vector3 o = new Vector3(Random.Range(-r, r) * 0.8f, Random.Range(-r, r) * 0.6f, 0f);
+                        EmitSprite(BubbleSprite(), at + o, new Vector3(0f, 1.2f, 0f), 0f, 0.6f, 0.3f, 0.7f, new Color(1f, 1f, 1f, 0.9f * fade), new Color(1f, 1f, 1f, 0f), Random.Range(-5f, 5f), false);
+                    }
+                }
             }
 
             foreach (Band b in _sim.Retardants)
@@ -2064,8 +2103,14 @@ namespace FireGame.Prototypes
                 if (laid <= 0f) continue;
                 Vector3 start = a;
                 Vector3 end = Vector3.Lerp(a, c, laid);
-                _band.Put((start + end) * 0.5f, SurvivorSim.RetardantWidth, deg - 90f, new Color(0.9f, 0.25f, 0.3f, 0.35f * (0.3f + (0.7f * t))), null, len * laid / SurvivorSim.RetardantWidth);
-                _band.Put((start + end) * 0.5f, SurvivorSim.RetardantWidth * 0.6f, deg - 90f, new Color(1f, 0.4f, 0.45f, 0.25f * (0.3f + (0.7f * t))), null, len * laid / (SurvivorSim.RetardantWidth * 0.6f));
+                // 띠 3겹: 넓은 바탕, 중간, 밝은 핵. 걷히기 3초 전부터 깜빡인다.
+                float life = 0.3f + (0.7f * t);
+                if (b.Life < 3f) life *= 0.5f + (0.5f * Mathf.Sin(_time * 8f));
+                Vector3 mid = (start + end) * 0.5f;
+                float w0 = SurvivorSim.RetardantWidth * 1.15f, w1 = SurvivorSim.RetardantWidth * 0.8f, w2 = SurvivorSim.RetardantWidth * 0.33f;
+                _band.Put(mid, w0, deg - 90f, new Color(0.9f, 0.25f, 0.3f, 0.45f * life), null, len * laid / w0);
+                _band.Put(mid, w1, deg - 90f, new Color(1f, 0.4f, 0.45f, 0.6f * life), null, len * laid / w1);
+                _band.Put(mid, w2, deg - 90f, new Color(1f, 0.8f, 0.85f, 0.9f * life), null, len * laid / w2);
             }
             if (_planeAge < 1.2f)
             {
@@ -2073,14 +2118,25 @@ namespace FireGame.Prototypes
                 float f = Mathf.Clamp01(_planeAge / 1.2f);
                 Vector3 at = Vector3.Lerp(_planeFrom, _planeTo, f);
                 Vector3 dir = (_planeTo - _planeFrom).normalized;
+                Vector3 wing = new Vector3(-dir.y, dir.x, 0f);
                 float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
-                _shadows.Put(at + new Vector3(0.8f, -1.2f, 0f), 3.2f, deg, new Color(0f, 0f, 0f, 0.3f), null, 0.6f);
+                _shadows.Put(at + new Vector3(1f, -1.5f, 0f), 4.2f, deg, new Color(0f, 0f, 0f, 0.3f), null, 0.6f);
                 GameObject planeModel = _planeModels.Get();
-                if (planeModel != null) ItemModels.Place(planeModel, at, 4f, dir, 1.15f);
-                if (Random.value < 0.8f)
+                if (planeModel != null) ItemModels.Place(planeModel, at, 5f, dir, 1.5f);
+                // 양 날개 끝에서 분홍 분사 두 줄기가 쏟아지고, 지나간 자리에 분홍 연기가 깔린다.
+                for (int side = -1; side <= 1; side += 2)
                 {
-                    Emit("Effects/glow", at + new Vector3(0f, 1.6f, 0f), new Vector3(Random.Range(-0.5f, 0.5f), -3f, 0f), 2f, 0.5f, 0.8f, 1.6f,
-                        new Color(1f, 0.35f, 0.4f, 0.7f), new Color(1f, 0.35f, 0.4f, 0f), 0f);
+                    Vector3 tip = at + (wing * side * 1.6f) + new Vector3(0f, 2f, 0f);
+                    for (int k = 0; k < 3; k++)
+                    {
+                        Emit("Effects/glow", tip, new Vector3(Random.Range(-0.6f, 0.6f), -Random.Range(3.5f, 5f), 0f), 1.5f, 0.5f, 0.7f, 1.5f,
+                            new Color(1f, 0.4f, 0.5f, 0.8f), new Color(1f, 0.4f, 0.5f, 0f), 0f);
+                    }
+                }
+                for (int k = 0; k < 2; k++)
+                {
+                    Emit("Effects/smoke_02", at + new Vector3(Random.Range(-1f, 1f), Random.Range(-0.5f, 0.5f), 0f), -dir * 1.5f, 1.5f, 1.2f, 0.9f, 2.2f,
+                        new Color(1f, 0.55f, 0.65f, 0.35f), new Color(1f, 0.55f, 0.65f, 0f), Random.Range(-1f, 1f));
                 }
             }
         }
