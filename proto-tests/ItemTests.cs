@@ -217,7 +217,7 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Partners_GrowWithLevel_AndDouseWhileRescuing()
+        public void Partner_StaysOne_AndDousesWhileRescuing()
         {
             SurvivorSim control = Quiet();
             Structure c = Shop(control, 12f, 0f, 3);
@@ -233,12 +233,15 @@ namespace FireGame.Prototypes.Tests
             Assert.True(sim.Rescued >= 1, "대원이 못 구했다");
             Assert.True(shop.Fire < c.Fire, "대원이 불을 안 줄였다");
 
+            // 레벨이 올라도 한 명이다(docs §16): 사람 수 대신 달리기·구조 배율이 오른다.
             Take(sim, UpgradeId.Partner, 2);
             Run(sim, 0.1f);
-            Assert.Equal(2, sim.Partners.Count);
+            Assert.Single(sim.Partners);
+            Assert.Equal(1.25f, sim.PartnerSpeedScale);
             Take(sim, UpgradeId.Partner, 2);
             Run(sim, 0.1f);
-            Assert.Equal(3, sim.Partners.Count);
+            Assert.Single(sim.Partners);
+            Assert.Equal(1.5f, sim.PartnerRescueBoost);
         }
 
         [Fact]
@@ -397,12 +400,15 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Squad_FieldsFourPartners()
+        public void Squad_FieldsTwoPartners()
         {
             SurvivorSim sim = Quiet();
             Evolve(sim, UpgradeId.Squad);
             Run(sim, 0.1f);
-            Assert.Equal(4, sim.Partners.Count);
+            // 넷이면 사람 구하기가 플레이어 일이 아니게 됐다: 분대는 둘, 대신 물·구조가 두 배.
+            Assert.Equal(2, sim.Partners.Count);
+            Assert.Equal(2f, sim.PartnerRescueBoost);
+            Assert.Equal(1.3f, sim.PartnerSpeedScale);
         }
 
         [Fact]

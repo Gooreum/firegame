@@ -2859,21 +2859,32 @@ namespace FireGame.Prototypes.Logic
         /// 불난 가게 문 앞에 잠깐 서 있으면 갇힌 사람을 한 명씩 데리고 나온다.
         /// 나온 사람은 잠깐 뛰어 나가는 모습으로만 남는다(Civilians는 화면용).
         /// </summary>
-        /// <summary>구조대원 수: Lv1~2 한 명, Lv3~4 두 명, Lv5 세 명, 구조 분대 네 명.</summary>
+        /// <summary>구조대원 수: 한 명, 구조 분대는 두 명. 셋·넷이면 사람 구하기가 플레이어 일이 아니게 됐다(docs §16).
+        /// 레벨은 사람 수가 아니라 Lv2 구조·물 +25%, Lv3 달리기 +25%, Lv4 물 +25%, Lv5 구조 +25%.</summary>
         public int PartnerCount
         {
             get
             {
-                if (Build.Level(UpgradeId.Squad) > 0) return 4;
-                int lv = Build.Level(UpgradeId.Partner);
-                return lv >= 5 ? 3 : lv >= 3 ? 2 : lv >= 1 ? 1 : 0;
+                if (Build.Level(UpgradeId.Squad) > 0) return 2;
+                return Build.Level(UpgradeId.Partner) > 0 ? 1 : 0;
             }
         }
 
-        /// <summary>문 앞에 대원이 있을 때 구조가 빨라지는 배율(Lv2부터 1.25, 구조 분대 2).</summary>
+        /// <summary>문 앞에 대원이 있을 때 구조가 빨라지는 배율(Lv2 1.25, Lv5 1.5, 구조 분대 2).</summary>
         public float PartnerRescueBoost
         {
-            get { return Build.Level(UpgradeId.Squad) > 0 ? 2f : Build.Level(UpgradeId.Partner) >= 2 ? 1.25f : 1f; }
+            get
+            {
+                if (Build.Level(UpgradeId.Squad) > 0) return 2f;
+                int lv = Build.Level(UpgradeId.Partner);
+                return lv >= 5 ? 1.5f : lv >= 2 ? 1.25f : 1f;
+            }
+        }
+
+        /// <summary>대원 달리기 배율(Lv3 1.25, 구조 분대 1.3).</summary>
+        public float PartnerSpeedScale
+        {
+            get { return Build.Level(UpgradeId.Squad) > 0 ? 1.3f : Build.Level(UpgradeId.Partner) >= 3 ? 1.25f : 1f; }
         }
 
         /// <summary>대원 한 명이 곁 건물 불을 초당 줄이는 양(Lv2·Lv4에 +25%, 구조 분대 두 배).</summary>
@@ -2907,7 +2918,7 @@ namespace FireGame.Prototypes.Logic
             while (Partners.Count > want) Partners.RemoveAt(Partners.Count - 1);
             if (want == 0) return;
 
-            float speed = PartnerSpeed * (Build.Level(UpgradeId.Squad) > 0 ? 1.3f : 1f);
+            float speed = PartnerSpeed * PartnerSpeedScale;
             var taken = new List<Structure>();
             for (int i = 0; i < Partners.Count; i++)
             {

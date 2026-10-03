@@ -89,5 +89,68 @@ namespace FireGame.Prototypes.Tests
             }
             Assert.True(reached >= 5, "대화재까지 간 판이 너무 적다: " + reached + "/10");
         }
+
+        private static SurvivorSim Quiet()
+        {
+            var sim = new SurvivorSim(1, 1);
+            sim.Enemies.Clear();
+            sim.Structures.Clear();
+            sim.Reports = false;
+            return sim;
+        }
+
+        private static void Run(SurvivorSim sim, float seconds)
+        {
+            for (int i = 0; i < (int)(seconds / SurvivorSim.Dt); i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.Enemies.Clear();
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+            }
+        }
+
+        [Fact]
+        public void Partner_IsAlwaysOne_AndLevelsSpeedNotBodies()
+        {
+            SurvivorSim sim = Quiet();
+            sim.Build.Add(UpgradeId.Partner);
+            Run(sim, 0.1f);
+            Assert.Single(sim.Partners);
+            Assert.Equal(1f, sim.PartnerSpeedScale);
+            Assert.Equal(1f, sim.PartnerRescueBoost);
+
+            while (sim.Build.Level(UpgradeId.Partner) < Loadout.MaxLevel) sim.Build.Add(UpgradeId.Partner);
+            Run(sim, 0.1f);
+            // 만렙이어도 한 명. 레벨은 달리기·구조 배율로 간다.
+            Assert.Single(sim.Partners);
+            Assert.Equal(1.25f, sim.PartnerSpeedScale);
+            Assert.Equal(1.5f, sim.PartnerRescueBoost);
+            Assert.Equal(1, sim.PartnerCount);
+
+            sim.Build.Add(UpgradeId.Boots);
+            sim.Build.Add(UpgradeId.Squad);
+            Run(sim, 0.1f);
+            Assert.Equal(2, sim.Partners.Count);
+            Assert.Equal(1.3f, sim.PartnerSpeedScale);
+            Assert.Equal(2f, sim.PartnerRescueBoost);
+
+            // 카드 글에 사람 수가 없다.
+            Assert.Equal("대원 달리기 +25%", SurvivorUpgrades.Describe(UpgradeId.Partner, 3));
+            Assert.Equal("구조 +25%", SurvivorUpgrades.Describe(UpgradeId.Partner, 5));
+        }
+
+        [Fact]
+        public void Partner_StillRescuesAtTheDoor()
+        {
+            SurvivorSim sim = Quiet();
+            sim.Build.Add(UpgradeId.Partner);
+            var house = new Structure { Kind = StructureKind.House, Name = "가게", Pos = new Vec2(sim.Player.X + 7f, sim.Player.Y), Half = new Vec2(2f, 1.5f), Residents = 2 };
+            sim.Structures.Add(house);
+            sim.Ignite(house, 0.5f);
+            // 소방관은 가만히 서 있고 대원만 달려간다.
+            Run(sim, 20f);
+            Assert.True(sim.Rescued >= 1, "대원 한 명이 문 앞에서 아무도 못 구했다: 구조 " + sim.Rescued);
+        }
     }
 }
