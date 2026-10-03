@@ -90,7 +90,7 @@ namespace FireGame.Prototypes.EditorTools
             // 2스테이지 산불 숲: 흙길·소나무, 불다람쥐, 막 날아온 재 박쥐 떼, 바람 화살표.
             failures += SurvivorShot(dir, "c17_forest", view => view.Sim.Time >= 40.5f && view.Sim.Enemies.Exists(e => (e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Squirrel) && e.Pos.DistanceTo(view.Sim.Player) < 6f), 10, false, null, 2);
             // 대형 신고(1:20): 갇힌 사람 얼굴 줄, "대형 화재!" 띠, 화면 밖이면 붉은 화살표.
-            failures += SurvivorShot(dir, "c18_big_report", view => view.Sim.BigReport != null && view.Sim.Time >= SurvivorSim.BigReportTimes[0] + 0.6f, 4);
+            failures += SurvivorShot(dir, "c18_big_report", view => view.Sim.BigReport != null && view.Sim.Time >= SurvivorSim.BigReportTimes[0] + 0.6f, 4, pro: true);
             // 대형 신고를 다 구해 떨어진 보물상자, 그리고 상자가 열리며 카드가 뜨는 순간.
             // 상자는 한 명도 잃지 않고 다 구해야 나온다: 봇에게 맡기면 시드 따라 못 받으니 대형 신고가 뜨면 소방관을 문 앞에 세운다.
             failures += SurvivorShot(dir, "c18b_chest", view =>
@@ -99,14 +99,14 @@ namespace FireGame.Prototypes.EditorTools
                 Structure big = view.Sim.BigReport;
                 if (big != null && big.Burning && big.Door.DistanceTo(view.Sim.Player) > 2f) big.Fire = 0f;
                 return view.Sim.Chests.Count > 0;
-            }, 10);
+            }, 10, pro: true);
             // 여는 순간만 보려고, 상자가 떨어지면 소방관을 상자 위로 옮긴다(다음 틱에 줍는다).
             failures += SurvivorShot(dir, "c18c_chest_open", view =>
             {
                 HoldBigReportDoor(view);
                 if (view.Sim.Chests.Count > 0 && view.Sim.PendingChoices == null) view.Sim.Player = view.Sim.Chests[0].Pos;
                 return view.Sim.JustChest;
-            }, 45);
+            }, 45, pro: true);
             // 대화재(3:00~): 붉은 가장자리, 남은 시간 막대와 랜드마크 갇힌 사람 수.
             failures += SurvivorShot(dir, "c20_finale", view => view.Sim.Finale && view.Sim.Time >= SurvivorSim.FinaleAt + 2f, 5);
             // 새 무기(풀장비): 순찰 드론이 불난 지붕 위에서 물을 뿌리고, 구조대원 셋이 건물에 물을 뿜고, 방수 포탑이 쏜다.
@@ -463,7 +463,8 @@ namespace FireGame.Prototypes.EditorTools
         }
 
         /// <param name="keepAlive">false면 체력·튼튼함을 받쳐 주지 않는다(무너지기 직전 장면용).</param>
-        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<SurvivorView> frame = null, int stage = 1, Action<SurvivorView> setup = null, bool keepAlive = true)
+        /// <param name="pro">true면 숙련 봇이 판을 굴린다(기본 봇은 아이템 다이어트 뒤 1:20까지 집을 다 태워 대형 신고가 뜰 자리가 없다 — docs §16).</param>
+        private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<SurvivorView> frame = null, int stage = 1, Action<SurvivorView> setup = null, bool keepAlive = true, bool pro = false)
         {
             try
             {
@@ -477,7 +478,7 @@ namespace FireGame.Prototypes.EditorTools
                 view.CloseStation();
                 view.Restart(ShotSeed);
                 setup?.Invoke(view);
-                var bot = new SurvivorBot(view.Sim);
+                var bot = new SurvivorBot(view.Sim) { Pro = pro };
                 int guard = 0;
                 while (!until(view) && view.Sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) BotTick(view, bot, keepAlive);
                 if (!until(view)) throw new Exception("조건에 닿기 전에 판이 끝났다: " + view.Sim.Outcome + " t=" + view.Sim.Time);
