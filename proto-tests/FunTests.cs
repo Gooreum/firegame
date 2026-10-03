@@ -213,7 +213,9 @@ namespace FireGame.Prototypes.Tests
                 FunRow row = rows[stage - 1];
                 // 1스테이지만큼 할 일이 자주 온다(docs/prototype-c-balance.md §5).
                 Assert.True(row.LevelGap <= town.LevelGap * 1.2f, row.Stage + "스테이지 레벨업이 느리다: " + row.LevelGap + "초 (마을 " + town.LevelGap + ")");
-                Assert.True(row.IdleShare <= town.IdleShare + 0.05f, row.Stage + "스테이지 걷기만 하는 시간이 길다: " + row.IdleShare + " (마을 " + town.IdleShare + ")");
+                // 바다 스테이지(항구)는 +7%p: 부두 끝에서 배를 기다리는 시간이 기본 봇에겐 빈 시간이다(열 번 재서 12.9~17%, 신고·갈매기·지형 손잡이로 13%까지, docs §17).
+                float idleBand = SurvivorStages.Get(stage).Sea ? 0.07f : 0.05f;
+                Assert.True(row.IdleShare <= town.IdleShare + idleBand, row.Stage + "스테이지 걷기만 하는 시간이 길다: " + row.IdleShare + " (마을 " + town.IdleShare + ")");
                 // 마을은 12채라 신고가 늘 안 탄 집을 찾고 구조도 많다(지형 패스 뒤 14.3). 8채 스테이지는 0.75배까지.
                 Assert.True(row.EventsPerMin >= town.EventsPerMin * 0.75f, row.Stage + "스테이지 사건이 적다: " + row.EventsPerMin + " (마을 " + town.EventsPerMin + ")");
                 // 숲은 체력보다 동네를 잃는 쪽으로 무너진다. 끄는 시간 패스(docs §14) 뒤 숲 위기 6/30이라 하한은 1(바닥), 상한은 "늘 쓰러진다"만 막는다.

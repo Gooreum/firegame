@@ -211,6 +211,8 @@ namespace FireGame.Prototypes.Tests
             var sim = Quiet();
             Enemy popper = sim.Spawn(EnemyKind.Popper, new Vec2(40f, 30f));
             sim.Kill(popper);
+            // 불씨는 틱 끝에 튄다(Kill이 적 목록을 도는 중에도 불리므로).
+            sim.Step(0f, 0f);
             List<Enemy> embers = sim.Enemies.FindAll(e => !e.Dead && e.Kind == EnemyKind.Ember);
             Assert.Equal(SurvivorSim.PopperEmbers, embers.Count);
             Assert.All(embers, e => Assert.True(e.Seeker));

@@ -125,6 +125,11 @@ namespace FireGame.Prototypes.Tests
             }
             Assert.True(lost[2] > lost[1] || housesLost[2] > housesLost[1], "2스테이지가 1스테이지보다 쉽다");
             Assert.True(lost[3] > lost[1] || housesLost[3] > housesLost[1], "3스테이지가 1스테이지보다 쉽다");
+            // 4 항구: 숙련 봇 승은 감독이 마을 수준으로 맞춰 준다(스폰 1.5·배 속도 3·옮김 2.5초로도 19~23 대 22). 항구의 어려움은 승이 아니라
+            // 대화재 최저 체력·아슬 비율로 읽는다(CloseReport). 여기선 "마을보다 쉽지 않다"(패가 노이즈 ±2 안)만 본다(docs §17).
+            Assert.True(lost[4] + 2 >= lost[1] || housesLost[4] > housesLost[1], "4스테이지가 1스테이지보다 쉽다");
+            // 5 야시장: 항구 이상(순서 밴드. 공단과의 순서는 묻지 않는다 — 셋 다 20% 바닥 위면 된다).
+            Assert.True(lost[5] >= lost[4] || housesLost[5] >= housesLost[4], "5스테이지가 4스테이지보다 쉽다");
         }
     }
 }

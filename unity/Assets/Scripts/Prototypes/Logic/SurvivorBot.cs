@@ -212,19 +212,26 @@ namespace FireGame.Prototypes.Logic
             // 불난 곳으로 간다(갇힌 사람이 있으면 문 앞까지, 아니면 5칸까지). 위험이 적을 때만 구슬을 줍는다.
             float danger = (float)Math.Sqrt((fx * fx) + (fy * fy));
             Structure fire = FireToFight(p);
+            // 항구: 뭍에 불이 없고 불배만 떠 있으면 부두 끝에 서서 쏜다(사람이 배우는 자리).
+            Vec2? pier = fire == null ? PierFor(FloatingBoat()) : null;
             Vec2? goal = null;
             float pull = 0.7f;
             if (Pro)
             {
-                // 숙련: 다쳤으면 구급상자 → 상자 → 주민 있는 불의 문 앞(구조 + 물, 열기를 몸으로 받는다) → 가장자리 2.5칸(Lv1 호스 사거리 안) → 공구상자 → 구슬.
+                // 숙련: 다쳤으면 구급상자 → 상자 → 주민 있는 불의 문 앞(구조 + 물, 열기를 몸으로 받는다) → 가장자리 2.5칸(Lv1 호스 사거리 안) → 부두 끝(불배) → 공구상자 → 구슬.
                 pull = 1f;
                 if (hurt && _sim.Kits.Count > 0) goal = _sim.Kits[0].Pos;
                 else if (hurt) goal = danger < 0.3f ? NearestLoot(p, 12f) : null;   // 다쳤고 상자도 없으면 불로 안 간다: 피하기만(구슬은 안전할 때만).
                 else if (_sim.Chests.Count > 0) goal = _sim.Chests[0].Pos;
                 else if (fire != null && fire.Residents > 0) goal = fire.Door;
                 else if (fire != null) goal = StandOff(fire, p, ProStandOff);
+                else if (pier.HasValue) goal = pier;
                 else if (_sim.Toolboxes.Count > 0) goal = _sim.Toolboxes[0].Pos;
                 else goal = NearestLoot(p, 12f);
+            }
+            else if (fire == null && pier.HasValue && danger < 1.5f)
+            {
+                goal = pier;
             }
             else if (_sim.Chests.Count > 0 && danger < 1.5f)
             {
@@ -258,9 +265,9 @@ namespace FireGame.Prototypes.Logic
 
             if (goal.HasValue)
             {
-                // 강: 목표가 건너편이면 다리 가운데(30,30)를 먼저 밟는다. 다리 줄(|y-30|<3.5)에 있으면 그냥 간다.
+                // 강(마을): 목표가 건너편이면 다리 가운데(30,30)를 먼저 밟는다. 다리 줄(|y-30|<3.5)에 있으면 그냥 간다. 바다(항구)엔 다리가 없다.
                 float mid = SurvivorSim.ArenaSize / 2f;
-                if (_sim.HasWater && Math.Sign(goal.Value.X - mid) != Math.Sign(p.X - mid) && Math.Abs(p.Y - mid) > 3.5f) goal = new Vec2(mid, mid);
+                if (_sim.HasWater && !_sim.Stage.Sea && Math.Sign(goal.Value.X - mid) != Math.Sign(p.X - mid) && Math.Abs(p.Y - mid) > 3.5f) goal = new Vec2(mid, mid);
                 float dx = goal.Value.X - p.X;
                 float dy = goal.Value.Y - p.Y;
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
@@ -274,6 +281,30 @@ namespace FireGame.Prototypes.Logic
             float len = (float)Math.Sqrt((fx * fx) + (fy * fy));
             if (len < 0.05f) return default;
             return new Vec2(fx / len, fy / len);
+        }
+
+        /// <summary>물 위를 떠가는 불배(닿은 배는 FireToFight가 보통 불처럼 다룬다). 없으면 null.</summary>
+        private Structure FloatingBoat()
+        {
+            Structure best = null;
+            foreach (Structure s in _sim.Structures)
+            {
+                if (s.Kind != StructureKind.Boat || !s.Burning || s.Docked) continue;
+                if (best == null || s.Pos.Y < best.Pos.Y) best = s;
+            }
+            return best;
+        }
+
+        /// <summary>그 배와 x가 가까운 부두 끝(걸을 수 있는 마지막 자리). 바다 스테이지가 아니거나 배가 없으면 null.</summary>
+        private Vec2? PierFor(Structure boat)
+        {
+            if (boat == null || !_sim.Stage.Sea) return null;
+            float best = SurvivorHarbor.PierX[0];
+            foreach (float x in SurvivorHarbor.PierX)
+            {
+                if (Math.Abs(x - boat.Pos.X) < Math.Abs(best - boat.Pos.X)) best = x;
+            }
+            return new Vec2(best, SurvivorHarbor.PierTip - 1.5f);
         }
 
         /// <summary>건물 가장자리에서 d칸 떨어진, 소방관 쪽 자리.</summary>
@@ -294,8 +325,8 @@ namespace FireGame.Prototypes.Logic
             float bestD = float.MaxValue;
             foreach (Structure s in _sim.Structures)
             {
-                // 물 위 불배는 갈 수 없는 목표다(사거리 안이면 조준은 NearestBurning이 잡는다).
-                if (!s.Burning || s.Kind == StructureKind.Boat) continue;
+                // 물 위를 떠가는 불배는 갈 수 없는 목표다(부두 끝에서 쏜다: PierFor). 부두에 닿은 배는 보통 불처럼 간다.
+                if (!s.Burning || (s.Kind == StructureKind.Boat && !s.Docked)) continue;
                 float d = s.DistanceTo(p) - (s.Residents > 0 ? 15f : 0f) - (s.IsBuilding ? 5f : 0f);
                 if (d < bestD)
                 {

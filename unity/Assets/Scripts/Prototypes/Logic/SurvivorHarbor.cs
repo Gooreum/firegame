@@ -17,14 +17,14 @@ namespace FireGame.Prototypes.Logic
         /// <summary>부두 반폭.</summary>
         public const float PierHalf = 2f;
 
-        /// <summary>부두 끝(여기까지 걸을 수 있다).</summary>
-        public const float PierTip = 48f;
+        /// <summary>부두 끝(여기까지 걸을 수 있다). 배 줄과 2칸 차이: 부두 끝에 서면 지나가는 배가 코앞이다(기본 봇 빈 시간 13% → 밴드 12%를 노린 지형 손잡이, docs §17).</summary>
+        public const float PierTip = 49f;
 
         /// <summary>부두 가운데 x 둘.</summary>
         public static readonly float[] PierX = { 15f, 45f };
 
         /// <summary>불배가 떠내려오는 줄(부두 끝 너머).</summary>
-        public const float BoatLane = 52f;
+        public const float BoatLane = 51f;
 
         /// <summary>부둣가 줄 y(이 위 건물이 배의 표적이다).</summary>
         public const float QuayRow = 36f;
@@ -40,8 +40,8 @@ namespace FireGame.Prototypes.Logic
             Water(list, 6.5f, 50f, 6.5f, 10f);
             Water(list, 30f, 50f, 13f, 10f);
             Water(list, 53.5f, 50f, 6.5f, 10f);
-            Water(list, PierX[0], 54f, PierHalf, 6f);
-            Water(list, PierX[1], 54f, PierHalf, 6f);
+            Water(list, PierX[0], (PierTip + 60f) / 2f, PierHalf, (60f - PierTip) / 2f);
+            Water(list, PierX[1], (PierTip + 60f) / 2f, PierHalf, (60f - PierTip) / 2f);
 
             // 부둣가 줄(배가 노린다). 주민 18: 마을만큼 구할 사람이 있어야 뒤 스테이지도 할 일이 온다(재미 밀도 밴드).
             House(list, "어시장", 8f, QuayRow, 3);
@@ -60,12 +60,10 @@ namespace FireGame.Prototypes.Logic
             Add(list, StructureKind.Gas, "연료 탱크", 48.5f, 38.6f, 0.4f, 0.4f);
             Add(list, StructureKind.Gas, "연료 탱크", 26f, 10f, 0.4f, 0.4f);
 
-            // 컨테이너(차 규칙): 길에 세워 둔 장애물.
+            // 컨테이너(차 규칙): 길에 세워 둔 장애물. 나무는 없다: 구석 나무 넷을 뒀을 땐 불씨가 옮긴 나무만 타는 시간이 13%라
+            // 기본 봇이 구석까지 걸어가느라 빈 시간이 마을 +7%p(밴드 +5%p)였다(docs §17).
             Add(list, StructureKind.Car, "컨테이너", 18f, 30f, 1f, 0.55f);
             Add(list, StructureKind.Car, "컨테이너", 42f, 30f, 1f, 0.55f);
-
-            float[] trees = { 4f, 20f, 56f, 20f, 6f, 30f, 54f, 30f };
-            for (int i = 0; i < trees.Length; i += 2) Add(list, StructureKind.Tree, "나무", trees[i], trees[i + 1], 0.6f, 0.6f);
 
             return list;
         }

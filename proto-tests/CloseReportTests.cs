@@ -241,6 +241,13 @@ namespace FireGame.Prototypes.Tests
                 Assert.True(rows[i].Won * 5 >= seeds, rows[i].Stage + "스테이지 승이 너무 적다: " + rows[i].Won + "/" + seeds);
                 Assert.True(rows[i].Close * 3 >= rows[i].Won, rows[i].Stage + "스테이지 끝이 싱겁다: 아슬 " + rows[i].Close + " / 승 " + rows[i].Won);
             }
+            // 항구는 승이 마을 수준이어도 더 아슬아슬해야 한다: 아슬 비율이 마을 이상이거나 대화재 최저 체력이 마을 이하(docs §17).
+            if (rows.Count >= 4)
+            {
+                CloseRow harbor = rows[3];
+                bool tenser = harbor.Close * town.Won >= town.Close * harbor.Won || harbor.FinaleHp <= town.FinaleHp + 0.02f;
+                Assert.True(tenser, "항구 끝이 마을보다 싱겁다: 아슬 " + harbor.Close + "/" + harbor.Won + " 최저 체력 " + harbor.FinaleHp + " (마을 " + town.Close + "/" + town.Won + " " + town.FinaleHp + ")");
+            }
         }
     }
 }

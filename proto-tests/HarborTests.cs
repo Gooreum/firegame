@@ -114,14 +114,40 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void HoseWater_FliesOverWater_AndWetsTheBuildingBeyond()
+        public void HoseWater_FliesOverTheSeaInTheHarbor_ButTheTownRiverStillBlocksIt()
         {
-            var sim = Quiet(1);
-            sim.Structures.Add(new Structure { Kind = StructureKind.Water, Name = "강", Pos = new Vec2(30f, 30f), Half = new Vec2(3f, 3f) });
-            Structure shop = House(sim, 30f, 37f);
-            sim.Shots.Add(new Shot { Kind = ShotKind.Drop, Pos = new Vec2(30f, 25f), Vel = new Vec2(0f, 20f), Life = 1f, Damage = 10f, Radius = 0.6f });
-            Run(sim, 60);
-            Assert.True(shop.Wet > 0f, "물은 강을 건너 건물을 적신다");
+            foreach (int stage in new[] { 4, 1 })
+            {
+                var sim = Quiet(stage);
+                sim.Structures.Add(new Structure { Kind = StructureKind.Water, Name = "물", Pos = new Vec2(30f, 30f), Half = new Vec2(3f, 3f) });
+                Structure shop = House(sim, 30f, 37f);
+                sim.Shots.Add(new Shot { Kind = ShotKind.Drop, Pos = new Vec2(30f, 25f), Vel = new Vec2(0f, 20f), Life = 1f, Damage = 10f, Radius = 0.6f });
+                Run(sim, 60);
+                if (stage == 4) Assert.True(shop.Wet > 0f, "항구: 물은 바다를 건너 건물을 적신다");
+                else Assert.True(shop.Wet <= 0f, "마을: 강이 물줄기를 막는다(예전 그대로)");
+            }
+        }
+
+        [Fact]
+        public void EdgeSpawns_LandAshore_NotStrandedBeyondTheSea()
+        {
+            var sim = new SurvivorSim(2, 4);
+            sim.Reports = false;
+            int land = 0;
+            int total = 0;
+            for (int i = 0; i < 60 * 40; i++)
+            {
+                sim.Step(0f, 0f);
+                foreach (Enemy e in sim.Enemies)
+                {
+                    if (e.Kind == EnemyKind.Gull) continue;
+                    total++;
+                    if (e.Pos.Y < SurvivorHarbor.SeaFrom + 0.5f) land++;
+                }
+                sim.Enemies.Clear();
+            }
+            Assert.True(total > 30, "40초면 스폰이 수십 번 난다: " + total);
+            Assert.True(land * 100 >= total * 95, "바다에 떨어진 스폰은 뭍에서 다시 뽑는다: 뭍 " + land + " / " + total);
         }
 
         [Fact]
@@ -141,17 +167,23 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Bot_DoesNotWalkIntoTheSeaAfterABurningBoat()
+        public void Bot_StandsOnThePierTip_WhenOnlyAFloatingBoatBurns()
         {
-            var sim = Quiet();
-            Boat(sim, 30f, 52f, false);
+            // 본 맵(바다·부두가 있다)에서 뭍의 불은 없고 불배만 떠 있다.
+            var sim = new SurvivorSim(1, 4);
+            sim.Enemies.Clear();
+            sim.Reports = false;
+            Boat(sim, 30f, SurvivorHarbor.BoatLane, false);
             var bot = new SurvivorBot(sim) { Pro = true };
-            for (int i = 0; i < 120; i++)
+            for (int i = 0; i < 60 * 12; i++)
             {
                 bot.Play();
                 sim.Enemies.Clear();
+                Assert.DoesNotContain(sim.Structures, w => w.Kind == StructureKind.Water && w.Within(sim.Player, 0f));
             }
-            Assert.True(sim.Player.Y < 36f, "봇이 물 위 배를 쫓아 북쪽으로 가지 않는다: " + sim.Player.Y);
+            bool onPier = false;
+            foreach (float x in SurvivorHarbor.PierX) onPier |= System.Math.Abs(sim.Player.X - x) < SurvivorHarbor.PierHalf && sim.Player.Y > SurvivorHarbor.SeaFrom && sim.Player.Y < SurvivorHarbor.PierTip;
+            Assert.True(onPier, "봇은 부두 끝에 서서 배를 쏜다: " + sim.Player.X + "," + sim.Player.Y);
         }
 
         [Fact]

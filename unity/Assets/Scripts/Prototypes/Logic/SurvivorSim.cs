@@ -733,12 +733,16 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>첫 불배가 뜨는 시각(그 뒤는 Stage.BoatEvery마다).</summary>
         public const float FirstBoat = 20f;
-        public const float BoatSpeed = 2.2f;
+
+        /// <summary>2.2면 숙련 봇이 배를 다 요격해 마을보다 쉬웠다(21승, 잃은 건물 1.8): 요격 시간을 줄여 부두에 더 자주 닿게 한다(docs §17).</summary>
+        public const float BoatSpeed = 3f;
         public const float BoatFire = 0.5f;
 
         /// <summary>닿은 배가 불을 옮기는 틈(배 가장자리에서 탈 것 가장자리까지)과 간격(초).</summary>
         public const float BoatDockGap = 4f;
-        public const float BoatSpreadEvery = 4f;
+
+        /// <summary>4초면 숙련 봇이 마을과 같은 수준(23 대 22승)이었다: 닿은 배가 더 자주 옮긴다(docs §17).</summary>
+        public const float BoatSpreadEvery = 2.5f;
 
         /// <summary>배가 다 타서 가라앉기까지(초, 불 세기 1 기준). 떠내려오는 동안 가라앉지 않게 건물보다 길다.</summary>
         public const float BurnBoat = 45f;
@@ -975,6 +979,7 @@ namespace FireGame.Prototypes.Logic
             TickStructures();
             if (Lanterns.Count > 0) TickLanterns();
             if (Rockets.Count > 0) TickRockets();
+            FlushPops();
             TouchPlayer();
             TickHeat();
             CollectGems();
@@ -1443,12 +1448,27 @@ namespace FireGame.Prototypes.Logic
 
         private Vec2 SpawnPoint(float distance)
         {
-            double a = Rand() * Math.PI * 2;
-            var at = new Vec2(Player.X + (float)(Math.Cos(a) * distance), Player.Y + (float)(Math.Sin(a) * distance));
-            at = ClampToArena(at);
+            // 바다 스테이지: 바다에 떨어지면 뭍에서 다시 뽑는다(넓은 바다는 둑으로 밀면 북쪽 끝에 갇혀 적이 사라진다). 강은 둑으로 민다.
+            int tries = Stage.Sea ? 8 : 1;
+            Vec2 at;
+            do
+            {
+                double a = Rand() * Math.PI * 2;
+                at = ClampToArena(new Vec2(Player.X + (float)(Math.Cos(a) * distance), Player.Y + (float)(Math.Sin(a) * distance)));
+            }
+            while (--tries > 0 && InWater(at));
             // 강에 떨어진 스폰은 둑으로 민다(물 위에 서 있는 불은 없다).
             if (HasWater) PushOutOfWater(ref at, 0.5f);
             return at;
+        }
+
+        private bool InWater(Vec2 p)
+        {
+            foreach (Structure s in Structures)
+            {
+                if (s.Kind == StructureKind.Water && s.Within(p, 0.5f)) return true;
+            }
+            return false;
         }
 
         /// <summary>강이 있는 맵인가(생성 때 한 번 센다).</summary>
@@ -2656,8 +2676,8 @@ namespace FireGame.Prototypes.Logic
             if (Lanterns.Count > 0) WetLanterns(s.Pos, LanternReach + (s.Radius * 0.5f));
             foreach (Structure st in Structures)
             {
-                // 물(강·바다)은 물줄기를 막지 않는다: 항구는 바다 위 불배를 부두에서 쏜다(마을 강도 넘어간다).
-                if (st.Collapsed || st.Kind == StructureKind.Water || !st.Within(s.Pos, s.Radius * 0.5f)) continue;
+                // 항구의 바다는 물줄기를 막지 않는다(바다 위 불배를 부두에서 쏜다). 마을 강은 예전처럼 막는다(Stage.Sea).
+                if (st.Collapsed || (st.Kind == StructureKind.Water && Stage.Sea) || !st.Within(s.Pos, s.Radius * 0.5f)) continue;
                 // 제트는 뚫고 가고, 나무는 물이 잎 사이로 빠진다(나무 밑에서 쏴도 막히지 않게).
                 if (s.Kind == ShotKind.Jet || st.Kind == StructureKind.Tree)
                 {
@@ -3284,7 +3304,8 @@ namespace FireGame.Prototypes.Logic
                 if (!s.Burning) continue;
                 if (s.IsBuilding) building = true;
                 else other = true;
-                if (!fireNear && s.DistanceTo(Player) <= 8f) fireNear = true;
+                // 떠가는 불배는 멀어도 "할 일"이다(부두 끝에 서서 쏜다): 바다 줄에서 부두까지(12칸)를 가까운 불로 친다.
+                if (!fireNear && s.DistanceTo(Player) <= (s.Kind == StructureKind.Boat && !s.Docked ? 16f : 8f)) fireNear = true;
             }
             if (building) Stats.BuildingFire += Dt;
             else if (other) Stats.TreeFireOnly += Dt;
@@ -3723,17 +3744,28 @@ namespace FireGame.Prototypes.Logic
             // 기름 방울은 터지며 기름을 튀긴다: 어디서 잡느냐가 중요하다.
             if (e.Kind == EnemyKind.Oil) Spill(e.Pos, OilDeathSpill);
             // 폭죽은 터지며 불씨를 튀긴다(탈 것을 노린다): 점포 곁에서 잡지 마라.
-            if (e.Kind == EnemyKind.Popper)
+            // Kill은 적 목록을 도는 중(증기 폭발·장막)에도 불리므로 여기서 스폰하지 않고 틱 끝에 FlushPops가 튀긴다.
+            if (e.Kind == EnemyKind.Popper) _pops.Add(e.Pos);
+        }
+
+        private readonly List<Vec2> _pops = new List<Vec2>();
+
+        /// <summary>이번 틱에 터진 폭죽마다 Seeker 불씨 PopperEmbers개(적 목록을 아무도 돌지 않는 때).</summary>
+        private void FlushPops()
+        {
+            if (_pops.Count == 0) return;
+            foreach (Vec2 pos in _pops)
             {
                 for (int k = 0; k < PopperEmbers && Enemies.Count < MaxEnemies; k++)
                 {
-                    var at = new Vec2(e.Pos.X + (k == 0 ? -0.4f : 0.4f), e.Pos.Y);
+                    var at = new Vec2(pos.X + (k == 0 ? -0.4f : 0.4f), pos.Y);
                     Enemy ember = Spawn(EnemyKind.Ember, at);
                     ember.Seeker = true;
                     ember.GoalClock = 0.4f;
-                    ember.Knock = Knockback(e.Pos, at, 4f);
+                    ember.Knock = Knockback(pos, at, 4f);
                 }
             }
+            _pops.Clear();
         }
 
         /// <summary>물이 닿은 자리의 바닥 불을 끈다(샷의 관통 수는 쓰지 않는다).</summary>

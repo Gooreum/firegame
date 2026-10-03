@@ -71,6 +71,11 @@ namespace FireGame.Prototypes.Logic
         /// <summary>항구: 가장자리 스폰에서 불 갈매기 비율(바다 쪽에서 날아온다).</summary>
         public float GullShare;
 
+        /// <summary>바다 스테이지(항구): 물줄기가 물을 넘어 날고(바다 위 불배를 부두에서 쏜다), 바다에 떨어진 가장자리 스폰은 뭍에서 다시 뽑는다
+        /// (좁은 강은 둑으로 밀면 되지만 넓은 바다는 북쪽 끝에 갇혀 적의 절반이 사라졌다). 마을 강은 예전처럼 물줄기를 막는다:
+        /// 전 스테이지에 켜자 마을 기본 봇의 레벨업이 빨라져 숲의 밀도 밴드(마을 ×1.2)가 깨졌다(docs §17).</summary>
+        public bool Sea;
+
         /// <summary>야시장: 가장자리 스폰에서 폭죽 비율(30초부터).</summary>
         public float PopperShare;
 
@@ -171,14 +176,19 @@ namespace FireGame.Prototypes.Logic
             Number = 4,
             Name = "항구",
             Map = SurvivorHarbor.Build,
-            // 부둣가 8채 + 창고: 마을과 같은 신고 표.
+            // 부둣가 8채 + 창고: 마을과 같은 신고 표. 앞쪽 신고 둘을 더해 봤더니 경험치만 늘어 쉬워졌다(24승, 최저 체력 41%)(docs §17).
             ReportTimes = SurvivorSim.ReportTimes,
-            SpawnRate = 1.3f,
+            // 바다가 스폰 방향의 40%를 지운다(바다에 떨어진 스폰은 뭍에서 다시 뽑지만 부둣가 줄은 뭍 쪽에서만 공격받는다):
+            // 1.3이면 숙련 봇이 마을과 같은 수준(19~23 대 22승)이라 그만큼 뭍 스폰을 늘린다(docs §17).
+            SpawnRate = 1.5f,
             BlazeMax = 0.3f,
             DartShare = 0.1f,
-            // 항구의 난이도는 새 규칙(불배·갈매기)에서 온다. 수치는 측정 전 초깃값(docs §17).
-            GullShare = 0.08f,
+            // 항구의 난이도는 새 규칙(불배·갈매기)에서 온다(docs §17).
+            // 0.08이면 기본 봇이 부두 끝에서 배를 기다리는 동안 곁에 아무것도 없어 빈 시간이 17%(마을 7%)였다: 바다에서 오는 갈매기를 늘린다(docs §17).
+            GullShare = 0.16f,
+            // 14로 자주 띄우자 오히려 쉬워졌다(21 → 27승): 배가 늘 떠 있으면 소방정·파도가 쉬지 않고 부둣가를 적셔 준다. 18로 두고 배 속도(BoatSpeed)를 올린다(docs §17).
             BoatEvery = 18f,
+            Sea = true,
             // 부둣가 줄은 서로 가까워 번진다(바다는 못 건넌다: CrossesWater).
             SpreadEvery = 8f,
             Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Fireboat, UpgradeId.Wave },
