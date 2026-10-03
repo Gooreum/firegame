@@ -163,6 +163,41 @@ namespace FireGame.Prototypes.Logic
         public float MaxLife;
     }
 
+    /// <summary>야시장 등줄: 점포 A–B를 잇는다. 한쪽이 크게 타면 불이 줄을 타고 건너간다(Burn 0→1, From에서 출발). 젖으면 꺼지고 한동안 안 탄다.</summary>
+    public sealed class Lantern
+    {
+        public Structure A;
+        public Structure B;
+
+        /// <summary>줄 불의 진행(0 = From 쪽 끝, 1 = 반대쪽). 음수면 안 탄다.</summary>
+        public float Burn = -1f;
+        public Structure From;
+
+        /// <summary>젖어서 안 타는 남은 시간.</summary>
+        public float Wet;
+
+        /// <summary>건너간 뒤 다시 타기까지 쉬는 시간.</summary>
+        public float Cool;
+
+        /// <summary>출발 점포가 크게 탄 뒤 줄에 불이 붙기까지(SurvivorSim.LanternDelay에서 센다).</summary>
+        public float Delay = SurvivorSim.LanternDelay;
+
+        public Structure Other(Structure s)
+        {
+            return s == A ? B : A;
+        }
+    }
+
+    /// <summary>야시장 불꽃 가판대가 쏜 로켓: From에서 Target으로 Life초 날아가 떨어진 자리에 불을 낸다.</summary>
+    public sealed class Rocket
+    {
+        public Vec2 From;
+        public Vec2 Target;
+        public float Age;
+        public float Life;
+        public bool Dead;
+    }
+
     public sealed class Civilian
     {
         public Vec2 Pos;
@@ -714,6 +749,45 @@ namespace FireGame.Prototypes.Logic
         public float? WaveY;
         public bool JustSurge;
 
+        /// <summary>야시장: 등줄(생성 때 Stage.Links로 깐다).</summary>
+        public readonly List<Lantern> Lanterns = new List<Lantern>();
+
+        /// <summary>이번 틱에 불이 줄을 다 건너 반대쪽에 붙은 줄 / 물에 꺼진(또는 젖은) 줄.</summary>
+        public readonly List<Lantern> LanternCaught = new List<Lantern>();
+        public readonly List<Lantern> LanternDoused = new List<Lantern>();
+
+        /// <summary>등줄: 출발 점포 불 세기 문턱, 붙기까지, 건너는 시간, 쉬는 시간, 젖어 있는 시간, 물줄기가 줄을 적시는 거리.</summary>
+        public const float LanternCatch = 0.6f;
+        public const float LanternDelay = 2f;
+        public const float LanternRun = 4f;
+        public const float LanternCool = 12f;
+        public const float LanternWet = 6f;
+        public const float LanternReach = 0.7f;
+        public const float LanternIgnite = 0.3f;
+
+        /// <summary>야시장: 날고 있는 로켓, 이번 틱에 떨어진 자리, 이번 틱에 쏘기 시작한 가판대.</summary>
+        public readonly List<Rocket> Rockets = new List<Rocket>();
+        public readonly List<Vec2> RocketBursts = new List<Vec2>();
+        public Structure JustLaunching;
+        public const float RocketEvery = 1f;
+        public const float RocketFlight = 1.1f;
+        public const float RocketRange = 14f;
+        public const float RocketBurn = 8f;
+        public const float RocketIgnite = 0.3f;
+        public const float RocketHit = 0.8f;
+
+        /// <summary>폭죽: 한 주기(1초) 중 움직이는 비율, 잡혔을 때 튀는 불씨 수.</summary>
+        public const float PopperHop = 0.35f;
+        public const int PopperEmbers = 2;
+
+        /// <summary>야시장 노란: 물안개 자리(없으면 null)와 남은 시간. 이번 틱에 피었으면 JustMist.</summary>
+        public Vec2? MistAt;
+        public float MistLeft;
+        public bool JustMist;
+        public const float MistInterval = 18f;
+        public const float MistTime = 6f;
+        public const float MistRadius = 8f;
+
         /// <summary>이번 틱에 스프링클러가 터진 건물.</summary>
         public readonly List<Structure> Sprinkled = new List<Structure>();
 
@@ -807,6 +881,10 @@ namespace FireGame.Prototypes.Logic
             Stage = SurvivorStages.Get(stage);
             Structures = Stage.Map();
             HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
+            if (Stage.Links != null)
+            {
+                foreach (int[] ab in Stage.Links(Structures)) Lanterns.Add(new Lantern { A = Structures[ab[0]], B = Structures[ab[1]] });
+            }
             _rng = new Rng(seed == 0 ? 1 : seed);
             _kitRng = new Rng(((seed == 0 ? 1 : seed) * 7919) + 13);
             _kitClock = NextKitWait();
@@ -882,6 +960,8 @@ namespace FireGame.Prototypes.Logic
             MoveShots();
             TickPuddles();
             TickStructures();
+            if (Lanterns.Count > 0) TickLanterns();
+            if (Rockets.Count > 0) TickRockets();
             TouchPlayer();
             TickHeat();
             CollectGems();
@@ -1079,6 +1159,10 @@ namespace FireGame.Prototypes.Logic
             BoatsDocked.Clear();
             BoatsAway.Clear();
             JustSurge = false;
+            LanternCaught.Clear();
+            LanternDoused.Clear();
+            RocketBursts.Clear();
+            JustLaunching = null;
             GemsCollected = 0;
             // 틱마다 한 번 센다(테스트가 판 도중 구조물을 넣는다).
             HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
@@ -1495,6 +1579,12 @@ namespace FireGame.Prototypes.Logic
                 float dy = chase.Y - e.Pos.Y;
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
                 float speed = e.Speed * (e.Slowed > 0f ? 0.5f : 1f);
+                if (e.Kind == EnemyKind.Popper)
+                {
+                    // 폭죽은 깡충깡충: 한 주기 1초 중 앞 PopperHop만 움직인다.
+                    e.Phase += Dt;
+                    if (e.Phase - (float)Math.Floor(e.Phase) >= PopperHop) speed = 0f;
+                }
                 float vx = d > 0.01f ? dx / d * speed : 0f;
                 float vy = d > 0.01f ? dy / d * speed : 0f;
                 if (e.Kind == EnemyKind.Squirrel || e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Gull)
@@ -1655,6 +1745,7 @@ namespace FireGame.Prototypes.Logic
                     _curtainClock = CurtainInterval - (0.4f * (lv - 1));
                     JustCurtain = true;
                     Douse(Player, radius);
+                    if (Lanterns.Count > 0) WetLanterns(Player, radius);
                     foreach (Structure st in Structures)
                     {
                         if (st.Within(Player, radius)) Soak(st, wall ? 0.8f : 0.5f, false);
@@ -2042,6 +2133,7 @@ namespace FireGame.Prototypes.Logic
             {
                 Vec2 at = RainAt.Value;
                 Douse(at, RainRadius);
+                if (Lanterns.Count > 0) WetLanterns(at, RainRadius);
                 foreach (Structure st in Structures)
                 {
                     if (st.Within(at, RainRadius)) Soak(st, 0.3f * Dt);
@@ -2315,6 +2407,7 @@ namespace FireGame.Prototypes.Logic
                         s.Dead = true;
                         (s.Kind == ShotKind.Heli ? HeliDrops : s.Air ? AirBlasts : s.Drone ? DroneDrops : Explosions).Add(s.Target);
                         Douse(s.Target, s.Radius);
+                        if (Lanterns.Count > 0) WetLanterns(s.Target, s.Radius);
                         foreach (Structure st in Structures)
                         {
                             if (st.Within(s.Target, s.Radius)) Soak(st, s.Drone ? DroneDropWater : s.Damage * WaterPerDamage, false);
@@ -2433,7 +2526,8 @@ namespace FireGame.Prototypes.Logic
                 s.BlazeClock = 6f;
                 s.SpreadClock = Stage.SpreadEvery;
                 s.RescueHold = 0f;
-                if (s.Kind == StructureKind.Gas) s.Fuse = GasFuse;
+                // 가스통은 터지고, 불꽃 가판대는 로켓을 쏜다: 둘 다 같은 퓨즈.
+                if (s.Kind == StructureKind.Gas || s.Kind == StructureKind.Fireworks) s.Fuse = GasFuse;
             }
             return fresh;
         }
@@ -2460,8 +2554,9 @@ namespace FireGame.Prototypes.Logic
                 s.HoseHold = 0f;
                 s.Warned = false;
                 Doused.Add(s);
-                // 물 위에서 끈 배는 바다로 돌아간다(TickBoats가 북쪽으로 돌린다).
+                // 물 위에서 끈 배는 바다로 돌아간다(TickBoats가 북쪽으로 돌린다). 끈 가판대는 로켓을 멈춘다.
                 if (s.Kind == StructureKind.Boat && !s.Docked) BoatsAway.Add(s);
+                s.Launching = false;
                 // 불을 끈 보상: 건물은 큰 구슬, 작은 것은 작은 구슬. 건물 진화는 콤보를 크게 잇는다.
                 if (s.IsBuilding) ComboAdd(ComboPerDouse);
                 DropGem(s.Door, (s.IsBuilding ? 8 : 3) * ComboMult);
@@ -2472,6 +2567,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>물줄기가 구조물에 닿았는지. 물대포 물방울은 막혀서 사라지면 true, 제트는 뚫고 간다.</summary>
         private bool SoakStructures(Shot s)
         {
+            if (Lanterns.Count > 0) WetLanterns(s.Pos, LanternReach + (s.Radius * 0.5f));
             foreach (Structure st in Structures)
             {
                 // 물(강·바다)은 물줄기를 막지 않는다: 항구는 바다 위 불배를 부두에서 쏜다(마을 강도 넘어간다).
@@ -2599,6 +2695,128 @@ namespace FireGame.Prototypes.Logic
                 }
             }
             return best;
+        }
+
+        /// <summary>
+        /// 등줄: 한쪽 점포가 LanternCatch 이상 타면 LanternDelay 뒤 불이 줄에 붙어 LanternRun초에 건너가 반대쪽에 붙는다(LanternIgnite).
+        /// 출발 점포가 꺼지면 줄 불도 꺼진다. 젖은 줄(물줄기·장막·비·투하·안개)은 꺼지고 LanternWet초 동안 안 탄다. 건너간 줄은 LanternCool초 쉰다.
+        /// </summary>
+        private void TickLanterns()
+        {
+            foreach (Lantern l in Lanterns)
+            {
+                if (l.Wet > 0f)
+                {
+                    l.Wet -= Dt;
+                    continue;
+                }
+                if (l.Cool > 0f) l.Cool -= Dt;
+                if (l.Burn < 0f)
+                {
+                    if (l.Cool > 0f) continue;
+                    Structure from = l.A.Burning && l.A.Fire >= LanternCatch && l.B.Flammable ? l.A
+                        : l.B.Burning && l.B.Fire >= LanternCatch && l.A.Flammable ? l.B : null;
+                    if (from == null)
+                    {
+                        l.Delay = LanternDelay;
+                        continue;
+                    }
+                    l.Delay -= Dt;
+                    if (l.Delay > 0f) continue;
+                    l.From = from;
+                    l.Burn = 0f;
+                }
+                if (!l.From.Burning)
+                {
+                    l.Burn = -1f;
+                    continue;
+                }
+                l.Burn += Dt / LanternRun;
+                if (l.Burn < 1f) continue;
+                Structure to = l.Other(l.From);
+                l.Burn = -1f;
+                l.Cool = LanternCool;
+                if (Ignite(to, LanternIgnite))
+                {
+                    LanternCaught.Add(l);
+                    Spread.Add(to);
+                    SpreadFrom.Add(l.From);
+                    Stats.Spreads++;
+                }
+            }
+        }
+
+        /// <summary>at에서 r 안을 지나는 등줄을 적신다: 줄 불이 꺼지고 LanternWet초 동안 안 탄다.</summary>
+        public void WetLanterns(Vec2 at, float r)
+        {
+            foreach (Lantern l in Lanterns)
+            {
+                if (SegmentDistance(at, l.A.Pos, l.B.Pos) > r) continue;
+                if (l.Burn >= 0f || l.Wet <= 0f) LanternDoused.Add(l);
+                l.Burn = -1f;
+                l.Wet = LanternWet;
+            }
+        }
+
+        /// <summary>줄 불이 지금 있는 자리(그림용). 안 타면 From 쪽 끝.</summary>
+        public Vec2 LanternFire(Lantern l)
+        {
+            Structure from = l.From ?? l.A;
+            Structure to = l.Other(from);
+            float t = Math.Max(0f, l.Burn);
+            return new Vec2(from.Pos.X + ((to.Pos.X - from.Pos.X) * t), from.Pos.Y + ((to.Pos.Y - from.Pos.Y) * t));
+        }
+
+        /// <summary>불꽃 가판대가 로켓 한 발을 쏜다: 반은 RocketRange 안 안 탄 탈 것을, 반은 아무 데나 노린다.</summary>
+        private void LaunchRocket(Structure s)
+        {
+            Vec2 target;
+            Structure pick = null;
+            if (Rand() < 0.5f)
+            {
+                var near = new List<Structure>();
+                foreach (Structure t in Structures)
+                {
+                    if (t != s && t.Flammable && t.Kind != StructureKind.Tree && t.DistanceTo(s.Pos) <= RocketRange) near.Add(t);
+                }
+                if (near.Count > 0) pick = near[Math.Min(near.Count - 1, (int)(Rand() * near.Count))];
+            }
+            if (pick != null) target = pick.Pos;
+            else
+            {
+                double a = Rand() * Math.PI * 2;
+                float d = 3f + (Rand() * (RocketRange - 3f));
+                target = ClampToArena(new Vec2(s.Pos.X + (float)(Math.Cos(a) * d), s.Pos.Y + (float)(Math.Sin(a) * d)));
+            }
+            Rockets.Add(new Rocket { From = s.Pos, Target = target, Life = RocketFlight });
+        }
+
+        /// <summary>로켓이 떨어진다: 그 자리 탈 것에 불(RocketIgnite), 없으면 바닥 불 4초. 곁 소방관은 RocketBurn. 물안개 안에 떨어지면 꺼진다.</summary>
+        private void TickRockets()
+        {
+            foreach (Rocket r in Rockets)
+            {
+                r.Age += Dt;
+                if (r.Age < r.Life) continue;
+                r.Dead = true;
+                RocketBursts.Add(r.Target);
+                if (MistAt.HasValue && r.Target.DistanceTo(MistAt.Value) <= MistRadius)
+                {
+                    Extinguished.Add(r.Target);
+                    continue;
+                }
+                Structure hit = null;
+                foreach (Structure st in Structures)
+                {
+                    if (st.Collapsed || st.Kind == StructureKind.Water || !st.Within(r.Target, RocketHit)) continue;
+                    hit = st;
+                    break;
+                }
+                if (hit != null) Ignite(hit, RocketIgnite);
+                else if (BurningGround.Count < MaxBurningGround) BurningGround.Add(new Puddle { Pos = r.Target, Radius = 0.8f, Life = 4f, MaxLife = 4f });
+                if (Player.DistanceTo(r.Target) <= 1.5f) Burn(RocketBurn);
+            }
+            Rockets.RemoveAll(r => r.Dead);
         }
 
         /// <summary>s 가장자리에서 틈 gap 안의 가장 가까운 안 탄 탈 것(물·s 자신 제외).</summary>
@@ -2754,6 +2972,30 @@ namespace FireGame.Prototypes.Logic
                     {
                         Blow(s);
                         continue;
+                    }
+                }
+                if (s.Kind == StructureKind.Fireworks)
+                {
+                    // 퓨즈가 다 타면 로켓을 쏘기 시작한다. 타는 동안 RocketEvery마다 한 발(끄면 Soak이 Launching을 끈다).
+                    if (s.Fuse >= 0f)
+                    {
+                        s.Fuse -= Dt;
+                        if (s.Fuse <= 0f)
+                        {
+                            s.Fuse = -1f;
+                            s.Launching = true;
+                            s.LaunchClock = 0.3f;
+                            JustLaunching = s;
+                        }
+                    }
+                    if (s.Launching)
+                    {
+                        s.LaunchClock -= Dt;
+                        if (s.LaunchClock <= 0f)
+                        {
+                            s.LaunchClock = RocketEvery;
+                            LaunchRocket(s);
+                        }
                     }
                 }
 
@@ -3394,6 +3636,18 @@ namespace FireGame.Prototypes.Logic
             }
             // 기름 방울은 터지며 기름을 튀긴다: 어디서 잡느냐가 중요하다.
             if (e.Kind == EnemyKind.Oil) Spill(e.Pos, OilDeathSpill);
+            // 폭죽은 터지며 불씨를 튀긴다(탈 것을 노린다): 점포 곁에서 잡지 마라.
+            if (e.Kind == EnemyKind.Popper)
+            {
+                for (int k = 0; k < PopperEmbers && Enemies.Count < MaxEnemies; k++)
+                {
+                    var at = new Vec2(e.Pos.X + (k == 0 ? -0.4f : 0.4f), e.Pos.Y);
+                    Enemy ember = Spawn(EnemyKind.Ember, at);
+                    ember.Seeker = true;
+                    ember.GoalClock = 0.4f;
+                    ember.Knock = Knockback(e.Pos, at, 4f);
+                }
+            }
         }
 
         /// <summary>물이 닿은 자리의 바닥 불을 끈다(샷의 관통 수는 쓰지 않는다).</summary>
