@@ -347,6 +347,8 @@ namespace FireGame.Prototypes
         private ModelPool _planeModels;
         private ModelPool _truckModels;
         private ModelPool _ambulanceModels;
+        private ModelPool _boatModels;
+        private ModelPool _fireboatModels;
         private readonly List<ModelPool> _modelPools = new List<ModelPool>();
         private static readonly string[] CivilianModels = { "People/Casual_Female", "People/OldClassy_Male", "People/Casual_Male" };
         private SpriteRenderer _playerGlow;
@@ -1415,6 +1417,27 @@ namespace FireGame.Prototypes
                 bool suit = _sim.Build.Level(UpgradeId.Suit) > 0;
                 SpawnText(W(_sim.Player) + new Vector3(0f, 1.3f, 0f), suit ? "방화복이 막는다" : "뜨거워!", suit ? new Color(1f, 0.85f, 0.4f) : new Color(1f, 0.4f, 0.2f), 1f);
             }
+            // 항구: 불배가 뜨면 알림, 닿으면 충격파·글자, 물 위에서 끄면 김·글자.
+            if (_sim.JustBoat != null)
+            {
+                ShowAlert("불배가 떠내려온다!", new Color(1f, 0.45f, 0.3f));
+                _trauma = Mathf.Min(1f, _trauma + 0.1f);
+                GameAudio.Play(Cue.SecondIgnition);
+            }
+            foreach (Structure b in _sim.BoatsDocked)
+            {
+                Vector3 at = W(b.Pos);
+                Shockwave(at, new Color(1f, 0.5f, 0.2f, 0.9f), 5f, 0.4f);
+                Burst(at, 14, new Color(1f, 0.6f, 0.15f), 5f);
+                SpawnText(at + new Vector3(0f, 1.6f, 0f), "부두에 닿았다!", new Color(1f, 0.5f, 0.3f), 1.8f);
+                _trauma = Mathf.Min(1f, _trauma + 0.2f);
+            }
+            foreach (Structure b in _sim.BoatsAway)
+            {
+                Vector3 at = W(b.Pos);
+                Steam(at, 10, 1.2f);
+                SpawnText(at + new Vector3(0f, 1.4f, 0f), "배를 껐다!", new Color(0.8f, 0.95f, 1f), 1.6f);
+            }
             if (_sim.JustWindShift) ShowAlert("바람이 " + WindName(_sim.Wind) + "쪽으로!", new Color(0.8f, 0.9f, 1f));
             if (_sim.JustPressureUp) ShowAlert("불길이 거세진다!", new Color(1f, 0.5f, 0.2f));
             if (_sim.JustBats)
@@ -1900,6 +1923,27 @@ namespace FireGame.Prototypes
                         _enemyGlow.Put(at, 1.5f, 0f, new Color(1f, 0.8f, 0.2f, 0.45f));
                         _darts.Put(at, 0.8f * flicker * punch, toward + 90f, hit ? water : Color.white, FlameArt.Frame(_dartSheet, _time, i, 18f));
                         break;
+                    case EnemyKind.Gull:
+                    {
+                        // 불 갈매기: 흰회색 날개가 천천히 퍼덕이고 날개 끝과 꼬리에 불이 붙어 연기를 끈다. 높이 날아 그림자가 멀다.
+                        float head = Mathf.Atan2(_sim.Player.Y - e.Pos.Y, _sim.Player.X - e.Pos.X) * Mathf.Rad2Deg;
+                        float flap = 0.4f + (0.6f * Mathf.Abs(Mathf.Sin((_time * 9f) + e.Phase)));
+                        Vector3 high = at + Up(1.6f);
+                        _enemyGlow.Put(high, 1.6f * flicker, 0f, new Color(1f, 0.5f, 0.1f, 0.3f));
+                        _bats.Put(high, 1.7f * punch, head, hit ? water : new Color(0.9f, 0.9f, 0.95f), null, flap);
+                        if (!hit)
+                        {
+                            float rad = head * Mathf.Deg2Rad;
+                            var wing = new Vector3(-Mathf.Sin(rad), Mathf.Cos(rad), 0f) * 0.75f * flap;
+                            _enemyCore.Put(high + wing, 0.5f * flicker, 0f, new Color(1f, 0.6f, 0.15f, 0.95f));
+                            _enemyCore.Put(high - wing, 0.5f * flicker, 0f, new Color(1f, 0.6f, 0.15f, 0.95f));
+                        }
+                        if (Random.value < 0.08f)
+                        {
+                            Emit("Effects/smoke_01", high, new Vector3(Random.Range(-0.4f, 0.4f), Random.Range(0.2f, 0.8f), 0f), 0.6f, 0.7f, 0.3f, 0.8f, new Color(0.3f, 0.25f, 0.25f, 0.6f), new Color(0.3f, 0.3f, 0.3f, 0f), 0f);
+                        }
+                        break;
+                    }
                 }
             }
         }
@@ -4056,6 +4100,7 @@ namespace FireGame.Prototypes
             _ground.Clear();
             bool forest = _sim.Stage.Number == 2;
             bool factory = _sim.Stage.Number == 3;
+            bool harbor = _sim.Stage.Number == 4;
             int size = (int)SurvivorSim.ArenaSize;
             float mid = size / 2f;
             // 바닥은 스테이지 전체를 그린 한 장(풀결·도로·광장·흙길이 이어진다). 해 그림자를 받는 Lit 쿼드에 깐다.
@@ -4090,7 +4135,22 @@ namespace FireGame.Prototypes
                 }
             }
 
-            if (!forest && !factory)
+            if (harbor)
+            {
+                // 항구 장식(판정 없음): 부두선 안쪽에 컨테이너 더미, 부두 끝에 작은 탱크. 바다 위엔 아무것도 없다.
+                float[] decor = { 4f, 33f, 30f, 38.2f, 56f, 33f, 15f, 46.5f, 45f, 46.5f, 24f, 18f, 36f, 18f };
+                for (int i = 0; i < decor.Length; i += 2)
+                {
+                    var p = new Vec2(decor[i], decor[i + 1]);
+                    if (_sim.Structures.Exists(st => st.Kind != StructureKind.Water && st.Within(p, 1.5f))) continue;
+                    bool tank = i == 6 || i == 8;
+                    string kind = tank ? "Industrial/detail-tank" : ContainerModels[(i / 2) % ContainerModels.Length];
+                    GameObject d = Models3D.Place(kind, _root, new Vector3(p.X, p.Y, 0f), tank ? 1.6f : 2.4f, tank ? 1.6f : 1.2f, tank ? 0f : (i % 4 == 0 ? 0f : 90f), out _, tank ? 1.6f : 1.2f);
+                    if (d != null) _ground.Add(d);
+                }
+            }
+
+            if (!forest && !factory && !harbor)
             {
                 // 마을 풀밭 덤불(판정 없음): 도로·강·건물을 피해 흩어 세운다.
                 for (int i = 0; i < 30; i++)
@@ -4157,6 +4217,8 @@ namespace FireGame.Prototypes
             _models.Clear();
             int n = _sim.Structures.Count;
             bool factory = _sim.Stage.Number == 3;
+            // 항구도 컨테이너·드럼(연료 탱크)을 쓴다.
+            bool yard = factory || _sim.Stage.Number == 4;
             _structModels = new GameObject[n];
             _structSize = new Vector3[n];
             for (int i = 0; i < n; i++)
@@ -4199,11 +4261,11 @@ namespace FireGame.Prototypes
                 }
                 else if (st.Kind == StructureKind.Car)
                 {
-                    go = factory
+                    go = yard
                         ? Models3D.Place(ContainerModels[i % ContainerModels.Length], _root, at, w, h, 90f, out size)
                         : Models3D.Place(CarModels[i % CarModels.Length], _root, at, w, h, 90f, out size);
                 }
-                else if (st.Kind == StructureKind.Gas && factory)
+                else if (st.Kind == StructureKind.Gas && yard)
                 {
                     // 약품 드럼: 기본 도형 모델(퓨즈 깜빡임은 DrawTown이 칠한다).
                     go = ItemModels.Drum(_root);
@@ -4359,6 +4421,12 @@ namespace FireGame.Prototypes
                 GameObject model = i < _structModels.Length ? _structModels[i] : null;
                 if (model != null && model.activeSelf == st.Collapsed) model.SetActive(!st.Collapsed);
 
+                if (st.Kind == StructureKind.Boat)
+                {
+                    if (!st.Collapsed) DrawBoat(st, at, i);
+                    continue;
+                }
+
                 if (st.IsBuilding)
                 {
                     if (sign < _signs.Count)
@@ -4425,6 +4493,68 @@ namespace FireGame.Prototypes
                         break;
                 }
                 if (st.Burning && st.Kind != StructureKind.Gas) DrawRoofFire(st, at, w, h, i, st.Kind == StructureKind.Car ? RoofHeight(i) : st.Kind == StructureKind.Tree ? RoofHeight(i) * 0.55f : 0f);
+            }
+        }
+
+        /// <summary>불배(판 중간에 생기는 구조물이라 모델 풀에서 꺼낸다): 뱃머리는 떠가는 쪽, 닿았으면 남쪽. 타면 갑판 불꽃·연기, 뒤로 물결.
+        /// 아직 안 닿은 불배는 노린 건물까지 빨간 점선과 지붕 고리(예고 표식)를 단다.</summary>
+        private void DrawBoat(Structure st, Vector3 at, int i)
+        {
+            Vector3 dir = st.Docked ? Vector3.down : st.Drift.X != 0f || st.Drift.Y != 0f ? new Vector3(st.Drift.X, st.Drift.Y, 0f).normalized : Vector3.down;
+            float bob = 0.06f * Mathf.Sin((_time * 2.2f) + i);
+            _shadows.Put(at + new Vector3(0.15f, -0.3f, 0f), 2.6f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
+            GameObject model = _boatModels.Get();
+            if (model != null)
+            {
+                ItemModels.Place(model, at, bob, dir, 1.1f);
+                float burnt = 1f - Mathf.Clamp01(st.Integrity);
+                Models3D.Tint(model, Color.Lerp(Color.white, new Color(0.25f, 0.2f, 0.2f), burnt));
+            }
+            // 뒤 물결: 떠가는 동안 뱃고물에서 흰 거품이 퍼진다.
+            if (!st.Docked && Random.value < 0.5f) AddWet(at - (dir * 1.1f) + new Vector3(Random.Range(-0.3f, 0.3f), Random.Range(-0.3f, 0.3f), 0f), 1.2f, 1.5f, false);
+            if (!st.Docked && Random.value < 0.3f) Emit("Effects/smoke_01", at - (dir * 1.3f), -dir * 0.6f, 1.5f, 0.6f, 0.4f, 0.9f, new Color(1f, 1f, 1f, 0.5f), new Color(1f, 1f, 1f, 0f), 0f);
+            if (st.Burning)
+            {
+                float f = st.Fire;
+                _roofGlow.Put(at + Up(0.5f), 2.4f * (1f + (0.6f * f)), 0f, new Color(1f, 0.35f, 0.08f, 0.25f + (0.3f * f)));
+                int n = 1 + Mathf.RoundToInt(f * 2f);
+                for (int k = 0; k < n; k++)
+                {
+                    Vector3 deck = at + (dir * ((k - 1) * 0.6f)) + Up(0.55f);
+                    float flick = 0.85f + (0.2f * Mathf.Sin((_time * (11f + k)) + (k * 1.9f)));
+                    _roofFire.Put(deck, (0.9f + (1.2f * f)) * flick * 0.8f, 0f, Color.white, FlameArt.Frame(_blazeSheet, _time, i + (k * 5), 10f + k));
+                }
+                if (Random.value < 0.08f + (0.15f * f))
+                {
+                    Emit(Smokes[Random.Range(0, Smokes.Length)], at + Up(0.8f), new Vector3(Random.Range(0.2f, 0.9f), Random.Range(1.5f, 2.6f), 0f), 0.3f,
+                        Random.Range(1.6f, 2.4f), 0.8f + f, 2.6f + (2f * f), new Color(0.2f, 0.18f, 0.18f, 0.5f), new Color(0.25f, 0.24f, 0.24f, 0f), Random.Range(-60f, 60f));
+                }
+                if (st.Docked)
+                {
+                    // 닿은 불배: 부두선 아래 바닥이 빨갛게 맥박친다(여기서 불이 옮는다).
+                    float beat = 0.5f + (0.5f * Mathf.Abs(Mathf.Sin(_time * 5f)));
+                    _groundGlow.Put(at + new Vector3(0f, -1.6f, 0f), 5f, 0f, new Color(1f, 0.3f, 0.1f, 0.18f + (0.2f * beat)));
+                }
+                else if (st.Target != null && !st.Target.Collapsed)
+                {
+                    // 예고: 노린 건물까지 빨간 점선과 지붕 고리.
+                    Vector3 to = W(st.Target.Pos);
+                    Vector3 d = to - at;
+                    float len = d.magnitude;
+                    if (len > 1f)
+                    {
+                        float deg = Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg;
+                        int dashes = Mathf.Max(1, (int)(len / 1.2f));
+                        for (int k = 0; k < dashes; k++)
+                        {
+                            float t = (k + 0.5f + Mathf.Repeat(_time * 0.6f, 1f)) / dashes;
+                            if (t > 1f) continue;
+                            _band.Put(at + (d * t), 0.3f, deg - 90f, new Color(1f, 0.3f, 0.2f, 0.3f), null, 0.6f / 0.3f);
+                        }
+                    }
+                    float pulse = 1f + (0.15f * Mathf.Sin(_time * 6f));
+                    _reticle.Put(to + Up(0.05f), Mathf.Max(st.Target.Half.X, st.Target.Half.Y) * 2.4f * pulse, _time * 60f, new Color(1f, 0.3f, 0.2f, 0.55f));
+                }
             }
         }
 
@@ -4756,6 +4886,8 @@ namespace FireGame.Prototypes
             _planeModels = ModelPoolOf(ItemModels.Plane);
             _truckModels = ModelPoolOf(p => Models3D.Place("Cars/firetruck", p, Vector3.zero, 1.5f, 3.2f, 0f, out _));
             _ambulanceModels = ModelPoolOf(ItemModels.Ambulance);
+            _boatModels = ModelPoolOf(ItemModels.Boat);
+            _fireboatModels = ModelPoolOf(ItemModels.Fireboat);
         }
 
         private ModelPool ModelPoolOf(System.Func<Transform, GameObject> make)
@@ -5311,6 +5443,11 @@ namespace FireGame.Prototypes
             if (_sim.Outcome != SOutcome.Playing || _camera == null) return;
             foreach (Structure st in _sim.Structures)
             {
+                if (st.Burning && st.Kind == StructureKind.Boat && !st.Docked)
+                {
+                    EdgeArrow(new Vector3(st.Pos.X, st.Pos.Y, 0f), new Color(1f, 0.4f, 0.25f), 1.6f * (1f + (0.2f * Mathf.Abs(Mathf.Sin(_time * 7f)))), "불배");
+                    continue;
+                }
                 if (!st.Burning || !(st.IsBuilding || st.Kind == StructureKind.Gas)) continue;
                 bool people = st.Residents > 0;
                 // 대형 신고·대화재 건물은 붉게, 가장 크게 뛴다.

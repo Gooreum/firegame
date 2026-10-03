@@ -62,6 +62,35 @@ namespace FireGame.Prototypes
             return root;
         }
 
+        /// <summary>불배(항구): 어두운 적갈색 선체 + 뱃머리 쐐기 + 선실 + 굴뚝. 길이 약 2.4칸(앞 +Z), 폭 약 1.2칸.</summary>
+        public static GameObject Boat(Transform parent)
+        {
+            return Hull(parent, "BoatModel", new Color(0.45f, 0.22f, 0.14f), new Color(0.62f, 0.5f, 0.36f), Dark);
+        }
+
+        /// <summary>소방정(항구 노란): 흰 선체 + 빨간 띠 + 물대포 두 문. 불배와 같은 크기.</summary>
+        public static GameObject Fireboat(Transform parent)
+        {
+            GameObject root = Hull(parent, "FireboatModel", Paint, FireRed, Water);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Part(PrimitiveType.Cylinder, root, new Vector3(side * 0.3f, 0.62f, 0.2f), new Vector3(0.1f, 0.3f, 0.1f), Steel, new Vector3(-60f, 0f, side * 35f));
+            }
+            return root;
+        }
+
+        private static GameObject Hull(Transform parent, string name, Color hull, Color deck, Color cabin)
+        {
+            GameObject root = Root(name, parent);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.22f, -0.2f), new Vector3(1.1f, 0.44f, 1.9f), hull);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.22f, 0.95f), new Vector3(0.78f, 0.44f, 0.78f), hull, new Vector3(0f, 45f, 0f));
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.46f, -0.2f), new Vector3(1.0f, 0.06f, 1.8f), deck);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.72f, -0.55f), new Vector3(0.7f, 0.5f, 0.7f), cabin);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.85f, -0.2f), new Vector3(0.6f, 0.22f, 0.1f), Glass);
+            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 1.1f, -0.75f), new Vector3(0.16f, 0.25f, 0.16f), Dark);
+            return root;
+        }
+
         /// <summary>약품 드럼(공단): 노란 원통 + 검은 띠 둘 + 뚜껑 테. 지름 약 1칸, 높이 약 1.3칸.</summary>
         public static GameObject Drum(Transform parent)
         {

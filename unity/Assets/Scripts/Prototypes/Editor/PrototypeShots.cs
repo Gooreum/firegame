@@ -311,6 +311,17 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c29_foam", view => view.Sim.Time >= 20f && view.Sim.FoamAt.HasValue && view.Sim.FoamLeft < SurvivorSim.FoamTime - 0.5f && view.Sim.PendingChoices == null, 12, true,
                 view => view.Frame(new Vector3(view.Sim.FoamAt.Value.X, view.Sim.FoamAt.Value.Y, 0f), 9f), 3);
 
+            // 4스테이지 항구: 바다·부두 전경(불배가 떠가며 노린 건물까지 빨간 점선), 그리고 불배가 부두에 닿는 순간.
+            failures += SurvivorShot(dir, "c58a_harbor_map", view => view.Sim.Time >= 30f, 4, false,
+                view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, 44f, 0f), 16f), 4, null, true, true);
+            failures += SurvivorShot(dir, "c58_harbor_boat", view => view.Sim.BoatsDocked.Count > 0, 3, false,
+                view =>
+                {
+                    Structure boat = view.Sim.Structures.Find(s => s.Kind == StructureKind.Boat && s.Docked);
+                    float x = Mathf.Clamp(boat != null ? boat.Pos.X : 30f, 16f, 44f);
+                    view.Frame(new Vector3(x, (boat != null ? boat.Pos.Y : 40f) - 2f, 0f), 10f);
+                }, 4, null, true, true);
+
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
         }

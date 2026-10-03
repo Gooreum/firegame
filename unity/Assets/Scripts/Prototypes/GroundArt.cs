@@ -38,8 +38,7 @@ namespace FireGame.Prototypes
                 {
                     float x = (px + 0.5f) / Ppu;
                     float y = (py + 0.5f) / Ppu;
-                    // 4 항구·5 야시장은 뷰 패스에서 그린다(그 전까지 마을 바닥).
-                    Color c = stage == 2 ? Forest(px, py, x, y, mid, pathHalf) : stage == 3 ? Factory(px, py, x, y, mid) : Town(px, py, x, y, mid);
+                    Color c = stage == 2 ? Forest(px, py, x, y, mid, pathHalf) : stage == 3 ? Factory(px, py, x, y, mid) : stage == 4 ? Harbor(px, py, x, y, mid) : Town(px, py, x, y, mid);
                     pixels[(py * n) + px] = c;
                 }
             }
@@ -146,6 +145,72 @@ namespace FireGame.Prototypes
             // 기름 얼룩: 큰 노이즈 봉우리만 어둡게.
             float stain = Noise(px + 431, py + 97, 40);
             if (stain > 0.8f) c = Color.Lerp(c, new Color(0.2f, 0.19f, 0.22f), Mathf.Clamp01((stain - 0.8f) * 6f) * 0.45f);
+            return Opaque(c);
+        }
+
+        /// <summary>항구: 북쪽(y ≥ SeaFrom) 짙은 바다에 비스듬한 물결 + 부두선 거품 띠, 바다로 뻗은 부두 둘(세로 판자), 부두선 돌 테, 남쪽은 콘크리트 판 + y=30 도로.</summary>
+        private static Color Harbor(int px, int py, float x, float y, float mid)
+        {
+            float grain = Hash(px, py);
+            bool pier = false;
+            foreach (float pxc in SurvivorHarbor.PierX) pier |= Mathf.Abs(x - pxc) < SurvivorHarbor.PierHalf;
+            if (y >= SurvivorHarbor.SeaFrom)
+            {
+                if (pier && y < SurvivorHarbor.PierTip)
+                {
+                    // 부두 판자: 세로 줄눈(0.5칸), 가장자리 두 줄은 난간(어둡게).
+                    var plank = new Color(0.5f, 0.36f, 0.22f) * (0.9f + (0.1f * Noise(px, py, 14)) + (0.05f * grain));
+                    if (Mathf.Repeat(x, 0.5f) < 0.07f) plank *= 0.7f;
+                    float edge = float.MaxValue;
+                    foreach (float pxc in SurvivorHarbor.PierX) edge = Mathf.Min(edge, SurvivorHarbor.PierHalf - Mathf.Abs(x - pxc));
+                    if (edge < 0.25f || y > SurvivorHarbor.PierTip - 0.25f) plank *= 0.75f;
+                    return Opaque(plank);
+                }
+                // 바다: 마을 강보다 짙고, 결은 가로로 길게 흐른다. 부두선·부두 가장자리엔 흰 거품.
+                var sea = new Color(0.12f, 0.32f, 0.58f) * (0.92f + (0.1f * Noise(px, py, 22)));
+                float ripple = Mathf.Repeat(x + (y * 0.25f) + (Noise(px, py, 9) * 0.5f), 1.6f);
+                if (ripple < 0.1f) sea = Color.Lerp(sea, new Color(0.42f, 0.66f, 0.9f), 0.65f);
+                float foam = y - SurvivorHarbor.SeaFrom;
+                if (pier && y < SurvivorHarbor.PierTip + 0.4f)
+                {
+                    foreach (float pxc in SurvivorHarbor.PierX) foam = Mathf.Min(foam, Mathf.Abs(x - pxc) - SurvivorHarbor.PierHalf);
+                }
+                else if (pier) foam = Mathf.Min(foam, y - SurvivorHarbor.PierTip);
+                else
+                {
+                    foreach (float pxc in SurvivorHarbor.PierX)
+                    {
+                        if (y < SurvivorHarbor.PierTip + 0.4f) foam = Mathf.Min(foam, Mathf.Abs(x - pxc) - SurvivorHarbor.PierHalf);
+                    }
+                }
+                if (foam < 0.5f && Noise(px + 77, py + 13, 6) > 0.35f + (foam * 0.8f)) sea = Color.Lerp(sea, Color.white, 0.75f);
+                return Opaque(sea);
+            }
+            if (y >= SurvivorHarbor.SeaFrom - 1f)
+            {
+                // 부두선: 밝은 돌 테, 바다 쪽 한 줄은 어둡게.
+                var kerb = new Color(0.5f, 0.5f, 0.48f) * (0.95f + (0.06f * grain));
+                if (y > SurvivorHarbor.SeaFrom - (2f / Ppu)) kerb *= 0.7f;
+                if (Mathf.Repeat(x, 2f) < 0.08f) kerb *= 0.8f;
+                return Opaque(kerb);
+            }
+            float road = Mathf.Abs(y - mid);
+            if (road < RoadHalf)
+            {
+                var asphalt = new Color(0.29f, 0.29f, 0.32f) * (0.92f + (0.1f * Noise(px, py, 24)) + (0.05f * grain));
+                if (road < 0.07f && Mathf.Repeat(x, 1.5f) < 0.8f) return new Color(0.78f, 0.68f, 0.35f);
+                return Opaque(asphalt);
+            }
+            if (road < RoadHalf + Curb) return Opaque(new Color(0.58f, 0.56f, 0.52f) * (0.95f + (0.06f * grain)));
+            // 콘크리트 판(공단보다 밝고 소금기 있는 회백색), 큰 노이즈 봉우리는 물 얼룩.
+            const int slab = Ppu * 2;
+            int tx = px / slab;
+            int ty = py / slab;
+            bool joint = (px % slab) == 0 || (py % slab) == 0;
+            Color c = new Color(0.6f, 0.6f, 0.57f) * (0.9f + (0.1f * Hash(tx, ty)) + (0.06f * Noise(px, py, 30)) + (0.04f * grain));
+            if (joint) c *= 0.82f;
+            float stain = Noise(px + 211, py + 307, 36);
+            if (stain > 0.82f) c = Color.Lerp(c, new Color(0.38f, 0.42f, 0.46f), Mathf.Clamp01((stain - 0.82f) * 6f) * 0.4f);
             return Opaque(c);
         }
 
