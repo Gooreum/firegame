@@ -250,6 +250,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>대화재(3:00) 뒤 최저 체력 비율. 끝이 아슬아슬했는지는 이것과 HousesRoom으로 잰다.</summary>
         public float FinaleMinHp = 1f;
+
+        /// <summary>대화재가 시작될 때의 레벨(아이템 다이어트가 보이는 숫자, docs §16).</summary>
+        public int FinaleLevel;
     }
 
     /// <summary>
@@ -1235,6 +1238,7 @@ namespace FireGame.Prototypes.Logic
             FinalePressure = 0;
             _finaleClock = FinaleReportEvery;
             Stats.Events++;
+            Stats.FinaleLevel = Level;
             Structure mark = Structures.Find(x => x.Kind == StructureKind.Depot && !x.Collapsed) ?? PickUnburntHouse();
             if (mark == null) return;
             Landmark = mark;

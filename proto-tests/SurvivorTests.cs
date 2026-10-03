@@ -461,9 +461,10 @@ namespace FireGame.Prototypes.Tests
                 log.AppendLine("seed " + seed + ": " + sim.Outcome + " t=" + (int)sim.Time + " lv=" + sim.Level);
             }
             // 봇 밴드는 바닥이다(docs §14): 봇은 건물에 거의 안 뿌려 끄는 시간이 15초인 판을 사람처럼 못 넘긴다.
-            // 30판 기준 대화재 도달 13, 승 10(2026-10-02). 도달은 1/3, 승은 1/10을 하한으로 두고 상한은 "다 이긴다"만 막는다.
-            Assert.True(reached * 3 >= seeds, "대화재까지 간 판이 " + reached + "/" + seeds + "개\n" + log);
-            Assert.InRange(won * 10f / seeds, 1f, 9f);
+            // 30판 기준 대화재 도달 13, 승 10(2026-10-02). 아이템 다이어트(무기 3·보조 2·대원 한 명) 뒤 기본 봇은 몹을 못 치워
+            // 도달 5·승 3(2026-10-04, docs §16). 사람 기준은 숙련 봇 CloseReport(22승)다. 여기 하한은 "전멸이 아니다": 도달 1/10, 승 2.
+            Assert.True(reached * 10 >= seeds, "대화재까지 간 판이 " + reached + "/" + seeds + "개\n" + log);
+            Assert.InRange(won * 10f / seeds, 0.5f, 9f);
         }
 
         // --- S2 TC-10 ---

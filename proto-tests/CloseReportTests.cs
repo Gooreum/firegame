@@ -169,12 +169,16 @@ namespace FireGame.Prototypes.Tests
             public float Rescued;
             public float PeopleLost;
             public float HousesLost;
+            /// <summary>3:00 레벨 평균과 끝에 쥔 장비 종류 수(진화·노란 포함) 평균: 아이템 다이어트가 보이는 숫자.</summary>
+            public float Level3;
+            public float Items;
 
             public override string ToString()
             {
                 return "스테이지 " + Stage + " " + SurvivorStages.Get(Stage).Name + ": 승 " + Won + " (아슬 " + Close + ") | 패 체력 " + LostHp + " 동네 " + LostTown
                     + " | 감독 단계 " + Pressure.ToString("0.0") + " | 대화재 최저 체력 " + (FinaleHp * 100f).ToString("0") + "% | 남은 여유 " + Room.ToString("0.0") + "채"
-                    + " | 구조 " + Rescued.ToString("0.0") + " 잃음 " + PeopleLost.ToString("0.0") + " | 무너진 건물 " + HousesLost.ToString("0.0");
+                    + " | 구조 " + Rescued.ToString("0.0") + " 잃음 " + PeopleLost.ToString("0.0") + " | 무너진 건물 " + HousesLost.ToString("0.0")
+                    + " | 3:00 레벨 " + Level3.ToString("0.0") + " 장비 " + Items.ToString("0.0") + "종";
             }
         }
 
@@ -198,6 +202,8 @@ namespace FireGame.Prototypes.Tests
                 row.Rescued += sim.Rescued;
                 row.PeopleLost += sim.CiviliansLost;
                 row.HousesLost += sim.HousesLost;
+                row.Level3 += sim.Finale ? sim.Stats.FinaleLevel : sim.Level;
+                foreach (UpgradeId id in sim.Build.Owned()) row.Items += 1f;
             }
             float k = 1f / seeds;
             row.Pressure *= k;
@@ -206,6 +212,8 @@ namespace FireGame.Prototypes.Tests
             row.Rescued *= k;
             row.PeopleLost *= k;
             row.HousesLost *= k;
+            row.Level3 *= k;
+            row.Items *= k;
             return row;
         }
 

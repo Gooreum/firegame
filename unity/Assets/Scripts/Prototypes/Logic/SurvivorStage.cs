@@ -110,7 +110,8 @@ namespace FireGame.Prototypes.Logic
             ReportTimes = new[] { 10f, 30f, 50f, 70f, 90f, 110f, 120f, 140f, 160f, 180f, 200f, 230f },
             // 숲의 난이도는 배율이 아니라 새 규칙(바람·다람쥐·박쥐)에서 온다.
             EnemyHp = 1f,
-            SpawnRate = 1.2f,
+            // 1.2였을 땐 아이템 다이어트 뒤 숙련 봇이 마을(22승)보다 숲(24승)을 더 쉽게 깼다(docs §16): 다른 두 맵과 같은 1.3.
+            SpawnRate = 1.3f,
             // 대화재 동안 바람이 거세져 산불이 캠프를 덮친다.
             FinaleWindChance = 0.35f,
             BlazeMax = 0.25f,
