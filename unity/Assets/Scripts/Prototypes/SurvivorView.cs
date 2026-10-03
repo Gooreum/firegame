@@ -660,14 +660,20 @@ namespace FireGame.Prototypes
             Text title = UiKit.OutlinedLabel(_stationLayer, "Title", "소방서", 84, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
             UiKit.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 400f), new Vector2(900f, 110f));
 
-            string best = "";
-            for (int n = 1; n <= SurvivorStages.Count; n++) best += (n > 1 ? "  ·  " : "") + SurvivorStages.Get(n).Name + " ★" + _station.Best[n];
-            Text stars = UiKit.OutlinedLabel(_stationLayer, "Stars", "모은 별 ★ " + _station.Stars + "      최고  " + best, 36, Color.white, TextAnchor.MiddleCenter);
+            // 스테이지별 최고 별은 아래 스테이지 버튼에 있다.
+            Text stars = UiKit.OutlinedLabel(_stationLayer, "Stars", "모은 별 ★ " + _station.Stars, 36, Color.white, TextAnchor.MiddleCenter);
             UiKit.Place(stars.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 318f), new Vector2(1500f, 50f));
 
+            // 스테이지 선택: 셋 다 열려 있다. 고른 것은 노란 버튼, 각 버튼에 이름과 최고 별. 탭하면 그 스테이지의 브리핑·대비 장비로 다시 연다.
             StageRules rules = SurvivorStages.Get(_stage);
-            Text next = UiKit.OutlinedLabel(_stationLayer, "Next", "다음 출동: STAGE " + _stage + " · " + rules.Name, 32, new Color(0.7f, 0.85f, 1f), TextAnchor.MiddleCenter);
-            UiKit.Place(next.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 268f), new Vector2(1000f, 44f));
+            for (int n = 1; n <= SurvivorStages.Count; n++)
+            {
+                int stage = n;
+                bool on = stage == _stage;
+                string label = "STAGE " + n + " · " + SurvivorStages.Get(n).Name + "  ★" + _station.Best[n];
+                Button pick = UiKit.Button(_stationLayer, "Stage" + n, Art.Get(on ? "UI/button_yellow" : "UI/button_blue"), label, 30, () => TapStage(stage));
+                UiKit.Place(pick.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2((n - 2) * 440f, 268f), new Vector2(420f, 56f));
+            }
 
             // 브리핑: 다음 스테이지의 위협 한 줄과, 그 위협을 막는 대비 장비 둘(하나를 골라 Lv1로 들고 간다).
             Text threat = UiKit.OutlinedLabel(_stationLayer, "Threat", "위협: " + rules.Threat, 30, new Color(1f, 0.75f, 0.55f), TextAnchor.MiddleCenter);
@@ -713,8 +719,20 @@ namespace FireGame.Prototypes
 
             Button go = UiKit.Button(_stationLayer, "Go", Art.Get("UI/button_red"), "출동!", 56, CloseStation);
             UiKit.Place(go.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(0f, -375f), new Vector2(460f, 110f));
-            Text hint = UiKit.OutlinedLabel(_stationLayer, "Hint", "대비 장비 하나 + 소방관을 골라 탭  ·  출동은 버튼 또는 Enter", 26, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
+            Text hint = UiKit.OutlinedLabel(_stationLayer, "Hint", "스테이지 · 대비 장비 · 소방관을 골라 탭  ·  출동은 버튼 또는 Enter", 26, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             UiKit.Place(hint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -455f), new Vector2(1000f, 40f));
+        }
+
+        /// <summary>스테이지 칸을 눌렀다: 그 스테이지로 바꾸고(대비 장비는 내려놓는다) 소방서를 다시 연다. 전부 열려 있다.</summary>
+        public void TapStage(int stage)
+        {
+            if (stage == _stage) return;
+            _stage = stage;
+            _station.Prep = null;
+            PlayerPrefs.SetInt(StageKey, stage);
+            PlayerPrefs.Save();
+            Restart(_seed);
+            OpenStation();
         }
 
         /// <summary>대비 장비 칸을 눌렀다: 같은 걸 누르면 내려놓고, 다른 걸 누르면 바꿔 든다. 판을 그 장비로 다시 연다.</summary>
