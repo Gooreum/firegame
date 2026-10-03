@@ -294,7 +294,8 @@ namespace FireGame.Prototypes.Logic
             float bestD = float.MaxValue;
             foreach (Structure s in _sim.Structures)
             {
-                if (!s.Burning) continue;
+                // 물 위 불배는 갈 수 없는 목표다(사거리 안이면 조준은 NearestBurning이 잡는다).
+                if (!s.Burning || s.Kind == StructureKind.Boat) continue;
                 float d = s.DistanceTo(p) - (s.Residents > 0 ? 15f : 0f) - (s.IsBuilding ? 5f : 0f);
                 if (d < bestD)
                 {

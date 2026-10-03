@@ -686,6 +686,26 @@ namespace FireGame.Prototypes.Logic
         public Vec2? Truck;
         public float TruckDir = 1f;
 
+        /// <summary>항구: 이번 틱에 바다에 나타난 불배(없으면 null).</summary>
+        public Structure JustBoat;
+
+        /// <summary>항구: 이번 틱에 부두에 닿은 배 / 물 위에서 꺼져 바다로 돌아가기 시작한 배.</summary>
+        public readonly List<Structure> BoatsDocked = new List<Structure>();
+        public readonly List<Structure> BoatsAway = new List<Structure>();
+
+        /// <summary>첫 불배가 뜨는 시각(그 뒤는 Stage.BoatEvery마다).</summary>
+        public const float FirstBoat = 20f;
+        public const float BoatSpeed = 2.2f;
+        public const float BoatFire = 0.5f;
+
+        /// <summary>닿은 배가 불을 옮기는 틈(배 가장자리에서 탈 것 가장자리까지)과 간격(초).</summary>
+        public const float BoatDockGap = 4f;
+        public const float BoatSpreadEvery = 4f;
+
+        /// <summary>배가 다 타서 가라앉기까지(초, 불 세기 1 기준). 떠내려오는 동안 가라앉지 않게 건물보다 길다.</summary>
+        public const float BurnBoat = 45f;
+        private float _nextBoat = FirstBoat;
+
         /// <summary>이번 틱에 스프링클러가 터진 건물.</summary>
         public readonly List<Structure> Sprinkled = new List<Structure>();
 
@@ -847,6 +867,7 @@ namespace FireGame.Prototypes.Logic
             MovePlayer(moveX, moveY);
             BlockPlayer();
             Direct();
+            if (Stage.BoatEvery > 0f) TickBoats();
             RebuildHash();
             MoveEnemies();
             FireWeapons();
@@ -1046,6 +1067,9 @@ namespace FireGame.Prototypes.Logic
             JustWindShift = false;
             JustBats = false;
             JustPressureUp = false;
+            JustBoat = null;
+            BoatsDocked.Clear();
+            BoatsAway.Clear();
             GemsCollected = 0;
             // 틱마다 한 번 센다(테스트가 판 도중 구조물을 넣는다).
             HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
@@ -1098,7 +1122,9 @@ namespace FireGame.Prototypes.Logic
             {
                 _spawnDebt -= 1f;
                 if (Enemies.Count >= MaxEnemies) continue;
-                Spawn(PickKind(), SpawnPoint(SpawnDistance));
+                EnemyKind kind = PickKind();
+                // 불 갈매기는 바다 쪽에서 날아온다(물 위를 건너니 부두에서 쏴야 한다).
+                Spawn(kind, kind == EnemyKind.Gull ? SeaPoint() : SpawnPoint(SpawnDistance));
             }
 
             if (_wavesDone < 3 && Time >= 60f * (_wavesDone + 1))
@@ -1291,7 +1317,19 @@ namespace FireGame.Prototypes.Logic
             if (r < blaze + dart) return EnemyKind.Dart;
             if (r < blaze + dart + Stage.SquirrelShare) return EnemyKind.Squirrel;
             if (Time >= OilFrom && r < blaze + dart + Stage.SquirrelShare + Stage.OilShare) return EnemyKind.Oil;
+            float sea = blaze + dart + Stage.SquirrelShare + Stage.OilShare;
+            if (r < sea + Stage.GullShare) return EnemyKind.Gull;
+            if (Time >= PopperFrom && r < sea + Stage.GullShare + Stage.PopperShare) return EnemyKind.Popper;
             return EnemyKind.Ember;
+        }
+
+        /// <summary>폭죽이 섞이기 시작하는 시각.</summary>
+        public const float PopperFrom = 30f;
+
+        /// <summary>바다 가장자리(북쪽 끝) 아무 x: 불 갈매기 스폰.</summary>
+        private Vec2 SeaPoint()
+        {
+            return new Vec2(1f + (Rand() * (ArenaSize - 2f)), ArenaSize - 1.5f);
         }
 
         private Vec2 SpawnPoint(float distance)
@@ -1450,11 +1488,11 @@ namespace FireGame.Prototypes.Logic
                 float speed = e.Speed * (e.Slowed > 0f ? 0.5f : 1f);
                 float vx = d > 0.01f ? dx / d * speed : 0f;
                 float vy = d > 0.01f ? dy / d * speed : 0f;
-                if (e.Kind == EnemyKind.Squirrel || e.Kind == EnemyKind.Bat)
+                if (e.Kind == EnemyKind.Squirrel || e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Gull)
                 {
-                    // 다람쥐는 지그재그로, 박쥐는 크게 출렁이며 온다(진행 방향에 수직으로 흔든다).
-                    e.Phase += Dt * (e.Kind == EnemyKind.Squirrel ? 9f : 5f);
-                    float sway = (float)Math.Sin(e.Phase) * (e.Kind == EnemyKind.Squirrel ? 0.9f : 1.3f);
+                    // 다람쥐는 지그재그로, 박쥐는 크게, 갈매기는 더 느리고 넓게 출렁이며 온다(진행 방향에 수직으로 흔든다).
+                    e.Phase += Dt * (e.Kind == EnemyKind.Squirrel ? 9f : e.Kind == EnemyKind.Gull ? 4f : 5f);
+                    float sway = (float)Math.Sin(e.Phase) * (e.Kind == EnemyKind.Squirrel ? 0.9f : e.Kind == EnemyKind.Gull ? 1.6f : 1.3f);
                     float px = -vy;
                     float py = vx;
                     vx += px * sway;
@@ -1511,8 +1549,8 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
                 e.Pos = ClampToArena(e.Pos);
-                // 땅을 기는 불은 강을 못 건넌다(둑에 멈춘다). 불씨와 박쥐는 날아 건넌다.
-                if (HasWater && !e.Seeker && e.Kind != EnemyKind.Bat) PushOutOfWater(ref e.Pos, e.Radius);
+                // 땅을 기는 불은 강을 못 건넌다(둑에 멈춘다). 불씨·박쥐·갈매기는 날아 건넌다.
+                if (HasWater && !e.Seeker && e.Kind != EnemyKind.Bat && e.Kind != EnemyKind.Gull) PushOutOfWater(ref e.Pos, e.Radius);
                 // 건물에서 나온 불씨와 다람쥐만 옮겨붙인다. 소방관을 쫓는 불(가장자리 불씨·큰 불)은 발밑에 불을 흘릴 뿐이다.
                 if (e.Seeker) TouchStructures(e);
                 e.Knock.X *= knockDecay;
@@ -2293,6 +2331,8 @@ namespace FireGame.Prototypes.Logic
                 s.HoseHold = 0f;
                 s.Warned = false;
                 Doused.Add(s);
+                // 물 위에서 끈 배는 바다로 돌아간다(TickBoats가 북쪽으로 돌린다).
+                if (s.Kind == StructureKind.Boat && !s.Docked) BoatsAway.Add(s);
                 // 불을 끈 보상: 건물은 큰 구슬, 작은 것은 작은 구슬. 건물 진화는 콤보를 크게 잇는다.
                 if (s.IsBuilding) ComboAdd(ComboPerDouse);
                 DropGem(s.Door, (s.IsBuilding ? 8 : 3) * ComboMult);
@@ -2305,7 +2345,8 @@ namespace FireGame.Prototypes.Logic
         {
             foreach (Structure st in Structures)
             {
-                if (st.Collapsed || !st.Within(s.Pos, s.Radius * 0.5f)) continue;
+                // 물(강·바다)은 물줄기를 막지 않는다: 항구는 바다 위 불배를 부두에서 쏜다(마을 강도 넘어간다).
+                if (st.Collapsed || st.Kind == StructureKind.Water || !st.Within(s.Pos, s.Radius * 0.5f)) continue;
                 // 제트는 뚫고 가고, 나무는 물이 잎 사이로 빠진다(나무 밑에서 쏴도 막히지 않게).
                 if (s.Kind == ShotKind.Jet || st.Kind == StructureKind.Tree)
                 {
@@ -2431,6 +2472,110 @@ namespace FireGame.Prototypes.Logic
             return best;
         }
 
+        /// <summary>s 가장자리에서 틈 gap 안의 가장 가까운 안 탄 탈 것(물·s 자신 제외).</summary>
+        private Structure NearestFlammableTo(Structure s, float gap)
+        {
+            Structure best = null;
+            float bestD = gap;
+            float reach = Math.Max(s.Half.X, s.Half.Y);
+            foreach (Structure t in Structures)
+            {
+                if (t == s || !t.Flammable) continue;
+                float d = t.DistanceTo(s.Pos) - reach;
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = t;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// 항구: BoatEvery마다 불붙은 배가 바다 왼쪽·오른쪽 끝에서 BoatLane 줄을 따라 떠내려온다. 노린 부둣가 건물의 x에 오면 남쪽으로 꺾어
+        /// 부두선(SeaFrom)에 닿아 멈추고(Docked), 타는 동안 BoatSpreadEvery마다 틈 BoatDockGap 안의 가장 가까운 탈 것에 불을 옮긴다.
+        /// 물 위에서 꺼지면 북쪽으로 돌아가 바다 밖으로 사라진다(Collapsed, 건물 손실 아님). 다 타면 가라앉는다(Fall).
+        /// </summary>
+        private void TickBoats()
+        {
+            if (Time >= _nextBoat)
+            {
+                _nextBoat = Time + Stage.BoatEvery;
+                Structure target = PickQuayTarget();
+                bool fromLeft = Rand() < 0.5f;
+                var boat = new Structure
+                {
+                    Kind = StructureKind.Boat,
+                    Name = "불배",
+                    Pos = new Vec2(fromLeft ? -1f : ArenaSize + 1f, SurvivorHarbor.BoatLane),
+                    Half = new Vec2(1.2f, 0.6f),
+                    Target = target,
+                    Drift = new Vec2(fromLeft ? BoatSpeed : -BoatSpeed, 0f),
+                };
+                Structures.Add(boat);
+                Ignite(boat, BoatFire);
+                JustBoat = boat;
+            }
+
+            foreach (Structure b in Structures)
+            {
+                if (b.Kind != StructureKind.Boat || b.Collapsed) continue;
+                if (!b.Burning && !b.Docked)
+                {
+                    // 꺼진 배는 바다로 돌아간다.
+                    b.Drift = new Vec2(0f, BoatSpeed);
+                    if (b.Pos.Y - b.Half.Y > ArenaSize + 2f)
+                    {
+                        b.Collapsed = true;
+                        continue;
+                    }
+                }
+                else if (!b.Docked && b.Drift.Y == 0f && b.Target != null && Math.Abs(b.Pos.X - b.Target.Pos.X) < 0.5f)
+                {
+                    // 노린 건물 앞: 남쪽으로 꺾는다.
+                    b.Drift = new Vec2(0f, -BoatSpeed);
+                }
+                b.Pos = new Vec2(b.Pos.X + (b.Drift.X * Dt), b.Pos.Y + (b.Drift.Y * Dt));
+                if (!b.Docked && b.Drift.Y < 0f && b.Pos.Y - b.Half.Y <= SurvivorHarbor.SeaFrom)
+                {
+                    b.Docked = true;
+                    b.Drift = default;
+                    b.Pos = new Vec2(b.Pos.X, SurvivorHarbor.SeaFrom + b.Half.Y);
+                    b.SpreadClock = 1f;
+                    BoatsDocked.Add(b);
+                }
+                if (b.Docked && b.Burning)
+                {
+                    b.SpreadClock -= Dt;
+                    if (b.SpreadClock <= 0f)
+                    {
+                        b.SpreadClock = BoatSpreadEvery;
+                        Structure near = NearestFlammableTo(b, BoatDockGap);
+                        if (near != null && Ignite(near, 0.4f))
+                        {
+                            Spread.Add(near);
+                            SpreadFrom.Add(b);
+                            Stats.Spreads++;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>불배가 노릴 부둣가 건물: 아직 안 타는 것 중 하나, 없으면 아무 부둣가 건물, 그것도 없으면 null(줄 따라 떠간다).</summary>
+        private Structure PickQuayTarget()
+        {
+            var quay = new List<Structure>();
+            foreach (Structure s in Structures)
+            {
+                if (s.IsBuilding && !s.Collapsed && s.Pos.Y > SurvivorHarbor.QuayRow - 4f) quay.Add(s);
+            }
+            if (quay.Count == 0) return null;
+            var calm = quay.FindAll(s => !s.Burning);
+            List<Structure> pool = calm.Count > 0 ? calm : quay;
+            return pool[Math.Min(pool.Count - 1, (int)(Rand() * pool.Count))];
+        }
+
         private Structure NearestFlammable(Vec2 p, float range)
         {
             Structure best = null;
@@ -2484,7 +2629,7 @@ namespace FireGame.Prototypes.Logic
                 }
 
                 s.Fire = Math.Min(1f, s.Fire + (Stage.FireGrowth * Dt));
-                s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding : BurnSmall);
+                s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding : s.Kind == StructureKind.Boat ? BurnBoat : BurnSmall);
                 if (s.HoseHold > 0f) s.HoseHold = Math.Max(0f, s.HoseHold - (SteamCool * Dt));
                 if (s.Integrity <= 0f)
                 {
