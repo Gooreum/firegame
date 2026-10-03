@@ -87,7 +87,7 @@ namespace FireGame.Prototypes.EditorTools
             }, 12);
             // 마을 전용 노란 카드(풀장비): 소방차가 줄을 가로지르고 스프링클러가 터진다.
             failures += SurvivorShot(dir, "c16_town_specials", view => view.Sim.Truck.HasValue && System.Math.Abs(view.Sim.Truck.Value.X - view.Sim.Player.X) < 5f, 3, true);
-            // 노란 장비 임팩트(docs §17): 헬기가 물을 쏟는 순간(충격파 두 겹·물보라 고리·젖은 자국), 스프링클러 물 돔.
+            // 노란 장비 임팩트(README 「노란 카드」 절의 세 박자): 헬기가 물을 쏟는 순간(충격파 두 겹·물보라 고리·젖은 자국), 스프링클러 물 돔.
             failures += SurvivorShot(dir, "c56_heli_impact", view => view.Sim.Time >= 20f && view.Sim.HeliDrops.Count > 0, 2, true,
                 view => view.Frame(view.Sim.HeliDrops.Count > 0 ? new Vector3(view.Sim.HeliDrops[0].X, view.Sim.HeliDrops[0].Y, 0f) : new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), 9f));
             // 스테이지 제목 띠(첫 3초)가 걷힌 뒤의 두 번째 작동을 찍는다.
