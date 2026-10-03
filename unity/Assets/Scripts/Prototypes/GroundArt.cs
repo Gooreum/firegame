@@ -38,7 +38,7 @@ namespace FireGame.Prototypes
                 {
                     float x = (px + 0.5f) / Ppu;
                     float y = (py + 0.5f) / Ppu;
-                    Color c = stage == 2 ? Forest(px, py, x, y, mid, pathHalf) : stage == 3 ? Factory(px, py, x, y, mid) : stage == 4 ? Harbor(px, py, x, y, mid) : Town(px, py, x, y, mid);
+                    Color c = stage == 2 ? Forest(px, py, x, y, mid, pathHalf) : stage == 3 ? Factory(px, py, x, y, mid) : stage == 4 ? Harbor(px, py, x, y, mid) : stage == 5 ? Market(px, py, x, y, mid) : Town(px, py, x, y, mid);
                     pixels[(py * n) + px] = c;
                 }
             }
@@ -211,6 +211,40 @@ namespace FireGame.Prototypes
             if (joint) c *= 0.82f;
             float stain = Noise(px + 211, py + 307, 36);
             if (stain > 0.82f) c = Color.Lerp(c, new Color(0.38f, 0.42f, 0.46f), Mathf.Clamp01((stain - 0.82f) * 6f) * 0.4f);
+            return Opaque(c);
+        }
+
+        /// <summary>야시장(밤): 어두운 자갈 돌바닥(1칸 격자, 돌마다 밝기) + 두 점포 줄 사이 골목(y 24~36)은 매끈한 포장, 점포 앞 노란 안내선, 무대 앞 반원 광장, 바닥에 떨어진 색종이 점.</summary>
+        private static Color Market(int px, int py, float x, float y, float mid)
+        {
+            float grain = Hash(px, py);
+            float aisleHalf = (SurvivorMarket.RowNorth - SurvivorMarket.RowSouth) / 2f - SurvivorMarket.StallHalf.Y - 0.3f;
+            bool aisle = Mathf.Abs(y - mid) < aisleHalf;
+            // 무대 앞 광장: 반지름 6 반원(무대 y=8 위쪽).
+            float dx = x - mid;
+            float dy = y - 10.5f;
+            bool apron = dy > 0f && ((dx * dx) + (dy * dy)) < 36f;
+            Color c;
+            if (aisle || apron)
+            {
+                c = (apron ? new Color(0.3f, 0.28f, 0.33f) : new Color(0.27f, 0.26f, 0.3f)) * (0.92f + (0.1f * Noise(px, py, 26)) + (0.04f * grain));
+                // 점포 앞 노란 안내선(골목 양 가장자리).
+                if (Mathf.Abs(Mathf.Abs(y - mid) - (aisleHalf - 0.25f)) < 0.07f) c = new Color(0.8f, 0.68f, 0.25f);
+            }
+            else
+            {
+                int tx = px / Ppu;
+                int ty = py / Ppu;
+                bool joint = (px % Ppu) == 0 || (py % Ppu) == 0;
+                c = new Color(0.22f, 0.21f, 0.25f) * (0.86f + (0.16f * Hash(tx, ty)) + (0.05f * Noise(px, py, 20)) + (0.04f * grain));
+                if (joint) c *= 0.7f;
+            }
+            // 색종이: 드문 점이 분홍·금·청록으로 반짝인다.
+            if (grain > 0.9975f)
+            {
+                float pick = Hash(px + 5, py + 9);
+                c = pick < 0.33f ? new Color(0.9f, 0.4f, 0.6f) : pick < 0.66f ? new Color(0.95f, 0.8f, 0.3f) : new Color(0.4f, 0.85f, 0.85f);
+            }
             return Opaque(c);
         }
 

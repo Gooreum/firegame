@@ -91,6 +91,23 @@ namespace FireGame.Prototypes
             return root;
         }
 
+        /// <summary>불꽃 가판대(야시장): 빨간 좌판 + 금색 천막 + 위로 선 발사관 다섯. 폭 약 1.8칸, 높이 약 1.4칸.</summary>
+        public static GameObject FireworkStand(Transform parent)
+        {
+            GameObject root = Root("FireworkStandModel", parent);
+            var gold = new Color(0.95f, 0.78f, 0.25f);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.3f, 0f), new Vector3(1.8f, 0.6f, 1.3f), FireRed);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.62f, 0f), new Vector3(1.9f, 0.05f, 1.4f), gold);
+            for (int k = 0; k < 5; k++)
+            {
+                float ox = (k - 2) * 0.32f;
+                Part(PrimitiveType.Cylinder, root, new Vector3(ox, 0.95f, (k % 2 == 0 ? 0.15f : -0.15f)), new Vector3(0.16f, 0.32f, 0.16f), k % 2 == 0 ? Dark : Steel);
+                Part(PrimitiveType.Cylinder, root, new Vector3(ox, 1.28f, (k % 2 == 0 ? 0.15f : -0.15f)), new Vector3(0.14f, 0.03f, 0.14f), gold);
+            }
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 1.25f, -0.75f), new Vector3(1.6f, 0.5f, 0.06f), gold);
+            return root;
+        }
+
         /// <summary>약품 드럼(공단): 노란 원통 + 검은 띠 둘 + 뚜껑 테. 지름 약 1칸, 높이 약 1.3칸.</summary>
         public static GameObject Drum(Transform parent)
         {

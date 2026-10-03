@@ -203,6 +203,7 @@ namespace FireGame.Prototypes
         private Pool _band;
         private bool _truckShown;
         private bool _fireboatShown;
+        private Light _sun;
 
         /// <summary>큰 파도가 이번에 부두선에 닿는 충격파를 이미 냈다.</summary>
         private bool _waveHitQuay;
@@ -515,15 +516,15 @@ namespace FireGame.Prototypes
             bloom.threshold.Override(1f);
             bloom.intensity.Override(0.8f);
             bloom.scatter.Override(0.65f);
-            // 해: 왼쪽 위에서 땅(+Z)으로 비스듬히 비춰 모델이 오른쪽 아래로 부드러운 그림자를 드리운다.
-            var sun = new GameObject("Sun").AddComponent<Light>();
-            sun.transform.SetParent(_root, false);
-            sun.type = LightType.Directional;
-            sun.intensity = 0.8f;
-            sun.color = new Color(1f, 0.96f, 0.88f);
-            sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = 0.55f;
-            sun.transform.localRotation = Quaternion.LookRotation(new Vector3(-0.45f, 0.35f, 1f), Vector3.back);
+            // 해: 왼쪽 위에서 땅(+Z)으로 비스듬히 비춰 모델이 오른쪽 아래로 부드러운 그림자를 드리운다(야시장은 BuildGround가 밤으로 낮춘다).
+            _sun = new GameObject("Sun").AddComponent<Light>();
+            _sun.transform.SetParent(_root, false);
+            _sun.type = LightType.Directional;
+            _sun.intensity = 0.8f;
+            _sun.color = new Color(1f, 0.96f, 0.88f);
+            _sun.shadows = LightShadows.Soft;
+            _sun.shadowStrength = 0.55f;
+            _sun.transform.localRotation = Quaternion.LookRotation(new Vector3(-0.45f, 0.35f, 1f), Vector3.back);
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.42f, 0.45f, 0.52f);
             _hud = UiKit.Node(canvas.transform, "SurvivorHud");
@@ -1423,6 +1424,39 @@ namespace FireGame.Prototypes
                 bool suit = _sim.Build.Level(UpgradeId.Suit) > 0;
                 SpawnText(W(_sim.Player) + new Vector3(0f, 1.3f, 0f), suit ? "방화복이 막는다" : "뜨거워!", suit ? new Color(1f, 0.85f, 0.4f) : new Color(1f, 0.4f, 0.2f), 1f);
             }
+            // 야시장: 등줄로 번짐·줄 불 꺼짐, 가판대 발사 시작, 로켓 착지.
+            foreach (Lantern l in _sim.LanternCaught)
+            {
+                Structure to = l.Other(l.From);
+                Vector3 at = W(to.Pos);
+                SpawnText(at + new Vector3(0f, 2.4f, 0f), "등줄로 번졌다!", new Color(1f, 0.6f, 0.2f), 1.6f);
+                Shockwave(at, new Color(1f, 0.5f, 0.1f, 0.9f), 3f, 0.3f);
+                _trauma = Mathf.Min(1f, _trauma + 0.1f);
+            }
+            foreach (Lantern l in _sim.LanternDoused)
+            {
+                Vector3 at = W(_sim.LanternFire(l)) + Up(LanternHeight);
+                Steam(at, 4, 0.8f);
+            }
+            if (_sim.JustLaunching != null)
+            {
+                ShowAlert("불꽃 가판대가 터진다! 하늘에서 불이 떨어진다", new Color(1f, 0.6f, 0.3f));
+                Flare(W(_sim.JustLaunching.Pos) + Up(1.3f), 5f, new Color(1f, 0.8f, 0.4f), 3);
+                _trauma = Mathf.Min(1f, _trauma + 0.2f);
+                GameAudio.Play(Cue.SecondIgnition);
+            }
+            foreach (Vec2 p in _sim.RocketBursts)
+            {
+                Vector3 at = W(p);
+                float pick = Random.value;
+                Color c = pick < 0.33f ? new Color(1f, 0.45f, 0.65f) : pick < 0.66f ? new Color(1f, 0.85f, 0.35f) : new Color(0.45f, 0.9f, 0.9f);
+                Flare(at, 6f, c, 4);
+                Burst(at, 18, c, 7f);
+                Shockwave(at, new Color(c.r, c.g, c.b, 0.9f), 4f, 0.3f);
+                Flash(c, 0.08f);
+                Scorch(at, 1.4f);
+                _trauma = Mathf.Min(1f, _trauma + 0.12f);
+            }
             // 큰 파도: 금색 배너 + 큰 흔들림 + 멈칫(바다가 통째로 밀려온다).
             if (_sim.JustSurge)
             {
@@ -1937,6 +1971,22 @@ namespace FireGame.Prototypes
                         _enemyGlow.Put(at, 1.5f, 0f, new Color(1f, 0.8f, 0.2f, 0.45f));
                         _darts.Put(at, 0.8f * flicker * punch, toward + 90f, hit ? water : Color.white, FlameArt.Frame(_dartSheet, _time, i, 18f));
                         break;
+                    case EnemyKind.Popper:
+                    {
+                        // 폭죽: 빨간 원통 몸통이 통통 뛰고(한 주기 1초 중 앞 0.35초) 심지에서 불꽃이 탄다.
+                        float ph = e.Phase - Mathf.Floor(e.Phase);
+                        float hop = ph < SurvivorSim.PopperHop ? Mathf.Sin(ph / SurvivorSim.PopperHop * Mathf.PI) * 0.8f : 0f;
+                        Vector3 body = at + Up(0.35f + hop);
+                        _enemyGlow.Put(at, 1.4f * flicker, 0f, new Color(1f, 0.4f, 0.15f, 0.3f));
+                        _enemyCore.Put(body, 0.5f * punch, 0f, hit ? water : new Color(0.9f, 0.15f, 0.1f, 1f), null, 1.9f);
+                        _enemyCore.Put(body + Up(0.5f), 0.52f * punch, 0f, hit ? water : new Color(1f, 0.85f, 0.3f, 1f), null, 0.3f);
+                        _darts.Put(body + Up(0.75f), 0.55f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_dartSheet, _time, i, 18f));
+                        if (Random.value < 0.15f)
+                        {
+                            Emit(Sparks[Random.Range(0, Sparks.Length)], body + Up(0.8f), new Vector3(Random.Range(-1.5f, 1.5f), Random.Range(1f, 3f), 0f), 1f, 0.4f, 0.3f, 0.05f, new Color(1f, 0.9f, 0.4f), new Color(1f, 0.3f, 0.05f, 0f), 0f, true);
+                        }
+                        break;
+                    }
                     case EnemyKind.Gull:
                     {
                         // 불 갈매기: 흰회색 날개가 천천히 퍼덕이고 날개 끝과 꼬리에 불이 붙어 연기를 끈다. 높이 날아 그림자가 멀다.
@@ -2081,6 +2131,7 @@ namespace FireGame.Prototypes
 
             DrawAmbulance(dt);
             DrawHarborSpecials();
+            if (_sim.Rockets.Count > 0) DrawRockets();
 
             if (_sim.RainAt.HasValue)
             {
@@ -3061,6 +3112,13 @@ namespace FireGame.Prototypes
                 Shockwave(at, new Color(0.6f, 0.9f, 1f, 0.9f), 3.5f, 0.3f);
                 _trauma = Mathf.Min(1f, _trauma + 0.06f);
                 HitStop(0.03f);
+            }
+            if (kind == EnemyKind.Popper)
+            {
+                // 폭죽은 펑 터진다: 빨간 파편과 작은 충격파(불씨 둘이 튀는 건 시뮬).
+                Burst(at, 12, new Color(1f, 0.35f, 0.25f), 6f);
+                Shockwave(at, new Color(1f, 0.5f, 0.3f, 0.9f), 2.2f, 0.25f);
+                _trauma = Mathf.Min(1f, _trauma + 0.04f);
             }
         }
 
@@ -4116,6 +4174,15 @@ namespace FireGame.Prototypes
             bool forest = _sim.Stage.Number == 2;
             bool factory = _sim.Stage.Number == 3;
             bool harbor = _sim.Stage.Number == 4;
+            bool night = _sim.Stage.Number == 5;
+            // 야시장은 밤: 해를 낮추고 푸르게, 주변광을 어둡게. 다른 스테이지로 가면 되돌린다(등불·불꽃의 additive 글로우가 밤에 산다).
+            if (_sun != null)
+            {
+                _sun.intensity = night ? 0.3f : 0.8f;
+                _sun.color = night ? new Color(0.7f, 0.75f, 1f) : new Color(1f, 0.96f, 0.88f);
+            }
+            RenderSettings.ambientLight = night ? new Color(0.2f, 0.22f, 0.34f) : new Color(0.42f, 0.45f, 0.52f);
+            if (_worldCam != null) _worldCam.backgroundColor = night ? new Color(0.02f, 0.02f, 0.05f) : new Color(0.05f, 0.05f, 0.07f);
             int size = (int)SurvivorSim.ArenaSize;
             float mid = size / 2f;
             // 바닥은 스테이지 전체를 그린 한 장(풀결·도로·광장·흙길이 이어진다). 해 그림자를 받는 Lit 쿼드에 깐다.
@@ -4165,7 +4232,7 @@ namespace FireGame.Prototypes
                 }
             }
 
-            if (!forest && !factory && !harbor)
+            if (!forest && !factory && !harbor && !night)
             {
                 // 마을 풀밭 덤불(판정 없음): 도로·강·건물을 피해 흩어 세운다.
                 for (int i = 0; i < 30; i++)
@@ -4279,6 +4346,12 @@ namespace FireGame.Prototypes
                     go = yard
                         ? Models3D.Place(ContainerModels[i % ContainerModels.Length], _root, at, w, h, 90f, out size)
                         : Models3D.Place(CarModels[i % CarModels.Length], _root, at, w, h, 90f, out size);
+                }
+                else if (st.Kind == StructureKind.Fireworks)
+                {
+                    // 불꽃 가판대: 기본 도형 모델(퓨즈 깜빡임·발사 스파크는 DrawTown이 칠한다).
+                    go = ItemModels.FireworkStand(_root);
+                    ItemModels.Place(go, at, 0f, Vector3.up, 1f);
                 }
                 else if (st.Kind == StructureKind.Gas && yard)
                 {
@@ -4506,8 +4579,101 @@ namespace FireGame.Prototypes
                             _props.Put(at, 0.85f * (1f + (0.25f * fuse)), 0f, blink ? new Color(1f, 0.55f, 0.45f) : tint, Art.Get("Props/barrel_red"));
                         }
                         break;
+                    case StructureKind.Fireworks:
+                    {
+                        // 불꽃 가판대: 퓨즈가 도는 동안 가스통처럼 빨갛게 깜빡이고, 쏘는 동안 발사관에서 금색 스파크가 치솟는다.
+                        float wick = st.Fuse >= 0f ? 1f - (st.Fuse / SurvivorSim.GasFuse) : 0f;
+                        bool blinkStand = st.Fuse >= 0f && Mathf.Sin(_time * (10f + (30f * wick))) > 0f;
+                        if (st.Fuse >= 0f) _roofGlow.Put(at, 2.5f + (2f * wick), 0f, new Color(1f, 0.25f, 0.05f, blinkStand ? 0.8f : 0.35f));
+                        if (st.Launching)
+                        {
+                            _roofGlow.Put(at + Up(1.2f), 3.5f, 0f, new Color(1f, 0.75f, 0.3f, 0.5f + (0.3f * Mathf.Sin(_time * 20f))));
+                            for (int k = 0; k < 10; k++)
+                            {
+                                Emit(Sparks[Random.Range(0, Sparks.Length)], at + Up(1.3f) + new Vector3(Random.Range(-0.7f, 0.7f), 0f, 0f), new Vector3(Random.Range(-1.5f, 1.5f), Random.Range(5f, 9f), 0f), 1.5f, 0.4f,
+                                    0.35f, 0.05f, new Color(1f, 0.9f, 0.4f), new Color(1f, 0.4f, 0.1f, 0f), 0f, true);
+                            }
+                            _trauma = Mathf.Max(_trauma, 0.05f);
+                        }
+                        if (model != null) Models3D.Tint(model, blinkStand || st.Launching ? new Color(1f, 0.55f, 0.4f) : tint);
+                        break;
+                    }
                 }
                 if (st.Burning && st.Kind != StructureKind.Gas) DrawRoofFire(st, at, w, h, i, st.Kind == StructureKind.Car ? RoofHeight(i) : st.Kind == StructureKind.Tree ? RoofHeight(i) * 0.55f : 0f);
+            }
+            if (_sim.Lanterns.Count > 0) DrawLanterns();
+        }
+
+        /// <summary>등줄 높이(점포 지붕 위).</summary>
+        private const float LanternHeight = 3f;
+
+        /// <summary>야시장 등줄: 점포 사이 가는 줄에 1.4칸마다 주황 등불(additive, 바닥에 빛무리). 타는 줄은 불꽃이 줄을 따라 가고 지나간 등불은 꺼진다. 젖은 줄은 등불이 파랗고 물이 듣는다.</summary>
+        private void DrawLanterns()
+        {
+            for (int n = 0; n < _sim.Lanterns.Count; n++)
+            {
+                Lantern l = _sim.Lanterns[n];
+                if (l.A.Collapsed || l.B.Collapsed) continue;
+                Vector3 a = W(l.A.Pos) + Up(LanternHeight);
+                Vector3 b = W(l.B.Pos) + Up(LanternHeight);
+                Vector3 d = b - a;
+                float len = d.magnitude;
+                if (len < 0.5f) continue;
+                float deg = Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg;
+                bool wet = l.Wet > 0f;
+                _motes.Put((a + b) * 0.5f, 0.08f, deg - 90f, new Color(0.25f, 0.18f, 0.12f, 0.85f), null, len / 0.08f);
+                // 타는 줄: From 쪽에서 Burn만큼 왔다.
+                Vector3 from = l.From == l.B ? b : a;
+                Vector3 to = l.From == l.B ? a : b;
+                float burn = l.Burn;
+                int count = Mathf.Max(1, (int)(len / 1.4f));
+                for (int k = 0; k < count; k++)
+                {
+                    float t = (k + 0.5f) / count;
+                    Vector3 p = a + (d * t);
+                    // 줄 불이 지나간 등불은 꺼져 검게 남는다.
+                    float along = l.From == l.B ? 1f - t : t;
+                    bool dead = burn >= 0f && along <= burn;
+                    float flick = 0.85f + (0.15f * Mathf.Sin((_time * 6f) + (k * 1.3f) + n));
+                    Color lamp = wet ? new Color(0.5f, 0.75f, 1f, 0.8f) : dead ? new Color(0.15f, 0.1f, 0.08f, 0.9f) : new Color(1f, 0.6f, 0.25f, 0.95f * flick);
+                    _siren.Put(p, dead ? 0.55f : 0.9f, 0f, lamp);
+                    if (!dead) _groundGlow.Put(W(new Vec2(p.x, p.y)), 2.2f, 0f, new Color(lamp.r, lamp.g, lamp.b, 0.12f * flick));
+                    if (wet && Random.value < 0.08f) EmitFalling("Effects/water_drop", p, new Vector3(0f, -1f, 0f), 0.5f, 0.3f, new Color(0.7f, 0.9f, 1f, 0.9f));
+                }
+                if (burn >= 0f)
+                {
+                    Vector3 fire = Vector3.Lerp(from, to, burn);
+                    Vector3 dir = (to - from).normalized;
+                    for (int k = -1; k <= 1; k++)
+                    {
+                        float flick = 0.85f + (0.2f * Mathf.Sin((_time * (12f + k)) + (k * 1.9f) + n));
+                        _embers.Put(fire + (dir * k * 0.45f), 1f * flick, 0f, Color.white, FlameArt.Frame(_emberSheet, _time, (n * 3) + k + 1));
+                    }
+                    _enemyGlow.Put(fire, 2f, 0f, new Color(1f, 0.5f, 0.1f, 0.35f));
+                    if (Random.value < 0.5f)
+                    {
+                        Emit(Sparks[Random.Range(0, Sparks.Length)], fire, new Vector3(Random.Range(-1.5f, 1.5f), Random.Range(-2f, 1f), 0f), 1f, 0.6f, 0.3f, 0.05f, new Color(1f, 0.85f, 0.35f), new Color(1f, 0.3f, 0.05f, 0f), 0f, true);
+                    }
+                }
+            }
+        }
+
+        /// <summary>불꽃 가판대 로켓: 포물선으로 솟아 떨어지며 금색 꼬리를 끈다.</summary>
+        private void DrawRockets()
+        {
+            foreach (Rocket r in _sim.Rockets)
+            {
+                float t = Mathf.Clamp01(r.Age / r.Life);
+                Vector3 ground = Vector3.Lerp(W(r.From), W(r.Target), t);
+                float lift = 7f * Mathf.Sin(t * Mathf.PI);
+                Vector3 at = ground + Up(lift);
+                _shadows.Put(ground, 0.5f + (0.3f * (1f - lift / 7f)), 0f, new Color(0f, 0f, 0f, 0.25f));
+                _enemyCore.Put(at, 0.55f, 0f, new Color(1f, 0.85f, 0.4f, 0.95f));
+                _enemyGlow.Put(at, 1.6f, 0f, new Color(1f, 0.6f, 0.2f, 0.35f));
+                for (int k = 0; k < 3; k++)
+                {
+                    Emit(Sparks[Random.Range(0, Sparks.Length)], at, new Vector3(Random.Range(-1f, 1f), Random.Range(-2.5f, -0.5f), 0f), 2f, 0.35f, 0.3f, 0.05f, new Color(1f, 0.9f, 0.5f), new Color(1f, 0.4f, 0.1f, 0f), 0f, true);
+                }
             }
         }
 

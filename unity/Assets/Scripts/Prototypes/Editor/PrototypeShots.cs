@@ -328,6 +328,22 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c58b_harbor_wave", view => view.Sim.WaveY.HasValue && view.Sim.WaveY.Value < 50f, 2, true,
                 view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, 44f, 0f), 16f), 4, null, true, true);
 
+            // 5스테이지 야시장(밤): 등줄을 타고 가는 불(또는 막 건너간 순간)과, 불꽃 가판대가 쏜 로켓이 떨어지는 순간.
+            failures += SurvivorShot(dir, "c59_market_lantern", view => view.Sim.LanternCaught.Count > 0 || view.Sim.Lanterns.Exists(l => l.Burn > 0.3f), 2, false,
+                view =>
+                {
+                    Lantern line = view.Sim.Lanterns.Find(l => l.Burn > 0f) ?? view.Sim.Lanterns.Find(l => l.Cool > 0f);
+                    Vec2 at = line != null ? view.Sim.LanternFire(line) : view.Sim.Player;
+                    view.Frame(new Vector3(at.X, at.Y + 1f, 0f), 9f);
+                }, 5, null, true, true);
+            failures += SurvivorShot(dir, "c59b_rockets", view => view.Sim.RocketBursts.Count > 0, 2, false,
+                view => view.Frame(new Vector3(18f, 32f, 0f), 11f), 5, view =>
+                {
+                    Structure stand = view.Sim.Structures.Find(s => s.Kind == StructureKind.Fireworks && s.Pos.X < 20f);
+                    view.Sim.Ignite(stand, 0.8f);
+                    view.Sim.Player = new Vec2(24f, 30f);
+                }, true, true);
+
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
         }
