@@ -93,8 +93,8 @@ namespace FireGame.Prototypes.Tests
         }
 
         /// <summary>
-        /// 밸런스 측정: 봇이 스테이지마다 시드 10개를 돈다. 표는 출력만 하고(목표는 docs/prototype-c-balance.md),
-        /// 검사는 "뒤 스테이지가 더 어렵다" 하나만 한다.
+        /// 밸런스 측정: 숙련 봇(사람 대리, docs §15)이 스테이지마다 30판을 돈다. 표는 출력만 하고(목표는 docs/prototype-c-balance.md),
+        /// 검사는 "뒤 스테이지가 더 어렵다" 하나만 한다. 기본 봇은 대화재 고리에 늘 쓰러져 승 3·0·4처럼 바닥 노이즈만 남는다.
         /// </summary>
         [Fact]
         public void BalanceReport_LaterStageIsHarder()
@@ -110,7 +110,7 @@ namespace FireGame.Prototypes.Tests
                 for (int seed = 1; seed <= seeds; seed++)
                 {
                     var sim = new SurvivorSim(seed, stage);
-                    var bot = new SurvivorBot(sim);
+                    var bot = new SurvivorBot(sim) { Pro = true };
                     int guard = 0;
                     while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) bot.Play();
                     if (sim.Outcome == SOutcome.Won) won++;

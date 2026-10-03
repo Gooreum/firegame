@@ -36,13 +36,14 @@ namespace FireGame.Prototypes.Logic
             var list = new List<Structure>();
 
             // 캠프 두 줄(남쪽). 첫 줄(y=28)은 숲 바람이 닿고, 둘째 줄(y=16)과 제재소는 불씨·다람쥐로만 위협받는다.
-            House(list, "산장", 12f, 28f, 2);
-            House(list, "캠핑 매점", 21f, 28f, 1);
-            House(list, "관리사무소", 39f, 28f, 2);
-            House(list, "통나무 카페", 48f, 28f, 1);
+            // 주민 17: 마을(18)만큼 구할 사람이 있어야 뒤 스테이지도 할 일이 온다(재미 밀도 밴드).
+            House(list, "산장", 12f, 28f, 3);
+            House(list, "캠핑 매점", 21f, 28f, 2);
+            House(list, "관리사무소", 39f, 28f, 3);
+            House(list, "통나무 카페", 48f, 28f, 2);
             House(list, "전망대", 12f, 16f, 1);
-            House(list, "목공소", 22f, 16f, 2);
-            House(list, "야영 관리동", 38f, 16f, 1);
+            House(list, "목공소", 22f, 16f, 3);
+            House(list, "야영 관리동", 38f, 16f, 2);
             House(list, "숲 식당", 48f, 16f, 1);
             list.Add(new Structure { Kind = StructureKind.Depot, Name = "제재소", Pos = new Vec2(30f, 8f), Half = new Vec2(3.5f, 2.5f) });
 

@@ -69,6 +69,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>노릴 탈 것 없이 떠돈 시간. 오래되면 사그라든다.</summary>
         public float Idle;
 
+        /// <summary>대화재 고리의 큰 불: 레벨만큼 질기고 물줄기·장막·방화복에 거의 안 밀린다(3:00의 장비를 뚫고 몸에 닿는 압력).</summary>
+        public bool Heavy;
+
         /// <summary>지그재그·출렁임 위상(다람쥐·박쥐).</summary>
         public float Phase;
         public bool Dead;
@@ -276,10 +279,38 @@ namespace FireGame.Prototypes.Logic
         /// </summary>
         public const int PressureMax = 3;
         public const float PressureHp = 0.6f;
-        public const float PressureLowHp = 0.3f;
+        /// <summary>이 밑이면 한 단계 내린다. 0.3이면 체력 30~60%에 머무는 서툰 판이 1단계에 묶여 더 쓰러졌다(기본 봇 마을 9 → 3/30). 0.45로 더 일찍 숨을 준다.</summary>
+        public const float PressureLowHp = 0.45f;
         public const float PressureGapStep = 1.5f;
         public const int PressureBurstStep = 4;
         public const float PressureWindStep = 0.1f;
+        public const float PressureFireStep = 0.15f;
+        public const float PressureHeatStep = 0.5f;
+
+        /// <summary>2단계부터 이 간격마다 큰 불 고리가 소방관을 에워싼다(8 + 4×단계 마리, 9칸). 3:00의 장비는 불을 다 끄므로 압력은 몸으로 간다.</summary>
+        public const float FinaleRingEvery = 8f;
+        public const int FinaleRingFrom = 2;
+        public const int FinaleRingBase = 8;
+        public const int PressureRingStep = 4;
+        /// <summary>고리 반경: 9칸이면 스무 마리 사이 틈이 1.6칸이라 빠른 소방관이 빠져나간다(숙련 봇 체력 100%). 6칸이면 틈 0.7.</summary>
+        public const float FinaleRingRadius = 6f;
+
+        /// <summary>고리 큰 불의 속도 배율: 보통 큰 불(1.5)은 장화 신은 소방관을 못 따라간다.</summary>
+        public const float HeavySpeed = 1.5f;
+
+        public int FinaleRingCount
+        {
+            get { return FinaleRingBase + (PressureRingStep * FinalePressure); }
+        }
+
+        /// <summary>고리 큰 불의 체력 배율: 1 + 레벨 × 0.15(Lv20이면 4배). 레벨이 높을수록(장비가 셀수록) 질겨 장비로 녹이지 못한다.</summary>
+        public const float HeavyPerLevel = 0.15f;
+        public const float HeavyKnock = 0.15f;
+
+        public float FinaleRingToughness
+        {
+            get { return 1f + (HeavyPerLevel * Level); }
+        }
 
         /// <summary>지금 압력 단계(0~PressureMax). 대화재 밖에선 0.</summary>
         public int FinalePressure;
@@ -717,6 +748,7 @@ namespace FireGame.Prototypes.Logic
         private bool _bigFailed;
         private float _finaleClock;
         private float _burstClock;
+        private float _ringClock;
         private int _bonusPicks;
         private int _wavesDone;
         private float _nextWind;
@@ -1139,10 +1171,29 @@ namespace FireGame.Prototypes.Logic
                     int reports = FinalePressure >= 2 ? 2 : 1;
                     for (int r = 0; r < reports; r++)
                     {
-                        Structure hit = Report();
+                        Structure hit = Report(FinaleReportFire);
                         if (hit != null) hit.Residents++;
                         Stats.Events++;
                     }
+                }
+                // 2단계부터: 큰 불 고리가 소방관을 에워싼다. 서서 끄지 못하게 하는 몸 압박(3:00의 장비는 불만으론 못 누른다).
+                _ringClock -= Dt;
+                if (FinalePressure >= FinaleRingFrom && _ringClock <= 0f)
+                {
+                    _ringClock = FinaleRingEvery;
+                    int ring = FinaleRingCount;
+                    for (int k = 0; k < ring && Enemies.Count < MaxEnemies; k++)
+                    {
+                        double a = Math.PI * 2 * k / ring;
+                        Vec2 at = ClampToArena(new Vec2(Player.X + (float)(Math.Cos(a) * FinaleRingRadius), Player.Y + (float)(Math.Sin(a) * FinaleRingRadius)));
+                        if (HasWater) PushOutOfWater(ref at, 0.6f);
+                        Enemy heavy = Spawn(EnemyKind.Blaze, at);
+                        heavy.Heavy = true;
+                        heavy.MaxHp *= FinaleRingToughness;
+                        heavy.Hp = heavy.MaxHp;
+                        heavy.Speed *= HeavySpeed;
+                    }
+                    JustWave = true;
                 }
                 // 불타는 랜드마크가 사방으로 불씨를 뿜는다(예전 보스가 하던 절정의 몸 압박). 단계가 오르면 더 많이.
                 _burstClock -= Dt;
@@ -1203,13 +1254,19 @@ namespace FireGame.Prototypes.Logic
         }
 
         /// <summary>신고: 안 타고 안 무너진 가게 하나에 불을 낸다(젖어 있어도 난다). 불낸 가게를 돌려준다.</summary>
-        private Structure Report()
+        private Structure Report(float fire = ReportFire)
         {
             Structure pick = PickUnburntHouse();
             if (pick == null) return null;
             pick.Wet = 0f;
-            Ignite(pick, ReportFire);
+            Ignite(pick, fire);
             return pick;
+        }
+
+        /// <summary>대화재 신고의 불 세기: 단계마다 커진다(0.35 → 0.5 → 0.65 → 0.8). 큰 불은 끄는 데 오래 걸려 여러 채가 동시에 타고 무너진다.</summary>
+        public float FinaleReportFire
+        {
+            get { return Math.Min(1f, ReportFire + (PressureFireStep * FinalePressure)); }
         }
 
         private EnemyKind PickKind()
@@ -2549,7 +2606,7 @@ namespace FireGame.Prototypes.Logic
                 Burn(e.Touch * Dt);
                 if (push <= 0f || e.BounceCool > 0f) continue;
                 e.BounceCool = SuitBounceCool;
-                Vec2 k = Knockback(Player, e.Pos, push);
+                Vec2 k = Knockback(Player, e.Pos, e.Heavy ? push * HeavyKnock : push);
                 e.Knock.X += k.X;
                 e.Knock.Y += k.Y;
                 SuitBounces.Add(e.Pos);
@@ -2579,8 +2636,10 @@ namespace FireGame.Prototypes.Logic
             HeatHurt = 0f;
             if (worst <= 0f) return;
             float wall = Build.Level(UpgradeId.WaterWall) > 0 ? 0.5f : 1f;
-            HeatHurt = HeatDps * worst * Build.HeatScale * wall * Dt;
-            Burn(HeatDps * worst * wall * Dt);
+            // 대화재 감독: 단계마다 열기가 세진다(1 → 1.5 → 2 → 2.5배). 3:00의 장비는 불을 다 끄므로, 서서 끄는 몸이 압력을 받는다.
+            float heat = HeatDps * (1f + (PressureHeatStep * FinalePressure));
+            HeatHurt = heat * worst * Build.HeatScale * wall * Dt;
+            Burn(heat * worst * wall * Dt);
         }
 
         /// <summary>불에 데는 피해: 방화복(HeatScale)만큼 덜 받는다. 원값은 통계에 남긴다.</summary>
@@ -3004,8 +3063,9 @@ namespace FireGame.Prototypes.Logic
             if (crit) amount *= 2f;
             e.Hp -= amount;
             e.HitFlash = 0.08f;
-            e.Knock.X += knock.X;
-            e.Knock.Y += knock.Y;
+            float heavy = e.Heavy ? HeavyKnock : 1f;
+            e.Knock.X += knock.X * heavy;
+            e.Knock.Y += knock.Y * heavy;
 
             bool killed = e.Hp <= 0f;
             if (killed) Kill(e);

@@ -110,9 +110,9 @@ namespace FireGame.Prototypes.Tests
             ToNextChange(sim, 1f);
             Assert.Equal(1, sim.FinalePressure);
 
-            // 중간(체력 45%, 여유 넉넉): 오르지도 내리지도 않는다.
+            // 중간(체력 52%, 여유 넉넉): 오르지도 내리지도 않는다.
             sim.HousesLost = 0;
-            Assert.Equal(-1, ToNextChange(sim, 0.45f, 10f));
+            Assert.Equal(-1, ToNextChange(sim, 0.52f, 10f));
             Assert.Equal(1, sim.FinalePressure);
         }
 
@@ -147,6 +147,81 @@ namespace FireGame.Prototypes.Tests
                 if (sim.JustBurst) burst = sim.Enemies.FindAll(e => Math.Sqrt((e.Knock.X * e.Knock.X) + (e.Knock.Y * e.Knock.Y)) > 3f).Count;
             }
             Assert.Equal(20, burst);
+        }
+
+        [Fact]
+        public void Pressure_MakesFiresBigger_HeatHotter_AndRingsOfHeavyBlazes()
+        {
+            // 신고 불 세기 0.35 → 0.5 → 0.65 → 0.8, 열기 1 → 2.5배.
+            var sim = new SurvivorSim(1);
+            for (int p = 0; p <= SurvivorSim.PressureMax; p++)
+            {
+                sim.FinalePressure = p;
+                Assert.InRange(sim.FinaleReportFire, 0.35f + (0.15f * p) - 0.001f, 0.35f + (0.15f * p) + 0.001f);
+                Assert.Equal(8 + (4 * p), sim.FinaleRingCount);
+            }
+            Assert.Equal(0.5f, SurvivorSim.PressureHeatStep);
+
+            // 2단계부터 8초마다 큰 불 고리: 6칸 둘레에 16마리, 레벨만큼 질기고(1 + 0.15×Lv) 1.5배 빠르며 거의 안 밀린다.
+            sim = new SurvivorSim(2);
+            RunTo(sim, SurvivorSim.FinaleAt + 0.1f);
+            ToNextChange(sim, 1f);
+            ToNextChange(sim, 1f);
+            Assert.Equal(2, sim.FinalePressure);
+            sim.Enemies.Clear();
+            sim.Hp = sim.MaxHp;
+            foreach (Structure s in sim.Structures) s.Fire = 0f;
+            bool rang = false;
+            for (int i = 0; i < (int)(SurvivorSim.FinaleRingEvery / SurvivorSim.Dt) + 2 && !rang; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+                rang = sim.JustWave;
+            }
+            Assert.True(rang, "2단계인데 고리가 안 왔다");
+            var heavy = sim.Enemies.FindAll(e => e.Heavy);
+            Assert.Equal(sim.FinaleRingCount, heavy.Count);
+            Enemy plain = sim.Spawn(EnemyKind.Blaze, sim.Player);
+            foreach (Enemy e in heavy)
+            {
+                Assert.Equal(EnemyKind.Blaze, e.Kind);
+                Assert.InRange(e.Pos.DistanceTo(sim.Player), SurvivorSim.FinaleRingRadius - 1f, SurvivorSim.FinaleRingRadius + 1f);
+                // 같은 시각의 보통 큰 불보다 (1 + 0.15×Lv)배 질기다.
+                Assert.InRange(e.MaxHp / plain.MaxHp, sim.FinaleRingToughness - 0.02f, sim.FinaleRingToughness + 0.02f);
+                Assert.InRange(e.Speed, 1.5f * SurvivorSim.HeavySpeed - 0.01f, 1.5f * SurvivorSim.HeavySpeed + 0.01f);
+            }
+            // 1단계 밑에선 고리가 없다.
+            sim.FinalePressure = 1;
+            sim.Enemies.Clear();
+            for (int i = 0; i < (int)(SurvivorSim.FinaleRingEvery / SurvivorSim.Dt) + 2; i++)
+            {
+                sim.Hp = sim.MaxHp * 0.2f; // 감독이 더 못 올리게
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+                Assert.Empty(sim.Enemies.FindAll(e => e.Heavy));
+            }
+        }
+
+        [Fact]
+        public void HeavyBlaze_BarelyMoves_WhenKnocked()
+        {
+            var sim = new SurvivorSim(1);
+            sim.Reports = false;
+            sim.Structures.Clear();
+            sim.Enemies.Clear();
+            Vec2 p = sim.Player;
+            Enemy light = sim.Spawn(EnemyKind.Blaze, new Vec2(p.X + 2f, p.Y));
+            Enemy heavy = sim.Spawn(EnemyKind.Blaze, new Vec2(p.X + 2f, p.Y + 0.01f));
+            heavy.Heavy = true;
+            light.Hp = light.MaxHp = heavy.Hp = heavy.MaxHp = 999f;
+            // 호스로 둘 다 민다.
+            sim.Aim = new Vec2(1f, 0f);
+            sim.Spraying = true;
+            for (int i = 0; i < 90; i++) sim.Step(0f, 0f);
+            float lightPush = light.Pos.X - (p.X + 2f);
+            float heavyPush = heavy.Pos.X - (p.X + 2f);
+            Assert.True(heavyPush < lightPush * 0.5f, "질긴 큰 불이 많이 밀렸다: " + heavyPush + " (보통 " + lightPush + ")");
         }
 
         [Fact]

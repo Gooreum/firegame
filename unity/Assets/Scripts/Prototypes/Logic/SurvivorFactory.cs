@@ -23,15 +23,15 @@ namespace FireGame.Prototypes.Logic
         {
             var list = new List<Structure>();
 
-            // 북쪽 줄.
-            House(list, "인쇄소", 10f, 38f, 2);
-            House(list, "페인트 공장", 18f, 38f, 1);
-            House(list, "정비소", 42f, 38f, 1);
-            House(list, "도금 공장", 50f, 38f, 2);
+            // 북쪽 줄. 주민 18: 마을만큼 구할 사람이 있어야 뒤 스테이지도 할 일이 온다(재미 밀도 밴드).
+            House(list, "인쇄소", 10f, 38f, 3);
+            House(list, "페인트 공장", 18f, 38f, 2);
+            House(list, "정비소", 42f, 38f, 2);
+            House(list, "도금 공장", 50f, 38f, 3);
             // 남쪽 줄.
-            House(list, "식품 공장", 10f, 22f, 1);
-            House(list, "섬유 공장", 18f, 22f, 2);
-            House(list, "부품 공장", 42f, 22f, 1);
+            House(list, "식품 공장", 10f, 22f, 2);
+            House(list, "섬유 공장", 18f, 22f, 3);
+            House(list, "부품 공장", 42f, 22f, 2);
             House(list, "포장 공장", 50f, 22f, 1);
             list.Add(new Structure { Kind = StructureKind.Depot, Name = "정유 저장소", Pos = new Vec2(30f, 52f), Half = new Vec2(3.5f, 2.5f) });
 

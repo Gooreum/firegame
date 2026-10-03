@@ -140,8 +140,8 @@ namespace FireGame.Prototypes.Logic
             Map = SurvivorFactory.Build,
             // 공장 8채가 마을과 같은 고리에 있어 신고 표도 마을과 같다.
             ReportTimes = SurvivorSim.ReportTimes,
-            // 새 위협(기름)이 있으니 기본 배율은 마을보다 낮게 둔다(1.3이면 봇이 동네를 더 잃고 위기 판은 줄었다, 측정 6).
-            SpawnRate = 1.2f,
+            // 마을과 같은 배율: 1.2면 레벨업 간격이 마을의 1.36배라 할 일이 느리게 왔다(지형 패스 측정). 봇 밴드는 바닥이다.
+            SpawnRate = 1.3f,
             BlazeMax = 0.3f,
             DartShare = 0.1f,
             OilShare = 0.12f,
