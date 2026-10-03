@@ -22,6 +22,14 @@ namespace FireGame.Prototypes.Logic
         /// <summary>측정용: 이 카드가 나오면 Lv3까지 무엇보다 먼저 고른다(아이템 하나의 힘을 잴 때).</summary>
         public UpgradeId? Favorite;
 
+        /// <summary>
+        /// 숙련: 사람처럼 문 앞에 서서 끄고, 큰 불·기름만 피하고, 체력이 ProRetreatHp 밑일 때만 물러난다.
+        /// 기본 봇은 적을 1/d²로 피해 건물 곁에 안 서므로 "아슬아슬한 끝"을 못 잰다 — 그건 이 모드로 잰다(docs §15). 기본 봇은 바닥 측정용으로 그대로.
+        /// </summary>
+        public bool Pro;
+        public const float ProRetreatHp = 0.35f;
+        public const float ProStandOff = 2.5f;
+
         public SurvivorBot(SurvivorSim sim)
         {
             _sim = sim;
@@ -81,25 +89,47 @@ namespace FireGame.Prototypes.Logic
         public void AimHose()
         {
             Vec2 p = _sim.Player;
-            Vec2? target = NearestEnemy(p, 4f);
-            if (!target.HasValue)
+            Vec2? target;
+            if (Pro)
             {
-                Structure fire = NearestBurning(p, 10f);
-                if (fire != null) target = fire.Pos;
+                // 숙련: 코앞(1.5칸) 큰 불·기름 → 4칸 안 타는 건물(증기를 모은다) → 3칸 안 아무 불 → 10칸 안 타는 건물.
+                target = NearestEnemy(p, 1.5f, true);
+                if (!target.HasValue)
+                {
+                    Structure near = NearestBurning(p, 4f);
+                    if (near != null) target = near.Pos;
+                }
+                if (!target.HasValue) target = NearestEnemy(p, 3f);
+                if (!target.HasValue)
+                {
+                    Structure far = NearestBurning(p, 10f);
+                    if (far != null) target = far.Pos;
+                }
             }
-            if (!target.HasValue) target = NearestEnemy(p, 10f);
+            else
+            {
+                target = NearestEnemy(p, 4f);
+                if (!target.HasValue)
+                {
+                    Structure fire = NearestBurning(p, 10f);
+                    if (fire != null) target = fire.Pos;
+                }
+                if (!target.HasValue) target = NearestEnemy(p, 10f);
+            }
 
             _sim.Spraying = target.HasValue;
             if (target.HasValue) _sim.Aim = new Vec2(target.Value.X - p.X, target.Value.Y - p.Y);
         }
 
-        private Vec2? NearestEnemy(Vec2 p, float range)
+        /// <summary>range 안 가장 가까운 불 몹. heavyOnly면 큰 불·기름(접촉 10)만.</summary>
+        private Vec2? NearestEnemy(Vec2 p, float range, bool heavyOnly = false)
         {
             Vec2? best = null;
             float bestD = range;
             foreach (Enemy e in _sim.Enemies)
             {
                 if (e.Dead) continue;
+                if (heavyOnly && e.Kind != EnemyKind.Blaze && e.Kind != EnemyKind.Oil) continue;
                 float d = e.Pos.DistanceTo(p);
                 if (d < bestD)
                 {
@@ -133,13 +163,17 @@ namespace FireGame.Prototypes.Logic
             float fx = 0f;
             float fy = 0f;
 
-            // 불 떼에서 멀어진다(가까울수록 세게).
+            // 불 떼에서 멀어진다(가까울수록 세게). 숙련: 다쳤을 때만 전부, 아니면 2.5칸 안 큰 불·기름만(불씨·다트는 쏴서 잡는다).
+            bool hurt = Pro && _sim.Hp < _sim.MaxHp * ProRetreatHp;
+            float avoid2 = Pro && !hurt ? ProStandOff * ProStandOff : 49f;
             foreach (Enemy e in _sim.Enemies)
             {
+                if (Pro && e.Dead) continue;
+                if (Pro && !hurt && e.Kind != EnemyKind.Blaze && e.Kind != EnemyKind.Oil) continue;
                 float dx = p.X - e.Pos.X;
                 float dy = p.Y - e.Pos.Y;
                 float d2 = (dx * dx) + (dy * dy);
-                if (d2 > 49f || d2 < 0.0001f) continue;
+                if (d2 > avoid2 || d2 < 0.0001f) continue;
                 float w = 1f / d2;
                 fx += dx * w;
                 fy += dy * w;
@@ -180,7 +214,19 @@ namespace FireGame.Prototypes.Logic
             Structure fire = FireToFight(p);
             Vec2? goal = null;
             float pull = 0.7f;
-            if (_sim.Chests.Count > 0 && danger < 1.5f)
+            if (Pro)
+            {
+                // 숙련: 다쳤으면 구급상자 → 상자 → 주민 있는 불의 문 앞(구조 + 물, 열기를 몸으로 받는다) → 가장자리 2.5칸(Lv1 호스 사거리 안) → 공구상자 → 구슬.
+                pull = 1f;
+                if (hurt && _sim.Kits.Count > 0) goal = _sim.Kits[0].Pos;
+                else if (hurt) goal = danger < 0.3f ? NearestLoot(p, 12f) : null;   // 다쳤고 상자도 없으면 불로 안 간다: 피하기만(구슬은 안전할 때만).
+                else if (_sim.Chests.Count > 0) goal = _sim.Chests[0].Pos;
+                else if (fire != null && fire.Residents > 0) goal = fire.Door;
+                else if (fire != null) goal = StandOff(fire, p, ProStandOff);
+                else if (_sim.Toolboxes.Count > 0) goal = _sim.Toolboxes[0].Pos;
+                else goal = NearestLoot(p, 12f);
+            }
+            else if (_sim.Chests.Count > 0 && danger < 1.5f)
             {
                 // 대형 신고를 다 구해 떨어진 보물상자: 카드 두 장이라 무엇보다 먼저 줍는다(30초면 사라진다).
                 goal = _sim.Chests[0].Pos;

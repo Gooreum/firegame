@@ -244,6 +244,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>대화재 감독이 올린 가장 높은 압력 단계(0~3). 높을수록 그 판은 여유가 있었다.</summary>
         public int PressurePeak;
+
+        /// <summary>대화재(3:00) 뒤 최저 체력 비율. 끝이 아슬아슬했는지는 이것과 HousesRoom으로 잰다.</summary>
+        public float FinaleMinHp = 1f;
     }
 
     /// <summary>
@@ -2598,6 +2601,7 @@ namespace FireGame.Prototypes.Logic
         private void Measure()
         {
             Stats.MinHpRatio = Math.Min(Stats.MinHpRatio, Math.Max(0f, Hp) / MaxHp);
+            if (Finale) Stats.FinaleMinHp = Math.Min(Stats.FinaleMinHp, Math.Max(0f, Hp) / MaxHp);
             bool building = false;
             bool other = false;
             bool fireNear = false;
