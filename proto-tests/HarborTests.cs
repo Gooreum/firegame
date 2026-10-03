@@ -163,6 +163,98 @@ namespace FireGame.Prototypes.Tests
             }
         }
 
+        /// <summary>플레이어가 레벨업 카드에서 이 장비를 골랐을 때(Choose 경로).</summary>
+        private static void Take(SurvivorSim sim, UpgradeId id)
+        {
+            sim.PendingChoices = new List<UpgradeId> { id };
+            sim.Choose(0);
+        }
+
+        [Fact]
+        public void Fireboat_CrossesTheSea_AndSoaksTheQuayRowAndBoats()
+        {
+            var sim = Quiet();
+            Take(sim, UpgradeId.Fireboat);
+            Structure shop = House(sim, 30f, SurvivorHarbor.QuayRow);
+            Structure inland = House(sim, 30f, 24f);
+            Structure boat = Boat(sim, 30f, SurvivorHarbor.BoatLane, false);
+            sim.Ignite(shop, 0.9f);
+            sim.Ignite(inland, 0.9f);
+            bool sailed = false;
+            float shopBefore = 0f;
+            for (int i = 0; i < 60 * 10; i++)
+            {
+                sim.Step(0f, 0f);
+                sim.Enemies.Clear();
+                if (sim.Fireboat.HasValue && !sailed) { sailed = true; shopBefore = shop.Fire; Assert.True(sim.Time < 6.1f, "부둣가 불이 있으면 6초 안에 나선다"); }
+            }
+            Assert.True(sailed, "소방정이 안 나섰다");
+            Assert.False(sim.Fireboat.HasValue, "4초 뒤엔 지나갔다");
+            Assert.True(shop.Fire < shopBefore - 0.3f, "부둣가 집은 한 방 0.6을 맞는다: " + shopBefore + " → " + shop.Fire);
+            Assert.False(boat.Burning, "떠가는 불배는 꺼진다");
+            Assert.True(inland.Fire >= 0.9f, "둘째 줄 집은 사거리 밖: " + inland.Fire);
+        }
+
+        [Fact]
+        public void Fireboat_WaitsWhenOnlyInlandBuildingsBurn()
+        {
+            var sim = Quiet();
+            Take(sim, UpgradeId.Fireboat);
+            Structure inland = House(sim, 30f, 24f);
+            sim.Ignite(inland, 0.9f);
+            for (int i = 0; i < 60 * 20; i++)
+            {
+                sim.Step(0f, 0f);
+                sim.Enemies.Clear();
+                Assert.False(sim.Fireboat.HasValue, "부둣가 불이 없으면 소방정은 기다린다");
+            }
+        }
+
+        [Fact]
+        public void Wave_PutsOutDockedBoats_PushesThemBackToSea_AndWetsTheQuay()
+        {
+            var sim = Quiet();
+            Take(sim, UpgradeId.Wave);
+            Structure shop = House(sim, 30f, SurvivorHarbor.QuayRow);
+            Structure boat = Boat(sim, 30f, SurvivorHarbor.SeaFrom + 0.6f, true);
+            sim.Ignite(shop, 0.9f);
+            Enemy onSea = sim.Spawn(EnemyKind.Blaze, new Vec2(30f, 50f));
+            onSea.Speed = 0f;
+            onSea.MaxHp = onSea.Hp = 999f;
+            bool surged = false;
+            float surgedAt = 0f;
+            for (int i = 0; i < 60 * 8 && !surged; i++)
+            {
+                sim.Step(0f, 0f);
+                sim.Enemies.RemoveAll(e => e != onSea);
+                if (sim.JustSurge) { surged = true; surgedAt = sim.Time; }
+            }
+            Assert.True(surged, "큰 파도가 안 일었다");
+            Assert.True(sim.WaveY.HasValue);
+            // 파도가 부두선까지 내려올 때까지(22칸 / 14 ≈ 1.6초).
+            for (int i = 0; i < 60 * 3; i++)
+            {
+                sim.Step(0f, 0f);
+                sim.Enemies.RemoveAll(e => e != onSea);
+            }
+            Assert.False(sim.WaveY.HasValue, "파도는 WaveEnd에서 잦아든다");
+            Assert.False(boat.Burning, "닿은 불배가 꺼진다");
+            Assert.False(boat.Docked);
+            Assert.True(boat.Pos.Y > SurvivorHarbor.SeaFrom + 4f, "북쪽으로 밀렸다: " + boat.Pos.Y);
+            Assert.True(shop.Fire < 0.9f + (0.04f * 4f) - 0.5f, "부둣가 집은 0.8 끈다: " + shop.Fire);
+            Assert.True(shop.Wet >= 4f, "부둣가 집은 젖는다: " + shop.Wet);
+            Assert.True(onSea.Hp <= 999f - 12f + 0.01f, "띠 안 적은 12 피해: " + onSea.Hp);
+            Assert.True(onSea.Pos.Y < 50f, "남쪽으로 밀린다: " + onSea.Pos.Y);
+            // 20초 전엔 다시 안 온다.
+            sim.Ignite(shop, 0.9f);
+            for (int i = 0; i < 60 * 12; i++)
+            {
+                sim.Step(0f, 0f);
+                sim.Enemies.Clear();
+                Assert.False(sim.JustSurge && sim.Time < surgedAt + SurvivorSim.WaveInterval - 0.1f, "파도 간격 20초");
+            }
+        }
+
         [Fact]
         public void BurningBoat_LastsLongerThanASmallStructure()
         {

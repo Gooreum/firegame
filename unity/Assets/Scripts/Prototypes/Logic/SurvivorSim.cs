@@ -706,6 +706,14 @@ namespace FireGame.Prototypes.Logic
         public const float BurnBoat = 45f;
         private float _nextBoat = FirstBoat;
 
+        /// <summary>항구 노란: 바다를 가로지르는 소방정 자리(없으면 null)와 방향(±x).</summary>
+        public Vec2? Fireboat;
+        public float FireboatDir = 1f;
+
+        /// <summary>항구 노란: 남쪽으로 쓸고 있는 큰 파도의 앞머리 y(없으면 null). 이번 틱에 일었으면 JustSurge.</summary>
+        public float? WaveY;
+        public bool JustSurge;
+
         /// <summary>이번 틱에 스프링클러가 터진 건물.</summary>
         public readonly List<Structure> Sprinkled = new List<Structure>();
 
@@ -1070,6 +1078,7 @@ namespace FireGame.Prototypes.Logic
             JustBoat = null;
             BoatsDocked.Clear();
             BoatsAway.Clear();
+            JustSurge = false;
             GemsCollected = 0;
             // 틱마다 한 번 센다(테스트가 판 도중 구조물을 넣는다).
             HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
@@ -1660,6 +1669,8 @@ namespace FireGame.Prototypes.Logic
             if (Build.Level(UpgradeId.Rain) > 0) TickRain();
             if (Build.Level(UpgradeId.Retardant) > 0) TickRetardant();
             if (Build.Level(UpgradeId.Foam) > 0) TickFoam();
+            if (Build.Level(UpgradeId.Fireboat) > 0) TickFireboat();
+            if (Build.Level(UpgradeId.Wave) > 0) TickWave();
         }
 
         private float _truckClock = 2f;
@@ -1918,6 +1929,110 @@ namespace FireGame.Prototypes.Logic
             }
         }
 
+        private float _fireboatClock = 3f;
+        private float _fireboatLeft;
+        private readonly List<Structure> _fireboatSoaked = new List<Structure>();
+        private readonly List<Enemy> _fireboatHit = new List<Enemy>();
+
+        /// <summary>부둣가 불: 불배가 떠 있거나 부두 가까운(QuayRow 위) 탈 것이 탄다. 소방정·큰 파도는 이게 있을 때만 나선다.</summary>
+        private bool HarborFire()
+        {
+            foreach (Structure s in Structures)
+            {
+                if (!s.Burning) continue;
+                if (s.Kind == StructureKind.Boat || s.Pos.Y > SurvivorHarbor.QuayRow - 4f) return true;
+            }
+            return false;
+        }
+
+        /// <summary>소방정: 14초마다(부둣가 불이 있을 때만) 바다 줄(FireboatLane)을 4초에 가로지르며 부두 쪽(y ≥ QuayRow − 2)으로 물을 뿜는다.
+        /// 지나는 x 좌우 FireboatReach 안 배·건물을 한 번씩 0.6 적시고(저항 없음), 부두 가까운 적에게 20 피해.</summary>
+        private void TickFireboat()
+        {
+            if (!Fireboat.HasValue)
+            {
+                _fireboatClock -= Dt;
+                if (_fireboatClock > 0f || !HarborFire()) return;
+                _fireboatClock = FireboatInterval;
+                FireboatDir = Rand() < 0.5f ? -1f : 1f;
+                Fireboat = new Vec2(FireboatDir > 0f ? -4f : ArenaSize + 4f, FireboatLane);
+                _fireboatLeft = FireboatTime;
+                _fireboatSoaked.Clear();
+                _fireboatHit.Clear();
+            }
+
+            Vec2 at = Fireboat.Value;
+            at.X += FireboatDir * ((ArenaSize + 8f) / FireboatTime) * Dt;
+            Fireboat = at;
+            foreach (Structure st in Structures)
+            {
+                if (st.Collapsed || st.Kind == StructureKind.Water || _fireboatSoaked.Contains(st)) continue;
+                if (Math.Abs(st.Pos.X - at.X) > FireboatReach || st.Pos.Y < SurvivorHarbor.QuayRow - 2f) continue;
+                _fireboatSoaked.Add(st);
+                // 배는 소방정의 본업: 한 방이 더 세다(갓 뜬 불배는 꺼진다).
+                Soak(st, st.Kind == StructureKind.Boat ? FireboatBoatSoak : FireboatSoak, false);
+            }
+            Near(new Vec2(at.X, SurvivorHarbor.SeaFrom), 12f, _near);
+            foreach (Enemy e in _near)
+            {
+                if (_fireboatHit.Contains(e) || Math.Abs(e.Pos.X - at.X) > 1.5f || e.Pos.Y < SurvivorHarbor.QuayRow + 2f) continue;
+                _fireboatHit.Add(e);
+                Damage(e, 20f, new Vec2(FireboatDir * 3f, -6f), true, HitSource.Special, at);
+            }
+            _fireboatLeft -= Dt;
+            if (_fireboatLeft <= 0f) Fireboat = null;
+        }
+
+        private float _waveClock = 4f;
+        private readonly List<Structure> _waveSoaked = new List<Structure>();
+        private readonly List<Enemy> _waveHit = new List<Enemy>();
+
+        /// <summary>큰 파도: 20초마다(부둣가 불이 있을 때만) 바다 북쪽 끝에서 남쪽으로 WaveSpeed로 쓸어 WaveEnd에서 잦아든다.
+        /// 띠(±WaveBand) 안 배는 1.5 끄고 북쪽으로 8칸 밀려 다시 떠가고(Docked 해제), 그 밖 탈 것은 0.8 끄고 6초 젖는다. 띠 안 적은 12 피해에 남쪽으로 밀린다.</summary>
+        private void TickWave()
+        {
+            if (!WaveY.HasValue)
+            {
+                _waveClock -= Dt;
+                if (_waveClock > 0f || !HarborFire()) return;
+                _waveClock = WaveInterval;
+                WaveY = ArenaSize;
+                JustSurge = true;
+                _waveSoaked.Clear();
+                _waveHit.Clear();
+            }
+
+            float y = WaveY.Value - (WaveSpeed * Dt);
+            WaveY = y;
+            foreach (Structure st in Structures)
+            {
+                if (st.Collapsed || st.Kind == StructureKind.Water || _waveSoaked.Contains(st)) continue;
+                if (Math.Abs(st.Pos.Y - y) > WaveBand + st.Half.Y) continue;
+                _waveSoaked.Add(st);
+                if (st.Kind == StructureKind.Boat)
+                {
+                    Soak(st, WaveBoatSoak, false);
+                    st.Docked = false;
+                    st.Pos = new Vec2(st.Pos.X, Math.Min(ArenaSize - 4f, st.Pos.Y + WavePush));
+                    st.Drift = new Vec2(0f, BoatSpeed);
+                }
+                else
+                {
+                    Soak(st, WaveSoak, false);
+                    st.Wet = Math.Max(st.Wet, WaveWet);
+                }
+            }
+            Douse(new Vec2(ArenaSize / 2f, y), ArenaSize / 2f);
+            Near(new Vec2(ArenaSize / 2f, y), ArenaSize / 2f, _near);
+            foreach (Enemy e in _near)
+            {
+                if (_waveHit.Contains(e) || Math.Abs(e.Pos.Y - y) > WaveBand) continue;
+                _waveHit.Add(e);
+                Damage(e, 12f, new Vec2(0f, -7f), true, HitSource.Special, new Vec2(e.Pos.X, y + 2f));
+            }
+            if (y <= WaveEnd) WaveY = null;
+        }
+
         private float _rainClock = 2f;
 
         /// <summary>비구름: 12초마다 14칸 안에서 불이 가장 몰린 곳에 3초 동안 비. 바닥 불을 끄고, 구조물을 적시고, 적에게 초당 6 피해.</summary>
@@ -2080,6 +2195,20 @@ namespace FireGame.Prototypes.Logic
             return 0.3f + (0.12f * (level - 1));
         }
 
+        public const float FireboatInterval = 14f;
+        public const float FireboatTime = 4f;
+        public const float FireboatLane = 50f;
+        public const float FireboatReach = 2.5f;
+        public const float FireboatSoak = 0.6f;
+        public const float FireboatBoatSoak = 1f;
+        public const float WaveInterval = 20f;
+        public const float WaveSpeed = 14f;
+        public const float WaveEnd = 38f;
+        public const float WaveBand = 1.5f;
+        public const float WaveBoatSoak = 1.5f;
+        public const float WaveSoak = 0.8f;
+        public const float WaveWet = 6f;
+        public const float WavePush = 8f;
         public const float TruckInterval = 12f;
         public const float TruckTime = 3f;
         public const float TruckReach = 16f;
