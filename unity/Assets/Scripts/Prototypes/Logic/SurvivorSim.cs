@@ -194,6 +194,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>출발 점포가 크게 탄 뒤 줄에 불이 붙기까지(SurvivorSim.LanternDelay에서 센다).</summary>
         public float Delay = SurvivorSim.LanternDelay;
 
+        /// <summary>불꽃 폭주(야시장 대화재)가 붙인 줄 불: 출발 점포가 안 타도 끝까지 간다(젖으면 꺼진다).</summary>
+        public bool Storm;
+
         public Structure Other(Structure s)
         {
             return s == A ? B : A;
@@ -757,6 +760,70 @@ namespace FireGame.Prototypes.Logic
         public const float BurnBoat = 45f;
         private float _nextBoat = FirstBoat;
 
+        // ------------------------------------------------------------------
+        // 대화재 종류(맵 특색 패스): 공통 감독 위에 스테이지마다 하나씩.
+        // ------------------------------------------------------------------
+
+        /// <summary>숲 불 전선: 북쪽 숲(FrontStart)에서 캠프 줄(FrontEnd)까지 FrontSpeed로 내려오며 FrontRow칸마다 바닥 불 한 줄(FrontGap 간격)을 깔고 지나는 탈 것에 불을 붙인다.</summary>
+        public const float FrontStart = 36f;
+        public const float FrontEnd = 12f;
+        public const float FrontSpeed = 0.22f;
+        public const float FrontRow = 1.0f;
+        public const float FrontGap = 2.5f;
+        public const float FrontIgnite = 0.3f;
+        public const float FrontPuddleLife = 6f;
+        /// <summary>마지막 줄을 다 꺼 놓으면 전선이 이만큼 느려진다.</summary>
+        public const float FrontHoldMax = 0.6f;
+        public float? FrontY;
+        public readonly List<Puddle> FrontRowPuddles = new List<Puddle>();
+        public bool JustFront;
+        private float _lastRowY;
+
+        /// <summary>공단 연쇄 폭발: ChainEvery(−ChainStep×압력, 최소 ChainMin)초마다 드럼 하나에 점화, 퓨즈 ChainFuse초 뒤 터진다. 끄면 막는다.</summary>
+        public const float ChainEvery = 12f;
+        public const float ChainStep = 1.5f;
+        public const float ChainMin = 6f;
+        public const float ChainFuse = 6f;
+        public Structure JustChain;
+        private float _chainClock;
+
+        /// <summary>항구 유조선 좌초: 큰 배가 TankerSpeed로 와 부두 가운데 닿고, 타는 동안 TankerLeakEvery초마다 부두 위에 불기름(반지름 TankerOilRadius)을 좌우로 번갈아 흘린다. 선원 FinalePeople.</summary>
+        public const float TankerSpeed = 1.8f;
+        public const float TankerLeakEvery = 3f;
+        public const float TankerLeakStep = 1.6f;
+        public const float TankerOilRadius = 1.6f;
+        public const float BurnTanker = 150f;
+        public Structure TankerBoat;
+        public bool JustTanker;
+        private float _leakClock;
+        private int _leakCount;
+
+        /// <summary>야시장 불꽃 폭주: 가판대가 전부 쏘고, StormEvery(−StormStep×압력, 최소 2)초마다 꺼진 가판대 하나가 다시 붙고 무대에서 가장 가까운 등줄이 탄다. 무대는 StageRocketEvery초마다 로켓.</summary>
+        public const float StormEvery = 6f;
+        public const float StormStep = 1f;
+        public const float StageRocketEvery = 2f;
+        public bool JustStorm;
+        private float _stormClock;
+        private float _stageRocketClock;
+
+        /// <summary>불 전선이 지금 내려오는 속도: 기본 × (1 + 0.25×압력) × (1 − FrontHoldMax × 마지막 줄의 꺼진 비율).</summary>
+        public float FrontSpeedNow
+        {
+            get { return FrontSpeed * (1f + (0.25f * FinalePressure)) * (1f - (FrontHoldMax * FrontHold)); }
+        }
+
+        /// <summary>마지막 줄 바닥 불 중 꺼진(Out) 비율.</summary>
+        public float FrontHold
+        {
+            get
+            {
+                if (FrontRowPuddles.Count == 0) return 0f;
+                int outCount = 0;
+                foreach (Puddle p in FrontRowPuddles) if (p.Out) outCount++;
+                return outCount / (float)FrontRowPuddles.Count;
+            }
+        }
+
         /// <summary>항구 노란: 바다를 가로지르는 소방정 자리(없으면 null)와 방향(±x).</summary>
         public Vec2? Fireboat;
         public float FireboatDir = 1f;
@@ -1194,6 +1261,10 @@ namespace FireGame.Prototypes.Logic
             LanternCaught.Clear();
             GullDrops.Clear();
             LanternLands.Clear();
+            JustFront = false;
+            JustChain = null;
+            JustTanker = false;
+            JustStorm = false;
             LanternDoused.Clear();
             RocketBursts.Clear();
             JustLaunching = null;
@@ -1378,6 +1449,7 @@ namespace FireGame.Prototypes.Logic
                     }
                     JustBurst = true;
                 }
+                TickFinaleKind();
             }
         }
 
@@ -1404,12 +1476,185 @@ namespace FireGame.Prototypes.Logic
             _finaleClock = FinaleReportEvery;
             Stats.Events++;
             Stats.FinaleLevel = Level;
-            Structure mark = Structures.Find(x => x.Kind == StructureKind.Depot && !x.Collapsed) ?? PickUnburntHouse();
+            // 항구는 창고 대신 유조선이 랜드마크(부두 가운데 닿아 불기름을 흘리고 선원이 갇혀 있다).
+            Structure mark = Stage.Finale == FinaleKind.Tanker ? SpawnTanker() : Structures.Find(x => x.Kind == StructureKind.Depot && !x.Collapsed) ?? PickUnburntHouse();
             if (mark == null) return;
             Landmark = mark;
             mark.Wet = 0f;
             Ignite(mark, 1f);
             mark.Residents += FinalePeople;
+            switch (Stage.Finale)
+            {
+                case FinaleKind.FireFront:
+                    FrontY = FrontStart;
+                    _lastRowY = FrontStart + FrontRow;
+                    break;
+                case FinaleKind.ChainBlast:
+                    // 시작과 함께 드럼 둘이 점화된다.
+                    ChainIgnite();
+                    ChainIgnite();
+                    _chainClock = ChainEvery;
+                    break;
+                case FinaleKind.RocketStorm:
+                    foreach (Structure s in Structures)
+                    {
+                        if (s.Kind != StructureKind.Fireworks || s.Collapsed) continue;
+                        s.Wet = 0f;
+                        Ignite(s, 0.6f);
+                    }
+                    _stormClock = StormEvery;
+                    _stageRocketClock = StageRocketEvery;
+                    break;
+            }
+        }
+
+        /// <summary>유조선: 바다 왼쪽·오른쪽 끝에서 배 줄을 따라 와 x가 30에 가장 가까운 부둣가 건물 앞에 닿는다.</summary>
+        private Structure SpawnTanker()
+        {
+            Structure quay = null;
+            float best = float.MaxValue;
+            foreach (Structure s in Structures)
+            {
+                if (!s.IsBuilding || s.Collapsed || s.Pos.Y <= SurvivorHarbor.QuayRow - 4f) continue;
+                float d = Math.Abs(s.Pos.X - (ArenaSize / 2f));
+                if (d < best)
+                {
+                    best = d;
+                    quay = s;
+                }
+            }
+            bool fromLeft = Rand() < 0.5f;
+            var t = new Structure
+            {
+                Kind = StructureKind.Boat,
+                Tanker = true,
+                Name = "유조선",
+                Pos = new Vec2(fromLeft ? -3f : ArenaSize + 3f, SurvivorHarbor.BoatLane),
+                Half = new Vec2(3f, 1.2f),
+                Target = quay,
+                Drift = new Vec2(fromLeft ? TankerSpeed : -TankerSpeed, 0f),
+            };
+            Structures.Add(t);
+            TankerBoat = t;
+            JustTanker = true;
+            _leakClock = TankerLeakEvery;
+            _leakCount = 0;
+            return t;
+        }
+
+        /// <summary>연쇄 폭발: 안 타는 드럼 하나에 점화하고 퓨즈를 ChainFuse로 늘린다(기본 가스 퓨즈 2.5초는 달려갈 틈이 없다).</summary>
+        private void ChainIgnite()
+        {
+            var cold = new List<Structure>();
+            foreach (Structure s in Structures)
+            {
+                if (s.Kind == StructureKind.Gas && !s.Collapsed && !s.Burning) cold.Add(s);
+            }
+            if (cold.Count == 0) return;
+            Structure gas = cold[(int)(Rand() * cold.Count) % cold.Count];
+            gas.Wet = 0f;
+            if (!Ignite(gas, 0.3f)) return;
+            gas.Fuse = ChainFuse;
+            JustChain = gas;
+        }
+
+        /// <summary>대화재 종류별 사건(공통 감독 뒤에 돈다).</summary>
+        private void TickFinaleKind()
+        {
+            switch (Stage.Finale)
+            {
+                case FinaleKind.FireFront:
+                    TickFront();
+                    break;
+                case FinaleKind.ChainBlast:
+                    _chainClock -= Dt;
+                    if (_chainClock <= 0f)
+                    {
+                        _chainClock = Math.Max(ChainMin, ChainEvery - (ChainStep * FinalePressure));
+                        ChainIgnite();
+                    }
+                    break;
+                case FinaleKind.RocketStorm:
+                    TickStorm();
+                    break;
+            }
+        }
+
+        /// <summary>불 전선: 내려오다 FrontRow칸마다 바닥 불 한 줄을 깔고 줄 가까이의 탈 것에 불을 붙인다. 마지막 줄을 꺼 놓은 만큼 느려지고, 캠프 줄에서 멈춘다.</summary>
+        private void TickFront()
+        {
+            if (!FrontY.HasValue) return;
+            float y = FrontY.Value - (FrontSpeedNow * Dt);
+            if (y <= FrontEnd) y = FrontEnd;
+            FrontY = y;
+            if (_lastRowY - y < FrontRow) return;
+            _lastRowY = y;
+            FrontRowPuddles.Clear();
+            // 한 줄(24개)이 들어갈 자리가 없으면 그 줄은 건너뛴다(큰 불 흔적이 한도를 차지한 때).
+            int count = (int)((ArenaSize - 2.5f) / FrontGap) + 1;
+            if (BurningGround.Count + count <= MaxBurningGround)
+            {
+                for (float x = 1.25f; x < ArenaSize; x += FrontGap)
+                {
+                    var p = new Puddle { Pos = new Vec2(x, y), Radius = 1f, Life = FrontPuddleLife, MaxLife = FrontPuddleLife };
+                    BurningGround.Add(p);
+                    FrontRowPuddles.Add(p);
+                }
+            }
+            foreach (Structure st in Structures)
+            {
+                if (!st.Flammable || Math.Abs(st.Pos.Y - y) > st.Half.Y + 1.2f) continue;
+                if (Ignite(st, FrontIgnite))
+                {
+                    Spread.Add(st);
+                    Stats.Spreads++;
+                }
+            }
+            JustFront = true;
+        }
+
+        /// <summary>불꽃 폭주: 꺼진 가판대 하나가 다시 붙고 무대에서 가장 가까운 안 타는 등줄이 탄다(Storm: 출발 점포가 안 타도 간다). 무대는 로켓을 쏜다.</summary>
+        private void TickStorm()
+        {
+            if (Landmark != null && Landmark.Burning && Landmark.Kind == StructureKind.Depot)
+            {
+                _stageRocketClock -= Dt;
+                if (_stageRocketClock <= 0f)
+                {
+                    _stageRocketClock = StageRocketEvery;
+                    LaunchRocket(Landmark);
+                }
+            }
+            _stormClock -= Dt;
+            if (_stormClock > 0f) return;
+            _stormClock = Math.Max(2f, StormEvery - (StormStep * FinalePressure));
+            foreach (Structure s in Structures)
+            {
+                if (s.Kind != StructureKind.Fireworks || s.Collapsed || s.Burning) continue;
+                s.Wet = 0f;
+                Ignite(s, 0.4f);
+                break;
+            }
+            if (Landmark == null) return;
+            Lantern pick = null;
+            float best = float.MaxValue;
+            foreach (Lantern l in Lanterns)
+            {
+                if (l.Burn >= 0f || l.Wet > 0f || !l.A.Flammable && !l.B.Flammable) continue;
+                float d = Math.Min(l.A.DistanceTo(Landmark.Pos), l.B.DistanceTo(Landmark.Pos));
+                if (d < best)
+                {
+                    best = d;
+                    pick = l;
+                }
+            }
+            if (pick == null) return;
+            pick.From = pick.A.DistanceTo(Landmark.Pos) <= pick.B.DistanceTo(Landmark.Pos) ? pick.A : pick.B;
+            if (!pick.Other(pick.From).Flammable) pick.From = pick.Other(pick.From);
+            pick.Burn = 0f;
+            pick.Cool = 0f;
+            pick.Storm = true;
+            JustStorm = true;
         }
 
         private Structure PickUnburntHouse()
@@ -2174,9 +2419,13 @@ namespace FireGame.Prototypes.Logic
                 if (st.Kind == StructureKind.Boat)
                 {
                     Soak(st, WaveBoatSoak, false);
-                    st.Docked = false;
-                    st.Pos = new Vec2(st.Pos.X, Math.Min(ArenaSize - 4f, st.Pos.Y + WavePush));
-                    st.Drift = new Vec2(0f, BoatSpeed);
+                    // 좌초한 유조선은 파도가 못 민다(적시기만 한다).
+                    if (!st.Tanker)
+                    {
+                        st.Docked = false;
+                        st.Pos = new Vec2(st.Pos.X, Math.Min(ArenaSize - 4f, st.Pos.Y + WavePush));
+                        st.Drift = new Vec2(0f, BoatSpeed);
+                    }
                 }
                 else
                 {
@@ -2881,7 +3130,7 @@ namespace FireGame.Prototypes.Logic
                     l.From = from;
                     l.Burn = 0f;
                 }
-                if (!l.From.Burning)
+                if (!l.From.Burning && !l.Storm)
                 {
                     l.Burn = -1f;
                     continue;
@@ -2890,6 +3139,7 @@ namespace FireGame.Prototypes.Logic
                 if (l.Burn < 1f) continue;
                 Structure to = l.Other(l.From);
                 l.Burn = -1f;
+                l.Storm = false;
                 l.Cool = LanternCool;
                 if (Ignite(to, LanternIgnite))
                 {
@@ -2909,6 +3159,7 @@ namespace FireGame.Prototypes.Logic
                 if (SegmentDistance(at, l.A.Pos, l.B.Pos) > r) continue;
                 if (l.Burn >= 0f || l.Wet <= 0f) LanternDoused.Add(l);
                 l.Burn = -1f;
+                l.Storm = false;
                 l.Wet = LanternWet;
             }
         }
@@ -3022,10 +3273,11 @@ namespace FireGame.Prototypes.Logic
             foreach (Structure b in Structures)
             {
                 if (b.Kind != StructureKind.Boat || b.Collapsed) continue;
+                float speed = b.Tanker ? TankerSpeed : BoatSpeed;
                 if (!b.Burning && !b.Docked)
                 {
                     // 꺼진 배는 바다로 돌아간다.
-                    b.Drift = new Vec2(0f, BoatSpeed);
+                    b.Drift = new Vec2(0f, speed);
                     if (b.Pos.Y - b.Half.Y > ArenaSize + 2f)
                     {
                         b.Collapsed = true;
@@ -3035,7 +3287,7 @@ namespace FireGame.Prototypes.Logic
                 else if (!b.Docked && b.Drift.Y == 0f && b.Target != null && Math.Abs(b.Pos.X - b.Target.Pos.X) < 0.5f)
                 {
                     // 노린 건물 앞: 남쪽으로 꺾는다.
-                    b.Drift = new Vec2(0f, -BoatSpeed);
+                    b.Drift = new Vec2(0f, -speed);
                 }
                 b.Pos = new Vec2(b.Pos.X + (b.Drift.X * Dt), b.Pos.Y + (b.Drift.Y * Dt));
                 if (!b.Docked && b.Drift.Y < 0f && b.Pos.Y - b.Half.Y <= SurvivorHarbor.SeaFrom)
@@ -3058,6 +3310,23 @@ namespace FireGame.Prototypes.Logic
                             Spread.Add(near);
                             SpreadFrom.Add(b);
                             Stats.Spreads++;
+                        }
+                    }
+                    if (b.Tanker)
+                    {
+                        // 유조선 누출: 부두 위에 불기름이 배 양옆으로 번갈아 퍼진다(부두 줄 건물·연료 탱크에 닿는다).
+                        _leakClock -= Dt;
+                        if (_leakClock <= 0f)
+                        {
+                            _leakClock = TankerLeakEvery;
+                            int side = _leakCount % 2 == 0 ? 1 : -1;
+                            int step = _leakCount / 2;
+                            _leakCount++;
+                            var at = ClampToArena(new Vec2(b.Pos.X + (side * step * TankerLeakStep), SurvivorHarbor.SeaFrom - 1.2f));
+                            if (BurningGround.Count < MaxBurningGround && !(FoamAt.HasValue && FoamAt.Value.DistanceTo(at) <= FoamRadius))
+                            {
+                                BurningGround.Add(new Puddle { Pos = at, Radius = TankerOilRadius, Life = OilLife, MaxLife = OilLife, Oil = true });
+                            }
                         }
                     }
                 }
@@ -3192,7 +3461,7 @@ namespace FireGame.Prototypes.Logic
                 }
 
                 s.Fire = Math.Min(1f, s.Fire + (Stage.FireGrowth * Dt));
-                s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding : s.Kind == StructureKind.Boat ? BurnBoat : BurnSmall);
+                s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding : s.Kind == StructureKind.Boat ? (s.Tanker ? BurnTanker : BurnBoat) : BurnSmall);
                 if (s.HoseHold > 0f) s.HoseHold = Math.Max(0f, s.HoseHold - (SteamCool * Dt));
                 if (s.Integrity <= 0f)
                 {
