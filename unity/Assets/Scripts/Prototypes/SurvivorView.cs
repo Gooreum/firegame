@@ -339,6 +339,32 @@ namespace FireGame.Prototypes
             public float Ttl;
         }
 
+        /// <summary>항구: 불배가 떴을 때 발밑 화살표가 가장 가까운 부두 끝을 가리키는 남은 시간.</summary>
+        private float _pierGuideTtl;
+
+        /// <summary>배(또는 소방관)에 가장 가까운 부두 끝 자리(봇이 서는 요격 지점과 같다).</summary>
+        private static Vec2 PierTipFor(Vec2 near)
+        {
+            float bestX = SurvivorHarbor.PierX[0];
+            foreach (float px in SurvivorHarbor.PierX)
+            {
+                if (Mathf.Abs(px - near.X) < Mathf.Abs(bestX - near.X)) bestX = px;
+            }
+            return new Vec2(bestX, SurvivorHarbor.PierTip - 1.5f);
+        }
+
+        /// <summary>떠 있는 불배 중 부두에 가장 가까운 것(없으면 null).</summary>
+        private Structure FloatingBoat()
+        {
+            Structure best = null;
+            foreach (Structure s in _sim.Structures)
+            {
+                if (s.Kind != StructureKind.Boat || s.Collapsed || s.Docked || !s.Burning || s.Tanker) continue;
+                if (best == null || s.Pos.Y < best.Pos.Y) best = s;
+            }
+            return best;
+        }
+
         private readonly List<Guide> _guides = new List<Guide>();
         private readonly List<Image> _stars = new List<Image>();
         private static Sprite _arrowSprite;
@@ -1525,9 +1551,13 @@ namespace FireGame.Prototypes
                 GameAudio.Play(Cue.Backfire);
             }
             // 항구: 불배가 뜨면 알림, 닿으면 충격파·글자, 물 위에서 끄면 김·글자.
-            if (_sim.JustBoat != null)
+            if (_sim.JustBoat != null && !_sim.JustBoat.Tanker)
             {
-                ShowAlert("불배가 떠내려온다!", new Color(1f, 0.45f, 0.3f));
+                // 불배: 무엇을 하라는지가 띠에 바로 나온다. 발밑 화살표는 가장 가까운 부두 끝(요격 지점)을 가리킨다.
+                _bossBandText.text = "불배! 부두 끝에서 쏘아 끄자";
+                _bandTint = new Color(0.05f, 0.2f, 0.5f);
+                _bossBannerAge = 0f;
+                _pierGuideTtl = 5f;
                 _trauma = Mathf.Min(1f, _trauma + 0.1f);
                 GameAudio.Play(Cue.SecondIgnition);
             }
@@ -1536,14 +1566,16 @@ namespace FireGame.Prototypes
                 Vector3 at = W(b.Pos);
                 Shockwave(at, new Color(1f, 0.5f, 0.2f, 0.9f), 5f, 0.4f);
                 Burst(at, 14, new Color(1f, 0.6f, 0.15f), 5f);
-                SpawnText(at + new Vector3(0f, 1.6f, 0f), "부두에 닿았다!", new Color(1f, 0.5f, 0.3f), 1.8f);
+                SpawnText(at + new Vector3(0f, 1.6f, 0f), b.Tanker ? "좌초했다!" : "부두에 닿았다!", new Color(1f, 0.5f, 0.3f), 1.8f);
+                if (!b.Tanker) ShowAlert("부두에 닿았다! 불이 옮는다", new Color(1f, 0.35f, 0.25f));
                 _trauma = Mathf.Min(1f, _trauma + 0.2f);
             }
             foreach (Structure b in _sim.BoatsAway)
             {
                 Vector3 at = W(b.Pos);
                 Steam(at, 10, 1.2f);
-                SpawnText(at + new Vector3(0f, 1.4f, 0f), "배를 껐다!", new Color(0.8f, 0.95f, 1f), 1.6f);
+                Shockwave(at, new Color(0.5f, 0.9f, 1f, 0.9f), 4f, 0.35f);
+                SpawnText(at + new Vector3(0f, 1.4f, 0f), b.Tanker ? "배를 껐다!" : "요격! +" + SurvivorSim.BoatXp, new Color(0.6f, 0.95f, 1f), 1.8f);
             }
             if (_sim.JustWindShift) ShowAlert("바람이 " + WindName(_sim.Wind) + "쪽으로!", new Color(0.8f, 0.9f, 1f));
             if (_sim.JustPressureUp) ShowAlert("불길이 거세진다!", new Color(1f, 0.5f, 0.2f));
@@ -5079,6 +5111,20 @@ namespace FireGame.Prototypes
 
         private void DrawHarborSpecials()
         {
+            // 떠 있는 불배마다: 가장 가까운 부두 끝에 청록 고리 "요격 지점", 배 위에 "N초 뒤 접안"(5초 밑이면 빨갛게).
+            foreach (Structure b in _sim.Structures)
+            {
+                if (b.Kind != StructureKind.Boat || b.Collapsed || b.Docked || !b.Burning || b.Tanker) continue;
+                Vec2 tip = PierTipFor(b.Pos);
+                Vector3 tipAt = W(tip);
+                float pulse = 1f + (0.1f * Mathf.Sin(_time * 5f));
+                _reticle.Put(tipAt + Up(0.05f), 2.8f * pulse, -_time * 50f, new Color(0.4f, 0.95f, 1f, 0.6f));
+                _groundGlow.Put(tipAt, 3.2f, 0f, new Color(0.4f, 0.9f, 1f, 0.2f));
+                Tag(tipAt + Up(0.4f) + new Vector3(0f, -1.6f, 0f), "요격 지점", new Color(0.75f, 1f, 1f), 0.045f);
+                float eta = _sim.BoatEta(b);
+                bool soon = eta < 5f;
+                Tag(W(b.Pos) + Up(1.6f) + new Vector3(0f, 0.9f, 0f), Mathf.CeilToInt(eta) + "초 뒤 접안", soon && Mathf.Sin(_time * 10f) > 0f ? Color.white : soon ? new Color(1f, 0.45f, 0.35f) : new Color(1f, 0.85f, 0.6f), 0.045f);
+            }
             if (_sim.Fireboat.HasValue)
             {
                 Vector3 at = W(_sim.Fireboat.Value);
@@ -5169,7 +5215,8 @@ namespace FireGame.Prototypes
             GameObject model = st.Tanker ? _tankerModels.Get() : _boatModels.Get();
             if (model != null)
             {
-                ItemModels.Place(model, at, bob, dir, st.Tanker ? 1f : 1.1f);
+                // 불배는 1.4배: 멀리서도 "배"로 읽힌다(판정은 그대로).
+                ItemModels.Place(model, at, bob, dir, st.Tanker ? 1f : 1.4f);
                 float burnt = 1f - Mathf.Clamp01(st.Integrity);
                 Models3D.Tint(model, Color.Lerp(Color.white, new Color(0.25f, 0.2f, 0.2f), burnt));
             }
@@ -6170,6 +6217,30 @@ namespace FireGame.Prototypes
         private void DrawGuides(float dt)
         {
             Vector3 me = W(_sim.Player);
+            // 항구: 불배가 떠 있는 동안 발밑 화살표가 부두 끝(요격 지점)을 가리킨다. 부두 끝 4칸 안에 서면 사라진다.
+            if (_pierGuideTtl > 0f)
+            {
+                _pierGuideTtl -= dt;
+                Structure boat = FloatingBoat();
+                if (boat != null && _sim.Outcome == SOutcome.Playing)
+                {
+                    Vec2 tip = PierTipFor(boat.Pos);
+                    float dx = tip.X - _sim.Player.X;
+                    float dy = tip.Y - _sim.Player.Y;
+                    float len = Mathf.Sqrt((dx * dx) + (dy * dy));
+                    if (len >= 4f)
+                    {
+                        float a = Mathf.Clamp01(_pierGuideTtl);
+                        var c = new Color(0.5f, 0.95f, 1f, a);
+                        var dir = new Vector3(dx / len, dy / len, 0f);
+                        float size = 1.6f * (1f + (0.2f * Mathf.Abs(Mathf.Sin(_time * 8f))));
+                        Vector3 spot = new Vector3(_sim.Player.X, _sim.Player.Y, 0f) + (dir * 2.4f);
+                        _arrowBacks.Put(spot, size * 1.4f, 0f, new Color(0f, 0f, 0f, 0.4f * a));
+                        _edgeArrows.Put(spot, size, Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, c);
+                        Tag(spot + new Vector3(0f, -1.2f, -0.05f), "부두 끝 요격 지점", new Color(0.8f, 1f, 1f, a), 0.055f);
+                    }
+                }
+            }
             for (int i = _guides.Count - 1; i >= 0; i--)
             {
                 Guide g = _guides[i];

@@ -170,6 +170,14 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c60_forest_camp", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 20f, 0f), 14f), 2);
             failures += SurvivorShot(dir, "c61_harbor_quay", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 32f, 0f), 14f), 4);
             failures += SurvivorShot(dir, "c62_market_stalls", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 30f, 0f), 16f), 5);
+            // 항구 할 일 가독성: 불배가 떠 있는 동안 띠·부두 끝 "요격 지점" 고리·"N초 뒤 접안"·발밑 화살표.
+            failures += SurvivorShot(dir, "c70_harbor_guide", view => view.Sim.Structures.Exists(s => s.Kind == StructureKind.Boat && !s.Docked && s.Burning && !s.Tanker && view.Sim.BoatEta(s) < 12f), 1, false,
+                view =>
+                {
+                    Structure boat = view.Sim.Structures.Find(s => s.Kind == StructureKind.Boat && !s.Docked && s.Burning && !s.Tanker);
+                    float x = Mathf.Clamp(boat != null ? boat.Pos.X : 30f, 14f, 46f);
+                    view.Frame(new Vector3(x, 44f, 0f), 12f);
+                }, 4, null, true, true);
             // 대화재 다섯 종류: 숲 불 전선(폭 60 불의 띠), 공단 연쇄 폭발(드럼 초읽기), 항구 유조선(부두 가운데·불기름), 야시장 불꽃 폭주(가판대 전부·등줄).
             failures += SurvivorShot(dir, "c66_forest_front", view => view.Sim.Finale && view.Sim.Time >= SurvivorSim.FinaleAt + 2.5f, 2, true,
                 view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, view.Sim.FrontY ?? 34f, 0f), 15f), 2, null, true, true);

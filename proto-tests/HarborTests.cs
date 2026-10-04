@@ -38,6 +38,8 @@ namespace FireGame.Prototypes.Tests
         {
             for (int i = 0; i < ticks; i++)
             {
+                // 요격 보상(BoatXp)으로 레벨업하면 카드를 고를 때까지 판이 멈춘다: 첫 카드를 집는다.
+                if (sim.PendingChoices != null) sim.Choose(0);
                 sim.Step(0f, 0f);
                 sim.Enemies.Clear();
             }
@@ -104,6 +106,7 @@ namespace FireGame.Prototypes.Tests
             sim.Step(0f, 0f);
             Assert.Contains(boat, sim.BoatsAway);
             Assert.False(boat.Burning);
+            if (sim.PendingChoices != null) sim.Choose(0);
             sim.Step(0f, 0f);
             Assert.True(boat.Drift.Y > 0f, "북쪽으로 돌아간다");
             Run(sim, 60 * 12);
@@ -207,6 +210,8 @@ namespace FireGame.Prototypes.Tests
         public void Fireboat_CrossesTheSea_AndSoaksTheQuayRowAndBoats()
         {
             var sim = Quiet();
+            // 소방정이 끈 배의 요격 보상(BoatXp)으로 레벨업하면 집은 카드가 집을 적셔 사거리 판정이 흐려진다: 이 테스트는 경험치를 묻어 둔다.
+            sim.Xp = -1000;
             Take(sim, UpgradeId.Fireboat);
             Structure shop = House(sim, 30f, SurvivorHarbor.QuayRow);
             Structure inland = House(sim, 30f, 24f);
@@ -217,6 +222,7 @@ namespace FireGame.Prototypes.Tests
             float shopBefore = 0f;
             for (int i = 0; i < 60 * 10; i++)
             {
+                if (sim.PendingChoices != null) sim.Choose(0);
                 sim.Step(0f, 0f);
                 sim.Enemies.Clear();
                 if (sim.Fireboat.HasValue && !sailed) { sailed = true; shopBefore = shop.Fire; Assert.True(sim.Time < 6.1f, "부둣가 불이 있으면 6초 안에 나선다"); }
@@ -408,6 +414,59 @@ namespace FireGame.Prototypes.Tests
             float crabPush = crab.Pos.X - (p.X + 2f);
             Assert.True(lightPush > 0.5f, "보통 큰 불은 밀린다: " + lightPush);
             Assert.True(crabPush < lightPush * 0.5f, "게가 많이 밀렸다: " + crabPush + " (보통 " + lightPush + ")");
+        }
+            /// <summary>요격 보상: 부두에 닿기 전에 바다 위에서 끈 배는 BoatXp(15)를 준다. 닿은 배·유조선은 아니다.</summary>
+        [Fact]
+        public void DousingABoatAtSea_GivesInterceptXp()
+        {
+            SurvivorSim sim = Quiet();
+            int before = sim.Xp;
+            int level = sim.Level;
+            Structure boat = Boat(sim, 30f, 48f, false, new Vec2(-SurvivorSim.BoatSpeed, 0f));
+            sim.Shots.Add(new Shot { Kind = ShotKind.Drop, Pos = boat.Pos, Life = 0.5f, Damage = 100f, Radius = 1f });
+            sim.Step(0f, 0f);
+            Assert.Contains(boat, sim.BoatsAway);
+            // 15면 1레벨 필요치(11)를 넘겨 레벨업한다(경험치는 넘긴 만큼만 남는다).
+            Assert.True(sim.Level > level || sim.Xp == before + SurvivorSim.BoatXp, "요격 보상: 레벨 " + level + "→" + sim.Level + ", 경험치 " + before + "→" + sim.Xp);
+
+            SurvivorSim docked = Quiet();
+            int before2 = docked.Xp;
+            Structure moored = Boat(docked, 30f, SurvivorHarbor.SeaFrom + 0.6f, true);
+            docked.Shots.Add(new Shot { Kind = ShotKind.Drop, Pos = moored.Pos, Life = 0.5f, Damage = 100f, Radius = 1f });
+            docked.Step(0f, 0f);
+            Assert.False(moored.Burning);
+            Assert.Equal(before2, docked.Xp);
+            Assert.Equal(1, docked.Level);
+
+            SurvivorSim tank = Quiet();
+            int before3 = tank.Xp;
+            Structure tanker = Boat(tank, 30f, 48f, false, new Vec2(-SurvivorSim.TankerSpeed, 0f));
+            tanker.Tanker = true;
+            tank.Shots.Add(new Shot { Kind = ShotKind.Drop, Pos = tanker.Pos, Life = 0.5f, Damage = 100f, Radius = 1f });
+            tank.Step(0f, 0f);
+            Assert.False(tanker.Burning);
+            Assert.Equal(before3, tank.Xp);
+            Assert.Equal(1, tank.Level);
+        }
+
+        /// <summary>접안까지 남은 초: 줄을 따라 목표 x까지 + 남쪽으로 부두선까지를 속도로 나눈다. 틱마다 줄고 닿으면 0.</summary>
+        [Fact]
+        public void BoatEta_CountsDownToZeroAtTheQuay()
+        {
+            SurvivorSim sim = Quiet();
+            Structure house = House(sim, 30f, SurvivorHarbor.QuayRow);
+            Structure boat = Boat(sim, 10f, SurvivorHarbor.BoatLane, false, new Vec2(SurvivorSim.BoatSpeed, 0f));
+            boat.Target = house;
+            float expect = (20f + (SurvivorHarbor.BoatLane - 0.6f - SurvivorHarbor.SeaFrom)) / SurvivorSim.BoatSpeed;
+            Assert.Equal(expect, sim.BoatEta(boat), 1);
+            float first = sim.BoatEta(boat);
+            Run(sim, 60);
+            float later = sim.BoatEta(boat);
+            Assert.True(later < first - 0.8f, "1초 지나면 약 1초 준다: " + first + " → " + later);
+            int ticks = 0;
+            while (!boat.Docked && ticks++ < 60 * 30) Run(sim, 1);
+            Assert.True(boat.Docked, "줄을 따라 가 닿는다");
+            Assert.Equal(0f, sim.BoatEta(boat));
         }
     }
 }

@@ -760,6 +760,19 @@ namespace FireGame.Prototypes.Logic
         public const float BurnBoat = 45f;
         private float _nextBoat = FirstBoat;
 
+        /// <summary>바다 위에서 끈 불배의 경험치(요격 보상). "부두 끝에서 쏘라"가 할 일이 되게.</summary>
+        public const int BoatXp = 15;
+
+        /// <summary>배가 부두에 닿기까지 초: 줄을 따라 목표 x까지 + 남쪽으로 부두선까지, 속도로 나눈다. 닿았으면 0, 목표가 없으면 줄 끝까지.</summary>
+        public float BoatEta(Structure b)
+        {
+            if (b.Docked) return 0f;
+            float speed = b.Tanker ? TankerSpeed : BoatSpeed;
+            float south = Math.Max(0f, b.Pos.Y - b.Half.Y - SurvivorHarbor.SeaFrom);
+            float along = b.Drift.Y != 0f || b.Target == null ? 0f : Math.Abs(b.Target.Pos.X - b.Pos.X);
+            return (along + south) / speed;
+        }
+
         // ------------------------------------------------------------------
         // 대화재 종류(맵 특색 패스): 공통 감독 위에 스테이지마다 하나씩.
         // ------------------------------------------------------------------
@@ -2939,7 +2952,12 @@ namespace FireGame.Prototypes.Logic
                 s.Warned = false;
                 Doused.Add(s);
                 // 물 위에서 끈 배는 바다로 돌아간다(TickBoats가 북쪽으로 돌린다). 끈 가판대는 로켓을 멈춘다.
-                if (s.Kind == StructureKind.Boat && !s.Docked) BoatsAway.Add(s);
+                if (s.Kind == StructureKind.Boat && !s.Docked)
+                {
+                    BoatsAway.Add(s);
+                    // 요격 보상: 부두에 닿기 전에 바다 위에서 끈 배(유조선은 어차피 좌초한다).
+                    if (!s.Tanker) Xp += BoatXp;
+                }
                 s.Launching = false;
                 // 불을 끈 보상: 건물은 큰 구슬, 작은 것은 작은 구슬. 건물 진화는 콤보를 크게 잇는다.
                 if (s.IsBuilding) ComboAdd(ComboPerDouse);
