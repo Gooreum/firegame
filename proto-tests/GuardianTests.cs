@@ -162,5 +162,73 @@ namespace FireGame.Prototypes.Tests
             Run(sim, 0.5f);
             Assert.Equal(0, sim.ShotsFired);
         }
+        /// <summary>끄는 시간: 자동 물은 보통 신고를 12초 안에, 쥐고 쏘면(증기) 그 절반 남짓에. 큰 불(1.0)은 쥐어야 끈다(수호 반경 밖).</summary>
+        [Fact]
+        public void DouseTime_AutoHandlesReports_HoldingIsTwiceAsFast()
+        {
+            float auto = DouseTime(SurvivorSim.ReportFire, false);
+            float held = DouseTime(SurvivorSim.ReportFire, true);
+            Assert.InRange(auto, 5f, 12f);
+            Assert.True(held * 1.8f <= auto, "쥐면 1.8배 넘게 빨라야: 쥠 " + held + " 자동 " + auto);
+            Assert.True(DouseTime(1f, true) > 0f, "큰 불은 쥐면 끈다");
+        }
+
+        private static float DouseTime(float fire, bool hold)
+        {
+            var sim = Quiet();
+            sim.Guardian = true;
+            Structure s = House(sim, 0f, 5.5f);
+            sim.Ignite(s, fire);
+            // 수호 반경 밖에 서서 잰다(반경 안이면 불이 안 자라 다른 숫자가 나온다).
+            for (int i = 0; i < 60 * 60; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Spraying = hold;
+                sim.Aim = new Vec2(0f, 1f);
+                sim.Step(0f, 0f);
+                if (!s.Burning) return sim.Time;
+            }
+            return -1f;
+        }
+
+        [Fact]
+        public void MoveOnlyBot_NeverHolds_ButStillShoots()
+        {
+            var sim = new SurvivorSim(3, 1);
+            var bot = new SurvivorBot(sim) { MoveOnly = true, Pro = true };
+            for (int i = 0; i < (int)(30f / SurvivorSim.Dt) && sim.Outcome == SOutcome.Playing; i++)
+            {
+                bot.Play();
+                Assert.False(sim.Spraying);
+            }
+            Assert.Equal(0, sim.Stats.FocusShots);
+            Assert.True(sim.Stats.AutoShots > 0);
+        }
+
+        [Fact]
+        public void MoveOnlyProBot_DousesAHouse_ByAutoWaterAlone()
+        {
+            var sim = Quiet();
+            Structure shop = House(sim, 0f, 5f);
+            sim.Ignite(shop, SurvivorSim.ReportFire);
+            var bot = new SurvivorBot(sim) { MoveOnly = true, Pro = true };
+            for (int i = 0; i < (int)(20f / SurvivorSim.Dt) && shop.Burning; i++)
+            {
+                sim.Enemies.Clear();
+                bot.Play();
+            }
+            Assert.False(shop.Burning, "자동 물로 20초 안에 못 껐다: " + shop.Fire);
+        }
+
+        [Fact]
+        public void ProBot_StillHolds()
+        {
+            var sim = Quiet();
+            Structure shop = House(sim, 0f, 5f);
+            sim.Ignite(shop, 0.6f);
+            var bot = new SurvivorBot(sim) { Pro = true };
+            for (int i = 0; i < 120; i++) bot.Play();
+            Assert.True(sim.Stats.FocusShots > 0);
+        }
     }
 }

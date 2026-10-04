@@ -483,8 +483,11 @@ namespace FireGame.Prototypes.Logic
             get { return Spraying || AutoFiring; }
         }
 
-        /// <summary>자동 분사의 힘(쥐고 쏜 물 대비). 쥐면 온전한 힘에 증기까지 쌓인다.</summary>
-        public const float AutoPower = 0.7f;
+        /// <summary>
+        /// 자동 분사의 힘(쥐고 쏜 물 대비). 같은 물대포다: 쥐는 보상은 증기 폭발(큰 불을 2배 넘게 빨리 끈다)과 내가 고른 과녁.
+        /// 0.7이면 보통 신고(0.35)를 끄는 데 28.5초(쥐면 4.9초)라 이동만으로는 작은 불도 못 지켰다. 1.0이면 10.1초.
+        /// </summary>
+        public const float AutoPower = 1.0f;
 
         /// <summary>자동 분사가 노리는 가장 먼 불(물줄기 사거리 16칸/초 × 0.6초 ≈ 9.6).</summary>
         public const float AutoReach = 9.5f;
@@ -2032,7 +2035,7 @@ namespace FireGame.Prototypes.Logic
         private void FireWeapons()
         {
             // 물대포: 겨눈 쪽으로, 쥐고 있을 때만. 예전 자동 조준(0.32초)과 초당 피해를 맞췄다.
-            // 수호자: 쥐지 않아도 가까운 불을 AutoPower배로 쏜다(증기는 안 쌓는다). 쥐면 겨눈 쪽으로 온전한 힘(집중 분사).
+            // 수호자: 쥐지 않아도 가까운 불을 AutoPower배로 쏜다(증기는 안 쌓는다). 쥐면 겨눈 쪽으로, 증기까지(집중 분사).
             int hose = Build.Level(UpgradeId.Hose);
             bool cannon = Build.Level(UpgradeId.Cannon) > 0;
             _hoseClock -= Dt;

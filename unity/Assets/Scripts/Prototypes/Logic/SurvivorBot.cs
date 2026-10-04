@@ -27,6 +27,12 @@ namespace FireGame.Prototypes.Logic
         /// 기본 봇은 적을 1/d²로 피해 건물 곁에 안 서므로 "아슬아슬한 끝"을 못 잰다 — 그건 이 모드로 잰다(docs §15). 기본 봇은 바닥 측정용으로 그대로.
         /// </summary>
         public bool Pro;
+
+        /// <summary>
+        /// 이동만: 손을 대지 않는다(쥐지 않는다). 수호자 마을의 자동 분사로만 쏜다 — "이동만으로 버티나"를 재는 사람 대리(docs §20).
+        /// 이동은 Pro 여부를 그대로 따른다.
+        /// </summary>
+        public bool MoveOnly;
         public const float ProRetreatHp = 0.35f;
         public const float ProStandOff = 2.5f;
 
@@ -88,6 +94,11 @@ namespace FireGame.Prototypes.Logic
         /// </summary>
         public void AimHose()
         {
+            if (MoveOnly)
+            {
+                _sim.Spraying = false;
+                return;
+            }
             Vec2 p = _sim.Player;
             // 지붕을 노리는 갈매기·풍등이 목표 건물 6칸 안이면 먼저 떨어뜨린다(안 닿으면 지붕에 불이 난다).
             Vec2? target = ThreatFlyer(p, 10f);

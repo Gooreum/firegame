@@ -1901,7 +1901,8 @@ namespace FireGame.Prototypes
             // 쥔 동안은 물살을 버티느라 살짝 뒤로 기댄 자세를 유지한다(쏠 때마다 튕기지 않는다).
             _recoil = Mathf.MoveTowards(_recoil, _sim.Spraying ? 0.35f : 0f, dt * 4f);
             UpdateSprayFeel(dt);
-            _stance = Mathf.MoveTowards(_stance, _sim.Spraying ? 1f : 0f, dt * 6f);
+            // 노즐을 든 자세는 물이 나가는 동안(자동 분사 포함). 뒤로 기대는 반동은 쥘 때만.
+            _stance = Mathf.MoveTowards(_stance, _sim.HoseOn ? 1f : 0f, dt * 6f);
             _hurtClock -= dt;
             _waveAge += dt;
             if (_cardsIn > 0f)
@@ -2906,7 +2907,7 @@ namespace FireGame.Prototypes
             _chain.Sort((a, b) => a.Age.CompareTo(b.Age));
 
             _streamPts.Clear();
-            if (_sim.Spraying && _chain[0].Age < 0.2f) _streamPts.Add(NozzleTip());
+            if (_sim.HoseOn && _chain[0].Age < 0.2f) _streamPts.Add(NozzleTip());
             // 판정상 물은 몸 중심에서 나가지만, 그림은 손에 든 노즐에서 나와 과녁 쪽 진짜 물길로 모인다.
             Vector3 fromHand = NozzleTip() - W(_sim.Player);
             Shot prev = null;
@@ -2935,7 +2936,8 @@ namespace FireGame.Prototypes
             bool jet = last.Kind == ShotKind.Jet;
             float w = jet ? 1.5f : Mathf.Max(0.95f, last.Radius * 2.3f);
             // 쥐는 순간 가늘게 나가다 0.25초에 확 굵어진다(압력이 차오르는 느낌). 놓은 뒤 날아가는 물은 굵은 채로.
-            if (last.Hose) w *= _sim.Spraying ? Mathf.Lerp(0.55f, 1.15f, Mathf.Clamp01(_sprayHeld / 0.25f)) : 1.15f;
+            // 수호자 자동 분사는 줄기가 조금 가늘다(증기를 못 쌓는 물): 쥐면 굵어지는 차이가 눈에 보인다.
+            if (last.Hose) w *= _sim.Spraying ? Mathf.Lerp(0.55f, 1.15f, Mathf.Clamp01(_sprayHeld / 0.25f)) : _sim.AutoFiring ? 0.85f : 1.15f;
             _ribbonIn.Clear();
             foreach (Vector3 p in pts) _ribbonIn.Add(new Vec2(p.x, p.y));
             // 방수포 제트는 고압이라 덜 출렁인다.
@@ -2967,7 +2969,7 @@ namespace FireGame.Prototypes
             Vector3 end = pts[pts.Count - 1];
             Vector3 endDir = (end - pts[pts.Count - 2]).normalized;
             EmitSpray(end, endDir, jet ? 1.6f : Mathf.Max(1f, last.Radius / 0.3f * 0.75f));
-            if (last.Hose && _sim.Spraying)
+            if (last.Hose && _sim.HoseOn)
             {
                 _streamEnd = end;
                 _streamEndAt = _time;
@@ -3212,7 +3214,7 @@ namespace FireGame.Prototypes
         /// <summary>몸이 보는 방향: 방금 쐈으면 조준 방향, 아니면 이동 방향.</summary>
         private Vector3 Look()
         {
-            if (_sim.Spraying && (_sim.Aim.X != 0f || _sim.Aim.Y != 0f)) return new Vector3(_sim.Aim.X, _sim.Aim.Y, 0f).normalized;
+            if (_sim.HoseOn && (_sim.Aim.X != 0f || _sim.Aim.Y != 0f)) return new Vector3(_sim.Aim.X, _sim.Aim.Y, 0f).normalized;
             return _aimAge < AimHold ? _aim : new Vector3(_sim.Facing.X, _sim.Facing.Y, 0f);
         }
 
@@ -4658,8 +4660,9 @@ namespace FireGame.Prototypes
         private void UpdateSpraySound(float dt)
         {
             if (_spray == null) return;
-            bool on = _sim.Spraying && _sim.Outcome == SOutcome.Playing && _sim.PendingChoices == null;
-            float target = on ? 0.35f : 0f;
+            bool live = _sim.Outcome == SOutcome.Playing && _sim.PendingChoices == null;
+            // 자동 분사는 물소리도 절반(쥐면 콸콸).
+            float target = !live ? 0f : _sim.Spraying ? 0.35f : _sim.AutoFiring ? 0.18f : 0f;
             _spray.volume = Mathf.MoveTowards(_spray.volume, target, dt * (0.35f / 0.06f));
             // 물대포 레벨·펌프만큼 소리가 굵어진다(피치↓). 방수포는 가장 묵직하다.
             int power = _sim.Build.Level(UpgradeId.Hose) + _sim.Build.Level(UpgradeId.Tank);
