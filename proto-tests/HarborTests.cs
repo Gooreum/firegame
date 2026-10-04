@@ -140,7 +140,8 @@ namespace FireGame.Prototypes.Tests
                 sim.Step(0f, 0f);
                 foreach (Enemy e in sim.Enemies)
                 {
-                    if (e.Kind == EnemyKind.Gull) continue;
+                    // 갈매기·게는 바다에서 오는 몹이라 뭍 비율에서 뺀다.
+                    if (e.Kind == EnemyKind.Gull || e.Kind == EnemyKind.Crab) continue;
                     total++;
                     if (e.Pos.Y < SurvivorHarbor.SeaFrom + 0.5f) land++;
                 }
@@ -327,6 +328,86 @@ namespace FireGame.Prototypes.Tests
             Assert.All(sim.Structures.FindAll(s => s.Kind == StructureKind.House && s.Pos.Y > 32f), h => Assert.InRange(SurvivorHarbor.SeaFrom - (h.Pos.Y + h.Half.Y), 1f, 4f));
             // 아직 배는 없다(TickBoats가 띄운다).
             Assert.Empty(sim.Structures.FindAll(s => s.Kind == StructureKind.Boat));
+        }
+            /// <summary>맵 특색 몹: 갈매기는 폭격기 — 건물을 노려 날아가 지붕에 불 0.25를 떨어뜨리고(GullDrops) 바다로 돌아가 북쪽 끝에서 구슬 없이 사라진다.</summary>
+        [Fact]
+        public void Gull_FliesToAQuayBuilding_DropsFire_AndLeavesForTheSea()
+        {
+            SurvivorSim sim = Quiet();
+            Structure house = House(sim, 30f, 36f);
+            Enemy gull = sim.Spawn(EnemyKind.Gull, new Vec2(30f, 50f));
+            Assert.True(gull.Seeker);
+            int drops = 0;
+            int ticks = 0;
+            while (!gull.Dropped && ticks++ < (int)(8f / SurvivorSim.Dt))
+            {
+                sim.Step(0f, 0f);
+                drops += sim.GullDrops.Count;
+                sim.Enemies.RemoveAll(e => e != gull);
+            }
+            Assert.True(gull.Dropped, "8초 안에 지붕에 닿아야 한다: " + gull.Pos.Y);
+            Assert.Equal(1, drops);
+            Assert.True(house.Burning && house.Fire >= 0.25f, "지붕 불 " + house.Fire);
+            Assert.False(gull.Dead);
+            ticks = 0;
+            while (!gull.Dead && ticks++ < (int)(10f / SurvivorSim.Dt))
+            {
+                sim.Step(0f, 0f);
+                sim.Enemies.RemoveAll(e => e != gull);
+            }
+            Assert.True(gull.Dead, "10초 안에 바다 끝에서 사라져야 한다: " + gull.Pos.Y);
+            Assert.True(gull.Pos.Y >= SurvivorSim.ArenaSize - 1f, "북쪽 끝: " + gull.Pos.Y);
+            Assert.Empty(sim.Gems);
+        }
+
+        /// <summary>불 게: 바다 위에서 안 밀리고 기어 올라와 건물에 불 0.4를 지핀 뒤(Dropped) 소방관을 쫓는다.</summary>
+        [Fact]
+        public void Crab_CrawlsAshore_IgnitesABuilding_ThenChasesTheFirefighter()
+        {
+            var sim = new SurvivorSim(1, 4);
+            sim.Enemies.Clear();
+            sim.Reports = false;
+            Enemy crab = sim.Spawn(EnemyKind.Crab, new Vec2(30f, 50f));
+            Assert.True(crab.Seeker && crab.Touch >= 10f && crab.MaxHp >= 9f);
+            bool wetStep = false;
+            int ticks = 0;
+            while (!crab.Dropped && ticks++ < (int)(25f / SurvivorSim.Dt))
+            {
+                sim.Step(0f, 0f);
+                sim.Enemies.RemoveAll(e => e != crab);
+                if (ticks < (int)(2f / SurvivorSim.Dt)) wetStep |= sim.Structures.Exists(w => w.Kind == StructureKind.Water && w.Within(crab.Pos, 0f));
+            }
+            Assert.True(wetStep, "처음 2초는 바다 위에 있어야 한다(밀리지 않는다)");
+            Assert.True(crab.Dropped, "25초 안에 상륙해 건물에 닿아야 한다: " + crab.Pos);
+            Assert.Contains(sim.Structures, s => s.IsBuilding && s.Burning && s.Fire >= 0.4f);
+            float before = crab.Pos.DistanceTo(sim.Player);
+            for (int i = 0; i < (int)(2f / SurvivorSim.Dt); i++)
+            {
+                sim.Step(0f, 0f);
+                sim.Enemies.RemoveAll(e => e != crab);
+            }
+            Assert.True(crab.Pos.DistanceTo(sim.Player) < before - 1f, "불을 지핀 뒤엔 소방관을 쫓는다: " + before + " → " + crab.Pos.DistanceTo(sim.Player));
+        }
+
+        /// <summary>불 게는 큰 불 고리처럼 밀치기가 HeavyKnock배만 먹힌다.</summary>
+        [Fact]
+        public void Crab_BarelyMoves_WhenKnocked()
+        {
+            SurvivorSim sim = Quiet();
+            Vec2 p = sim.Player;
+            Enemy light = sim.Spawn(EnemyKind.Blaze, new Vec2(p.X + 2f, p.Y));
+            Enemy crab = sim.Spawn(EnemyKind.Crab, new Vec2(p.X + 2f, p.Y + 0.01f));
+            crab.Seeker = false;
+            crab.Dropped = true;
+            light.Speed = crab.Speed = 0f;
+            light.Hp = light.MaxHp = crab.Hp = crab.MaxHp = 999f;
+            sim.Aim = new Vec2(1f, 0f);
+            sim.Spraying = true;
+            for (int i = 0; i < 90; i++) sim.Step(0f, 0f);
+            float lightPush = light.Pos.X - (p.X + 2f);
+            float crabPush = crab.Pos.X - (p.X + 2f);
+            Assert.True(lightPush > 0.5f, "보통 큰 불은 밀린다: " + lightPush);
+            Assert.True(crabPush < lightPush * 0.5f, "게가 많이 밀렸다: " + crabPush + " (보통 " + lightPush + ")");
         }
     }
 }

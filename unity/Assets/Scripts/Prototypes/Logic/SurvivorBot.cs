@@ -89,8 +89,12 @@ namespace FireGame.Prototypes.Logic
         public void AimHose()
         {
             Vec2 p = _sim.Player;
-            Vec2? target;
-            if (Pro)
+            // 지붕을 노리는 갈매기·풍등이 목표 건물 6칸 안이면 먼저 떨어뜨린다(안 닿으면 지붕에 불이 난다).
+            Vec2? target = ThreatFlyer(p, 10f);
+            if (target.HasValue)
+            {
+            }
+            else if (Pro)
             {
                 // 숙련: 코앞(1.5칸) 큰 불·기름 → 4칸 안 타는 건물(증기를 모은다) → 3칸 안 아무 불 → 10칸 안 타는 건물.
                 target = NearestEnemy(p, 1.5f, true);
@@ -119,6 +123,26 @@ namespace FireGame.Prototypes.Logic
 
             _sim.Spraying = target.HasValue;
             if (target.HasValue) _sim.Aim = new Vec2(target.Value.X - p.X, target.Value.Y - p.Y);
+        }
+
+        /// <summary>range 안에서 목표 건물 6칸 안까지 간 갈매기·풍등(아직 불을 안 떨어뜨린 것) 중 가장 가까운 것.</summary>
+        private Vec2? ThreatFlyer(Vec2 p, float range)
+        {
+            Vec2? best = null;
+            float bestD = range;
+            foreach (Enemy e in _sim.Enemies)
+            {
+                if (e.Dead || e.Dropped || e.Goal == null) continue;
+                if (e.Kind != EnemyKind.Gull && e.Kind != EnemyKind.SkyLantern) continue;
+                if (e.Goal.DistanceTo(e.Pos) > 6f) continue;
+                float d = e.Pos.DistanceTo(p);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = e.Pos;
+                }
+            }
+            return best;
         }
 
         /// <summary>range 안 가장 가까운 불 몹. heavyOnly면 큰 불·기름(접촉 10)만.</summary>

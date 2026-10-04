@@ -157,5 +157,28 @@ namespace FireGame.Prototypes.Tests
             // 5 야시장: 항구 이상(순서 밴드. 공단과의 순서는 묻지 않는다 — 셋 다 20% 바닥 위면 된다).
             Assert.True(lost[5] >= lost[4] || housesLost[5] >= housesLost[4], "5스테이지가 4스테이지보다 쉽다");
         }
+            /// <summary>항구는 다트 대신 갈매기·게, 야시장은 다트 대신 폭죽·풍등이 섞인다.</summary>
+        [Fact]
+        public void HarborAndMarket_SpawnTheirOwnMonsters_NotDarts()
+        {
+            var harbor = new Dictionary<EnemyKind, int>();
+            var market = new Dictionary<EnemyKind, int>();
+            var h = new SurvivorSim(3, 4) { Time = 120f };
+            var m = new SurvivorSim(3, 5) { Time = 120f };
+            for (int i = 0; i < 1000; i++)
+            {
+                EnemyKind a = h.PickKind();
+                EnemyKind b = m.PickKind();
+                harbor[a] = harbor.TryGetValue(a, out int ca) ? ca + 1 : 1;
+                market[b] = market.TryGetValue(b, out int cb) ? cb + 1 : 1;
+            }
+            Assert.False(harbor.ContainsKey(EnemyKind.Dart), "항구에 다트");
+            Assert.False(market.ContainsKey(EnemyKind.Dart), "야시장에 다트");
+            Assert.True(harbor.TryGetValue(EnemyKind.Crab, out int crabs) && crabs > 20, "게 " + crabs);
+            Assert.True(harbor.TryGetValue(EnemyKind.Gull, out int gulls) && gulls > 50, "갈매기 " + gulls);
+            Assert.True(market.TryGetValue(EnemyKind.SkyLantern, out int lanterns) && lanterns > 40, "풍등 " + lanterns);
+            Assert.True(market.TryGetValue(EnemyKind.Popper, out int poppers) && poppers > 40, "폭죽 " + poppers);
+            Assert.False(harbor.ContainsKey(EnemyKind.SkyLantern) || market.ContainsKey(EnemyKind.Crab));
+        }
     }
 }

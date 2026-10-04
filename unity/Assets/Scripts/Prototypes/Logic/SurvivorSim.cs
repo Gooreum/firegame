@@ -1109,9 +1109,14 @@ namespace FireGame.Prototypes.Logic
                 case EnemyKind.Squirrel: e.MaxHp = 3f * scale; e.Speed = 3.6f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; e.Seeker = true; break;
                 case EnemyKind.Bat: e.MaxHp = 1.5f * scale; e.Speed = 3.2f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; break;
                 case EnemyKind.Oil: e.MaxHp = 6f * scale; e.Speed = 1.3f; e.Radius = 0.55f; e.Touch = 10f; e.Xp = 3; break;
-                case EnemyKind.Gull: e.MaxHp = 2.5f * scale; e.Speed = 3.4f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; break;
+                // 갈매기는 폭격기: 건물(Seeker)을 노려 날아가 지붕에 불을 떨어뜨리고 바다로 돌아간다.
+                case EnemyKind.Gull: e.MaxHp = 2.5f * scale; e.Speed = 3.4f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; e.Seeker = true; break;
                 // 폭죽의 Speed는 뛰는 순간 속도(한 주기 1초 중 0.35초만 움직인다 → 평균 2.6).
                 case EnemyKind.Popper: e.MaxHp = 2f * scale; e.Speed = 7.5f; e.Radius = 0.3f; e.Touch = SmallTouch; e.Xp = 1; break;
+                // 불 게: 단단하고 느리고(옆걸음) 잘 안 밀린다. 건물에 불을 지핀 뒤 소방관을 쫓는다.
+                case EnemyKind.Crab: e.MaxHp = 9f * scale; e.Speed = 1.1f; e.Radius = 0.5f; e.Touch = 10f; e.Xp = 4; e.Seeker = true; break;
+                // 풍등: 하늘을 떠서 점포 지붕에 내려앉는다. 닿아도 소방관을 안 태운다(Touch 0) — 떨어뜨려야 할 표적.
+                case EnemyKind.SkyLantern: e.MaxHp = 1.5f * scale; e.Speed = 0.9f; e.Radius = 0.35f; e.Touch = 0f; e.Xp = 2; e.Seeker = true; break;
             }
             e.Hp = e.MaxHp;
             Enemies.Add(e);
@@ -1187,6 +1192,8 @@ namespace FireGame.Prototypes.Logic
             BoatsAway.Clear();
             JustSurge = false;
             LanternCaught.Clear();
+            GullDrops.Clear();
+            LanternLands.Clear();
             LanternDoused.Clear();
             RocketBursts.Clear();
             JustLaunching = null;
@@ -1246,8 +1253,8 @@ namespace FireGame.Prototypes.Logic
                 _spawnDebt -= 1f;
                 if (Enemies.Count >= MaxEnemies) continue;
                 EnemyKind kind = PickKind();
-                // 불 갈매기는 바다 쪽에서 날아온다(물 위를 건너니 부두에서 쏴야 한다).
-                Spawn(kind, kind == EnemyKind.Gull ? SeaPoint() : SpawnPoint(SpawnDistance));
+                // 불 갈매기·불 게는 바다 쪽에서 온다(물 위를 건너니 부두에서 쏴야 한다).
+                Spawn(kind, kind == EnemyKind.Gull || kind == EnemyKind.Crab ? SeaPoint() : SpawnPoint(SpawnDistance));
             }
 
             if (_wavesDone < 3 && Time >= 60f * (_wavesDone + 1))
@@ -1431,7 +1438,8 @@ namespace FireGame.Prototypes.Logic
             get { return Math.Min(1f, ReportFire + (PressureFireStep * FinalePressure)); }
         }
 
-        private EnemyKind PickKind()
+        /// <summary>가장자리 스폰의 종류(테스트용으로 공개). 스테이지 비율을 하나의 주사위에 차례로 쌓는다.</summary>
+        public EnemyKind PickKind()
         {
             float r = Rand();
             float blaze = Math.Min(Stage.BlazeMax, 0.05f + (Time / 600f));
@@ -1442,7 +1450,10 @@ namespace FireGame.Prototypes.Logic
             if (Time >= OilFrom && r < blaze + dart + Stage.SquirrelShare + Stage.OilShare) return EnemyKind.Oil;
             float sea = blaze + dart + Stage.SquirrelShare + Stage.OilShare;
             if (r < sea + Stage.GullShare) return EnemyKind.Gull;
-            if (Time >= PopperFrom && r < sea + Stage.GullShare + Stage.PopperShare) return EnemyKind.Popper;
+            if (r < sea + Stage.GullShare + Stage.CrabShare) return EnemyKind.Crab;
+            float shore = sea + Stage.GullShare + Stage.CrabShare;
+            if (Time >= PopperFrom && r < shore + Stage.PopperShare) return EnemyKind.Popper;
+            if (Time >= PopperFrom && r < shore + Stage.PopperShare + Stage.LanternShare) return EnemyKind.SkyLantern;
             return EnemyKind.Ember;
         }
 
@@ -1601,12 +1612,13 @@ namespace FireGame.Prototypes.Logic
                 else if (e.Seeker)
                 {
                     // 건물에서 나온 불씨는 가까운 탈 것을 노린다. 없으면 소방관을 쫓는다.
+                    // 갈매기·게·풍등은 멀리서도 건물만 노린다(맵 특색 몹: 어느 지붕을 노리는지 뷰가 보여 준다).
                     e.GoalClock -= Dt;
                     if (e.Goal != null && !e.Goal.Flammable) e.Goal = null;
                     if (e.Goal == null && e.GoalClock <= 0f)
                     {
                         e.GoalClock = 0.5f;
-                        e.Goal = NearestFlammable(e.Pos, EmberSight);
+                        e.Goal = TargetsBuildings(e) ? NearestBuilding(e.Pos, BuildingSight) : NearestFlammable(e.Pos, EmberSight);
                     }
                     if (e.Goal != null) chase = e.Goal.Pos;
                     else
@@ -1620,10 +1632,21 @@ namespace FireGame.Prototypes.Logic
                         }
                     }
                 }
+                if (e.Kind == EnemyKind.Gull && e.Dropped)
+                {
+                    // 불을 떨어뜨린 갈매기는 바다로 돌아가 북쪽 끝에서 사라진다(구슬 없음).
+                    chase = new Vec2(e.Pos.X, ArenaSize + 4f);
+                    if (e.Pos.Y >= ArenaSize - 0.5f)
+                    {
+                        e.Dead = true;
+                        continue;
+                    }
+                }
                 float dx = chase.X - e.Pos.X;
                 float dy = chase.Y - e.Pos.Y;
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
-                float speed = e.Speed * (e.Slowed > 0f ? 0.5f : 1f);
+                // 풍등은 하늘을 떠서 안개·장막에 안 느려진다.
+                float speed = e.Speed * (e.Slowed > 0f && e.Kind != EnemyKind.SkyLantern ? 0.5f : 1f);
                 if (e.Kind == EnemyKind.Popper)
                 {
                     // 폭죽은 깡충깡충: 한 주기 1초 중 앞 PopperHop만 움직인다.
@@ -1632,11 +1655,11 @@ namespace FireGame.Prototypes.Logic
                 }
                 float vx = d > 0.01f ? dx / d * speed : 0f;
                 float vy = d > 0.01f ? dy / d * speed : 0f;
-                if (e.Kind == EnemyKind.Squirrel || e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Gull)
+                if (e.Kind == EnemyKind.Squirrel || e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Gull || e.Kind == EnemyKind.Crab)
                 {
-                    // 다람쥐는 지그재그로, 박쥐는 크게, 갈매기는 더 느리고 넓게 출렁이며 온다(진행 방향에 수직으로 흔든다).
-                    e.Phase += Dt * (e.Kind == EnemyKind.Squirrel ? 9f : e.Kind == EnemyKind.Gull ? 4f : 5f);
-                    float sway = (float)Math.Sin(e.Phase) * (e.Kind == EnemyKind.Squirrel ? 0.9f : e.Kind == EnemyKind.Gull ? 1.6f : 1.3f);
+                    // 다람쥐는 지그재그로, 박쥐는 크게, 갈매기는 더 느리고 넓게 출렁이며, 게는 옆걸음으로 온다(진행 방향에 수직으로 흔든다).
+                    e.Phase += Dt * (e.Kind == EnemyKind.Squirrel ? 9f : e.Kind == EnemyKind.Gull ? 4f : e.Kind == EnemyKind.Crab ? 2.5f : 5f);
+                    float sway = (float)Math.Sin(e.Phase) * (e.Kind == EnemyKind.Squirrel ? 0.9f : e.Kind == EnemyKind.Gull ? 1.6f : e.Kind == EnemyKind.Crab ? 0.8f : 1.3f);
                     float px = -vy;
                     float py = vx;
                     vx += px * sway;
@@ -1693,8 +1716,8 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
                 e.Pos = ClampToArena(e.Pos);
-                // 땅을 기는 불은 강을 못 건넌다(둑에 멈춘다). 불씨·박쥐·갈매기는 날아 건넌다.
-                if (HasWater && !e.Seeker && e.Kind != EnemyKind.Bat && e.Kind != EnemyKind.Gull) PushOutOfWater(ref e.Pos, e.Radius);
+                // 땅을 기는 불은 강을 못 건넌다(둑에 멈춘다). 불씨·박쥐·갈매기·풍등은 날아 건너고, 게는 바다에서 기어 나온다.
+                if (HasWater && !e.Seeker && e.Kind != EnemyKind.Bat && e.Kind != EnemyKind.Gull && e.Kind != EnemyKind.Crab && e.Kind != EnemyKind.SkyLantern) PushOutOfWater(ref e.Pos, e.Radius);
                 // 건물에서 나온 불씨와 다람쥐만 옮겨붙인다. 소방관을 쫓는 불(가장자리 불씨·큰 불)은 발밑에 불을 흘릴 뿐이다.
                 if (e.Seeker) TouchStructures(e);
                 e.Knock.X *= knockDecay;
@@ -2739,6 +2762,23 @@ namespace FireGame.Prototypes.Logic
                 // 나무 불은 바람을 타고 건물을 위협하므로 숲다운 압박은 남는다.
                 if (e.Kind == EnemyKind.Squirrel && st.Kind != StructureKind.Tree) continue;
                 if (!st.Within(e.Pos, e.Radius)) continue;
+                // 맵 특색 몹: 갈매기는 지붕에 불을 떨어뜨리고 바다로, 게는 불을 지피고 소방관을 쫓고, 풍등은 내려앉아 타 없어진다(구슬 없음).
+                if (e.Kind == EnemyKind.Gull || e.Kind == EnemyKind.Crab)
+                {
+                    Ignite(st, e.Kind == EnemyKind.Gull ? 0.25f : 0.4f);
+                    e.Dropped = true;
+                    e.Seeker = false;
+                    e.Goal = null;
+                    if (e.Kind == EnemyKind.Gull) GullDrops.Add(e.Pos);
+                    return;
+                }
+                if (e.Kind == EnemyKind.SkyLantern)
+                {
+                    Ignite(st, 0.3f);
+                    e.Dead = true;
+                    LanternLands.Add(e.Pos);
+                    return;
+                }
                 Ignite(st, 0.15f);
                 // 불씨와 다람쥐는 불을 붙이며 그 속으로 사라진다(다람쥐가 살아남으면 한 마리가 숲을 다 태운다).
                 if (e.Kind == EnemyKind.Ember || e.Kind == EnemyKind.Squirrel)
@@ -3038,6 +3078,43 @@ namespace FireGame.Prototypes.Logic
             return pool[Math.Min(pool.Count - 1, (int)(Rand() * pool.Count))];
         }
 
+        /// <summary>대화재 고리의 큰 불과 불 게는 밀치기가 HeavyKnock배만 먹힌다.</summary>
+        private static float KnockScale(Enemy e)
+        {
+            return e.Heavy || e.Kind == EnemyKind.Crab ? HeavyKnock : 1f;
+        }
+
+        /// <summary>갈매기·게·풍등: 멀리서도 건물만 노린다.</summary>
+        private static bool TargetsBuildings(Enemy e)
+        {
+            return e.Kind == EnemyKind.Gull || e.Kind == EnemyKind.Crab || e.Kind == EnemyKind.SkyLantern;
+        }
+
+        /// <summary>갈매기·게·풍등이 건물을 찾는 거리(맵 어디서든 하나는 보인다).</summary>
+        public const float BuildingSight = 40f;
+
+        /// <summary>갈매기가 이번 틱 불을 떨어뜨린 자리 / 풍등이 내려앉은 자리(뷰 신호).</summary>
+        public readonly List<Vec2> GullDrops = new List<Vec2>();
+        public readonly List<Vec2> LanternLands = new List<Vec2>();
+
+        /// <summary>range 안 가장 가까운 불붙을 수 있는 건물(집·창고).</summary>
+        private Structure NearestBuilding(Vec2 p, float range)
+        {
+            Structure best = null;
+            float bestD = range;
+            foreach (Structure s in Structures)
+            {
+                if (!s.IsBuilding || !s.Flammable) continue;
+                float d = s.DistanceTo(p);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = s;
+                }
+            }
+            return best;
+        }
+
         private Structure NearestFlammable(Vec2 p, float range)
         {
             Structure best = null;
@@ -3250,7 +3327,7 @@ namespace FireGame.Prototypes.Logic
                 Burn(e.Touch * Dt);
                 if (push <= 0f || e.BounceCool > 0f) continue;
                 e.BounceCool = SuitBounceCool;
-                Vec2 k = Knockback(Player, e.Pos, e.Heavy ? push * HeavyKnock : push);
+                Vec2 k = Knockback(Player, e.Pos, push * KnockScale(e));
                 e.Knock.X += k.X;
                 e.Knock.Y += k.Y;
                 SuitBounces.Add(e.Pos);
@@ -3719,7 +3796,7 @@ namespace FireGame.Prototypes.Logic
             if (crit) amount *= 2f;
             e.Hp -= amount;
             e.HitFlash = 0.08f;
-            float heavy = e.Heavy ? HeavyKnock : 1f;
+            float heavy = KnockScale(e);
             e.Knock.X += knock.X * heavy;
             e.Knock.Y += knock.Y * heavy;
 

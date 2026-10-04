@@ -366,5 +366,40 @@ namespace FireGame.Prototypes.Tests
                 Assert.True(neighbour || endPost, a.Name + "-" + b.Name + " 등줄이 이웃이 아니다");
             }
         }
+            /// <summary>맵 특색 몹: 풍등은 하늘을 떠서 점포 지붕에 내려앉아 불 0.3을 내고(LanternLands) 구슬 없이 타 없어진다.</summary>
+        [Fact]
+        public void SkyLantern_DriftsToAStall_IgnitesIt_AndBurnsUp()
+        {
+            SurvivorSim sim = Quiet();
+            Structure stall = Stall(sim, 30f, 38f);
+            Enemy lantern = sim.Spawn(EnemyKind.SkyLantern, new Vec2(30f, 55f));
+            Assert.True(lantern.Seeker && lantern.Touch == 0f);
+            int lands = 0;
+            int ticks = 0;
+            while (!lantern.Dead && ticks++ < (int)(30f / SurvivorSim.Dt))
+            {
+                sim.Step(0f, 0f);
+                lands += sim.LanternLands.Count;
+                // 가장자리 스폰은 치운다(가만히 선 소방관이 죽으면 판이 멈춘다).
+                sim.Enemies.RemoveAll(e => e != lantern);
+            }
+            Assert.True(lantern.Dead, "30초 안에 점포에 내려앉아야 한다: " + lantern.Pos);
+            Assert.Equal(1, lands);
+            Assert.True(stall.Burning && stall.Fire >= 0.3f, "점포 불 " + stall.Fire);
+            Assert.Empty(sim.Gems);
+        }
+
+        /// <summary>쏘아 떨어뜨린 풍등은 구슬을 떨어뜨린다(Xp 2).</summary>
+        [Fact]
+        public void SkyLantern_ShotDown_DropsAGem()
+        {
+            SurvivorSim sim = Quiet();
+            Stall(sim, 30f, 38f);
+            Enemy lantern = sim.Spawn(EnemyKind.SkyLantern, new Vec2(30f, 46f));
+            Splash(sim, lantern.Pos, 100f);
+            sim.Step(0f, 0f);
+            Assert.True(lantern.Dead);
+            Assert.Single(sim.Gems);
+        }
     }
 }
