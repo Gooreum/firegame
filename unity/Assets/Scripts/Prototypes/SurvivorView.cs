@@ -5595,6 +5595,7 @@ namespace FireGame.Prototypes
                     Emit(Smokes[Random.Range(0, Smokes.Length)], at, new Vector3(0.4f, 1f, 0f), 0.3f, 2.2f, 0.8f, 2.4f,
                         new Color(0.3f, 0.3f, 0.3f, 0.35f), new Color(0.3f, 0.3f, 0.3f, 0f), Random.Range(-40f, 40f));
                 }
+                if (_sim.Guardian && st.IsBuilding) DrawRuinNest(st, at, w, h, seed);
                 return;
             }
 
@@ -5617,6 +5618,10 @@ namespace FireGame.Prototypes
                     _roofTrim.PutRot(c, Facade, 0.45f, 0.35f, Color.Lerp(new Color(1f, 0.45f, 0.1f, 0.85f), new Color(1f, 0.8f, 0.35f, 0.9f), flick * st.Fire));
                     _roofGlow.PutRot(c + new Vector3(0f, -0.02f, 0f), Facade, 0.8f, 0.8f, new Color(1f, 0.5f, 0.12f, 0.25f + (0.35f * st.Fire)));
                 }
+            }
+            else if (_sim.Guardian && st.Guarded)
+            {
+                DrawGuardedLights(st, seed);
             }
             else if (_sim.Stage.Number == 5 && StageModels.SteamAt(st.Name, out bool smoky) is Vector3 spot && Random.value < 0.06f)
             {
@@ -6339,7 +6344,8 @@ namespace FireGame.Prototypes
             int total = _sim.HousesTotal;
             _kills.text = "지킨 건물 " + (total - _sim.HousesLost) + "/" + total + "  ·  구조 " + _sim.Rescued + "  ·  잃음 " + _sim.CiviliansLost;
             // 하나만 더 무너지면 진다: 붉게 깜빡인다.
-            bool edge = total > 0 && (_sim.HousesLost + 1) * 2 > total && _sim.Outcome == SOutcome.Playing;
+            // 수호자 마을은 동네를 잃어도 안 지므로, 지킨 비율이 대화재 감독의 "위험"(0.45) 밑이면 깜빡인다.
+            bool edge = total > 0 && (_sim.Guardian ? _sim.VillageSaved < SurvivorSim.GuardTight : (_sim.HousesLost + 1) * 2 > total) && _sim.Outcome == SOutcome.Playing;
             _kills.color = edge && Mathf.Sin(_time * 10f) > 0f ? new Color(1f, 0.35f, 0.3f) : new Color(1f, 0.85f, 0.6f);
             _level.text = "Lv " + _sim.Level;
 

@@ -55,6 +55,13 @@ namespace FireGame.Prototypes
                 HitStop(0.05f);
                 GameAudio.Play(Cue.Critical);
             }
+            foreach (Structure ruin in _sim.RuinSpat)
+            {
+                // 잿더미 둥지가 불씨를 뱉었다: 잔해에서 불똥이 튀고 붉은 고리.
+                Vector3 at = W(ruin.Pos);
+                Burst(at, 14, new Color(1f, 0.45f, 0.1f), 6f);
+                Shockwave(at, new Color(1f, 0.35f, 0.08f, 0.7f), Mathf.Max(ruin.Half.X, ruin.Half.Y) * 3.2f, 0.35f);
+            }
             if (_sim.JustSiegeWave && _sim.Siege != null)
             {
                 // 파도: 링 둘레가 한 번 확 타오른다(불씨가 거기서 나온다).
@@ -99,6 +106,7 @@ namespace FireGame.Prototypes
             _siegeAge += dt;
             _siegeEndAge += dt;
 
+            DrawHaven();
             Siege siege = _sim.Siege;
             if (siege != null) DrawSiegeRing(W(siege.Center), siege.Radius, Mathf.Clamp01(_siegeAge / 0.35f), 1f, false);
             else if (_siegeEndAge < 1.2f)
@@ -125,6 +133,44 @@ namespace FireGame.Prototypes
                     _siegeGlow.Put(p, 0.6f, 0f, new Color(1f, 0.55f, 0.2f, 0.35f + (0.25f * breathe)));
                 }
             }
+        }
+
+        /// <summary>지켜 낸 집: 앞벽 창 셋에 따뜻한 불이 켜진다(살아 있는 집). 지붕 위로 옅은 금빛.</summary>
+        private void DrawGuardedLights(Structure st, int seed)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                Vector3 c = WindowPoint(seed, k);
+                float glow = 0.85f + (0.15f * Mathf.Sin((_time * 1.5f) + seed + k));
+                _roofTrim.PutRot(c, Facade, 0.42f, 0.32f, new Color(1f, 0.86f, 0.45f, 0.95f * glow));
+                _roofGlow.PutRot(c + new Vector3(0f, -0.02f, 0f), Facade, 0.9f, 0.9f, new Color(1f, 0.8f, 0.35f, 0.35f * glow));
+            }
+        }
+
+        /// <summary>잿더미 둥지: 잔해 사이 불씨가 맥박치고 작은 불꽃이 핀다. 불씨를 뱉는 틱엔 확 솟는다.</summary>
+        private void DrawRuinNest(Structure st, Vector3 at, float w, float h, int seed)
+        {
+            float beat = 0.6f + (0.4f * Mathf.Sin((_time * 3f) + seed));
+            bool spat = _sim.RuinSpat.Contains(st);
+            _groundGlow.Put(at, Mathf.Max(w, h) * 1.3f, 0f, new Color(1f, 0.28f, 0.05f, 0.3f * beat));
+            for (int k = 0; k < 3; k++)
+            {
+                float ox = (Hash01((seed * 11) + k) - 0.5f) * w * 0.6f;
+                float oy = (Hash01((seed * 17) + k) - 0.5f) * h * 0.5f;
+                float f = (0.5f + (0.2f * Mathf.Sin((_time * 14f) + k + seed))) * (spat ? 1.6f : 1f);
+                _groundFire.Put(at + new Vector3(ox, oy + 0.15f, 0f), f, 0f, new Color(1f, 1f, 1f, 0.85f), FlameArt.Frame(_emberSheet, _time, seed + k), 0.75f);
+            }
+        }
+
+        /// <summary>쉼터 곁: 발밑에 초록 원이 숨 쉬고 "+" 같은 초록 반짝이가 오른다.</summary>
+        private void DrawHaven()
+        {
+            if (_sim.Haven == null || _sim.Outcome != SOutcome.Playing) return;
+            Vector3 me = W(_sim.Player);
+            float breathe = 0.5f + (0.5f * Mathf.Sin(_time * 5f));
+            _civilianRings.Put(me, 2.2f + (0.3f * breathe), 0f, new Color(0.4f, 1f, 0.5f, 0.35f + (0.2f * breathe)));
+            _civilianRings.Put(W(_sim.Haven.Pos), Mathf.Max(_sim.Haven.Half.X, _sim.Haven.Half.Y) * 2f + (SurvivorSim.HavenRange * 2f), 0f, new Color(0.4f, 1f, 0.5f, 0.12f));
+            if (Random.value < 0.12f) Sparkle(me + new Vector3(Random.Range(-0.4f, 0.4f), Random.Range(-0.2f, 0.2f), 0f), 1, new Color(0.5f, 1f, 0.55f));
         }
 
         /// <summary>이름 뒤 목적격 조사: 받침이 있으면 "을", 없으면 "를".</summary>
