@@ -467,6 +467,98 @@ namespace FireGame.Prototypes
             return root;
         }
 
+        // ------------------------------------------------------------------
+        // 장식(판정 없음): BuildGround가 구조물을 피해 세운다. 모두 yaw 0, 크기 1 = 1칸.
+        // ------------------------------------------------------------------
+
+        /// <summary>텐트: 두 장이 마루에서 만나는 삼각 천막(앞이 열려 어둡다). 폭 1.4·깊이 1.6·높이 0.9.</summary>
+        public static GameObject Tent(Transform parent, Color cloth)
+        {
+            GameObject root = ItemModels.Root("Tent", parent);
+            const float ridge = 0.9f;
+            float slope = Mathf.Sqrt(0.7f * 0.7f + ridge * ridge) + 0.05f;
+            float tilt = Mathf.Atan2(ridge, 0.7f) * Mathf.Rad2Deg;
+            for (int side = -1; side <= 1; side += 2)
+            {
+                ItemModels.Part(PrimitiveType.Cube, root, new Vector3(side * 0.35f, ridge / 2f, 0f), new Vector3(slope, 0.05f, 1.6f), cloth, new Vector3(0f, 0f, side * tilt));
+            }
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, ridge, 0f), new Vector3(0.06f, 0.9f, 0.06f), DarkWood, new Vector3(90f, 0f, 0f));
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 0.3f, 0.78f), new Vector3(0.5f, 0.6f, 0.04f), Dark);
+            return root;
+        }
+
+        /// <summary>모닥불: 돌 여섯 고리 + 장작 셋 + 가운데 주황 불씨 구. 지름 약 1.1.</summary>
+        public static GameObject Campfire(Transform parent)
+        {
+            GameObject root = ItemModels.Root("Campfire", parent);
+            for (int k = 0; k < 6; k++)
+            {
+                float a = k * Mathf.PI / 3f;
+                ItemModels.Part(PrimitiveType.Sphere, root, new Vector3(Mathf.Cos(a) * 0.5f, 0.1f, Mathf.Sin(a) * 0.5f), new Vector3(0.24f, 0.2f, 0.24f), Stone);
+            }
+            for (int k = 0; k < 3; k++) ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.12f, 0f), new Vector3(0.12f, 0.35f, 0.12f), DarkWood, new Vector3(90f, k * 60f, 0f));
+            ItemModels.Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.2f, 0f), new Vector3(0.3f, 0.25f, 0.3f), new Color(1f, 0.5f, 0.15f));
+            return root;
+        }
+
+        /// <summary>장작 더미: 통나무 셋(둘 위 하나), 길이 1.6.</summary>
+        public static GameObject LogPile(Transform parent)
+        {
+            GameObject root = ItemModels.Root("LogPile", parent);
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.17f, -0.18f), new Vector3(0.34f, 0.8f, 0.34f), Wood, new Vector3(0f, 0f, 90f));
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.17f, 0.18f), new Vector3(0.34f, 0.8f, 0.34f), Wood, new Vector3(0f, 0f, 90f));
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.46f, 0f), new Vector3(0.34f, 0.75f, 0.34f), Wood * 1.1f, new Vector3(0f, 0f, 90f));
+            return root;
+        }
+
+        /// <summary>부두 크레인: 노란 받침 + 기둥 + 바다(뒤, −Z) 쪽으로 뻗은 지브 + 줄과 갈고리. 높이 2.6.</summary>
+        public static GameObject Crane(Transform parent)
+        {
+            GameObject root = ItemModels.Root("Crane", parent);
+            var yellow = new Color(0.95f, 0.75f, 0.12f);
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 0.2f, 0f), new Vector3(1.2f, 0.4f, 1.2f), yellow);
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 1.4f, 0f), new Vector3(0.3f, 1.0f, 0.3f), yellow);
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 2.4f, -1.0f), new Vector3(0.14f, 0.14f, 3.0f), yellow);
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 2.4f, 0.6f), new Vector3(0.5f, 0.4f, 0.5f), Dark);
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 1.8f, -2.3f), new Vector3(0.03f, 1.2f, 0.03f), Dark);
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 1.15f, -2.3f), new Vector3(0.2f, 0.12f, 0.2f), Steel);
+            return root;
+        }
+
+        /// <summary>정박한 작은 배: 파란 선체 흰 갑판(불배 선체 재사용), 0.8배.</summary>
+        public static GameObject MooredBoat(Transform parent, int k)
+        {
+            Color[] hulls = { new Color(0.2f, 0.4f, 0.7f), new Color(0.85f, 0.85f, 0.8f), new Color(0.2f, 0.5f, 0.45f) };
+            GameObject root = ItemModels.Hull(parent, "MooredBoat", hulls[k % hulls.Length], Paint, Dark);
+            return root;
+        }
+
+        /// <summary>부표: 빨간 구 + 흰 띠 + 작은 깃대. 지름 0.6.</summary>
+        public static GameObject Buoy(Transform parent)
+        {
+            GameObject root = ItemModels.Root("Buoy", parent);
+            ItemModels.Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.2f, 0f), new Vector3(0.6f, 0.5f, 0.6f), new Color(0.86f, 0.16f, 0.12f));
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.25f, 0f), new Vector3(0.62f, 0.05f, 0.62f), Paint);
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.6f, 0f), new Vector3(0.05f, 0.25f, 0.05f), Dark);
+            return root;
+        }
+
+        /// <summary>야시장 탁자: 파라솔(색) + 둥근 상 + 의자 셋. 지름 약 1.4, 높이 1.5.</summary>
+        public static GameObject Table(Transform parent, Color umbrella)
+        {
+            GameObject root = ItemModels.Root("Table", parent);
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.3f, 0f), new Vector3(0.08f, 0.3f, 0.08f), Steel);
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.6f, 0f), new Vector3(0.9f, 0.03f, 0.9f), Paint);
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 1.05f, 0f), new Vector3(0.05f, 0.45f, 0.05f), Steel);
+            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 1.45f, 0f), new Vector3(1.4f, 0.04f, 1.4f), umbrella);
+            for (int k = 0; k < 3; k++)
+            {
+                float a = (k * Mathf.PI * 2f / 3f) + 0.5f;
+                ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(Mathf.Cos(a) * 0.65f, 0.2f, Mathf.Sin(a) * 0.65f), new Vector3(0.3f, 0.2f, 0.3f), new Color(0.85f, 0.3f, 0.3f));
+            }
+            return root;
+        }
+
         /// <summary>부탄가스 묶음: 나무 상자 위 파란 작은 통 셋(빨간 꼭지). 높이 약 0.65.</summary>
         private static GameObject GasCans(Transform parent, float w, float h, out float height)
         {

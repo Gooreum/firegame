@@ -4271,16 +4271,53 @@ namespace FireGame.Prototypes
 
             if (harbor)
             {
-                // 항구 장식(판정 없음): 부두선 안쪽에 컨테이너 더미, 부두 끝에 작은 탱크. 바다 위엔 아무것도 없다.
+                // 항구 장식(판정 없음): 부두선에 크레인 둘, 안쪽에 컨테이너 더미, 부두 끝에 작은 탱크. 부두 옆 바다에 정박한 배 셋과 부표 다섯.
                 float[] decor = { 4f, 33f, 30f, 38.2f, 56f, 33f, 15f, 46.5f, 45f, 46.5f, 24f, 18f, 36f, 18f };
                 for (int i = 0; i < decor.Length; i += 2)
                 {
                     var p = new Vec2(decor[i], decor[i + 1]);
                     if (_sim.Structures.Exists(st => st.Kind != StructureKind.Water && st.Within(p, 1.5f))) continue;
                     bool tank = i == 6 || i == 8;
-                    string kind = tank ? "Industrial/detail-tank" : ContainerModels[(i / 2) % ContainerModels.Length];
-                    GameObject d = Models3D.Place(kind, _root, new Vector3(p.X, p.Y, 0f), tank ? 1.6f : 2.4f, tank ? 1.6f : 1.2f, tank ? 0f : (i % 4 == 0 ? 0f : 90f), out _, tank ? 1.6f : 1.2f);
+                    bool crane = i == 0 || i == 2;
+                    GameObject d;
+                    if (crane)
+                    {
+                        d = StageModels.Crane(_root);
+                        ItemModels.Place(d, new Vector3(p.X, p.Y, 0f), 0f, Vector3.down, 1f);
+                    }
+                    else
+                    {
+                        string kind = tank ? "Industrial/detail-tank" : ContainerModels[(i / 2) % ContainerModels.Length];
+                        d = Models3D.Place(kind, _root, new Vector3(p.X, p.Y, 0f), tank ? 1.6f : 2.4f, tank ? 1.6f : 1.2f, tank ? 0f : (i % 4 == 0 ? 0f : 90f), out _, tank ? 1.6f : 1.2f);
+                    }
                     if (d != null) _ground.Add(d);
+                }
+                float[] moored = { 18.6f, 43f, 41.4f, 44.5f, 11.4f, 45.5f };
+                for (int i = 0; i < moored.Length; i += 2)
+                {
+                    GameObject b = StageModels.MooredBoat(_root, i / 2);
+                    ItemModels.Place(b, new Vector3(moored[i], moored[i + 1], 0f), 0f, new Vector3(0f, i == 2 ? -1f : 1f, 0f), 0.8f);
+                    _ground.Add(b);
+                }
+                for (int i = 0; i < 5; i++)
+                {
+                    GameObject b = StageModels.Buoy(_root);
+                    ItemModels.Place(b, new Vector3(5f + (Hash01(i + 300) * 50f), 53.5f + (Hash01(i + 310) * 4f), 0f), 0f, Vector3.down, 1f);
+                    _ground.Add(b);
+                }
+            }
+
+            if (night)
+            {
+                // 야시장 장식(판정 없음): 골목 두 줄에 파라솔 탁자 여섯(등줄·점포·가판대를 피한다).
+                float[] tables = { 11f, 27f, 11f, 33f, 30f, 27f, 30f, 33f, 49f, 27f, 49f, 33f };
+                for (int i = 0; i < tables.Length; i += 2)
+                {
+                    var p = new Vec2(tables[i], tables[i + 1]);
+                    if (_sim.Structures.Exists(st => st.Within(p, 1.5f))) continue;
+                    GameObject t = StageModels.Table(_root, StageModels.StallPalette[(i / 2) % StageModels.StallPalette.Length]);
+                    ItemModels.Place(t, new Vector3(p.X, p.Y, 0f), 0f, Vector3.down, 1f);
+                    _ground.Add(t);
                 }
             }
 
@@ -4305,6 +4342,17 @@ namespace FireGame.Prototypes
 
             if (forest)
             {
+                // 캠프 장식(판정 없음): 텐트 넷, 모닥불 둘, 장작 더미 셋을 캠프(남쪽) 빈터에.
+                float[] camp = { 6f, 12f, 10f, 8f, 54f, 12f, 50f, 8f, 14f, 10f, 46f, 10f, 6f, 20f, 54f, 20f, 40f, 10f };
+                for (int i = 0; i < camp.Length; i += 2)
+                {
+                    var p = new Vec2(camp[i], camp[i + 1]);
+                    if (_sim.Structures.Exists(st => st.Within(p, 1.5f))) continue;
+                    int k = i / 2;
+                    GameObject d = k < 4 ? StageModels.Tent(_root, k % 2 == 0 ? new Color(0.9f, 0.5f, 0.2f) : new Color(0.3f, 0.55f, 0.8f)) : k < 6 ? StageModels.Campfire(_root) : StageModels.LogPile(_root);
+                    ItemModels.Place(d, new Vector3(p.X, p.Y, 0f), 0f, k < 4 ? new Vector3(Hash01(i + 200) - 0.5f, -1f, 0f) : Vector3.down, 1f);
+                    _ground.Add(d);
+                }
                 // 덤불과 바위(판정 없음): 길과 구조물을 피해 흩어 둔다.
                 for (int i = 0; i < 70; i++)
                 {

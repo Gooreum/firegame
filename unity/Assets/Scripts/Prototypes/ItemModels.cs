@@ -79,6 +79,24 @@ namespace FireGame.Prototypes
             return root;
         }
 
+        /// <summary>유조선(항구 대화재): 어두운 적갈 선체 6×2.4(앞 +Z) + 녹슨 갑판 + 탱크 돔 셋 + 선미 조타실 + 굴뚝. 불배의 2.5배.</summary>
+        public static GameObject Tanker(Transform parent)
+        {
+            GameObject root = Root("TankerModel", parent);
+            var hull = new Color(0.4f, 0.12f, 0.1f);
+            var deck = new Color(0.55f, 0.3f, 0.2f);
+            var tank = new Color(0.75f, 0.72f, 0.65f);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.28f, -0.4f), new Vector3(2.2f, 0.56f, 5.0f), hull);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.28f, 2.1f), new Vector3(1.55f, 0.56f, 1.55f), hull, new Vector3(0f, 45f, 0f));
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.58f, -0.4f), new Vector3(2.0f, 0.06f, 4.8f), deck);
+            for (int k = -1; k <= 1; k++) Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.55f, (k * 1.3f) + 0.3f), new Vector3(1.3f, 0.9f, 1.3f), tank);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.62f, 0.3f), new Vector3(0.12f, 0.1f, 4.0f), Steel);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 1.05f, -2.3f), new Vector3(1.5f, 0.9f, 1.0f), Paint);
+            Part(PrimitiveType.Cube, root, new Vector3(0f, 1.25f, -1.78f), new Vector3(1.2f, 0.3f, 0.06f), Glass);
+            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 1.75f, -2.6f), new Vector3(0.3f, 0.35f, 0.3f), Dark);
+            return root;
+        }
+
         internal static GameObject Hull(Transform parent, string name, Color hull, Color deck, Color cabin)
         {
             GameObject root = Root(name, parent);
