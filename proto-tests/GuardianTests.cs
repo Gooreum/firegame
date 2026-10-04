@@ -191,6 +191,184 @@ namespace FireGame.Prototypes.Tests
             return -1f;
         }
 
+        // --- 버티기 ---
+
+        /// <summary>대형 신고까지 시간을 보내고(적 없이) 신고 건물을 돌려준다.</summary>
+        private static Structure ToBigReport(SurvivorSim sim)
+        {
+            while (sim.BigReport == null && sim.Time < 60f)
+            {
+                sim.Enemies.Clear();
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+            }
+            sim.Enemies.Clear();
+            return sim.BigReport;
+        }
+
+        /// <summary>건물 가장자리 dist칸 아래(남쪽)로 순간이동.</summary>
+        private static void StandBelow(SurvivorSim sim, Structure s, float dist)
+        {
+            sim.Player = new Vec2(s.Pos.X, s.Pos.Y - s.Half.Y - dist);
+        }
+
+        [Fact]
+        public void Siege_ClosesWhenTheFirefighterArrives()
+        {
+            var sim = new SurvivorSim(1, 1);
+            Structure big = ToBigReport(sim);
+            Assert.NotNull(big);
+            Assert.InRange(sim.Time, 50f, 50.1f);
+            Assert.Contains(big, sim.SiegeTargets);
+            StandBelow(sim, big, 6.5f);
+            sim.Step(0f, 0f);
+            Assert.Null(sim.Siege);
+            StandBelow(sim, big, 4.5f);
+            sim.Step(0f, 0f);
+            Assert.NotNull(sim.Siege);
+            Assert.Same(big, sim.Siege.Target);
+            Assert.True(sim.JustSiegeStart);
+        }
+
+        [Fact]
+        public void Siege_KeepsTheFirefighterInsideTheRing()
+        {
+            var sim = new SurvivorSim(1, 1);
+            Structure big = ToBigReport(sim);
+            StandBelow(sim, big, 4f);
+            sim.Step(0f, 0f);
+            Assert.NotNull(sim.Siege);
+            for (int i = 0; i < 180; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, -1f);
+            }
+            Assert.NotNull(sim.Siege);
+            Assert.True(sim.Player.DistanceTo(sim.Siege.Center) <= SurvivorSim.SiegeRadius + 0.01f, "링 밖으로 나갔다: " + sim.Player.DistanceTo(sim.Siege.Center));
+        }
+
+        [Fact]
+        public void Siege_SendsWavesFromTheRingEdge()
+        {
+            var sim = new SurvivorSim(1, 1);
+            Structure big = ToBigReport(sim);
+            StandBelow(sim, big, 4f);
+            sim.Step(0f, 0f);
+            sim.Enemies.Clear();
+            bool waved = false;
+            for (int i = 0; i < 160 && !waved; i++)
+            {
+                sim.Step(0f, 0f);
+                waved = sim.JustSiegeWave;
+            }
+            Assert.True(waved);
+            int edge = sim.Enemies.FindAll(e => e.Kind == EnemyKind.Ember && e.Pos.DistanceTo(sim.Siege.Center) >= SurvivorSim.SiegeRadius - 0.5f).Count;
+            Assert.True(edge >= SurvivorSim.SiegeWaveBase, "가장자리 불씨 " + edge);
+        }
+
+        [Fact]
+        public void Siege_DousingTheTarget_ReleasesAndClearsTheBlock()
+        {
+            var sim = new SurvivorSim(1, 1);
+            Structure big = ToBigReport(sim);
+            StandBelow(sim, big, 4f);
+            sim.Step(0f, 0f);
+            Vec2 c = sim.Siege.Center;
+            Enemy near = sim.Spawn(EnemyKind.Blaze, new Vec2(c.X + 6f, c.Y));
+            Enemy far = sim.Spawn(EnemyKind.Ember, new Vec2(c.X + 20f, c.Y));
+            Structure neighbour = sim.Structures.Find(s => s != big && s.IsBuilding && !s.Collapsed && s.DistanceTo(c) <= SurvivorSim.SiegeReliefRange);
+            int xp = sim.Xp;
+            int level = sim.Level;
+            sim.Hp = 50f;
+            big.Fire = 0.001f;
+            big.Residents = 2;
+            sim.Spraying = false;
+            for (int i = 0; i < 30 && sim.Siege != null; i++) sim.Step(0f, 0f);
+            Assert.Null(sim.Siege);
+            Assert.Equal(1, sim.Stats.SiegesWon);
+            Assert.True(near.Dead, "링 안 큰 불이 사그라들어야");
+            Assert.False(far.Dead, "멀리 있는 불씨는 그대로");
+            Assert.True(sim.Level > level || sim.PendingChoices != null || sim.Xp >= xp + SurvivorSim.SiegeXp - 1, "경험치 " + xp + " → " + sim.Xp);
+            Assert.True(sim.Hp >= 50f + SurvivorSim.SiegeHeal - 1f);
+            if (neighbour != null) Assert.True(neighbour.Wet >= SurvivorSim.SiegeReliefWet - 1f);
+            Assert.DoesNotContain(big, sim.SiegeTargets);
+        }
+
+        [Fact]
+        public void Siege_CollapseOpensTheRing_AsALoss()
+        {
+            var sim = new SurvivorSim(1, 1);
+            Structure big = ToBigReport(sim);
+            StandBelow(sim, big, 4f);
+            sim.Step(0f, 0f);
+            big.Integrity = 0.0001f;
+            big.Fire = 1f;
+            for (int i = 0; i < 10 && sim.Siege != null; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+            }
+            Assert.Null(sim.Siege);
+            Assert.True(big.Collapsed);
+            Assert.Equal(1, sim.Stats.SiegesLost);
+            Assert.True(sim.JustSiegeLost || sim.Stats.SiegesLost == 1);
+        }
+
+        [Fact]
+        public void Siege_RestsTheFinaleRing()
+        {
+            var sim = new SurvivorSim(1, 1);
+            Structure big = ToBigReport(sim);
+            StandBelow(sim, big, 4f);
+            sim.Step(0f, 0f);
+            sim.Finale = true;
+            sim.FinalePressure = 3;
+            sim.Reports = false;
+            for (int i = 0; i < 60 * 9; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                big.Fire = 0.9f;
+                big.Integrity = 1f;
+                sim.Step(0f, 0f);
+                Assert.DoesNotContain(sim.Enemies, e => e.Heavy);
+            }
+        }
+
+        [Fact]
+        public void Forest_HasNoSiege()
+        {
+            var sim = new SurvivorSim(1, 2);
+            Structure big = null;
+            while (sim.BigReport == null && sim.Time < 90f)
+            {
+                sim.Enemies.Clear();
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+            }
+            big = sim.BigReport;
+            Assert.NotNull(big);
+            StandBelow(sim, big, 3f);
+            sim.Step(0f, 0f);
+            Assert.Null(sim.Siege);
+            Assert.Empty(sim.SiegeTargets);
+        }
+
+        [Fact]
+        public void Siege_LandmarkIsATarget()
+        {
+            var sim = new SurvivorSim(1, 1);
+            sim.Time = SurvivorSim.FinaleAt - SurvivorSim.Dt;
+            sim.Step(0f, 0f);
+            Assert.True(sim.Finale);
+            Assert.NotNull(sim.Landmark);
+            Assert.Contains(sim.Landmark, sim.SiegeTargets);
+            StandBelow(sim, sim.Landmark, 3f);
+            sim.Step(0f, 0f);
+            Assert.NotNull(sim.Siege);
+            Assert.Same(sim.Landmark, sim.Siege.Target);
+        }
+
         [Fact]
         public void MoveOnlyBot_NeverHolds_ButStillShoots()
         {
