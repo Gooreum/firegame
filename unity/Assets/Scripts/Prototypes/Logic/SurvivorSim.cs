@@ -1604,11 +1604,8 @@ namespace FireGame.Prototypes.Logic
             foreach (Structure st in Structures)
             {
                 if (!st.Flammable || Math.Abs(st.Pos.Y - y) > st.Half.Y + 1.2f) continue;
-                if (Ignite(st, FrontIgnite))
-                {
-                    Spread.Add(st);
-                    Stats.Spreads++;
-                }
+                // Spread/SpreadFrom은 짝이라(출발 구조물이 없다) 번짐 신호엔 안 넣고 통계만 센다.
+                if (Ignite(st, FrontIgnite)) Stats.Spreads++;
             }
             JustFront = true;
         }
@@ -3274,7 +3271,8 @@ namespace FireGame.Prototypes.Logic
             {
                 if (b.Kind != StructureKind.Boat || b.Collapsed) continue;
                 float speed = b.Tanker ? TankerSpeed : BoatSpeed;
-                if (!b.Burning && !b.Docked)
+                // 유조선은 꺼도 돌아가지 않고 좌초한다(바다 위에서 끄면 끝나는 대화재는 대화재가 아니다).
+                if (!b.Burning && !b.Docked && !b.Tanker)
                 {
                     // 꺼진 배는 바다로 돌아간다.
                     b.Drift = new Vec2(0f, speed);
@@ -3297,6 +3295,12 @@ namespace FireGame.Prototypes.Logic
                     b.Pos = new Vec2(b.Pos.X, SurvivorHarbor.SeaFrom + b.Half.Y);
                     b.SpreadClock = 1f;
                     BoatsDocked.Add(b);
+                    if (b.Tanker)
+                    {
+                        // 좌초하는 충격에 불이 다시 솟는다: 누출과 구조는 늘 부두에서 벌어진다.
+                        b.Wet = 0f;
+                        if (!Ignite(b, 0.8f)) b.Fire = Math.Max(b.Fire, 0.8f);
+                    }
                 }
                 if (b.Docked && b.Burning)
                 {

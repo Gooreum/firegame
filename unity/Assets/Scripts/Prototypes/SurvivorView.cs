@@ -357,6 +357,7 @@ namespace FireGame.Prototypes
         private ModelPool _truckModels;
         private ModelPool _ambulanceModels;
         private ModelPool _boatModels;
+        private ModelPool _tankerModels;
         private ModelPool _fireboatModels;
         private readonly List<ModelPool> _modelPools = new List<ModelPool>();
         private static readonly string[] CivilianModels = { "People/Casual_Female", "People/OldClassy_Male", "People/Casual_Male" };
@@ -1365,7 +1366,8 @@ namespace FireGame.Prototypes
                 }
                 Burst(at, 30, new Color(1f, 0.5f, 0.1f), 12f);
                 _zoomKick = -0.8f;
-                _bossBandText.text = "대화재! 끝까지 지켜라";
+                // 스테이지마다 다른 대화재: "불 전선! 내려오는 불의 띠를 끊어라".
+                _bossBandText.text = _sim.Stage.FinaleName + "! " + _sim.Stage.FinaleGoal;
                 _bandTint = new Color(0.6f, 0f, 0f);
                 _bossBannerAge = 0f;
                 _trauma = 1f;
@@ -1556,6 +1558,32 @@ namespace FireGame.Prototypes
                 _waveAge = 0f;
                 GameAudio.Play(Cue.SecondIgnition);
                 _trauma = Mathf.Min(1f, _trauma + 0.3f);
+            }
+            // 대화재 종류별 신호: 드럼 점화(공단), 유조선 등장(항구), 등줄 폭주(야시장), 불 전선 한 줄(숲).
+            if (_sim.JustChain != null)
+            {
+                ShowAlert("드럼 점화! " + Mathf.CeilToInt(SurvivorSim.ChainFuse) + "초 — 끄면 막는다", new Color(1f, 0.4f, 0.25f));
+                PointAt(_sim.JustChain, 3f);
+                Shockwave(W(_sim.JustChain.Pos), new Color(1f, 0.3f, 0.1f, 0.9f), 3f, 0.3f);
+                GameAudio.Play(Cue.SecondIgnition);
+            }
+            if (_sim.JustTanker && _sim.TankerBoat != null)
+            {
+                _bossBandText.text = "유조선 좌초! 부두로 불기름이 흐른다";
+                _bandTint = new Color(0.5f, 0.05f, 0f);
+                _bossBannerAge = 0f;
+                _trauma = Mathf.Min(1f, _trauma + 0.3f);
+            }
+            if (_sim.JustStorm) ShowAlert("등줄이 무대에서 번진다!", new Color(1f, 0.55f, 0.2f));
+            if (_sim.JustFront && _sim.FrontY.HasValue)
+            {
+                _trauma = Mathf.Min(1f, _trauma + 0.05f);
+                for (int k = 0; k < 6; k++)
+                {
+                    Vector3 at = W(new Vec2(2f + (Random.value * (SurvivorSim.ArenaSize - 4f)), _sim.FrontY.Value));
+                    Emit(Smokes[Random.Range(0, Smokes.Length)], at, new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(1f, 2f), 0f), 0.6f, Random.Range(1.5f, 2.5f),
+                        1.2f, 3f, new Color(0.2f, 0.17f, 0.15f, 0.6f), new Color(0.2f, 0.2f, 0.2f, 0f), Random.Range(-60f, 60f));
+                }
             }
 
             if (_sim.JustRescued)
@@ -2244,6 +2272,7 @@ namespace FireGame.Prototypes
             DrawHarborSpecials();
             if (_sim.Rockets.Count > 0) DrawRockets();
             DrawMist();
+            if (_sim.FrontY.HasValue) DrawFront();
 
             if (_sim.RainAt.HasValue)
             {
@@ -4840,10 +4869,16 @@ namespace FireGame.Prototypes
                         Models3D.Tint(model, tint);
                         break;
                     case StructureKind.Gas:
-                        // 퓨즈가 도는 동안 빨갛게 깜빡이며 부풀고 불똥이 튄다.
-                        float fuse = st.Fuse >= 0f ? 1f - (st.Fuse / SurvivorSim.GasFuse) : 0f;
+                        // 퓨즈가 도는 동안 빨갛게 깜빡이며 부풀고 불똥이 튄다. 연쇄 폭발(공단 대화재)의 긴 퓨즈는 남은 초를 빨간 숫자와 고리로 보여 준다.
+                        bool chain = st.Fuse > SurvivorSim.GasFuse;
+                        float fuse = st.Fuse >= 0f ? Mathf.Clamp01(1f - (st.Fuse / (chain ? SurvivorSim.ChainFuse : SurvivorSim.GasFuse))) : 0f;
                         bool blink = st.Fuse >= 0f && Mathf.Sin(_time * (10f + (30f * fuse))) > 0f;
                         _shadows.Put(at + new Vector3(0.1f, -0.25f, 0f), 1f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.5f);
+                        if (chain)
+                        {
+                            _reticle.Put(at + Up(0.05f), 2.6f + (1.5f * fuse), _time * 120f, new Color(1f, 0.25f, 0.1f, 0.7f));
+                            Tag(at + Up(1.9f), Mathf.CeilToInt(st.Fuse) + "초", blink ? Color.white : new Color(1f, 0.35f, 0.2f), 0.05f);
+                        }
                         if (st.Fuse >= 0f)
                         {
                             _roofGlow.Put(at, 2f + (2f * fuse), 0f, new Color(1f, 0.25f, 0.05f, blink ? 0.8f : 0.35f));
@@ -5007,6 +5042,41 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>항구 노란 둘. 소방정: 바다 줄 예고 띠 + 흰 선체 모델 + 남쪽으로 두 물줄기 + 사이렌 + 뒤 물결. 큰 파도: 폭 60 흰·파랑 띠가 남쪽으로 쓸며 거품·젖은 자국을 남기고 부두선에서 충격파.</summary>
+        /// <summary>숲 불 전선: 폭 60 검붉은 띠가 내려오고 그 위에 불꽃 벽이 선다. 꺼 놓은 자리(Out)는 김만 오르고 벽이 비어 "끊었다"가 보인다.</summary>
+        private void DrawFront()
+        {
+            float y = _sim.FrontY.Value;
+            Vector3 mid = W(new Vec2(SurvivorSim.ArenaSize / 2f, y));
+            float beat = 1f + (0.08f * Mathf.Sin(_time * 5f));
+            // 띠는 -90° 규칙(0°면 세로로 선다).
+            _band.Put(mid, 2.2f * beat, -90f, new Color(0.6f, 0.08f, 0.02f, 0.25f), null, SurvivorSim.ArenaSize / 2.2f);
+            _band.Put(mid, 0.5f, -90f, new Color(1f, 0.45f, 0.1f, 0.5f), null, SurvivorSim.ArenaSize / 0.5f);
+            for (int k = 0; k < 24; k++)
+            {
+                float x = 1.25f + (k * SurvivorSim.FrontGap);
+                var p = new Vec2(x, y);
+                bool cut = false;
+                foreach (Puddle pd in _sim.FrontRowPuddles)
+                {
+                    if (pd.Out && Mathf.Abs(pd.Pos.X - x) < 0.5f) cut = true;
+                }
+                Vector3 at = W(p);
+                if (cut)
+                {
+                    if (Random.value < 0.05f) Steam(at, 1, 0.6f);
+                    continue;
+                }
+                float flick = 0.85f + (0.25f * Mathf.Sin((_time * (9f + (k % 4))) + (k * 1.3f)));
+                _groundGlow.Put(at, 2.6f * flick, 0f, new Color(1f, 0.35f, 0.08f, 0.3f));
+                _blazes.Put(at + new Vector3(0f, 0.1f, 0f), 1.9f * flick, 0f, Color.white, FlameArt.Frame(_blazeSheet, _time, k + 40));
+                if (Random.value < 0.03f)
+                {
+                    Emit(Smokes[Random.Range(0, Smokes.Length)], at + new Vector3(0f, 0.8f, 0f), new Vector3(Random.Range(-0.3f, 0.3f), 1.4f, 0f), 0.5f, 1.4f,
+                        0.7f, 2f, new Color(0.22f, 0.18f, 0.16f, 0.5f), new Color(0.2f, 0.2f, 0.2f, 0f), Random.Range(-60f, 60f));
+                }
+            }
+        }
+
         private void DrawHarborSpecials()
         {
             if (_sim.Fireboat.HasValue)
@@ -5093,12 +5163,13 @@ namespace FireGame.Prototypes
         private void DrawBoat(Structure st, Vector3 at, int i)
         {
             Vector3 dir = st.Docked ? Vector3.down : st.Drift.X != 0f || st.Drift.Y != 0f ? new Vector3(st.Drift.X, st.Drift.Y, 0f).normalized : Vector3.down;
-            float bob = 0.06f * Mathf.Sin((_time * 2.2f) + i);
-            _shadows.Put(at + new Vector3(0.15f, -0.3f, 0f), 2.6f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
-            GameObject model = _boatModels.Get();
+            float bob = (st.Tanker ? 0.03f : 0.06f) * Mathf.Sin((_time * 2.2f) + i);
+            _shadows.Put(at + new Vector3(0.15f, -0.3f, 0f), st.Tanker ? 6.4f : 2.6f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
+            // 유조선(항구 대화재)은 제 모델 풀에서, 불배는 불배 풀에서.
+            GameObject model = st.Tanker ? _tankerModels.Get() : _boatModels.Get();
             if (model != null)
             {
-                ItemModels.Place(model, at, bob, dir, 1.1f);
+                ItemModels.Place(model, at, bob, dir, st.Tanker ? 1f : 1.1f);
                 float burnt = 1f - Mathf.Clamp01(st.Integrity);
                 Models3D.Tint(model, Color.Lerp(Color.white, new Color(0.25f, 0.2f, 0.2f), burnt));
             }
@@ -5108,11 +5179,12 @@ namespace FireGame.Prototypes
             if (st.Burning)
             {
                 float f = st.Fire;
-                _roofGlow.Put(at + Up(0.5f), 2.4f * (1f + (0.6f * f)), 0f, new Color(1f, 0.35f, 0.08f, 0.25f + (0.3f * f)));
-                int n = 1 + Mathf.RoundToInt(f * 2f);
+                float hull = st.Tanker ? 2.4f : 1f;
+                _roofGlow.Put(at + Up(0.5f), 2.4f * hull * (1f + (0.6f * f)), 0f, new Color(1f, 0.35f, 0.08f, 0.25f + (0.3f * f)));
+                int n = (st.Tanker ? 3 : 1) + Mathf.RoundToInt(f * 2f);
                 for (int k = 0; k < n; k++)
                 {
-                    Vector3 deck = at + (dir * ((k - 1) * 0.6f)) + Up(0.55f);
+                    Vector3 deck = at + (dir * ((k - ((n - 1) / 2f)) * 0.6f * hull)) + Up(0.55f);
                     float flick = 0.85f + (0.2f * Mathf.Sin((_time * (11f + k)) + (k * 1.9f)));
                     _roofFire.Put(deck, (0.9f + (1.2f * f)) * flick * 0.8f, 0f, Color.white, FlameArt.Frame(_blazeSheet, _time, i + (k * 5), 10f + k));
                 }
@@ -5479,6 +5551,7 @@ namespace FireGame.Prototypes
             _truckModels = ModelPoolOf(p => Models3D.Place("Cars/firetruck", p, Vector3.zero, 1.5f, 3.2f, 0f, out _));
             _ambulanceModels = ModelPoolOf(ItemModels.Ambulance);
             _boatModels = ModelPoolOf(ItemModels.Boat);
+            _tankerModels = ModelPoolOf(ItemModels.Tanker);
             _fireboatModels = ModelPoolOf(ItemModels.Fireboat);
         }
 
@@ -5974,7 +6047,7 @@ namespace FireGame.Prototypes
                 {
                     // 사람이 갇혀 있는 동안은 "무너지기까지 남은 시간"이 막대다. 붉게 줄어든다.
                     float fall = _sim.TimeToFall(mark);
-                    _bossName.text = "대화재 · " + mark.Name + " " + Mathf.CeilToInt(Mathf.Min(fall, 99f)) + "초 뒤 무너짐 · " + mark.Residents + "명 갇힘";
+                    _bossName.text = _sim.Stage.FinaleName + " · " + mark.Name + " " + Mathf.CeilToInt(Mathf.Min(fall, 99f)) + "초 뒤 " + (mark.Tanker ? "침몰" : "무너짐") + " · " + mark.Residents + "명 갇힘";
                     _bossFill.rectTransform.localScale = new Vector3(Mathf.Clamp01(fall / SurvivorSim.BurnBuilding), 1f, 1f);
                     bool urgent = fall <= SurvivorSim.CollapseWarnAt;
                     _bossFill.color = urgent && Mathf.Sin(_time * 12f) > 0f ? new Color(1f, 0.2f, 0.1f) : new Color(0.9f, 0.3f, 0.15f);
@@ -5982,7 +6055,8 @@ namespace FireGame.Prototypes
                 else
                 {
                     // 감독 단계가 오르면 이름 칸에 보인다: "지금 몰아붙이는 중"을 알아야 버틸 각오가 선다.
-                    _bossName.text = _sim.FinalePressure > 0 ? "대화재 · 불길 " + _sim.FinalePressure + "단계 · 끝까지 지켜라" : "대화재 · 끝까지 지켜라";
+                    string finaleName = _sim.Stage.FinaleName;
+                    _bossName.text = _sim.FinalePressure > 0 ? finaleName + " · 불길 " + _sim.FinalePressure + "단계 · " + _sim.Stage.FinaleGoal : finaleName + " · " + _sim.Stage.FinaleGoal;
                     float left = Mathf.Clamp01((SurvivorSim.RunTime - _sim.Time) / (SurvivorSim.RunTime - SurvivorSim.FinaleAt));
                     _bossFill.rectTransform.localScale = new Vector3(left, 1f, 1f);
                     _bossFill.color = new Color(1f, 0.45f, 0.1f);
@@ -6043,7 +6117,7 @@ namespace FireGame.Prototypes
             {
                 if (st.Burning && st.Kind == StructureKind.Boat && !st.Docked)
                 {
-                    EdgeArrow(new Vector3(st.Pos.X, st.Pos.Y, 0f), new Color(1f, 0.4f, 0.25f), 1.6f * (1f + (0.2f * Mathf.Abs(Mathf.Sin(_time * 7f)))), "불배");
+                    EdgeArrow(new Vector3(st.Pos.X, st.Pos.Y, 0f), new Color(1f, 0.4f, 0.25f), 1.6f * (1f + (0.2f * Mathf.Abs(Mathf.Sin(_time * 7f)))), st.Tanker ? "유조선" : "불배");
                     continue;
                 }
                 if (!st.Burning || !(st.IsBuilding || st.Kind == StructureKind.Gas)) continue;

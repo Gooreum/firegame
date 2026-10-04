@@ -170,6 +170,29 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c60_forest_camp", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 20f, 0f), 14f), 2);
             failures += SurvivorShot(dir, "c61_harbor_quay", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 32f, 0f), 14f), 4);
             failures += SurvivorShot(dir, "c62_market_stalls", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 30f, 0f), 16f), 5);
+            // 대화재 다섯 종류: 숲 불 전선(폭 60 불의 띠), 공단 연쇄 폭발(드럼 초읽기), 항구 유조선(부두 가운데·불기름), 야시장 불꽃 폭주(가판대 전부·등줄).
+            failures += SurvivorShot(dir, "c66_forest_front", view => view.Sim.Finale && view.Sim.Time >= SurvivorSim.FinaleAt + 2.5f, 2, true,
+                view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, view.Sim.FrontY ?? 34f, 0f), 15f), 2, null, true, true);
+            failures += SurvivorShot(dir, "c67_factory_chain", view => view.Sim.Finale && view.Sim.Structures.Exists(s => s.Kind == StructureKind.Gas && s.Fuse > SurvivorSim.GasFuse), 2, true,
+                view =>
+                {
+                    Structure drum = view.Sim.Structures.Find(s => s.Kind == StructureKind.Gas && s.Fuse > 0f);
+                    Vec2 at = drum != null ? drum.Pos : view.Sim.Player;
+                    view.Frame(new Vector3(Mathf.Clamp(at.X, 12f, 48f), Mathf.Clamp(at.Y, 10f, 50f), 0f), 9f);
+                }, 3, null, true, true);
+            failures += SurvivorShot(dir, "c68_harbor_tanker", view => view.Sim.TankerBoat != null && view.Sim.TankerBoat.Docked && view.Sim.Time >= SurvivorSim.FinaleAt + 40f, 2, true,
+                view =>
+                {
+                    Vec2 at = view.Sim.TankerBoat != null ? view.Sim.TankerBoat.Pos : new Vec2(30f, 40f);
+                    view.Frame(new Vector3(Mathf.Clamp(at.X, 14f, 46f), at.Y - 3f, 0f), 11f);
+                }, 4, null, true, true);
+            failures += SurvivorShot(dir, "c69_market_storm", view => view.Sim.Finale && view.Sim.Lanterns.Exists(l => l.Storm && l.Burn > 0.2f), 2, true,
+                view =>
+                {
+                    Lantern line = view.Sim.Lanterns.Find(l => l.Storm && l.Burn > 0f);
+                    Vec2 at = line != null ? view.Sim.LanternFire(line) : view.Sim.Landmark != null ? view.Sim.Landmark.Pos : view.Sim.Player;
+                    view.Frame(new Vector3(Mathf.Clamp(at.X, 12f, 48f), Mathf.Clamp(at.Y, 10f, 50f), 0f), 11f);
+                }, 5, null, true, true);
             // 맵 특색 몹: 갈매기가 지붕에 불을 떨어뜨린 직후(갈매기 실루엣·떨어뜨렸다 글자), 게가 상륙한 순간(목표 고리), 풍등이 점포 가까이(종이등·바닥 빛·고리).
             failures += SurvivorShot(dir, "c63_gull_bomb", view => view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.Gull && e.Dropped), 8, false,
                 view =>
