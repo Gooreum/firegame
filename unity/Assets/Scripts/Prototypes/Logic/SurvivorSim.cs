@@ -273,6 +273,15 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이 판에서 몇 번째 버티기인지(0부터). 파도가 그만큼 커진다.</summary>
         public int Index;
+
+        /// <summary>대상 불이 꺼진 때(Age). 아직 타면 -1.</summary>
+        public float OutAt = -1f;
+
+        /// <summary>링이 풀리기까지 남은 비율(1 → 0). 불이 다 꺼져야 줄어들기 시작하는 게 아니라 닫힌 순간부터 줄고, 불이 남아 있으면 0에서 멈춘다.</summary>
+        public float Left
+        {
+            get { return Math.Max(0f, 1f - (Age / SurvivorSim.SiegeMinTime)); }
+        }
     }
 
     /// <summary>소방관이 받은 피해의 출처(RunStats.HurtBy 칸).</summary>
@@ -346,6 +355,9 @@ namespace FireGame.Prototypes.Logic
         public int SiegesWon;
         public int SiegesLost;
         public float SiegeTime;
+
+        /// <summary>링 안에서의 최저 체력 비율(버티기가 몸으로 아슬했나). 버티기가 없으면 1.</summary>
+        public float SiegeMinHp = 1f;
 
         /// <summary>수호자: 쥐지 않아 저절로 나간 물줄기 수와 쥐고 쏜 물줄기 수.</summary>
         public int AutoShots;
@@ -518,10 +530,11 @@ namespace FireGame.Prototypes.Logic
         }
 
         /// <summary>
-        /// 자동 분사의 힘(쥐고 쏜 물 대비). 같은 물대포다: 쥐는 보상은 증기 폭발(큰 불을 2배 넘게 빨리 끈다)과 내가 고른 과녁.
-        /// 0.7이면 보통 신고(0.35)를 끄는 데 28.5초(쥐면 4.9초)라 이동만으로는 작은 불도 못 지켰다. 1.0이면 10.1초.
+        /// 자동 분사의 힘(쥐고 쏜 물 대비). 쥐면 온전한 힘에 증기까지(집중 분사).
+        /// 수호 반경 밖에선 0.7로 보통 신고(0.35)도 28.5초가 걸리지만, 반경 안에선 불이 안 자라 자동 물로 꺼진다 — 끄려면 다가가라.
+        /// 1.0이면 쥔 봇과 이동만 봇이 똑같았다(지킨 비율 81%, 최저 체력 30·33%). 0.7이면 쥐는 쪽이 더 버틴다(승 26·22, 최저 체력 42·25%, docs §20).
         /// </summary>
-        public const float AutoPower = 1.0f;
+        public const float AutoPower = 0.7f;
 
         /// <summary>자동 분사가 노리는 가장 먼 불(물줄기 사거리 16칸/초 × 0.6초 ≈ 9.6).</summary>
         public const float AutoReach = 9.5f;
@@ -628,7 +641,17 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>링 반경(건물 중심 기준). 건물 반폭 3 안팎이라 문 앞 구조는 링 안이다.</summary>
         public const float SiegeRadius = 8f;
+        /// <summary>파도 간격과 불씨 수(SiegeWaveBase + SiegeWaveStep × 순번).</summary>
         public const float SiegeWaveEvery = 2.5f;
+
+        /// <summary>링이 풀리기까지 최소 시간(초). 불을 일찍 꺼도 이때까지는 버틴다.</summary>
+        public const float SiegeMinTime = 12f;
+
+        /// <summary>
+        /// 파도마다 섞이는 질긴 큰 불 수(이 값 + 순번). 대화재 고리처럼 레벨만큼 질기다(FinaleRingToughness).
+        /// 링의 몸 압박은 이것이 정한다: 불씨 수(6→9)는 링 최저 체력을 안 바꿨고(70→73%, 바로 녹는다), 큰 불 1·2·3이면 70·57·47%(docs §20).
+        /// </summary>
+        public const int SiegeHeavyBase = 2;
         public const int SiegeWaveBase = 6;
         public const int SiegeWaveStep = 2;
 
@@ -1389,6 +1412,7 @@ namespace FireGame.Prototypes.Logic
             JustSiegeLost = false;
             JustSiegeWave = false;
             RuinSpat.Clear();
+            SealHits.Clear();
             Hits.Clear();
             Explosions.Clear();
             DroneDrops.Clear();
@@ -1873,6 +1897,7 @@ namespace FireGame.Prototypes.Logic
             }
             Siege.Age += Dt;
             Stats.SiegeTime += Dt;
+            Stats.SiegeMinHp = Math.Min(Stats.SiegeMinHp, Math.Max(0f, Hp) / MaxHp);
             // 링 밖으로 못 나간다(탕탕 보스 링).
             float dx = Player.X - Siege.Center.X;
             float dy = Player.Y - Siege.Center.Y;
@@ -1890,8 +1915,13 @@ namespace FireGame.Prototypes.Logic
                 SpawnSiegeWave();
             }
             if (Siege.Target.Collapsed) EndSiege(false);
-            // 불이 꺼지면 갇힌 사람도 풀린다(구조는 타는 동안의 일): 끄면 성공.
-            else if (!Siege.Target.Burning) EndSiege(true);
+            // 불이 꺼지면 갇힌 사람도 풀린다(구조는 타는 동안의 일). 그래도 링은 SiegeMinTime까지 버텨야 풀린다:
+            // 높은 레벨 장비는 큰 불을 1~5초에 지우므로, 끄는 시간이 아니라 몰려오는 불을 몸으로 버티는 시간이 디펜스다.
+            else if (!Siege.Target.Burning)
+            {
+                if (Siege.OutAt < 0f) Siege.OutAt = Siege.Age;
+                if (Siege.Age >= SiegeMinTime) EndSiege(true);
+            }
         }
 
         private void BeginSiege(Structure t)
@@ -1901,7 +1931,7 @@ namespace FireGame.Prototypes.Logic
             Stats.Events++;
         }
 
-        /// <summary>링 가장자리(반경 + 0.5)에 고르게 불씨 SiegeWaveBase + SiegeWaveStep × 순번, 두 번에 한 번 큰 불 하나.</summary>
+        /// <summary>링 가장자리(반경 + 0.5)에 고르게 불씨 SiegeWaveBase + SiegeWaveStep × 순번, 그리고 질긴 큰 불 SiegeHeavyBase + 순번.</summary>
         private void SpawnSiegeWave()
         {
             Siege.Waves++;
@@ -1916,10 +1946,18 @@ namespace FireGame.Prototypes.Logic
                 if (HasWater) PushOutOfWater(ref at, 0.4f);
                 Spawn(EnemyKind.Ember, at);
             }
-            if (Siege.Waves % 2 == 0 && Enemies.Count < MaxEnemies)
+            // 질긴 큰 불: 장비가 세질수록 질기다(대화재 고리와 같은 규칙) — 레벨이 높아도 링은 몸으로 버틴다.
+            int heavy = SiegeHeavyBase + Siege.Index;
+            for (int k = 0; k < heavy && Enemies.Count < MaxEnemies; k++)
             {
-                double a = turn + Math.PI / n;
-                Spawn(EnemyKind.Blaze, ClampToArena(new Vec2(Siege.Center.X + (float)(Math.Cos(a) * rr), Siege.Center.Y + (float)(Math.Sin(a) * rr))));
+                double a = turn + (Math.PI / n) + (Math.PI * 2 * k / heavy);
+                Vec2 at = ClampToArena(new Vec2(Siege.Center.X + (float)(Math.Cos(a) * rr), Siege.Center.Y + (float)(Math.Sin(a) * rr)));
+                if (HasWater) PushOutOfWater(ref at, 0.6f);
+                Enemy e = Spawn(EnemyKind.Blaze, at);
+                e.Heavy = true;
+                e.MaxHp *= FinaleRingToughness;
+                e.Hp = e.MaxHp;
+                e.Speed *= HeavySpeed;
             }
         }
 
@@ -1952,6 +1990,15 @@ namespace FireGame.Prototypes.Logic
             LastSiege = Siege;
             Siege = null;
         }
+
+        /// <summary>버티기 후보인데 아직 링이 안 닫혔다(물이 안 먹힌다).</summary>
+        public bool Sealed(Structure s)
+        {
+            return Guardian && s.Burning && (Siege == null || Siege.Target != s) && SiegeTargets.Contains(s);
+        }
+
+        /// <summary>이번 틱 봉인된 건물에 물이 튕겼다(그림용).</summary>
+        public readonly List<Structure> SealHits = new List<Structure>();
 
         /// <summary>방금 끝난 버티기(그림용: 풀린 자리에 물빛 충격파).</summary>
         public Siege LastSiege;
@@ -3296,6 +3343,12 @@ namespace FireGame.Prototypes.Logic
         private void Soak(Structure s, float water, bool resist = true)
         {
             if (s.Collapsed) return;
+            // 수호자: 버티기 후보는 봉인 — 링 밖에서 쏜 물은 안 먹힌다. 가서 링 안에 들어가야 끈다(진격 → 도착 → 버티기).
+            if (Sealed(s))
+            {
+                SealHits.Add(s);
+                return;
+            }
             if (s.Burning)
             {
                 // 큰 불일수록 물이 덜 먹힌다: 일찍 잡으면 쉽고, 놓치면 오래 걸린다.

@@ -35,6 +35,9 @@ namespace FireGame.Prototypes.Tests
             public float SiegesLost;
             public float MinHp;
             public float FinaleHp;
+            public float SiegeHp;
+            public float SiegeTime;
+            public int SiegeClose;
             public float Rescued;
             public float PeopleLost;
             public float Haven;
@@ -64,7 +67,7 @@ namespace FireGame.Prototypes.Tests
                 string share = hurt <= 0f ? "-" : "닿음 " + Pct(Hurt[0] / hurt) + " 열기 " + Pct(Hurt[1] / hurt) + " 바닥 " + Pct(Hurt[2] / hurt) + " 폭발 " + Pct(Hurt[3] / hurt);
                 return Name + ": 승 " + Won + "/" + Runs + " 쓰러짐 " + Down + (LostTown > 0 ? " 동네 " + LostTown : "")
                     + " | 지킨 비율 평균 " + Pct(Saved) + " 최저 " + Pct(SavedMin) + " (10~90% 폭 " + Pct(Spread) + ")"
-                    + " | 버티기 " + SiegesWon.ToString("0.0") + "성공 " + SiegesLost.ToString("0.0") + "실패"
+                    + " | 버티기 " + SiegesWon.ToString("0.0") + "성공 " + SiegesLost.ToString("0.0") + "실패 한 번 " + (SiegesWon + SiegesLost > 0f ? SiegeTime / (SiegesWon + SiegesLost) : 0f).ToString("0.0") + "초 링 최저 체력 " + Pct(SiegeHp) + " 아슬(≤35%) " + SiegeClose + "판"
                     + " | 최저 체력 " + Pct(MinHp) + " 대화재 최저 " + Pct(FinaleHp)
                     + " | 구조 " + Rescued.ToString("0.0") + " 잃음 " + PeopleLost.ToString("0.0")
                     + " | 쉼터 회복 " + Haven.ToString("0") + " | 자동/쥠 " + Auto.ToString("0") + "/" + Focus.ToString("0")
@@ -104,6 +107,9 @@ namespace FireGame.Prototypes.Tests
                 row.SiegesWon += sim.Stats.SiegesWon;
                 row.SiegesLost += sim.Stats.SiegesLost;
                 row.MinHp += sim.Stats.MinHpRatio;
+                row.SiegeHp += sim.Stats.SiegeMinHp;
+                row.SiegeTime += sim.Stats.SiegeTime;
+                if (sim.Stats.SiegeMinHp <= 0.35f) row.SiegeClose++;
                 row.FinaleHp += sim.Finale ? sim.Stats.FinaleMinHp : 0f;
                 row.Rescued += sim.Rescued;
                 row.PeopleLost += sim.CiviliansLost;
@@ -119,6 +125,8 @@ namespace FireGame.Prototypes.Tests
             row.SiegesWon *= d;
             row.SiegesLost *= d;
             row.MinHp *= d;
+            row.SiegeHp *= d;
+            row.SiegeTime *= d;
             row.FinaleHp *= d;
             row.Rescued *= d;
             row.PeopleLost *= d;
@@ -142,6 +150,16 @@ namespace FireGame.Prototypes.Tests
 
             Assert.Equal(0, pro.LostTown + move.LostTown + basic.LostTown);
             Assert.Equal(0, (int)move.Focus);
+            // 이동만으로 버틴다(30판에 ±4 잡음): 다가가는 걸음이면 대부분 살아남는다.
+            Assert.True(move.Won >= seeds * 0.6f, "이동만으로 못 버틴다: " + move.Won + "/" + seeds);
+            // 상처는 있지만 버텨냈다: 지킨 비율이 평균 55~85%에 넓게 퍼진다.
+            Assert.InRange(move.Saved, 0.55f, 0.85f);
+            Assert.True(move.Spread >= 0.3f, "판마다 상처가 비슷하다: 폭 " + move.Spread);
+            // 서는 곳이 실력: 불에 안 다가가는 걸음은 확실히 덜 지킨다.
+            Assert.True(basic.Saved <= move.Saved - 0.15f, "다가가는 걸음이 더 지켜야: 기본 " + basic.Saved + " 숙련 걸음 " + move.Saved);
+            // 버티기는 몸에 닿는다: 링 안 최저 체력이 평균 35~80%.
+            Assert.InRange(move.SiegeHp, 0.35f, 0.8f);
+            Assert.True(move.SiegesWon >= 1.5f, "버티기를 거의 안 한다: " + move.SiegesWon);
         }
     }
 }

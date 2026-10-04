@@ -172,24 +172,29 @@ namespace FireGame.Prototypes.Tests
             Run(sim, 0.5f);
             Assert.Equal(0, sim.ShotsFired);
         }
-        /// <summary>끄는 시간: 자동 물은 보통 신고를 12초 안에, 쥐고 쏘면(증기) 그 절반 남짓에. 큰 불(1.0)은 쥐어야 끈다(수호 반경 밖).</summary>
+        /// <summary>
+        /// 끄는 시간: 수호 반경 밖에선 자동 물로 보통 신고도 오래 걸린다(다가가라). 반경 안에선 자동 물로 꺼진다.
+        /// 쥐고 쏘면(증기) 반경 밖에서도 자동보다 훨씬 빠르다.
+        /// </summary>
         [Fact]
-        public void DouseTime_AutoHandlesReports_HoldingIsTwiceAsFast()
+        public void DouseTime_AutoNeedsTheRadius_HoldingIsFaster()
         {
-            float auto = DouseTime(SurvivorSim.ReportFire, false);
-            float held = DouseTime(SurvivorSim.ReportFire, true);
-            Assert.InRange(auto, 5f, 12f);
-            Assert.True(held * 1.8f <= auto, "쥐면 1.8배 넘게 빨라야: 쥠 " + held + " 자동 " + auto);
-            Assert.True(DouseTime(1f, true) > 0f, "큰 불은 쥐면 끈다");
+            float autoFar = DouseTime(SurvivorSim.ReportFire, false, 5.5f);
+            float autoNear = DouseTime(SurvivorSim.ReportFire, false, 3.5f);
+            float held = DouseTime(SurvivorSim.ReportFire, true, 5.5f);
+            Assert.True(autoFar < 0f || autoFar > 20f, "반경 밖 자동은 오래 걸려야: " + autoFar);
+            Assert.InRange(autoNear, 1f, 15f);
+            Assert.InRange(held, 1f, 8f);
+            Assert.True(DouseTime(1f, true, 5.5f) > 0f, "큰 불은 쥐면 끈다");
         }
 
-        private static float DouseTime(float fire, bool hold)
+        /// <param name="dy">집 중심까지 거리(집 반높이 1.5): 5.5면 가장자리 4칸(반경 밖), 3.5면 2칸(반경 안).</param>
+        private static float DouseTime(float fire, bool hold, float dy)
         {
             var sim = Quiet();
             sim.Guardian = true;
-            Structure s = House(sim, 0f, 5.5f);
+            Structure s = House(sim, 0f, dy);
             sim.Ignite(s, fire);
-            // 수호 반경 밖에 서서 잰다(반경 안이면 불이 안 자라 다른 숫자가 나온다).
             for (int i = 0; i < 60 * 60; i++)
             {
                 sim.Enemies.Clear();
@@ -241,6 +246,40 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void SiegeTarget_IsSealed_UntilTheRingCloses()
+        {
+            var sim = new SurvivorSim(1, 1);
+            Structure big = ToBigReport(sim);
+            float fire = big.Fire;
+            // 8칸 아래에서 쥐고 3초 쏜다: 링 밖이라 안 먹힌다.
+            StandBelow(sim, big, 8f);
+            for (int i = 0; i < 180; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Spraying = true;
+                sim.Aim = new Vec2(big.Pos.X - sim.Player.X, big.Pos.Y - sim.Player.Y);
+                sim.Step(0f, 0f);
+            }
+            Assert.Null(sim.Siege);
+            Assert.True(big.Fire >= fire, "봉인된 불이 줄었다: " + fire + " → " + big.Fire);
+            Assert.True(sim.Sealed(big));
+            // 링 안으로 들어가면 먹힌다.
+            StandBelow(sim, big, 2.5f);
+            sim.Step(0f, 0f);
+            Assert.NotNull(sim.Siege);
+            Assert.False(sim.Sealed(big));
+            float inside = big.Fire;
+            for (int i = 0; i < 120; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Spraying = true;
+                sim.Aim = new Vec2(big.Pos.X - sim.Player.X, big.Pos.Y - sim.Player.Y);
+                sim.Step(0f, 0f);
+            }
+            Assert.True(big.Fire < inside, "링 안에선 먹혀야: " + inside + " → " + big.Fire);
+        }
+
+        [Fact]
         public void Siege_KeepsTheFirefighterInsideTheRing()
         {
             var sim = new SurvivorSim(1, 1);
@@ -285,22 +324,38 @@ namespace FireGame.Prototypes.Tests
             StandBelow(sim, big, 4f);
             sim.Step(0f, 0f);
             Vec2 c = sim.Siege.Center;
+            float start = sim.Time;
             Enemy near = sim.Spawn(EnemyKind.Blaze, new Vec2(c.X + 6f, c.Y));
+            near.Speed = 0f;
             Enemy far = sim.Spawn(EnemyKind.Ember, new Vec2(c.X + 20f, c.Y));
+            far.Speed = 0f;
             Structure neighbour = sim.Structures.Find(s => s != big && s.IsBuilding && !s.Collapsed && s.DistanceTo(c) <= SurvivorSim.SiegeReliefRange);
             int xp = sim.Xp;
             int level = sim.Level;
             sim.Hp = 50f;
             big.Fire = 0.001f;
             big.Residents = 2;
-            sim.Spraying = false;
-            for (int i = 0; i < 30 && sim.Siege != null; i++) sim.Step(0f, 0f);
-            Assert.Null(sim.Siege);
+            // 링 가장자리 파도가 코앞에 오면 자동 물은 그쪽을 노린다: 쥐고 건물을 겨눠 끈다.
+            float before = sim.Hp;
+            for (int i = 0; i < (int)((SurvivorSim.SiegeMinTime + 2f) / SurvivorSim.Dt) && sim.Siege != null; i++)
+            {
+                // 링 안 몹은 지운다(풀릴 때 사그라드는지 볼 near·far만 남긴다).
+                sim.Enemies.RemoveAll(e => e != near && e != far);
+                near.Hp = near.MaxHp;
+                far.Pos = new Vec2(c.X + 20f, c.Y);
+                sim.Hp = Math.Max(sim.Hp, 50f);
+                before = sim.Hp;
+                sim.Spraying = true;
+                sim.Aim = new Vec2(big.Pos.X - sim.Player.X, big.Pos.Y - sim.Player.Y);
+                sim.Step(0f, 0f);
+            }
+            Assert.True(sim.Siege == null, "안 풀렸다: 불 " + big.Fire);
+            Assert.True(sim.Time - start >= SurvivorSim.SiegeMinTime - 0.1f, "불을 일찍 꺼도 최소 시간은 버틴다: " + (sim.Time - start));
             Assert.Equal(1, sim.Stats.SiegesWon);
             Assert.True(near.Dead, "링 안 큰 불이 사그라들어야");
             Assert.False(far.Dead, "멀리 있는 불씨는 그대로");
             Assert.True(sim.Level > level || sim.PendingChoices != null || sim.Xp >= xp + SurvivorSim.SiegeXp - 1, "경험치 " + xp + " → " + sim.Xp);
-            Assert.True(sim.Hp >= 50f + SurvivorSim.SiegeHeal - 1f);
+            Assert.True(sim.Hp >= before + SurvivorSim.SiegeHeal - 1f, "풀리는 틱 회복: " + before + " → " + sim.Hp);
             if (neighbour != null) Assert.True(neighbour.Wet >= SurvivorSim.SiegeReliefWet - 1f);
             Assert.DoesNotContain(big, sim.SiegeTargets);
         }
@@ -341,7 +396,8 @@ namespace FireGame.Prototypes.Tests
                 big.Fire = 0.9f;
                 big.Integrity = 1f;
                 sim.Step(0f, 0f);
-                Assert.DoesNotContain(sim.Enemies, e => e.Heavy);
+                // 버티기 파도도 질긴 큰 불을 섞으니, 대화재 고리 신호(JustWave)로 본다.
+                Assert.False(sim.JustWave, "버티기 중에 대화재 고리가 왔다");
             }
         }
 
@@ -634,12 +690,12 @@ namespace FireGame.Prototypes.Tests
             Structure shop = House(sim, 0f, 5f);
             sim.Ignite(shop, SurvivorSim.ReportFire);
             var bot = new SurvivorBot(sim) { MoveOnly = true, Pro = true };
-            for (int i = 0; i < (int)(20f / SurvivorSim.Dt) && shop.Burning; i++)
+            for (int i = 0; i < (int)(40f / SurvivorSim.Dt) && shop.Burning; i++)
             {
                 sim.Enemies.Clear();
                 bot.Play();
             }
-            Assert.False(shop.Burning, "자동 물로 20초 안에 못 껐다: " + shop.Fire);
+            Assert.False(shop.Burning, "자동 물로 40초 안에 못 껐다: " + shop.Fire + " 거리 " + shop.DistanceTo(sim.Player));
         }
 
         [Fact]
