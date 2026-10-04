@@ -201,6 +201,9 @@ namespace FireGame.Prototypes.EditorTools
                 }
                 view.Frame(new Vector3(23f, 28f, 0f), 5f);
             });
+            // 건물에 물이 맞는 동안: 물 왕관·치익 김·벽 타고 흐르는 물·눌린 지붕 불꽃. 끄는 순간: 히트스톱·솟는 물 왕관·무지개 반짝이.
+            failures += SurvivorShot(dir, "c82_hose_on_building", view => view.Sim.Time >= 4f && view.Sim.PendingChoices == null, 0, false, view => HoseBuilding(view, false));
+            failures += SurvivorShot(dir, "c83_douse_moment", view => view.Sim.Time >= 4f && view.Sim.PendingChoices == null, 0, false, view => HoseBuilding(view, true));
             // 항구 할 일 가독성: 불배가 떠 있는 동안 띠·부두 끝 "요격 지점" 고리·"N초 뒤 접안"·발밑 화살표.
             failures += SurvivorShot(dir, "c70_harbor_guide", view => view.Sim.Structures.Exists(s => s.Kind == StructureKind.Boat && !s.Docked && s.Burning && !s.Tanker && view.Sim.BoatEta(s) < 12f), 1, false,
                 view =>
@@ -644,6 +647,30 @@ namespace FireGame.Prototypes.EditorTools
         }
 
         /// <summary>봇 한 칸: 카드가 떠 있으면 고르고, 아니면 살려 둔 채 조준·이동하고 화면을 60Hz 한 칸 흘린다.</summary>
+        /// <summary>
+        /// 가장 가까운 가게에 불(1.0)을 붙이고 문 4칸 앞에서 지붕을 겨눠 쏜다. untilOut이면 꺼질 때까지 쏘고 몇 프레임 뒤를,
+        /// 아니면 0.8초 쏜 뒤를 찍는다. 몹은 지운다(물 반응만 본다).
+        /// </summary>
+        private static void HoseBuilding(SurvivorView view, bool untilOut)
+        {
+            Structure near = null;
+            foreach (Structure st in view.Sim.Structures) if (st.IsBuilding && !st.Collapsed && (near == null || st.DistanceTo(view.Sim.Player) < near.DistanceTo(view.Sim.Player))) near = st;
+            view.Sim.Ignite(near, 1f);
+            view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 4f);
+            int guard = 0;
+            while (guard++ < (untilOut ? 60 * 30 : 48))
+            {
+                view.Sim.Enemies.Clear();
+                view.Sim.Spraying = true;
+                view.Sim.Aim = new Vec2(near.Pos.X - view.Sim.Player.X, near.Pos.Y - view.Sim.Player.Y);
+                view.Step(new Vec2(0f, 0f));
+                view.Refresh(SurvivorSim.Dt);
+                if (untilOut && !near.Burning) break;
+            }
+            for (int i = 0; i < (untilOut ? 4 : 0); i++) view.Refresh(SurvivorSim.Dt);
+            view.Frame(new Vector3(near.Pos.X, near.Pos.Y - 2f, 0f), 5.5f);
+        }
+
         private static void BotTick(SurvivorView view, SurvivorBot bot, bool keepAlive = true)
         {
             if (view.Sim.PendingChoices != null)

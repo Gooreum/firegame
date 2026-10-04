@@ -258,6 +258,15 @@ namespace FireGame.Prototypes
         /// <summary>바닥 물길·물결 고리를 다음에 남길 때(_time).</summary>
         private float _wetAt;
         private float _rippleAt;
+        /// <summary>구조물별 지난 프레임 HoseHold(물대포가 건물 불에 맞는 동안 늘어난다)와 벽 물줄기 세기(1 → 0, 1초).</summary>
+        private float[] _hoseSeen = new float[0];
+        private float[] _hoseSheet = new float[0];
+        /// <summary>마지막 호스 줄기 끝(월드)과 그때 시각: 건물 어디에 물이 맞는지.</summary>
+        private Vector3 _streamEnd;
+        private float _streamEndAt = -1f;
+        /// <summary>물대포에 맞아 젖은 몹: 남은 초(물방울이 떨어지고 발밑이 젖는다).</summary>
+        private readonly Dictionary<Enemy, float> _enemyWet = new Dictionary<Enemy, float>();
+        private readonly List<Enemy> _wetKeys = new List<Enemy>();
         private Pool _nozzle;
         private Pool _reticle;
         private Pool _shadows;
@@ -613,6 +622,7 @@ namespace FireGame.Prototypes
             _shownXp = 0f;
             _heliExitAge = 99f;
             _hitStop = 0f;
+            _enemyWet.Clear();
             _zoomKick = 0f;
             _recoil = 0f;
             _stance = 0f;
@@ -1100,6 +1110,7 @@ namespace FireGame.Prototypes
                 Vector3 at = W(h.Pos);
                 WeaponHit(h, at);
                 if (h.Killed) DeathBurst(at, h.Kind, crowded);
+                if (h.Source == HitSource.Hose) WaterHit(h, at, crowded);
                 else
                 {
                     HitSplash(at, Away(h.Pos));
@@ -1806,6 +1817,7 @@ namespace FireGame.Prototypes
                 {
                     Shockwave(at, new Color(0.6f, 0.9f, 1f, 0.9f), 7f, 0.5f);
                     SpawnText(at + new Vector3(0f, 1.6f, 0f), "진화!", new Color(0.6f, 0.9f, 1f), 1.6f);
+                    DouseMoment(at);
                 }
                 GameAudio.Play(Cue.PutOut);
             }
@@ -1912,6 +1924,7 @@ namespace FireGame.Prototypes
             _people.Begin();
             foreach (ModelPool m in _modelPools) m.Begin();
             foreach (RibbonPool r in _ribbons) r.Begin(_time);
+            DetectHosed();
             DrawTown();
             DrawPuddles();
             DrawWetMarks();
@@ -2031,6 +2044,12 @@ namespace FireGame.Prototypes
                 float punch = (hit ? 1.35f : 1f) * life;
                 if (hit && Random.value < 0.12f) Steam(at, 1, 0.45f * life);
                 var water = new Color(0.7f, 0.95f, 1f);
+                if (_enemyWet.TryGetValue(e, out float soaked))
+                {
+                    // 젖은 몹: 발밑이 파랗게 번들거리고 몸에서 물방울이 떨어진다.
+                    _wet.Put(at + new Vector3(0f, -0.15f, 0f), foot * 1.1f, 0f, new Color(0.2f, 0.5f, 0.9f, 0.4f * Mathf.Clamp01(soaked / 0.4f)));
+                    if (Random.value < 0.3f) EmitFalling("Effects/water_drop", at + Up(0.4f), new Vector3(Random.Range(-1f, 1f), 1f, 0f), 0.3f, Random.Range(0.14f, 0.2f), new Color(0.8f, 0.96f, 1f, 0.9f));
+                }
 
                 switch (e.Kind)
                 {
@@ -2950,6 +2969,8 @@ namespace FireGame.Prototypes
             EmitSpray(end, endDir, jet ? 1.6f : Mathf.Max(1f, last.Radius / 0.3f * 0.75f));
             if (last.Hose && _sim.Spraying)
             {
+                _streamEnd = end;
+                _streamEndAt = _time;
                 Rainbow(end, endDir, _ribbon[_ribbon.Count - 1].Along);
                 GroundWet(end);
             }
@@ -2973,6 +2994,17 @@ namespace FireGame.Prototypes
         /// </summary>
         private void UpdateSprayFeel(float dt)
         {
+            if (_enemyWet.Count > 0)
+            {
+                _wetKeys.Clear();
+                _wetKeys.AddRange(_enemyWet.Keys);
+                foreach (Enemy e in _wetKeys)
+                {
+                    float left = _enemyWet[e] - dt;
+                    if (left <= 0f || e.Dead) _enemyWet.Remove(e);
+                    else _enemyWet[e] = left;
+                }
+            }
             bool on = _sim.Spraying && _sim.Outcome == SOutcome.Playing && _sim.PendingChoices == null;
             if (!on)
             {
@@ -3045,6 +3077,101 @@ namespace FireGame.Prototypes
                 _rippleAt = _time + 0.35f;
                 AddWet(end, 1.1f, 0.8f, true);
             }
+        }
+
+        /// <summary>
+        /// 물대포가 건물 불에 맞는 동안(HoseHold가 늘어난 프레임): 맞은 자리에 물 왕관과 치익 김, 벽을 타고 흐르는 물(1초),
+        /// 지붕 불꽃은 물에 눌려 움츠러든다(DrawRoofFire cower). 이제까지 건물에 물이 맞아도 아무 반응이 없었다.
+        /// </summary>
+        private void DetectHosed()
+        {
+            int n = _sim.Structures.Count;
+            if (_hoseSeen.Length != n)
+            {
+                _hoseSeen = new float[n];
+                _hoseSheet = new float[n];
+            }
+            for (int i = 0; i < n; i++)
+            {
+                Structure st = _sim.Structures[i];
+                _hoseSheet[i] = Mathf.Max(0f, _hoseSheet[i] - _frameDt);
+                if (st.HoseHold > _hoseSeen[i] + 0.0001f && st.Burning && !st.Collapsed)
+                {
+                    Vector3 hit = _time - _streamEndAt < 0.1f && Mathf.Abs(_streamEnd.x - st.Pos.X) < st.Half.X + 0.8f && Mathf.Abs(_streamEnd.y - st.Pos.Y) < st.Half.Y + 0.8f
+                        ? _streamEnd
+                        : WindowPoint(i, 0);
+                    hit.z = 0f;
+                    Vector3 lifted = hit + Up(RoofHeight(i) * 0.5f);
+                    for (int k = 0; k < 4; k++)
+                    {
+                        float a = Random.Range(0.3f, Mathf.PI - 0.3f);
+                        EmitFalling("Effects/water_drop", lifted, (new Vector3(Mathf.Cos(a) * 3f, Mathf.Sin(a) * 4f, 0f) * Random.Range(0.6f, 1f)) + new Vector3(0f, 1.5f, 0f), 0.3f, Random.Range(0.18f, 0.28f), new Color(0.8f, 0.96f, 1f, 0.95f));
+                    }
+                    if (Random.value < 0.25f) Emit("Effects/glow", lifted, Vector3.zero, 0f, 0.08f, 0.4f, 0.8f, new Color(1f, 1f, 1f, 0.6f), new Color(0.7f, 0.9f, 1f, 0f), 0f, true);
+                    if (Random.value < 0.8f) Steam(lifted, 1, 0.6f + st.Fire);
+                    _hoseSheet[i] = 1f;
+                    Sizzle();
+                }
+                _hoseSeen[i] = st.HoseHold;
+            }
+        }
+
+        /// <summary>물 맞는 건물 앞벽: 위에서 아래로 흐르는 파란 물줄기 셋 + 흘러내리는 밝은 점(세기 = sheet).</summary>
+        private void DrawWaterSheet(int i, float sheet, float hgt)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                Vector3 c = WindowPoint(i, k);
+                var mid = new Vector3(c.x, c.y, -hgt * 0.5f);
+                _roofTrim.PutRot(mid, Facade, 0.12f, hgt * 0.85f, new Color(0.55f, 0.82f, 1f, 0.45f * sheet));
+                float flow = ((_time * 1.6f) + (k * 0.37f)) % 1f;
+                var drop = new Vector3(c.x, c.y - 0.01f, -hgt * (0.9f - (0.8f * flow)));
+                _roofTrim.PutRot(drop, Facade, 0.16f, 0.2f, new Color(0.9f, 0.98f, 1f, 0.7f * sheet));
+            }
+        }
+
+        /// <summary>물대포 적중: 맞은 몹은 0.4초 젖고(물방울·발밑 물기), 물로 끈 몹은 파란 고리와 위로 튀는 물방울로 "퐁".</summary>
+        private void WaterHit(Hit h, Vector3 at, bool crowded)
+        {
+            if (h.Killed)
+            {
+                if (crowded) return;
+                Shockwave(at, new Color(0.55f, 0.85f, 1f, 0.9f), 1.3f, 0.15f);
+                for (int k = 0; k < 4; k++)
+                {
+                    float a = Random.Range(0.4f, Mathf.PI - 0.4f);
+                    EmitFalling("Effects/water_drop", at, new Vector3(Mathf.Cos(a) * 2.5f, Mathf.Sin(a) * 3.5f, 0f) + new Vector3(0f, 2f, 0f), 0.3f, Random.Range(0.18f, 0.26f), new Color(0.8f, 0.96f, 1f, 0.95f));
+                }
+                return;
+            }
+            Enemy near = null;
+            float best = 0.9f;
+            foreach (Enemy e in _sim.Enemies)
+            {
+                if (e.Dead) continue;
+                float d = e.Pos.DistanceTo(h.Pos);
+                if (d < best)
+                {
+                    best = d;
+                    near = e;
+                }
+            }
+            if (near != null) _enemyWet[near] = 0.4f;
+        }
+
+        /// <summary>건물을 끈 순간: 짧은 히트스톱 + 줌 펀치 + 위로 솟는 물 왕관 + 무지개 반짝이.</summary>
+        private void DouseMoment(Vector3 at)
+        {
+            HitStop(0.06f);
+            _zoomKick = Mathf.Max(_zoomKick, 0.25f);
+            Vector3 top = at + Up(1.2f);
+            for (int k = 0; k < 20; k++)
+            {
+                float a = Random.Range(0.25f, Mathf.PI - 0.25f);
+                EmitFalling("Effects/water_drop", top, (new Vector3(Mathf.Cos(a) * 4f, Mathf.Sin(a) * 6f, 0f) * Random.Range(0.5f, 1f)) + new Vector3(0f, 2f, 0f), 0.3f, Random.Range(0.2f, 0.32f), new Color(0.8f, 0.96f, 1f, 0.95f));
+            }
+            Color[] bow = { new Color(1f, 0.35f, 0.35f), new Color(1f, 0.75f, 0.3f), new Color(1f, 0.95f, 0.4f), new Color(0.45f, 0.95f, 0.5f), new Color(0.45f, 0.65f, 1f) };
+            foreach (Color c in bow) Sparkle(top, 2, c);
         }
 
         /// <summary>방화복을 갈아입는 순간: 금빛 고리 + 반짝이 + 글자.</summary>
@@ -5502,7 +5629,9 @@ namespace FireGame.Prototypes
                     0.25f, 0.9f, new Color(1f, 1f, 1f, 0.45f), new Color(1f, 1f, 1f, 0f), Random.Range(-40f, 40f));
             }
 
-            if (st.Burning) DrawRoofFire(st, at, w, h, seed, hgt);
+            float sheet = seed < _hoseSheet.Length ? _hoseSheet[seed] : 0f;
+            if (st.Burning) DrawRoofFire(st, at, w, h, seed, hgt, 1f - (0.25f * sheet));
+            if (sheet > 0f) DrawWaterSheet(seed, sheet, hgt);
 
             // 타는 동안은 위에 진압 게이지(파란 물이 차오른다 = 1 − 불 세기, 다 차면 꺼진다), 그 밑에 증기 충전 금,
             // 맨 밑에 얇은 마감 바(언제까지 꺼야 하나: 사람이 있으면 첫 사람을 잃기까지, 없으면 무너지기까지 ÷ 30초).
@@ -5628,7 +5757,7 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>타는 구조물 위 불꽃(세기만큼 많고 크게) + 밑빛 + 연기 기둥.</summary>
-        private void DrawRoofFire(Structure st, Vector3 at, float w, float h, int seed, float baseZ)
+        private void DrawRoofFire(Structure st, Vector3 at, float w, float h, int seed, float baseZ, float cower = 1f)
         {
             float f = st.Fire;
             float area = Mathf.Max(w, h);
@@ -5640,7 +5769,7 @@ namespace FireGame.Prototypes
                 float ox = (Hash01((seed * 31) + k) - 0.5f) * w * 0.85f;
                 float oy = (Hash01((seed * 17) + (k * 5)) - 0.5f) * h * 0.75f;
                 float flick = 0.85f + (0.2f * Mathf.Sin((_time * (11f + k)) + (k * 1.9f)));
-                float size = (0.8f + (1.3f * f)) * flick * (st.IsBuilding ? 1f : 0.8f);
+                float size = (0.8f + (1.3f * f)) * flick * (st.IsBuilding ? 1f : 0.8f) * cower;
                 // 지붕 위에 선 불꽃 플립북(큰 불 시트). 프레임은 불마다 다른 위상으로 돈다.
                 _roofFire.Put(at + new Vector3(ox, oy, 0f), size * 0.8f, 0f, Color.white, FlameArt.Frame(_blazeSheet, _time, seed + (k * 5), 10f + k));
             }
