@@ -79,7 +79,7 @@ namespace FireGame.Prototypes
             return root;
         }
 
-        private static GameObject Hull(Transform parent, string name, Color hull, Color deck, Color cabin)
+        internal static GameObject Hull(Transform parent, string name, Color hull, Color deck, Color cabin)
         {
             GameObject root = Root(name, parent);
             Part(PrimitiveType.Cube, root, new Vector3(0f, 0.22f, -0.2f), new Vector3(1.1f, 0.44f, 1.9f), hull);
@@ -226,7 +226,7 @@ namespace FireGame.Prototypes
             head.rotation = turret.transform.parent.rotation * Models3D.Stand * Quaternion.Euler(0f, yaw, 0f);
         }
 
-        private static GameObject Root(string name, Transform parent)
+        internal static GameObject Root(string name, Transform parent)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
@@ -244,7 +244,7 @@ namespace FireGame.Prototypes
             return axis;
         }
 
-        private static GameObject Part(PrimitiveType type, GameObject parent, Vector3 at, Vector3 scale, Color color, Vector3 euler = default)
+        internal static GameObject Part(PrimitiveType type, GameObject parent, Vector3 at, Vector3 scale, Color color, Vector3 euler = default)
         {
             GameObject go = GameObject.CreatePrimitive(type);
             Object.DestroyImmediate(go.GetComponent<Collider>());
@@ -256,7 +256,7 @@ namespace FireGame.Prototypes
             return go;
         }
 
-        private static Material Mat(Color color)
+        internal static Material Mat(Color color)
         {
             if (Mats.TryGetValue(color, out Material m) && m != null) return m;
             if (_template == null)

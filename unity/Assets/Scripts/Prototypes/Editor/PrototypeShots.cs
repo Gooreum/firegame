@@ -166,6 +166,10 @@ namespace FireGame.Prototypes.EditorTools
             }, 1, view => view.Sim.Ignite(view.Sim.Structures.Find(st => st.Name == "빵집"), 1f));
             // 소방서: 켜면 먼저 보이는 화면(새 소방서)과, 별 5개로 드론 담당을 해금한 직후.
             failures += StationShot(dir, "c33_station", null);
+            // 맵 특색: 숲은 통나무 동네, 항구는 창고·등대 부두, 야시장은 천막 점포 골목(Kenney 주택이 안 보여야 한다).
+            failures += SurvivorShot(dir, "c60_forest_camp", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 20f, 0f), 14f), 2);
+            failures += SurvivorShot(dir, "c61_harbor_quay", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 32f, 0f), 14f), 4);
+            failures += SurvivorShot(dir, "c62_market_stalls", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 30f, 0f), 16f), 5);
             // 판 시작 1.5초 뒤 할 일 한 줄("할 일: 부두 끝에 서서 바다 위 배를 쏘아 끈다")이 위 알림 줄에 뜬다.
             failures += SurvivorShot(dir, "c33c_goal_alert", view => view.Sim.Time > 1.7f, 0, false, null, 4);
             failures += StationShot(dir, "c33b_station_unlock", "stars=5;best=3,2,0;unlocked=rookie,rescue;selected=rescue", "pilot");

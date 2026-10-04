@@ -4361,9 +4361,13 @@ namespace FireGame.Prototypes
                 var at = new Vector3(st.Pos.X, st.Pos.Y, 0f);
                 float w = st.Half.X * 2f;
                 float h = st.Half.Y * 2f;
-                GameObject go = null;
-                Vector3 size = Vector3.zero;
-                if (st.Kind == StructureKind.Depot && factory)
+                // 스테이지 전용 모델(숲 통나무 집·항구 창고·야시장 천막 점포)이 먼저. 없으면 지금처럼 Kenney 키트.
+                GameObject go = StageModels.Build(_sim.Stage.Number, st, i, _root, out Vector3 size);
+                bool custom = go != null;
+                if (custom)
+                {
+                }
+                else if (st.Kind == StructureKind.Depot && factory)
                 {
                     // 정유 저장소: 큰 원통 탱크 둘을 나란히.
                     go = new GameObject("Refinery");
@@ -4423,7 +4427,7 @@ namespace FireGame.Prototypes
                 _structSize[i] = size;
                 // 주택 모델은 지붕이 모두 초록이라, 예전 가게 그림의 지붕색으로 지붕만 다시 칠해 가게를 구별한다.
                 // 공장은 모델마다 모양이 달라 키트 원래 색(회보라·주황)을 둔다.
-                if (st.IsBuilding && !factory)
+                if (st.IsBuilding && !factory && !custom)
                 {
                     // 밝기는 가장 센 채널 0.9로 맞춰 지붕이 칙칙하지 않게. 창고는 두 채 묶음(루트)에 한 번.
                     Color shop = RoofColor(ShopArt.For(st.Name, w, h));
@@ -4624,7 +4628,7 @@ namespace FireGame.Prototypes
                         {
                             // 약품 드럼 모델: 퓨즈가 돌면 빨갛게 깜빡이며 부푼다.
                             Models3D.Tint(model, blink ? new Color(1f, 0.45f, 0.35f) : tint);
-                            model.transform.localScale = Vector3.one * 0.8f * (1f + (0.2f * fuse));
+                            model.transform.localScale = Vector3.one * (model.name == "DrumModel" ? 0.8f : 1f) * (1f + (0.2f * fuse));
                         }
                         else
                         {
