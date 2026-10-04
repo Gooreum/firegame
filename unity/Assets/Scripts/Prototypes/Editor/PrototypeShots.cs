@@ -173,6 +173,11 @@ namespace FireGame.Prototypes.EditorTools
             // 야시장 밝기·특색: 밝아진 밤 골목(c62와 비교)과 색 네온 간판, 무대 스포트라이트.
             failures += SurvivorShot(dir, "c71_market_night", view => view.Sim.Time > 1f, 0, false, view => view.Frame(new Vector3(30f, 30f, 0f), 18f), 5);
             failures += SurvivorShot(dir, "c72_stage_lights", view => view.Sim.Time > 1f, 0, false, view => view.Frame(new Vector3(30f, 11f, 0f), 10f), 5);
+            // 가게 디테일: 마을 가게가 지붕 상징물·앞마당 진열로 이름표 없이도 읽히는가(서쪽·동쪽 블록, 편의점 근접).
+            failures += SurvivorShot(dir, "c73_town_west", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(17f, 37f, 0f), 10f));
+            failures += SurvivorShot(dir, "c74_town_east", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(43f, 37f, 0f), 10f));
+            failures += SurvivorShot(dir, "c75_convenience_close", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(22f, 36.8f, 0f), 4.5f));
+            failures += SurvivorShot(dir, "c75b_barber_close", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(12f, 35.5f, 0f), 4.5f));
             // 항구 할 일 가독성: 불배가 떠 있는 동안 띠·부두 끝 "요격 지점" 고리·"N초 뒤 접안"·발밑 화살표.
             failures += SurvivorShot(dir, "c70_harbor_guide", view => view.Sim.Structures.Exists(s => s.Kind == StructureKind.Boat && !s.Docked && s.Burning && !s.Tanker && view.Sim.BoatEta(s) < 12f), 1, false,
                 view =>
@@ -418,6 +423,7 @@ namespace FireGame.Prototypes.EditorTools
 
         private static int Shot(string dir, string name, Action<TacticsView> prepare)
         {
+            if (!Wanted(name)) return 0;
             try
             {
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -446,6 +452,7 @@ namespace FireGame.Prototypes.EditorTools
         /// <summary>봇에게 몇 초 맡겨 교전 중인 화면을 찍는다.</summary>
         private static int ActionShot(string dir, string name, float seconds)
         {
+            if (!Wanted(name)) return 0;
             try
             {
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -532,6 +539,7 @@ namespace FireGame.Prototypes.EditorTools
         /// <summary>소방서 화면을 찍는다. save가 있으면 그 저장 글을 끼우고(저장하지 않는다), tap이 있으면 그 소방관 칸을 누른 뒤 찍는다.</summary>
         private static int StationShot(string dir, string name, string save, string tap = null)
         {
+            if (!Wanted(name)) return 0;
             try
             {
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -579,6 +587,7 @@ namespace FireGame.Prototypes.EditorTools
         /// <param name="pro">true면 숙련 봇이 판을 굴린다(기본 봇은 아이템 다이어트 뒤 1:20까지 집을 다 태워 대형 신고가 뜰 자리가 없다 — docs §16).</param>
         private static int SurvivorShot(string dir, string name, Func<SurvivorView, bool> until, int settle = 20, bool maxGear = false, Action<SurvivorView> frame = null, int stage = 1, Action<SurvivorView> setup = null, bool keepAlive = true, bool pro = false)
         {
+            if (!Wanted(name)) return 0;
             try
             {
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -674,6 +683,7 @@ namespace FireGame.Prototypes.EditorTools
         /// </summary>
         private static int TouchShot(string dir, string name)
         {
+            if (!Wanted(name)) return 0;
             RenderTexture screen = null;
             try
             {
@@ -746,6 +756,7 @@ namespace FireGame.Prototypes.EditorTools
         /// </summary>
         private static int AimShot(string dir, string name)
         {
+            if (!Wanted(name)) return 0;
             RenderTexture screen = null;
             try
             {
@@ -805,6 +816,7 @@ namespace FireGame.Prototypes.EditorTools
         /// <summary>1스테이지를 이긴 결과창에서 탭하면 2스테이지가 "STAGE 2" 띠와 함께 열린다(플레이어 경로: Tick에 클릭).</summary>
         private static int NextStageShot(string dir, string name)
         {
+            if (!Wanted(name)) return 0;
             try
             {
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -873,6 +885,15 @@ namespace FireGame.Prototypes.EditorTools
                 RenderTexture.active = previous;
                 UnityEngine.Object.DestroyImmediate(target);
             }
+        }
+
+        /// <summary>FIREGAME_SHOTS="c73,c74"이면 그 접두로 시작하는 장면만 찍는다(빠르게 고쳐 보기). 비면 전부.</summary>
+        private static bool Wanted(string name)
+        {
+            string only = Environment.GetEnvironmentVariable("FIREGAME_SHOTS");
+            if (string.IsNullOrEmpty(only)) return true;
+            foreach (string p in only.Split(',')) if (p.Length > 0 && name.StartsWith(p.Trim())) return true;
+            return false;
         }
 
         private static string ArgValue(string name)

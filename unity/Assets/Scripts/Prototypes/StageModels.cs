@@ -10,7 +10,7 @@ namespace FireGame.Prototypes
     /// 축은 ItemModels와 같다(위 +Y, 앞(카메라 쪽·남) +Z, 1 = 1칸). 발자국 w×h에 맞춰 세우고 높이는 주택 상한(2.4) 아래.
     /// 월드에 세울 때 Place(…, Vector3.down)으로 yaw 0을 준다(Vector3.up은 180° 돌아 앞뒤가 바뀐다).
     /// </summary>
-    public static class StageModels
+    public static partial class StageModels
     {
         private static readonly Color Wood = new Color(0.58f, 0.4f, 0.24f);
         private static readonly Color DarkWood = new Color(0.35f, 0.22f, 0.12f);
@@ -40,6 +40,9 @@ namespace FireGame.Prototypes
             float height;
             switch (stage)
             {
+                case 1:
+                    go = Town(st, parent, w, h, out height);
+                    break;
                 case 2:
                     go = Forest(st, index, parent, at, w, h, out height, out size);
                     break;

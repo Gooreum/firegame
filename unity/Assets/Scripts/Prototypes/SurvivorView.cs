@@ -5087,6 +5087,15 @@ namespace FireGame.Prototypes
             GameObject model = _structModels[seed];
             if (model == null || st.Collapsed) return;
             string kind = model.name;
+            // 이발소·미용실 회전등: 띠가 올라가 보이게 돈다(무너지면 위에서 return).
+            if (kind == "Barber" || kind == "Salon")
+            {
+                foreach (Transform child in model.transform)
+                {
+                    Transform pole = child.name == "Pole" ? child : child.name == "PoleMount" ? child.Find("Pole") : null;
+                    if (pole != null) pole.localRotation = Quaternion.Euler(0f, _time * 140f, 0f);
+                }
+            }
             if (kind == "Stall")
             {
                 Transform sign = model.transform.Find("Sign");
