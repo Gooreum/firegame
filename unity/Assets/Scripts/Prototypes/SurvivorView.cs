@@ -15,7 +15,7 @@ namespace FireGame.Prototypes
     /// 구슬이 빨려 오며 소리 높이가 올라가고, 레벨업하면 화면이 하얗게 터지며 카드가 튀어 오른다.
     /// 그림은 매 프레임 풀에서 꺼내 다시 그린다(적·구슬·물은 수백 개라 오브젝트를 붙잡아 두지 않는다).
     /// </summary>
-    public sealed class SurvivorView : IPrototype
+    public sealed partial class SurvivorView : IPrototype
     {
         private const float CameraSize = 9f;
 
@@ -1097,6 +1097,7 @@ namespace FireGame.Prototypes
 
         private void React()
         {
+            ReactGuardian();
             int kills = 0;
             foreach (Hit h in _sim.Hits)
             {
@@ -1928,6 +1929,7 @@ namespace FireGame.Prototypes
             DetectHosed();
             DrawTown();
             DrawPuddles();
+            DrawGuardian(dt);
             DrawWetMarks();
             DrawGems();
             DrawToolboxes();
@@ -5903,6 +5905,7 @@ namespace FireGame.Prototypes
             _pools.Add(_bubbles);
             _auras = new Pool(_world, "Aura", RingSprite(), 10, Additive);
             _pools.Add(_auras);
+            BuildGuardianPools();
             _tank = AddPool("Tank", "Effects/glow", 10, true);
             _radar = new Pool(_world, "Radar", BeamSprite(), 10, Additive);
             _pools.Add(_radar);
