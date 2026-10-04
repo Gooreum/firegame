@@ -202,6 +202,25 @@ namespace FireGame.Prototypes.EditorTools
                 view.Frame(new Vector3(23f, 28f, 0f), 5f);
             });
             // 건물에 물이 맞는 동안: 물 왕관·치익 김·벽 타고 흐르는 물·눌린 지붕 불꽃. 끄는 순간: 히트스톱·솟는 물 왕관·무지개 반짝이.
+            // 수호자 마을 샘플(docs §20): 수호 반경·버티기 링·풀리는 순간·쉼터·잿더미 둥지·결과 한 장면·소방서 얼굴.
+            failures += SurvivorShot(dir, "g80_guard_radius", view => view.Sim.Time >= 30f && view.Sim.PendingChoices == null, 4, false,
+                view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), 8f), 1, null, true, true);
+            failures += SurvivorShot(dir, "g81_siege_ring", view => view.Sim.Siege != null && view.Sim.Siege.Age > 4f && view.Sim.PendingChoices == null, 0, false,
+                view => view.Frame(new Vector3(view.Sim.Siege.Center.X, view.Sim.Siege.Center.Y - 1f, 0f), 11f), 1, null, true, true);
+            failures += SurvivorShot(dir, "g82_siege_relief", view => view.Sim.LastSiege != null && view.Sim.Siege == null && view.Sim.PendingChoices == null, 10, false,
+                view => view.Frame(new Vector3(view.Sim.LastSiege.Center.X, view.Sim.LastSiege.Center.Y - 1f, 0f), 13f), 1, null, true, true);
+            failures += SurvivorShot(dir, "g83_haven", view => view.Sim.Haven != null && view.Sim.PendingChoices == null, 6, false,
+                view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), 6f), 1,
+                view => view.Sim.Hp = view.Sim.MaxHp * 0.5f, false, true);
+            failures += SurvivorShot(dir, "g84_ruin_nest", view => view.Sim.Time >= 12f && view.Sim.PendingChoices == null, 0, false,
+                view =>
+                {
+                    Structure ruin = view.Sim.Structures.Find(s => s.IsBuilding && s.Collapsed);
+                    view.Frame(new Vector3(ruin.Pos.X, ruin.Pos.Y - 1f, 0f), 6f);
+                }, 1, view => Ruin(view), true, true);
+            failures += SurvivorShot(dir, "g85_result_crowd", view => view.Sim.Outcome != SOutcome.Playing, 66, false, null, 1, view => DayEnd(view), true, true);
+            failures += SurvivorShot(dir, "g86_result_pullback", view => view.Sim.Outcome != SOutcome.Playing, 240, false, null, 1, view => DayEnd(view), true, true);
+            failures += SurvivorShot(dir, "g87_station_face", view => view.Sim.Outcome != SOutcome.Playing, 240, false, view => view.OpenStation(), 1, view => DayEnd(view), true, true);
             failures += SurvivorShot(dir, "c82_hose_on_building", view => view.Sim.Time >= 4f && view.Sim.PendingChoices == null, 0, false, view => HoseBuilding(view, false));
             failures += SurvivorShot(dir, "c83_douse_moment", view => view.Sim.Time >= 4f && view.Sim.PendingChoices == null, 0, false, view => HoseBuilding(view, true));
             // 항구 할 일 가독성: 불배가 떠 있는 동안 띠·부두 끝 "요격 지점" 고리·"N초 뒤 접안"·발밑 화살표.
@@ -671,6 +690,41 @@ namespace FireGame.Prototypes.EditorTools
             view.Frame(new Vector3(near.Pos.X, near.Pos.Y - 2f, 0f), 5.5f);
         }
 
+        /// <summary>수호자 결과 장면용: 판 끝 5초 전으로 건너뛰고, 구한 사람 18명·무너진 집 넷(상처)을 만든다.</summary>
+        private static void DayEnd(SurvivorView view)
+        {
+            SurvivorSim sim = view.Sim;
+            sim.Time = SurvivorSim.RunTime - 5f;
+            sim.Reports = false;
+            sim.Rescued = 18;
+            int fell = 0;
+            foreach (Structure st in sim.Structures)
+            {
+                if (!st.IsBuilding) continue;
+                if (fell < 4 && st.Kind != StructureKind.Depot)
+                {
+                    st.Fire = 1f;
+                    st.Integrity = 0.0001f;
+                    fell++;
+                }
+                else st.Guarded = true;
+            }
+            // 하니스의 KeepAlive가 무너지려는 집을 붙잡기 전에 한 틱 흘려 무너뜨린다.
+            view.Step(new Vec2(0f, 0f));
+        }
+
+        /// <summary>잿더미 둥지용: 플레이어에서 가장 가까운 가게 하나를 곧 무너지게 한다.</summary>
+        private static void Ruin(SurvivorView view)
+        {
+            SurvivorSim sim = view.Sim;
+            Structure near = null;
+            foreach (Structure st in sim.Structures) if (st.IsBuilding && st.Kind != StructureKind.Depot && (near == null || st.DistanceTo(sim.Player) < near.DistanceTo(sim.Player))) near = st;
+            near.Fire = 1f;
+            near.Integrity = 0.0001f;
+            view.Step(new Vec2(0f, 0f));
+        }
+
+        /// <summary>봇 한 칸: 카드가 떠 있으면 고르고, 아니면 살려 둔 채 조준·이동하고 화면을 60Hz 한 칸 흘린다.</summary>
         private static void BotTick(SurvivorView view, SurvivorBot bot, bool keepAlive = true)
         {
             if (view.Sim.PendingChoices != null)

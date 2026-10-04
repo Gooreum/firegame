@@ -102,6 +102,13 @@ namespace FireGame.Prototypes
                 HitStop(0.05f);
                 GameAudio.Play(Cue.Critical);
             }
+            if (_sim.SealHits.Count > 0)
+            {
+                // 봉인: 링 밖에서 쏜 물이 튕긴다 — 주황 고리가 번쩍이고, 가끔 "가까이 가야 끈다!".
+                Structure seal = _sim.SealHits[0];
+                if (Random.value < 0.25f) Shockwave(W(seal.Pos), new Color(1f, 0.55f, 0.15f, 0.7f), (Mathf.Max(seal.Half.X, seal.Half.Y) * 2.4f) + 1f, 0.25f);
+                if (_alertAge > 2.5f) ShowAlert("가까이 가야 끈다! 링 안으로", new Color(1f, 0.6f, 0.2f));
+            }
             foreach (Structure ruin in _sim.RuinSpat)
             {
                 // 잿더미 둥지가 불씨를 뱉었다: 잔해에서 불똥이 튀고 붉은 고리.
@@ -157,7 +164,7 @@ namespace FireGame.Prototypes
             DrawHaven();
             DrawCrowd();
             Siege siege = _sim.Siege;
-            if (siege != null) DrawSiegeRing(W(siege.Center), siege.Radius, Mathf.Clamp01(_siegeAge / 0.35f), 1f, false);
+            if (siege != null) DrawSiegeRing(W(siege.Center), siege.Radius, Mathf.Clamp01(_siegeAge / 0.35f), 1f, false, siege.Left);
             else if (_siegeEndAge < 1.2f)
             {
                 // 끝난 링: 성공이면 불꽃이 바깥으로 밀려나며 꺼지고, 실패면 잿빛으로 가라앉는다.
@@ -217,7 +224,7 @@ namespace FireGame.Prototypes
             if (_sim.Haven == null || _sim.Outcome != SOutcome.Playing) return;
             Vector3 me = W(_sim.Player);
             float breathe = 0.5f + (0.5f * Mathf.Sin(_time * 5f));
-            _civilianRings.Put(me, 2.2f + (0.3f * breathe), 0f, new Color(0.4f, 1f, 0.5f, 0.35f + (0.2f * breathe)));
+            _civilianRings.Put(me, 2.4f + (0.3f * breathe), 0f, new Color(0.4f, 1f, 0.5f, 0.5f + (0.25f * breathe)));
             _civilianRings.Put(W(_sim.Haven.Pos), Mathf.Max(_sim.Haven.Half.X, _sim.Haven.Half.Y) * 2f + (SurvivorSim.HavenRange * 2f), 0f, new Color(0.4f, 1f, 0.5f, 0.12f));
             if (Random.value < 0.12f) Sparkle(me + new Vector3(Random.Range(-0.4f, 0.4f), Random.Range(-0.2f, 0.2f), 0f), 1, new Color(0.5f, 1f, 0.55f));
         }
@@ -234,8 +241,10 @@ namespace FireGame.Prototypes
         /// <param name="rise">0이면 불꽃이 땅에 붙어 있고 1이면 다 솟았다.</param>
         /// <param name="alpha">전체 투명도.</param>
         /// <param name="ash">잿빛(실패한 링).</param>
-        private void DrawSiegeRing(Vector3 at, float radius, float rise, float alpha, bool ash)
+        /// <param name="left">남은 시간 비율: 둘레 불꽃이 시계 방향으로 하나씩 꺼지며 물빛 점이 된다(링 타이머).</param>
+        private void DrawSiegeRing(Vector3 at, float radius, float rise, float alpha, bool ash, float left = 1f)
         {
+            int lit = Mathf.CeilToInt(left * SiegeFlames);
             if (alpha <= 0f) return;
             float pulse = 0.85f + (0.15f * Mathf.Sin(_time * 6f));
             Color glow = ash ? new Color(0.4f, 0.4f, 0.4f, 0.35f * alpha) : new Color(1f, 0.35f, 0.05f, 0.5f * alpha * pulse);
@@ -246,6 +255,12 @@ namespace FireGame.Prototypes
             {
                 float a = k * Mathf.PI * 2f / SiegeFlames;
                 Vector3 p = at + (new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * radius);
+                if (k >= lit)
+                {
+                    // 꺼진 자리: 작은 물빛 점(얼마나 남았는지 둘레로 읽힌다).
+                    _siegeGlow.Put(p, 0.7f, 0f, new Color(0.5f, 0.85f, 1f, 0.55f * alpha));
+                    continue;
+                }
                 float flick = 0.8f + (0.25f * Mathf.Sin((_time * 13f) + (k * 1.7f)));
                 float size = 1.1f * flick * Mathf.Lerp(0.2f, 1f, rise);
                 _siegeGlow.Put(p, 1.8f * size, 0f, new Color(glow.r, glow.g, glow.b, glow.a * 0.8f));
@@ -270,6 +285,9 @@ namespace FireGame.Prototypes
         /// <summary>스테이지별 마지막 판 끝 사진(소방서 배경·썸네일). 파일에서 한 번 읽는다.</summary>
         private static readonly Dictionary<int, Texture2D> StageFaces = new Dictionary<int, Texture2D>();
         private bool _faceTaken;
+        private Text _help;
+        private string _helpDefault;
+        private bool _enemiesSteamed;
 
         public static string FacePath(int stage)
         {
@@ -345,6 +363,8 @@ namespace FireGame.Prototypes
         {
             if (_faceTaken || _overAge < PullEnd + 0.1f || _worldRt == null) return;
             _faceTaken = true;
+            // 월드 카메라를 지금 한 번 그려 둔다(캡처 하니스는 찍을 때만 그려 RT가 비어 있다).
+            _worldCam.Render();
             var small = RenderTexture.GetTemporary(FaceWidth, FaceHeight, 0, RenderTextureFormat.ARGB32);
             Graphics.Blit(_worldRt, small);
             RenderTexture before = RenderTexture.active;
@@ -401,7 +421,6 @@ namespace FireGame.Prototypes
             if (tex == null) return false;
             RawImage back = NewRaw(layer, "Face", tex);
             UiKit.Stretch(back.rectTransform);
-            back.color = new Color(1f, 1f, 1f, 0.9f);
             return true;
         }
 
@@ -422,6 +441,29 @@ namespace FireGame.Prototypes
             raw.texture = tex;
             raw.raycastTarget = false;
             return raw;
+        }
+        /// <summary>수호자 마을 조작 안내: 물은 저절로 나가고, 쥐면 집중 분사(증기).</summary>
+        private string GuardianHelp()
+        {
+            return Input.touchSupported
+                ? "왼손 끌어 이동 · 물은 저절로(오른손 쥐면 집중 분사) · 큰 불에 다가가 링을 버텨라 · 불난 가게 문 앞에 서 있으면 구조"
+                : "WASD 이동 · 물은 저절로(왼쪽 버튼 쥐면 겨눈 쪽으로 집중 분사) · 큰 불에 다가가 링을 버텨라 · 카드는 1/2/3 · 문 앞에 서 있으면 구조      R 다시  N 스테이지  Tab 시험판 전환";
+        }
+
+        /// <summary>수호자 결과 장면에선 불 몹을 그리지 않는다. 처음 한 번은 몹마다 김이 오른다.</summary>
+        private bool EnemiesFaded()
+        {
+            if (!_sim.Guardian || _sim.Outcome == SOutcome.Playing)
+            {
+                _enemiesSteamed = false;
+                return false;
+            }
+            if (!_enemiesSteamed)
+            {
+                _enemiesSteamed = true;
+                for (int i = 0; i < _sim.Enemies.Count; i += 3) Steam(W(_sim.Enemies[i].Pos), 1, 0.8f);
+            }
+            return true;
         }
     }
 }

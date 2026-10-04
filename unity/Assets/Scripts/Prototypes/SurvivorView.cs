@@ -618,6 +618,7 @@ namespace FireGame.Prototypes
             _slowmo = 0f;
             _overAge = 0f;
             _faceTaken = false;
+            if (_help != null) _help.text = _sim.Guardian ? GuardianHelp() : _helpDefault;
             _siegeEndAge = 99f;
             _guardShown = 0f;
             _alertAge = 99f;
@@ -726,7 +727,7 @@ namespace FireGame.Prototypes
 
             // 수호자: 고른 스테이지의 마지막 판 끝 사진(지켜 낸 마을의 얼굴)을 배경에 깐다. 있으면 어둠을 옅게.
             bool face = StationFace(_stationLayer, _stage);
-            Image dim = UiKit.Image(_stationLayer, "Dim", Art.White, new Color(0.02f, 0.03f, 0.08f, face ? 0.6f : 0.82f));
+            Image dim = UiKit.Image(_stationLayer, "Dim", Art.White, new Color(0.02f, 0.03f, 0.08f, face ? 0.45f : 0.82f));
             UiKit.Stretch(dim.rectTransform);
 
             Text title = UiKit.OutlinedLabel(_stationLayer, "Title", "소방서", 84, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
@@ -1399,7 +1400,7 @@ namespace FireGame.Prototypes
                 var red = new Color(1f, 0.25f, 0.05f);
                 for (int k = 0; k < 2; k++) Shockwave(at, red, 8f + (5f * k), 0.6f, k * 0.15f);
                 Burst(at, 30, new Color(1f, 0.5f, 0.1f), 10f);
-                _bossBandText.text = "대형 화재! " + _sim.BigReport.Name + " " + _sim.BigReport.Residents + "명 갇힘";
+                _bossBandText.text = "대형 화재! " + _sim.BigReport.Name + " " + _sim.BigReport.Residents + "명 갇힘" + (_sim.Guardian ? " · 가서 버텨라" : "");
                 _bandTint = new Color(0.6f, 0.05f, 0f);
                 _bossBannerAge = 0f;
                 _trauma = Mathf.Min(1f, _trauma + 0.5f);
@@ -2040,6 +2041,8 @@ namespace FireGame.Prototypes
 
         private void DrawEnemies()
         {
+            // 수호자 결과 장면: 하루가 끝나면 불 몹은 김을 내며 사그라든다(모인 사람들과 마을이 보이게).
+            if (EnemiesFaded()) return;
             for (int i = 0; i < _sim.Enemies.Count; i++)
             {
                 Enemy e = _sim.Enemies[i];
@@ -6298,8 +6301,9 @@ namespace FireGame.Prototypes
             string controls = Input.touchSupported
                 ? "왼손 끌어 이동 · 오른손 누르면 물(끌어서 겨누기) · 구슬을 모아 레벨업 · 카드는 탭 · 불난 가게 문 앞에 서 있으면 구조"
                 : "WASD 이동 · 마우스로 겨누고 왼쪽 버튼을 누르면 물 · 구슬을 모아 레벨업 · 카드는 1/2/3 또는 클릭 · 불난 가게 문 앞에 서 있으면 구조      R 다시  N 스테이지  G " + (_maxGear ? "일반" : "풀장비") + "  Tab 시험판 전환";
-            Text help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + controls, 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
-            UiKit.Place(help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 20f), new Vector2(1850f, 40f));
+            _help = UiKit.OutlinedLabel(_hud, "Help", (_maxGear ? "[풀장비]  " : "") + controls, 24, new Color(0.8f, 0.8f, 0.85f), TextAnchor.LowerCenter);
+            UiKit.Place(_help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 20f), new Vector2(1850f, 40f));
+            _helpDefault = _help.text;
 
             _flashImage = UiKit.Image(_hud, "Flash", Art.White, Color.clear);
             UiKit.Stretch(_flashImage.rectTransform);
