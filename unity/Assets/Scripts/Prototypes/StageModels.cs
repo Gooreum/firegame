@@ -385,7 +385,7 @@ namespace FireGame.Prototypes
                 case StructureKind.Depot:
                     return Stage(parent, w, h, out height);
                 case StructureKind.House:
-                    return Stall(parent, w, h, StallPalette[index % StallPalette.Length], out height);
+                    return Stall(parent, st.Name, w, h, StallPalette[index % StallPalette.Length], out height);
                 case StructureKind.Car:
                     return FoodTruck(parent, w, h, StallPalette[(index + 2) % StallPalette.Length], out height);
                 case StructureKind.Gas:
@@ -394,34 +394,47 @@ namespace FireGame.Prototypes
             return null;
         }
 
-        /// <summary>천막 점포: 기둥 넷, 줄무늬 차양(앞이 낮다), 좌판과 물건, 뒷판, 색 간판 "Sign", 등불 "Lamp". 높이 약 1.75.</summary>
-        private static GameObject Stall(Transform parent, float w, float h, Color color, out float height)
+        /// <summary>
+        /// 천막 점포: 뒤 기둥 넷, 줄무늬 차양은 뒤 55%만 덮고(앞이 낮다) 앞 좌판은 하늘로 트여 위에서 물건이 보인다.
+        /// 좌판 물건은 점포 이름별(Goods), 차양 위 상징물 하나, 색 간판 "Sign"은 차양 앞 끝 위, 등불 "Lamp"는 앞 모서리. 높이 약 1.9.
+        /// </summary>
+        private static GameObject Stall(Transform parent, string name, float w, float h, Color color, out float height)
         {
             GameObject root = ItemModels.Root("Stall", parent);
             const float pole = 1.5f;
+            float back = -h * 0.45f;
+            float edge = h * 0.1f;
             for (int sx = -1; sx <= 1; sx += 2)
             {
-                for (int sz = -1; sz <= 1; sz += 2) ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(sx * w * 0.45f, pole / 2f, sz * h * 0.45f), new Vector3(0.08f, pole / 2f, 0.08f), Steel);
+                ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(sx * w * 0.45f, pole / 2f, back), new Vector3(0.08f, pole / 2f, 0.08f), Steel);
+                ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(sx * w * 0.45f, (pole - 0.15f) / 2f, edge), new Vector3(0.08f, (pole - 0.15f) / 2f, 0.08f), Steel);
             }
             // 차양: 일곱 장이 번갈아 색·흰색, 앞으로 12° 기운다.
             const int stripes = 7;
             float stripeW = w * 1.1f / stripes;
+            float awningZ = (back + edge) / 2f;
+            float awningD = edge - back + 0.25f;
             for (int k = 0; k < stripes; k++)
             {
                 float x = (k - ((stripes - 1) / 2f)) * stripeW;
-                ItemModels.Part(PrimitiveType.Cube, root, new Vector3(x, pole + 0.08f, 0f), new Vector3(stripeW + 0.01f, 0.04f, h * 0.8f), k % 2 == 0 ? color : Paint, new Vector3(-12f, 0f, 0f));
+                ItemModels.Part(PrimitiveType.Cube, root, new Vector3(x, pole + 0.02f, awningZ), new Vector3(stripeW + 0.01f, 0.04f, awningD), k % 2 == 0 ? color : Paint, new Vector3(-12f, 0f, 0f));
             }
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, pole + 0.14f, -h * 0.4f), new Vector3(w * 1.1f, 0.12f, 0.05f), color * 0.8f);
-            // 좌판(앞)과 물건, 뒷판.
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 0.3f, h * 0.22f), new Vector3(w * 0.9f, 0.6f, 0.5f), Wood);
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 0.62f, h * 0.22f), new Vector3(w * 0.95f, 0.05f, 0.6f), DarkWood);
-            for (int k = -1; k <= 1; k++) ItemModels.Part(PrimitiveType.Cube, root, new Vector3(k * w * 0.26f, 0.76f, h * 0.22f), new Vector3(0.3f, 0.22f, 0.3f), StallPalette[(k + 4) % StallPalette.Length]);
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 0.6f, -h * 0.44f), new Vector3(w * 0.9f, 1.2f, 0.06f), new Color(0.3f, 0.25f, 0.25f));
-            GameObject sign = ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 1.32f, h * 0.5f + 0.02f), new Vector3(w * 0.7f, 0.28f, 0.05f), color);
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, pole + 0.18f, back + 0.04f), new Vector3(w * 1.1f, 0.12f, 0.05f), color * 0.8f);
+            // 뒷판 + 안쪽 선반(뒤 물건이 어둡게 쌓인 느낌).
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 0.6f, back + 0.02f), new Vector3(w * 0.9f, 1.2f, 0.06f), new Color(0.3f, 0.25f, 0.25f));
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 0.5f, back + 0.3f), new Vector3(w * 0.8f, 0.06f, 0.4f), DarkWood);
+            // 좌판: 앞이 트인 나무 단 + 천 깔개.
+            float counterZ = h * 0.25f;
+            const float counterTop = 0.62f;
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, counterTop / 2f, counterZ), new Vector3(w * 0.95f, counterTop, 0.8f), Wood);
+            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, counterTop + 0.01f, counterZ), new Vector3(w * 0.98f, 0.03f, 0.86f), color * 0.55f);
+            Goods(root, name, w, counterTop + 0.025f, counterZ);
+            Topper(root, name, new Vector3(0f, pole + 0.08f, edge - 0.2f));
+            GameObject sign = ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, pole + 0.05f, edge + 0.16f), new Vector3(w * 0.7f, 0.26f, 0.05f), color);
             sign.name = "Sign";
-            GameObject lamp = ItemModels.Part(PrimitiveType.Sphere, root, new Vector3(w * 0.3f, 1.2f, h * 0.5f), new Vector3(0.26f, 0.26f, 0.26f), new Color(1f, 0.78f, 0.4f));
+            GameObject lamp = ItemModels.Part(PrimitiveType.Sphere, root, new Vector3(w * 0.45f, pole - 0.3f, edge + 0.05f), new Vector3(0.26f, 0.26f, 0.26f), new Color(1f, 0.78f, 0.4f));
             lamp.name = "Lamp";
-            height = pole + 0.25f;
+            height = pole + 0.45f;
             return root;
         }
 

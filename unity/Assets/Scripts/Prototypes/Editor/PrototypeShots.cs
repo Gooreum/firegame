@@ -178,6 +178,10 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c74_town_east", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(43f, 37f, 0f), 10f));
             failures += SurvivorShot(dir, "c75_convenience_close", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(22f, 36.8f, 0f), 4.5f));
             failures += SurvivorShot(dir, "c75b_barber_close", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(12f, 35.5f, 0f), 4.5f));
+            // 야시장 좌판: 과일 노점에 과일이, 점포마다 이름에 맞는 물건이 보이는가(차양이 좌판을 안 가린다).
+            failures += SurvivorShot(dir, "c76_market_goods", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(45f, 38.8f, 0f), 4.5f), 5);
+            failures += SurvivorShot(dir, "c77_market_row", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(30f, 20.5f, 0f), 11f), 5);
+            failures += SurvivorShot(dir, "c77b_market_food", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(15f, 39f, 0f), 6f), 5);
             // 항구 할 일 가독성: 불배가 떠 있는 동안 띠·부두 끝 "요격 지점" 고리·"N초 뒤 접안"·발밑 화살표.
             failures += SurvivorShot(dir, "c70_harbor_guide", view => view.Sim.Structures.Exists(s => s.Kind == StructureKind.Boat && !s.Docked && s.Burning && !s.Tanker && view.Sim.BoatEta(s) < 12f), 1, false,
                 view =>

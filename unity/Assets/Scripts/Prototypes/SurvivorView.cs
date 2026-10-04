@@ -4817,10 +4817,14 @@ namespace FireGame.Prototypes
                 // 도트 화면에서도 읽히게 지붕 앞 가장자리에 큰 간판으로 세운다(글자 한 줄 ≈ 10픽셀).
                 t.characterSize = 0.11f;
                 t.color = Color.white;
-                t.transform.localPosition = new Vector3(st.Pos.X, st.Pos.Y - (st.Half.Y * 0.75f), 0f) + Up(roof + 0.45f);
+                // 야시장 천막 점포는 앞 좌판에 물건이 있어 이름표를 뒤(차양 뒤 끝)로 올린다.
+                bool stall = i < _structModels.Length && _structModels[i] != null && _structModels[i].name == "Stall";
+                float signY = stall ? st.Pos.Y + (st.Half.Y * 0.8f) : st.Pos.Y - (st.Half.Y * 0.75f);
+                float signUp = stall ? roof + 0.1f : roof + 0.45f;
+                t.transform.localPosition = new Vector3(st.Pos.X, signY, 0f) + Up(signUp);
                 t.transform.localRotation = Billboard;
                 // 간판 판: 글자 뒤 짙은 띠(가게 색 대신 읽기 쉬운 어두운 판).
-                _signBoards.Add(new Vector4(st.Pos.X, st.Pos.Y - (st.Half.Y * 0.75f), roof + 0.45f, Mathf.Min(st.Half.X * 2f - 0.2f, (st.Name.Length * 0.62f) + 0.5f)));
+                _signBoards.Add(new Vector4(st.Pos.X, signY, signUp, Mathf.Min(st.Half.X * 2f - 0.2f, (st.Name.Length * 0.62f) + 0.5f)));
                 _signs.Add(t);
 
                 // 갇힌 사람이 외치는 말풍선(불이 나야 보인다).
@@ -5373,6 +5377,14 @@ namespace FireGame.Prototypes
                     _roofTrim.PutRot(c, Facade, 0.45f, 0.35f, Color.Lerp(new Color(1f, 0.45f, 0.1f, 0.85f), new Color(1f, 0.8f, 0.35f, 0.9f), flick * st.Fire));
                     _roofGlow.PutRot(c + new Vector3(0f, -0.02f, 0f), Facade, 0.8f, 0.8f, new Color(1f, 0.5f, 0.12f, 0.25f + (0.35f * st.Fire)));
                 }
+            }
+            else if (_sim.Stage.Number == 5 && StageModels.SteamAt(st.Name, out bool smoky) is Vector3 spot && Random.value < 0.06f)
+            {
+                // 야시장 먹거리 점포: 철판·냄비·숯불 위로 흰 김(꼬치구이는 회색 연기).
+                var from = new Vector3(st.Pos.X + spot.x, st.Pos.Y - spot.z, -spot.y);
+                Color c = smoky ? new Color(0.6f, 0.6f, 0.62f, 0.5f) : new Color(1f, 1f, 1f, 0.5f);
+                Emit(Smokes[Random.Range(0, Smokes.Length)], from, new Vector3(Random.Range(-0.2f, 0.3f), Random.Range(0.6f, 1f), 0f), 0.4f, Random.Range(1.2f, 1.8f),
+                    0.3f, 1.1f, c, new Color(c.r, c.g, c.b, 0f), Random.Range(-40f, 40f));
             }
             else if (look.Steam.HasValue && Random.value < 0.025f)
             {
