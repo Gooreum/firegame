@@ -724,7 +724,9 @@ namespace FireGame.Prototypes
             ClearStation();
             _stationOpen = true;
 
-            Image dim = UiKit.Image(_stationLayer, "Dim", Art.White, new Color(0.02f, 0.03f, 0.08f, 0.82f));
+            // 수호자: 고른 스테이지의 마지막 판 끝 사진(지켜 낸 마을의 얼굴)을 배경에 깐다. 있으면 어둠을 옅게.
+            bool face = StationFace(_stationLayer, _stage);
+            Image dim = UiKit.Image(_stationLayer, "Dim", Art.White, new Color(0.02f, 0.03f, 0.08f, face ? 0.6f : 0.82f));
             UiKit.Stretch(dim.rectTransform);
 
             Text title = UiKit.OutlinedLabel(_stationLayer, "Title", "소방서", 84, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
@@ -746,6 +748,7 @@ namespace FireGame.Prototypes
                 string label = n + " " + SurvivorStages.Get(n).Name + "  ★" + _station.Best[n];
                 Button pick = UiKit.Button(_stationLayer, "Stage" + n, Art.Get(on ? "UI/button_yellow" : "UI/button_blue"), label, 28, () => TapStage(stage));
                 UiKit.Place(pick.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(stageX0 + ((n - 1) * stageStep), 268f), new Vector2(280f, 56f));
+                StageThumb(pick.GetComponent<RectTransform>(), stage);
             }
 
             // 브리핑: 다음 스테이지의 위협 한 줄과, 그 위협을 막는 대비 장비 둘(하나를 골라 Lv1로 들고 간다).

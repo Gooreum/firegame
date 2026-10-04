@@ -4,6 +4,7 @@ using FireGame.Prototypes.Logic;
 using FireGame.UnityLayer;
 using FireGame.UnityLayer.Feel;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace FireGame.Prototypes
 {
@@ -392,6 +393,35 @@ namespace FireGame.Prototypes
                 _stars[i].rectTransform.localScale = Vector3.one * (pop2 < 1f ? Mathf.Lerp(0f, 1.3f, pop2) : 1f);
             }
             _resultBack.rectTransform.localScale = Vector3.one;
+        }
+        /// <summary>소방서 배경: 그 스테이지의 마지막 사진을 화면 가득(가로 맞춤) 깐다. 사진이 없으면 false.</summary>
+        private static bool StationFace(Transform layer, int stage)
+        {
+            Texture2D tex = Face(stage);
+            if (tex == null) return false;
+            RawImage back = NewRaw(layer, "Face", tex);
+            UiKit.Stretch(back.rectTransform);
+            back.color = new Color(1f, 1f, 1f, 0.9f);
+            return true;
+        }
+
+        /// <summary>스테이지 버튼 왼쪽 끝 작은 사진(56×32). 사진이 없으면 아무것도 안 붙인다.</summary>
+        private static void StageThumb(RectTransform button, int stage)
+        {
+            Texture2D tex = Face(stage);
+            if (tex == null) return;
+            RawImage thumb = NewRaw(button, "Thumb", tex);
+            UiKit.Place(thumb.rectTransform, new Vector2(0f, 0.5f), new Vector2(34f, 0f), new Vector2(56f, 32f));
+        }
+
+        private static RawImage NewRaw(Transform parent, string name, Texture tex)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(RawImage));
+            go.transform.SetParent(parent, false);
+            var raw = go.GetComponent<RawImage>();
+            raw.texture = tex;
+            raw.raycastTarget = false;
+            return raw;
         }
     }
 }
