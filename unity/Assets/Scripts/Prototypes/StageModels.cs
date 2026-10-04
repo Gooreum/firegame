@@ -56,6 +56,7 @@ namespace FireGame.Prototypes
                     return null;
             }
             if (go == null) return null;
+            if ((stage == 2 || stage == 4) && st.Kind == StructureKind.House) Yard(go, stage, st.Name, w, h);
             if (size == Vector3.zero)
             {
                 ItemModels.Place(go, at, 0f, Vector3.down, 1f);

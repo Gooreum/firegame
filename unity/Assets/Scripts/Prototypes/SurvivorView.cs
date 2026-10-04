@@ -4683,12 +4683,21 @@ namespace FireGame.Prototypes
                         size = new Vector3(w, Mathf.Max(size.y, half.y), Mathf.Max(size.z, half.z));
                     }
                 }
+                else if (st.IsBuilding && factory)
+                {
+                    // 공장: Kenney 공장 + 문 앞 이름별 마당 소품(종이 두루마리·페인트 통·리프트 위 차…)을 한 루트로.
+                    int pick = 0;
+                    foreach (char ch in st.Name) pick += ch;
+                    go = new GameObject("Factory");
+                    go.transform.SetParent(_root, false);
+                    Models3D.Place(FactoryModels[pick % FactoryModels.Length], go.transform, at, w * 0.95f, h * 0.95f, 0f, out size, MaxHouseHeight);
+                    StageModels.FactoryYard(go.transform, st, at);
+                }
                 else if (st.IsBuilding)
                 {
                     int pick = 0;
                     foreach (char ch in st.Name) pick += ch;
-                    string[] kinds = factory ? FactoryModels : HouseModels;
-                    go = Models3D.Place(kinds[pick % kinds.Length], _root, at, w * 0.95f, h * 0.95f, 0f, out size, MaxHouseHeight);
+                    go = Models3D.Place(HouseModels[pick % HouseModels.Length], _root, at, w * 0.95f, h * 0.95f, 0f, out size, MaxHouseHeight);
                 }
                 else if (st.Kind == StructureKind.Car)
                 {
