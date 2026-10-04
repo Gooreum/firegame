@@ -275,6 +275,15 @@ namespace FireGame.Prototypes.Logic
         public int Index;
     }
 
+    /// <summary>소방관이 받은 피해의 출처(RunStats.HurtBy 칸).</summary>
+    public enum HurtKind
+    {
+        Contact,
+        Heat,
+        Ground,
+        Blast,
+    }
+
     public sealed class RunStats
     {
         /// <summary>레벨업한 시각들.</summary>
@@ -326,6 +335,12 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>대화재가 시작될 때의 레벨(아이템 다이어트가 보이는 숫자, docs §16).</summary>
         public int FinaleLevel;
+
+        /// <summary>받은 피해를 출처별로(HurtKind 순서: 닿음·열기·바닥 불·폭발). 무엇에 쓰러지는지 잰다.</summary>
+        public readonly float[] HurtBy = new float[4];
+
+        /// <summary>수호자 쉼터(지킨 집 곁)에서 찬 체력.</summary>
+        public float HealHaven;
 
         /// <summary>버티기 성공·실패와 링 안에서 보낸 시간.</summary>
         public int SiegesWon;
@@ -622,6 +637,54 @@ namespace FireGame.Prototypes.Logic
         public const float SiegeReliefWet = 20f;
         public const int SiegeXp = 60;
         public const float SiegeHeal = 15f;
+
+        /// <summary>잿더미 둥지: 무너진 집이 이 간격마다 불씨 RuinSpit개를 뱉는다(무너진 순간부터 한 간격 뒤).</summary>
+        public const float RuinSpitEvery = 7f;
+        public const int RuinSpit = 2;
+
+        /// <summary>이번 틱 불씨를 뱉은 잿더미(그림용).</summary>
+        public readonly List<Structure> RuinSpat = new List<Structure>();
+
+        /// <summary>쉼터: 지켜 낸 집(안 타는) 가장자리 이 거리 안에 서 있으면 초당 HavenHeal씩 찬다.</summary>
+        public const float HavenRange = 3f;
+        public const float HavenHeal = 3f;
+
+        /// <summary>이번 틱 쉼터에서 찼다(그림용). 어느 집 곁인지.</summary>
+        public Structure Haven;
+
+        /// <summary>수호자 대화재 감독: 지킨 비율이 이 이상이면 여유, 이 밑이면 위험.</summary>
+        public const float GuardRoomy = 0.6f;
+        public const float GuardTight = 0.45f;
+
+        /// <summary>지킨 건물 비율(0~1). 건물이 없으면 1.</summary>
+        public float VillageSaved
+        {
+            get
+            {
+                int houses = HousesTotal;
+                return houses > 0 ? (houses - HousesLost) / (float)houses : 1f;
+            }
+        }
+
+        /// <summary>쉼터: 방금 꺼진 건물은 지킨 집이 되고, 안 타는 지킨 집 곁에 서 있으면 찬다.</summary>
+        private void TickHaven()
+        {
+            foreach (Structure d in Doused)
+            {
+                if (d.IsBuilding && !d.Collapsed) d.Guarded = true;
+            }
+            Haven = null;
+            if (Hp >= MaxHp) return;
+            foreach (Structure s in Structures)
+            {
+                if (!s.Guarded || s.Burning || s.Collapsed || s.DistanceTo(Player) > HavenRange) continue;
+                Haven = s;
+                float heal = Math.Min(MaxHp - Hp, HavenHeal * Dt);
+                Hp += heal;
+                Stats.HealHaven += heal;
+                return;
+            }
+        }
         private int _siegeCount;
         public bool JustFinale;
         public bool JustChest;
@@ -1163,6 +1226,7 @@ namespace FireGame.Prototypes.Logic
             TickToolboxes();
             TickKits();
             TickRescue();
+            if (Guardian) TickHaven();
             TickChests();
             if (Combo > 0)
             {
@@ -1184,7 +1248,8 @@ namespace FireGame.Prototypes.Logic
                 return;
             }
             int houses = HousesTotal;
-            if (houses > 0 && HousesLost * 2 > houses)
+            // 수호자: 동네를 잃어도 끝나지 않는다. 쓰러질 때까지 지킨다(대신 무너진 집은 잿더미 둥지가 된다).
+            if (!Guardian && houses > 0 && HousesLost * 2 > houses)
             {
                 LostTown = true;
                 Outcome = SOutcome.Lost;
@@ -1312,6 +1377,7 @@ namespace FireGame.Prototypes.Logic
             JustSiegeWon = false;
             JustSiegeLost = false;
             JustSiegeWave = false;
+            RuinSpat.Clear();
             Hits.Clear();
             Explosions.Clear();
             DroneDrops.Clear();
@@ -1505,8 +1571,11 @@ namespace FireGame.Prototypes.Logic
                     // 감독: 여유가 있으면 한 단계 올리고, 위험하면 한 단계 내린다. 그 단계로 다음 간격을 정한다.
                     float hp = Hp / MaxHp;
                     int before = FinalePressure;
-                    if (hp >= PressureHp && HousesRoom >= 2) FinalePressure = Math.Min(PressureMax, FinalePressure + 1);
-                    else if (hp < PressureLowHp || HousesRoom <= 1) FinalePressure = Math.Max(0, FinalePressure - 1);
+                    // 수호자 마을은 동네를 잃어도 안 지므로 "건물 여유" 대신 지킨 비율로 본다.
+                    bool roomy = Guardian ? VillageSaved >= GuardRoomy : HousesRoom >= 2;
+                    bool tight = Guardian ? VillageSaved < GuardTight : HousesRoom <= 1;
+                    if (hp >= PressureHp && roomy) FinalePressure = Math.Min(PressureMax, FinalePressure + 1);
+                    else if (hp < PressureLowHp || tight) FinalePressure = Math.Max(0, FinalePressure - 1);
                     if (FinalePressure > before)
                     {
                         JustPressureUp = true;
@@ -3147,7 +3216,7 @@ namespace FireGame.Prototypes.Logic
                             Footprints.Add(Player);
                         }
                     }
-                    else Burn(10f * Dt);
+                    else Burn(10f * Dt, HurtKind.Ground);
                 }
                 if (!p.Oil || p.Out || p.Life <= 0f) continue;
                 // 기름 불은 닿은 탈 것에 옮겨붙는다: 건물 곁에서 기름 방울을 터뜨리면 건물이 탄다.
@@ -3514,7 +3583,7 @@ namespace FireGame.Prototypes.Logic
                 }
                 if (hit != null) Ignite(hit, RocketIgnite);
                 else if (BurningGround.Count < MaxBurningGround) BurningGround.Add(new Puddle { Pos = r.Target, Radius = 0.8f, Life = 4f, MaxLife = 4f });
-                if (Player.DistanceTo(r.Target) <= 1.5f) Burn(RocketBurn);
+                if (Player.DistanceTo(r.Target) <= 1.5f) Burn(RocketBurn, HurtKind.Blast);
             }
             Rockets.RemoveAll(r => r.Dead);
         }
@@ -3723,7 +3792,21 @@ namespace FireGame.Prototypes.Logic
         {
             foreach (Structure s in Structures)
             {
-                if (s.Collapsed) continue;
+                if (s.Collapsed)
+                {
+                    // 수호자: 무너진 집은 잿더미 둥지 — 판 끝까지 RuinSpitEvery마다 불씨 RuinSpit개. 잃은 만큼 세상이 거칠어진다.
+                    if (Guardian && s.IsBuilding)
+                    {
+                        s.RuinClock -= Dt;
+                        if (s.RuinClock <= 0f)
+                        {
+                            s.RuinClock = RuinSpitEvery;
+                            for (int k = 0; k < RuinSpit; k++) SpitEmber(s, 4f);
+                            RuinSpat.Add(s);
+                        }
+                    }
+                    continue;
+                }
                 if (s.Wet > 0f) s.Wet -= Dt;
                 if (!s.Burning) continue;
 
@@ -3845,7 +3928,7 @@ namespace FireGame.Prototypes.Logic
             for (int k = 0; k < 8; k++) SpitEmber(gas, 9f);
             // 공단 약품 드럼은 터지며 기름을 흩뿌린다.
             if (Stage.DrumSpill > 0) Spill(gas.Pos, Stage.DrumSpill);
-            if (Player.DistanceTo(gas.Pos) <= GasRadius) Hurt(25f);
+            if (Player.DistanceTo(gas.Pos) <= GasRadius) Hurt(25f, HurtKind.Blast);
         }
 
         private void Fall(Structure s)
@@ -3855,6 +3938,7 @@ namespace FireGame.Prototypes.Logic
             s.Integrity = 0f;
             s.Fuse = -1f;
             Fell.Add(s);
+            s.RuinClock = RuinSpitEvery;
             if (s.IsBuilding)
             {
                 HousesLost++;
@@ -3894,7 +3978,7 @@ namespace FireGame.Prototypes.Logic
             float push = Build.SuitPush;
             foreach (Enemy e in _near)
             {
-                Burn(e.Touch * Dt);
+                Burn(e.Touch * Dt, HurtKind.Contact);
                 if (push <= 0f || e.BounceCool > 0f) continue;
                 e.BounceCool = SuitBounceCool;
                 Vec2 k = Knockback(Player, e.Pos, push * KnockScale(e));
@@ -3930,21 +4014,22 @@ namespace FireGame.Prototypes.Logic
             // 대화재 감독: 단계마다 열기가 세진다(1 → 1.5 → 2 → 2.5배). 3:00의 장비는 불을 다 끄므로, 서서 끄는 몸이 압력을 받는다.
             float heat = HeatDps * (1f + (PressureHeatStep * FinalePressure));
             HeatHurt = heat * worst * Build.HeatScale * wall * Dt;
-            Burn(heat * worst * wall * Dt);
+            Burn(heat * worst * wall * Dt, HurtKind.Heat);
         }
 
         /// <summary>불에 데는 피해: 방화복(HeatScale)만큼 덜 받는다. 원값은 통계에 남긴다.</summary>
-        private void Burn(float raw)
+        private void Burn(float raw, HurtKind kind)
         {
             Stats.FireDamageRaw += raw;
-            Hurt(raw * Build.HeatScale);
+            Hurt(raw * Build.HeatScale, kind);
         }
 
-        private void Hurt(float amount)
+        private void Hurt(float amount, HurtKind kind)
         {
             Hp -= amount;
             PlayerHurt += amount;
             Stats.DamageTaken += amount;
+            Stats.HurtBy[(int)kind] += amount;
         }
 
         /// <summary>한 틱의 재미 밀도 통계를 쌓는다.</summary>

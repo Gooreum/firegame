@@ -92,6 +92,12 @@ namespace FireGame.Prototypes.Logic
         /// <summary>불꽃 가판대: 퓨즈가 다 타서 로켓을 쏘고 있다.</summary>
         public bool Launching;
 
+        /// <summary>수호자: 타다가 지켜 낸 건물(무너지지 않고 꺼졌다). 안 타는 동안 곁에 서면 쉼터가 된다.</summary>
+        public bool Guarded;
+
+        /// <summary>수호자: 무너진 건물(잿더미 둥지)이 다음 불씨를 뱉기까지.</summary>
+        public float RuinClock;
+
         /// <summary>불꽃 가판대: 다음 로켓까지 남은 시간.</summary>
         public float LaunchClock;
 

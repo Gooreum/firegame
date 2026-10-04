@@ -369,6 +369,156 @@ namespace FireGame.Prototypes.Tests
             Assert.Same(sim.Landmark, sim.Siege.Target);
         }
 
+        // --- 생명줄 ---
+
+        private static void Collapse(SurvivorSim sim, int count)
+        {
+            int n = 0;
+            foreach (Structure s in sim.Structures)
+            {
+                if (!s.IsBuilding || s.Collapsed || n >= count) continue;
+                s.Fire = 1f;
+                s.Integrity = 0.00001f;
+                n++;
+            }
+        }
+
+        [Fact]
+        public void Guardian_LosingHalfTheTown_DoesNotEndTheRun()
+        {
+            var sim = new SurvivorSim(1, 1);
+            sim.Reports = false;
+            Collapse(sim, (sim.HousesTotal / 2) + 1);
+            Run(sim, 0.5f);
+            Assert.Equal(SOutcome.Playing, sim.Outcome);
+            Assert.False(sim.LostTown);
+            Assert.True(sim.HousesLost * 2 > sim.HousesTotal);
+
+            var old = new SurvivorSim(1, 1) { Guardian = false };
+            old.Reports = false;
+            Collapse(old, (old.HousesTotal / 2) + 1);
+            Run(old, 0.5f);
+            Assert.Equal(SOutcome.Lost, old.Outcome);
+            Assert.True(old.LostTown);
+        }
+
+        [Fact]
+        public void Ruin_SpitsEmbers_EverySevenSeconds()
+        {
+            var sim = Quiet();
+            Structure shop = House(sim, 0f, 15f);
+            shop.Fire = 1f;
+            shop.Integrity = 0.00001f;
+            sim.Step(0f, 0f);
+            Assert.True(shop.Collapsed);
+            sim.Enemies.Clear();
+            bool spat = false;
+            for (int i = 0; i < (int)((SurvivorSim.RuinSpitEvery - 0.1f) / SurvivorSim.Dt); i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+                spat |= sim.RuinSpat.Contains(shop);
+            }
+            Assert.False(spat, "7초가 안 됐는데 뱉었다");
+            for (int i = 0; i < 12 && !spat; i++)
+            {
+                sim.Step(0f, 0f);
+                spat = sim.RuinSpat.Contains(shop);
+            }
+            Assert.True(spat);
+            Assert.Equal(SurvivorSim.RuinSpit, sim.Enemies.FindAll(e => e.Kind == EnemyKind.Ember && shop.DistanceTo(e.Pos) <= 2f).Count);
+        }
+
+        [Fact]
+        public void GuardedHouse_IsAHaven()
+        {
+            var sim = Quiet();
+            Structure shop = House(sim, 0f, 3.5f);
+            sim.Ignite(shop, 0.05f);
+            for (int i = 0; i < 600 && shop.Burning; i++)
+            {
+                sim.Aim = new Vec2(0f, 1f);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+            }
+            Assert.False(shop.Burning);
+            Assert.True(shop.Guarded);
+            sim.Spraying = false;
+            sim.Hp = 50f;
+            Run(sim, 1f);
+            Assert.InRange(sim.Hp, 52.5f, 53.5f);
+            Assert.InRange(sim.Stats.HealHaven, 2.5f, 3.5f);
+            Assert.Same(shop, sim.Haven);
+        }
+
+        [Fact]
+        public void NoHaven_BesideAnUntouchedHouse_OrABurningGuardedOne()
+        {
+            var sim = Quiet();
+            House(sim, 0f, 3.5f);
+            sim.Hp = 50f;
+            Run(sim, 1f);
+            Assert.Equal(50f, sim.Hp);
+
+            sim = Quiet();
+            Structure shop = House(sim, 0f, 3.5f);
+            shop.Guarded = true;
+            sim.Ignite(shop, 0.3f);
+            sim.Hp = 50f;
+            Run(sim, 1f);
+            Assert.True(sim.Hp <= 50f, "타는 집은 쉼터가 아니다: " + sim.Hp);
+        }
+
+        [Fact]
+        public void Director_ReadsVillageSaved()
+        {
+            var sim = new SurvivorSim(1, 1);
+            sim.Reports = true;
+            sim.Time = SurvivorSim.FinaleAt - SurvivorSim.Dt;
+            sim.Step(0f, 0f);
+            Assert.True(sim.Finale);
+            int houses = sim.HousesTotal;
+            // 지킨 비율 0.5 미만~0.6 미만: 여유가 아니라 안 오른다.
+            sim.HousesLost = (int)Math.Ceiling(houses * 0.42f);
+            Assert.InRange(sim.VillageSaved, SurvivorSim.GuardTight, SurvivorSim.GuardRoomy - 0.001f);
+            for (int i = 0; i < (int)(20f / SurvivorSim.Dt); i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.Enemies.Clear();
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+            }
+            Assert.Equal(0, sim.FinalePressure);
+            // 지킨 비율이 충분하면 오른다.
+            sim.HousesLost = 0;
+            for (int i = 0; i < (int)(10f / SurvivorSim.Dt); i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.Enemies.Clear();
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+            }
+            Assert.True(sim.FinalePressure > 0);
+        }
+
+        [Fact]
+        public void HurtBy_SortsDamageBySource()
+        {
+            var sim = Quiet();
+            Enemy e = sim.Spawn(EnemyKind.Blaze, sim.Player);
+            e.Speed = 0f;
+            e.Hp = e.MaxHp = 9999f;
+            sim.Step(0f, 0f);
+            Assert.True(sim.Stats.HurtBy[(int)HurtKind.Contact] > 0f);
+
+            sim = Quiet();
+            Structure shop = House(sim, 0f, 2.5f);
+            sim.Ignite(shop, 1f);
+            shop.Wet = 0f;
+            sim.Step(0f, 0f);
+            Assert.True(sim.Stats.HurtBy[(int)HurtKind.Heat] > 0f);
+        }
+
         [Fact]
         public void MoveOnlyBot_NeverHolds_ButStillShoots()
         {
