@@ -42,7 +42,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Finale_RaisesPressure_WhenTheTownIsSafe()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             RunTo(sim, SurvivorSim.FinaleAt + 0.1f);
             Assert.True(sim.Finale);
             Assert.Equal(0, sim.FinalePressure);
@@ -74,7 +74,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Finale_LowersPressure_WhenHpIsLow()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             RunTo(sim, SurvivorSim.FinaleAt + 0.1f);
             for (int i = 0; i < 3; i++) ToNextChange(sim, 1f);
             Assert.Equal(3, sim.FinalePressure);
@@ -97,7 +97,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Finale_LowersPressure_WhenOneMoreHouseLoses()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             RunTo(sim, SurvivorSim.FinaleAt + 0.1f);
             for (int i = 0; i < 2; i++) ToNextChange(sim, 1f);
             Assert.Equal(2, sim.FinalePressure);
@@ -119,7 +119,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Pressure_ScalesBursts_AndForestWind()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             for (int p = 0; p <= SurvivorSim.PressureMax; p++)
             {
                 sim.FinalePressure = p;
@@ -130,7 +130,7 @@ namespace FireGame.Prototypes.Tests
             Assert.InRange(SurvivorStages.Get(2).FinaleWindChance + (SurvivorSim.PressureWindStep * SurvivorSim.PressureMax), 0.6f, 0.7f);
 
             // 3단계 대화재의 랜드마크 불씨 분출은 한 번에 20개(튕겨 나가는 세기 6으로 가장자리 스폰과 구분한다).
-            sim = new SurvivorSim(2);
+            sim = new SurvivorSim(2) { Guardian = false };
             RunTo(sim, SurvivorSim.FinaleAt + 0.1f);
             Assert.NotNull(sim.Landmark);
             sim.FinalePressure = SurvivorSim.PressureMax;
@@ -153,7 +153,7 @@ namespace FireGame.Prototypes.Tests
         public void Pressure_MakesFiresBigger_HeatHotter_AndRingsOfHeavyBlazes()
         {
             // 신고 불 세기 0.35 → 0.5 → 0.65 → 0.8, 열기 1 → 2.5배.
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             for (int p = 0; p <= SurvivorSim.PressureMax; p++)
             {
                 sim.FinalePressure = p;
@@ -163,7 +163,7 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(0.5f, SurvivorSim.PressureHeatStep);
 
             // 2단계부터 8초마다 큰 불 고리: 6칸 둘레에 16마리, 레벨만큼 질기고(1 + 0.15×Lv) 1.5배 빠르며 거의 안 밀린다.
-            sim = new SurvivorSim(2);
+            sim = new SurvivorSim(2) { Guardian = false };
             RunTo(sim, SurvivorSim.FinaleAt + 0.1f);
             ToNextChange(sim, 1f);
             ToNextChange(sim, 1f);
@@ -206,7 +206,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void HeavyBlaze_BarelyMoves_WhenKnocked()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Reports = false;
             sim.Structures.Clear();
             sim.Enemies.Clear();
@@ -227,7 +227,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void BeforeTheFinale_PressureStaysZero()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             RunTo(sim, 100f);
             Assert.False(sim.Finale);
             Assert.Equal(0, sim.FinalePressure);

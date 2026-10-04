@@ -22,7 +22,7 @@ namespace FireGame.Prototypes.Tests
 
         private static SurvivorSim Quiet()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Reports = false;
@@ -85,7 +85,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Stats_CountReportsAsEvents()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             float first = sim.Stage.ReportTimes[0];
             int ticks = (int)((first + 0.5f) / SurvivorSim.Dt);
             for (int i = 0; i < ticks && sim.PendingChoices == null; i++)
@@ -152,7 +152,7 @@ namespace FireGame.Prototypes.Tests
             var row = new FunRow { Stage = stage };
             for (int seed = 1; seed <= seeds; seed++)
             {
-                var sim = new SurvivorSim(seed, stage, start);
+                var sim = new SurvivorSim(seed, stage, start) { Guardian = false };
                 var bot = new SurvivorBot(sim) { Favorite = favorite, Pro = pro };
                 int guard = 0;
                 while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) bot.Play();

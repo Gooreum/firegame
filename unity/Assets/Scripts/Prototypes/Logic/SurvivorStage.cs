@@ -109,6 +109,12 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>야시장: 가장자리 스폰에서 풍등 비율(하늘을 떠서 점포 지붕에 내려앉는다).</summary>
         public float LanternShare;
+
+        /// <summary>수호자 규칙(자동 분사·버티기·생명줄·수호 반경). 샘플로 마을만 켠다(docs §20).</summary>
+        public bool Guardian;
+
+        /// <summary>수호자 규칙의 대형 신고(버티기 지점) 시각. null이면 SurvivorSim.BigReportTimes.</summary>
+        public float[] BigReportTimes;
     }
 
     /// <summary>대화재 종류: 공통 감독(압력·신고·불씨·큰 불 고리) 위에 스테이지마다 다른 사건 하나.</summary>
@@ -151,6 +157,9 @@ namespace FireGame.Prototypes.Logic
             Threat = "큰 불에 주민이 갇힌다 · 신고가 멀리서 온다",
             Counters = new[] { UpgradeId.Partner, UpgradeId.Boots },
             Goal = "큰 불부터, 갇힌 사람 먼저",
+            // 수호자 샘플: 대형 신고를 약 1분 리듬으로(50·115초 + 3:00 랜드마크) — 진격하고, 도착해 버티고, 풀고, 다음으로.
+            Guardian = true,
+            BigReportTimes = new[] { 50f, 115f },
         };
 
         private static readonly StageRules Forest = new StageRules

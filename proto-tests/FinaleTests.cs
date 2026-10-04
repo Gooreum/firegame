@@ -66,7 +66,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void BigReport_At80s_BigFireAndThreeMorePeople()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             RunTo(sim, SurvivorSim.BigReportTimes[0] - 0.5f);
             Assert.Null(sim.BigReport);
             int[] before = sim.Structures.ConvertAll(s => s.Residents).ToArray();
@@ -87,7 +87,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void RescuingEveryone_DropsAChest_AndItOpensTwoPicksStartingYellow()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             Structure big = ToBigReport(sim);
             // 다른 가게의 사람은 이 테스트와 상관없다: 대형 신고 건물만 끈질기게 탄다.
             WalkTo(sim, big.Door, 60 * 30, () => big.Residents <= 0);
@@ -125,7 +125,7 @@ namespace FireGame.Prototypes.Tests
         public void DousingTheBigReport_WithNoOneLost_AlsoDropsTheChest()
         {
             // 불을 먼저 꺼서 안의 사람이 안전해져도 "한 명도 잃지 않고 지켰다"는 같다: 상자가 나온다.
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             Structure big = ToBigReport(sim);
             int inside = big.Residents;
             big.Fire = 0.01f;
@@ -152,7 +152,7 @@ namespace FireGame.Prototypes.Tests
 
         private static SurvivorSim Quiet()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Reports = false;
@@ -273,7 +273,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void ClearingTheLandmark_Signals_AndRewards()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             RunTo(sim, SurvivorSim.FinaleAt + 0.1f);
             Structure mark = sim.Landmark;
             Assert.NotNull(mark);
@@ -302,7 +302,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void CollapsedBigReport_GivesNoChest()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             Structure big = ToBigReport(sim);
             big.Integrity = 0.0001f;
             RunTo(sim, sim.Time + 1f);
@@ -314,7 +314,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Finale_ReportsEveryEightSeconds_AddingAPerson()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             RunTo(sim, SurvivorSim.FinaleAt + 0.1f);
             Assert.True(sim.Finale);
             Assert.Equal(1f, sim.Landmark.Fire, 2);
@@ -334,7 +334,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void SurvivingToFourMinutes_Wins()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Reports = false;
             RunTo(sim, SurvivorSim.RunTime + 1f);
             Assert.Equal(SOutcome.Won, sim.Outcome);
@@ -344,7 +344,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void LosingHalfTheTown_StillLosesBeforeTheEnd()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Reports = false;
             int n = 0;
             // 절반을 넘기는 수(13채면 7채).
@@ -368,7 +368,7 @@ namespace FireGame.Prototypes.Tests
             // 같은 나무 쌍 여럿을 대화재 전과 대화재 중에 태워 옮은 수를 센다.
             int Spread(bool finale)
             {
-                var sim = new SurvivorSim(3, 2);
+                var sim = new SurvivorSim(3, 2) { Guardian = false };
                 sim.Structures.Clear();
                 sim.Reports = false;
                 if (finale)

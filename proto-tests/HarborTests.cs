@@ -9,7 +9,7 @@ namespace FireGame.Prototypes.Tests
     {
         private static SurvivorSim Quiet(int stage = 4)
         {
-            var sim = new SurvivorSim(1, stage);
+            var sim = new SurvivorSim(1, stage) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Reports = false;
@@ -48,7 +48,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void FirstBoat_AppearsAtTwentySeconds_DriftsTheLane_TurnsAtItsTarget_AndDocks()
         {
-            var sim = new SurvivorSim(3, 4);
+            var sim = new SurvivorSim(3, 4) { Guardian = false };
             sim.Reports = false;
             Structure boat = null;
             int guard = 0;
@@ -134,7 +134,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void EdgeSpawns_LandAshore_NotStrandedBeyondTheSea()
         {
-            var sim = new SurvivorSim(2, 4);
+            var sim = new SurvivorSim(2, 4) { Guardian = false };
             sim.Reports = false;
             int land = 0;
             int total = 0;
@@ -157,7 +157,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Gulls_FlyOverWater_AndAreNotPushedAshore()
         {
-            var sim = new SurvivorSim(1, 4);
+            var sim = new SurvivorSim(1, 4) { Guardian = false };
             sim.Enemies.Clear();
             sim.Reports = false;
             Enemy gull = sim.Spawn(EnemyKind.Gull, new Vec2(30f, 50f));
@@ -174,7 +174,7 @@ namespace FireGame.Prototypes.Tests
         public void Bot_StandsOnThePierTip_WhenOnlyAFloatingBoatBurns()
         {
             // 본 맵(바다·부두가 있다)에서 뭍의 불은 없고 불배만 떠 있다.
-            var sim = new SurvivorSim(1, 4);
+            var sim = new SurvivorSim(1, 4) { Guardian = false };
             sim.Enemies.Clear();
             sim.Reports = false;
             Boat(sim, 30f, SurvivorHarbor.BoatLane, false);
@@ -306,7 +306,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void HarborMap_HasEightBuildings_AColdStore_FuelTanks_AndASeaWithTwoPiers()
         {
-            var sim = new SurvivorSim(1, 4);
+            var sim = new SurvivorSim(1, 4) { Guardian = false };
             Assert.Equal("항구", sim.Stage.Name);
             Assert.Equal(4, sim.Stage.Number);
             Assert.Equal(8, sim.Structures.FindAll(s => s.Kind == StructureKind.House).Count);
@@ -370,7 +370,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Crab_CrawlsAshore_IgnitesABuilding_ThenChasesTheFirefighter()
         {
-            var sim = new SurvivorSim(1, 4);
+            var sim = new SurvivorSim(1, 4) { Guardian = false };
             sim.Enemies.Clear();
             sim.Reports = false;
             Enemy crab = sim.Spawn(EnemyKind.Crab, new Vec2(30f, 50f));

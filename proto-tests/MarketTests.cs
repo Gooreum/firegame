@@ -9,7 +9,7 @@ namespace FireGame.Prototypes.Tests
     {
         private static SurvivorSim Quiet()
         {
-            var sim = new SurvivorSim(1, 5);
+            var sim = new SurvivorSim(1, 5) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Lanterns.Clear();
@@ -326,15 +326,15 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void MarketMap_LaysTwelveLanternLines()
         {
-            var sim = new SurvivorSim(1, 5);
+            var sim = new SurvivorSim(1, 5) { Guardian = false };
             Assert.Equal(12, sim.Lanterns.Count);
             Assert.All(sim.Lanterns, l => Assert.True(l.A.Kind == StructureKind.House && l.B.Kind == StructureKind.House && l.Burn < 0f));
-            Assert.Empty(new SurvivorSim(1, 1).Lanterns);
+            Assert.Empty(new SurvivorSim(1, 1) { Guardian = false }.Lanterns);
         }
         [Fact]
         public void MarketMap_HasTwelveStalls_AStage_ThreeFireworkStands_AndTwelveLanternLinks()
         {
-            var sim = new SurvivorSim(1, 5);
+            var sim = new SurvivorSim(1, 5) { Guardian = false };
             Assert.Equal("야시장", sim.Stage.Name);
             Assert.Equal(5, sim.Stage.Number);
             List<Structure> stalls = sim.Structures.FindAll(s => s.Kind == StructureKind.House);

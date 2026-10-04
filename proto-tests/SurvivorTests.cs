@@ -19,7 +19,7 @@ namespace FireGame.Prototypes.Tests
         /// <summary>스폰 감독이 끼어들지 않게 적을 모두 지운 판(테스트는 원하는 적만 놓는다).</summary>
         private static SurvivorSim Quiet(int seed = 1)
         {
-            var sim = new SurvivorSim(seed);
+            var sim = new SurvivorSim(seed) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Reports = false;
@@ -252,8 +252,8 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void SameSeed_SamePlay()
         {
-            var a = new SurvivorSim(42);
-            var b = new SurvivorSim(42);
+            var a = new SurvivorSim(42) { Guardian = false };
+            var b = new SurvivorSim(42) { Guardian = false };
             var aimA = new SurvivorBot(a);
             var aimB = new SurvivorBot(b);
             for (int i = 0; i < 1200; i++)
@@ -289,7 +289,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void WaterBomb_ExplodesOnACrowd()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Enemies.Clear();
             sim.Build.Add(UpgradeId.WaterBomb);
             var crowd = new List<Enemy>();
@@ -385,7 +385,7 @@ namespace FireGame.Prototypes.Tests
         {
             for (int seed = 1; seed <= 20; seed++)
             {
-                var sim = new SurvivorSim(seed);
+                var sim = new SurvivorSim(seed) { Guardian = false };
                 var bot = new SurvivorBot(sim);
                 while (sim.Outcome == SOutcome.Playing && sim.Time < SurvivorSim.FinaleAt + 1f) bot.Play();
                 if (sim.Outcome == SOutcome.Playing) return seed;
@@ -397,7 +397,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Finale_AtThreeMinutes_ThenSurvivingToFourWins()
         {
-            var sim = new SurvivorSim(LongSeed);
+            var sim = new SurvivorSim(LongSeed) { Guardian = false };
             var bot = new SurvivorBot(sim);
             bool finale = false;
             while (sim.Outcome == SOutcome.Playing && sim.Time < SurvivorSim.FinaleAt + 1f)
@@ -429,7 +429,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void StandingStill_LosesWithin150Seconds()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             while (sim.Outcome == SOutcome.Playing && sim.Time < 150f)
             {
                 if (sim.PendingChoices != null) sim.Choose(0);
@@ -448,7 +448,7 @@ namespace FireGame.Prototypes.Tests
             var log = new System.Text.StringBuilder();
             for (int seed = 1; seed <= seeds; seed++)
             {
-                var sim = new SurvivorSim(seed);
+                var sim = new SurvivorSim(seed) { Guardian = false };
                 var bot = new SurvivorBot(sim);
                 int guard = 0;
                 while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400)
@@ -479,7 +479,7 @@ namespace FireGame.Prototypes.Tests
             {
                 System.GC.Collect();
                 var watch = System.Diagnostics.Stopwatch.StartNew();
-                var sim = new SurvivorSim(seed);
+                var sim = new SurvivorSim(seed) { Guardian = false };
                 var bot = new SurvivorBot(sim);
                 int guard = 0;
                 while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) bot.Play();
@@ -575,7 +575,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Town_HasShopsDepotGasAndAClearCenter()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             var houses = sim.Structures.FindAll(s => s.Kind == StructureKind.House);
             Assert.Equal(12, houses.Count);
             Assert.Single(sim.Structures.FindAll(s => s.Kind == StructureKind.Depot));
@@ -785,7 +785,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Reports_IgniteShopsOnSchedule()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             var times = new List<float>();
             int pairs = 0;
             // 대형 신고와 대화재(3:00~)는 따로 본다(FinaleTests): 여기선 3:00 전 신고 표만.
@@ -810,7 +810,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void LosingHalfTheTown_LosesTheRun()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Enemies.Clear();
             List<Structure> shops = sim.Structures.FindAll(s => s.Kind == StructureKind.House);
             // 딱 절반(13채면 6채)까지는 버티고, 한 채 더 잃으면 진다.
@@ -847,7 +847,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Finale_SetsTheDepotAblaze_WithPeopleInside()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             while (!sim.Finale && sim.Outcome == SOutcome.Playing)
             {
                 sim.Enemies.Clear();
@@ -866,13 +866,13 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void WinningStars_CountSavedHousesAndLostPeople()
         {
-            var perfect = new SurvivorSim(1);
+            var perfect = new SurvivorSim(1) { Guardian = false };
             perfect.Reports = false;
             SurviveToTheEnd(perfect);
             Assert.Equal(SOutcome.Won, perfect.Outcome);
             Assert.Equal(3, perfect.Stars);
 
-            var oneLost = new SurvivorSim(1);
+            var oneLost = new SurvivorSim(1) { Guardian = false };
             oneLost.Reports = false;
             Structure shop = oneLost.Structures.Find(s => s.Kind == StructureKind.House && s.Residents > 0);
             oneLost.Ignite(shop, 1f);
@@ -887,7 +887,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void GiveMaxGear_MaxesEveryItem_AndEvolvesTheHose()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.GiveMaxGear();
 
             UpgradeId[] maxed = { UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Turret, UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit };
@@ -1026,7 +1026,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void StartingGear_IsWhatTheStationGives()
         {
-            var sim = new SurvivorSim(1, 1, Roster.Get("veteran").Start);
+            var sim = new SurvivorSim(1, 1, Roster.Get("veteran").Start) { Guardian = false };
             Assert.Equal(1, sim.Build.Level(UpgradeId.Hose));
             Assert.Equal(1, sim.Build.Level(UpgradeId.Curtain));
             Assert.Equal(1, sim.Build.Level(UpgradeId.Suit));
@@ -1034,13 +1034,13 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(sim.MaxHp, sim.Hp);
             Assert.True(sim.MaxHp > SurvivorSim.BaseMaxHp, "방화복이 최대 체력을 올려야 한다");
 
-            var rookie = new SurvivorSim(1);
+            var rookie = new SurvivorSim(1) { Guardian = false };
             Assert.Equal(1, rookie.Build.Level(UpgradeId.Hose));
             Assert.Equal(0, rookie.Build.Level(UpgradeId.Suit));
             Assert.Equal(SurvivorSim.BaseMaxHp, rookie.Hp);
 
             // 빈 손으로도 터지지 않는다: 쏴도 아무 일이 없다.
-            var bare = new SurvivorSim(1, 1, new UpgradeId[0]);
+            var bare = new SurvivorSim(1, 1, new UpgradeId[0]) { Guardian = false };
             bare.Enemies.Clear();
             bare.Aim = new Vec2(1f, 0f);
             bare.Spraying = true;

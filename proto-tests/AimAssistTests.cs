@@ -67,7 +67,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void SimTargets_IncludeFiresAndBurningBuildings()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Enemies.Clear();
             sim.Reports = false;
             Enemy boss = sim.Spawn(EnemyKind.Blaze, new Vec2(10f, 10f));

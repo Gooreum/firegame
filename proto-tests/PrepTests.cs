@@ -95,7 +95,7 @@ namespace FireGame.Prototypes.Tests
             // 실제 판(숲)에서 레벨업해도 포탑은 안 나온다: 플레이어 경로(구슬 → 레벨업 → 카드).
             for (int seed = 1; seed <= 10; seed++)
             {
-                var sim = new SurvivorSim(seed, 2);
+                var sim = new SurvivorSim(seed, 2) { Guardian = false };
                 sim.Reports = false;
                 for (int level = 0; level < 12; level++)
                 {
@@ -118,7 +118,7 @@ namespace FireGame.Prototypes.Tests
 
             station.Prep = UpgradeId.Partner;
             Assert.Equal(new[] { UpgradeId.Hose, UpgradeId.Partner }, station.StartFor(town));
-            var sim = new SurvivorSim(1, 1, station.StartFor(town));
+            var sim = new SurvivorSim(1, 1, station.StartFor(town)) { Guardian = false };
             Assert.Equal(1, sim.Build.Level(UpgradeId.Partner));
             Assert.Equal(1, sim.Build.Level(UpgradeId.Hose));
 
@@ -126,7 +126,7 @@ namespace FireGame.Prototypes.Tests
             station.Unlocked.Add("rescue");
             station.Selected = "rescue";
             Assert.Equal(new[] { UpgradeId.Hose, UpgradeId.Partner }, station.StartFor(town));
-            sim = new SurvivorSim(1, 1, station.StartFor(town));
+            sim = new SurvivorSim(1, 1, station.StartFor(town)) { Guardian = false };
             Assert.Equal(1, sim.Build.Level(UpgradeId.Partner));
         }
 

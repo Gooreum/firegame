@@ -8,7 +8,7 @@ namespace FireGame.Prototypes.Tests
     {
         private static SurvivorSim Quiet()
         {
-            var sim = new SurvivorSim(1, 3);
+            var sim = new SurvivorSim(1, 3) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Reports = false;
@@ -30,7 +30,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void FactoryMap_HasEightPlants_ARefinery_TwelveDrums_AndAClearCenter()
         {
-            var sim = new SurvivorSim(1, 3);
+            var sim = new SurvivorSim(1, 3) { Guardian = false };
             Assert.Equal("공단", sim.Stage.Name);
             Assert.Equal(3, sim.Stage.Number);
             Assert.Equal(8, sim.Structures.FindAll(s => s.Kind == StructureKind.House).Count);
@@ -48,7 +48,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void OneDrum_SetsOffItsPile_AndSpillsOil()
         {
-            var sim = new SurvivorSim(1, 3);
+            var sim = new SurvivorSim(1, 3) { Guardian = false };
             sim.Reports = false;
             Structure first = sim.Structures.Find(s => s.Kind == StructureKind.Gas);
             // 줄의 끝 드럼: 3칸 안엔 둘(1.2·2.4), 넷째는 3.6이지만 연쇄로 터진다.
@@ -145,9 +145,9 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void OilBlobs_OnlyComeInTheFactory_AfterOilFrom()
         {
-            var town = new SurvivorSim(1, 1);
+            var town = new SurvivorSim(1, 1) { Guardian = false };
             Assert.Equal(0f, town.Stage.OilShare);
-            var factory = new SurvivorSim(3, 3);
+            var factory = new SurvivorSim(3, 3) { Guardian = false };
             bool early = false;
             bool seen = false;
             while (factory.Time < 120f && factory.Outcome == SOutcome.Playing)

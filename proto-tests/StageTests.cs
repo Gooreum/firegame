@@ -21,7 +21,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Stage1_IsTheOriginalTown()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             Assert.Equal(1, sim.Stage.Number);
             Assert.Equal(SurvivorSim.ReportTimes, sim.Stage.ReportTimes);
             Assert.Equal(SurvivorSim.FireGrowth, sim.Stage.FireGrowth);
@@ -35,8 +35,8 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Stage2_KeepsBaseStats_AndWindsUpTheFinale()
         {
-            var one = new SurvivorSim(1, 1);
-            var two = new SurvivorSim(1, 2);
+            var one = new SurvivorSim(1, 1) { Guardian = false };
+            var two = new SurvivorSim(1, 2) { Guardian = false };
             Assert.Equal(2, two.Stage.Number);
             float ember1 = one.Spawn(EnemyKind.Ember, one.Player).MaxHp;
             float ember2 = two.Spawn(EnemyKind.Ember, two.Player).MaxHp;
@@ -81,7 +81,7 @@ namespace FireGame.Prototypes.Tests
                 var seen = new HashSet<UpgradeId>();
                 for (int seed = 1; seed <= 20; seed++)
                 {
-                    var sim = new SurvivorSim(seed, stage);
+                    var sim = new SurvivorSim(seed, stage) { Guardian = false };
                     sim.Enemies.Clear();
                     sim.Structures.Clear();
                     sim.Reports = false;
@@ -137,7 +137,7 @@ namespace FireGame.Prototypes.Tests
                 float time = 0f;
                 for (int seed = 1; seed <= seeds; seed++)
                 {
-                    var sim = new SurvivorSim(seed, stage);
+                    var sim = new SurvivorSim(seed, stage) { Guardian = false };
                     var bot = new SurvivorBot(sim) { Pro = true };
                     int guard = 0;
                     while (sim.Outcome == SOutcome.Playing && guard++ < 60 * 400) bot.Play();
@@ -163,8 +163,8 @@ namespace FireGame.Prototypes.Tests
         {
             var harbor = new Dictionary<EnemyKind, int>();
             var market = new Dictionary<EnemyKind, int>();
-            var h = new SurvivorSim(3, 4) { Time = 120f };
-            var m = new SurvivorSim(3, 5) { Time = 120f };
+            var h = new SurvivorSim(3, 4) { Guardian = false, Time = 120f };
+            var m = new SurvivorSim(3, 5) { Guardian = false, Time = 120f };
             for (int i = 0; i < 1000; i++)
             {
                 EnemyKind a = h.PickKind();

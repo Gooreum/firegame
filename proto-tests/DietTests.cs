@@ -72,7 +72,7 @@ namespace FireGame.Prototypes.Tests
             int reached = 0;
             for (int seed = 1; seed <= 10; seed++)
             {
-                var sim = new SurvivorSim(seed, 1);
+                var sim = new SurvivorSim(seed, 1) { Guardian = false };
                 var bot = new SurvivorBot(sim) { Pro = true };
                 while (sim.Outcome == SOutcome.Playing && !sim.Finale) bot.Play();
                 // 3:00 전에 진 판은 상한을 볼 자리가 아니다(바닥은 CloseReport가 잰다).
@@ -92,7 +92,7 @@ namespace FireGame.Prototypes.Tests
 
         private static SurvivorSim Quiet()
         {
-            var sim = new SurvivorSim(1, 1);
+            var sim = new SurvivorSim(1, 1) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Reports = false;

@@ -23,7 +23,7 @@ namespace FireGame.Prototypes.Tests
 
         private static SurvivorSim Quiet(int stage = 1)
         {
-            var sim = new SurvivorSim(1, stage);
+            var sim = new SurvivorSim(1, stage) { Guardian = false };
             sim.Reports = false;
             sim.Structures.Clear();
             sim.Enemies.Clear();
@@ -131,7 +131,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void FinaleMinHp_TracksOnlyTheFinale()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Reports = false;
             // 3:00 전 체력 10%: 전체 최저엔 잡히지만 대화재 최저엔 안 잡힌다.
             sim.Hp = sim.MaxHp * 0.1f;
@@ -188,7 +188,7 @@ namespace FireGame.Prototypes.Tests
             var row = new CloseRow { Stage = stage };
             for (int seed = 1; seed <= seeds; seed++)
             {
-                var sim = new SurvivorSim(seed, stage);
+                var sim = new SurvivorSim(seed, stage) { Guardian = false };
                 var bot = new SurvivorBot(sim) { Pro = true };
                 while (sim.Outcome == SOutcome.Playing) bot.Play();
                 bool won = sim.Outcome == SOutcome.Won;

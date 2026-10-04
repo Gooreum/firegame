@@ -9,7 +9,7 @@ namespace FireGame.Prototypes.Tests
     {
         private static SurvivorSim Quiet(int stage = 1)
         {
-            var sim = new SurvivorSim(1, stage);
+            var sim = new SurvivorSim(1, stage) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Reports = false;

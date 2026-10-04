@@ -32,7 +32,7 @@ namespace FireGame.Prototypes.Tests
 
         private static SurvivorSim AtFinale(int stage)
         {
-            var sim = new SurvivorSim(3, stage);
+            var sim = new SurvivorSim(3, stage) { Guardian = false };
             sim.Reports = true;
             RunRaw(sim, SurvivorSim.FinaleAt + 0.1f);
             Assert.True(sim.Finale, "3:00이면 대화재");

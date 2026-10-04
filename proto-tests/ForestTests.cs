@@ -8,7 +8,7 @@ namespace FireGame.Prototypes.Tests
     {
         private static SurvivorSim Quiet()
         {
-            var sim = new SurvivorSim(1, 2);
+            var sim = new SurvivorSim(1, 2) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Reports = false;
@@ -36,7 +36,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void ForestMap_HasEightBuildings_ManyTrees_AndAClearCenter()
         {
-            var sim = new SurvivorSim(1, 2);
+            var sim = new SurvivorSim(1, 2) { Guardian = false };
             Assert.Equal("산불 숲", sim.Stage.Name);
             Assert.Equal(9, sim.HousesTotal);
             Assert.Single(sim.Structures.FindAll(s => s.Kind == StructureKind.Depot));
@@ -118,7 +118,7 @@ namespace FireGame.Prototypes.Tests
         public void ForestBuildings_FormACampWithinReach()
         {
             // 캠프는 남쪽 두 줄(y=28·16) + 제재소: 출발점에서 걸어서 7~24칸(멀리 흩어 두면 걷기만 하는 시간이 늘어 지루하다).
-            var sim = new SurvivorSim(1, 2);
+            var sim = new SurvivorSim(1, 2) { Guardian = false };
             foreach (Structure s in sim.Structures)
             {
                 if (!s.IsBuilding) continue;

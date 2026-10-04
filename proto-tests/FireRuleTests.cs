@@ -9,7 +9,7 @@ namespace FireGame.Prototypes.Tests
     {
         private static SurvivorSim Quiet(int seed = 1)
         {
-            var sim = new SurvivorSim(seed);
+            var sim = new SurvivorSim(seed) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Reports = false;
@@ -295,7 +295,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Report_IgnitesAtReportFire()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             Structure hit = null;
             while (hit == null && sim.Time < SurvivorSim.ReportTimes[0] + 0.1f)
             {

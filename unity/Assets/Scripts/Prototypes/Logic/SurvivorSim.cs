@@ -124,6 +124,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>호스(손에 든 노즐)에서 나간 물. 뷰가 이것들을 한 줄기로 이어 그린다.</summary>
         public bool Hose;
 
+        /// <summary>쥐고 쏜 물(집중 분사). 이 물만 건물에 쌓여 증기 폭발을 낸다. 수호자 자동 분사는 false.</summary>
+        public bool Focus = true;
+
         /// <summary>공중 소화탄(진화): 하늘에서 떨어진다.</summary>
         public bool Air;
 
@@ -309,6 +312,10 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>대화재가 시작될 때의 레벨(아이템 다이어트가 보이는 숫자, docs §16).</summary>
         public int FinaleLevel;
+
+        /// <summary>수호자: 쥐지 않아 저절로 나간 물줄기 수와 쥐고 쏜 물줄기 수.</summary>
+        public int AutoShots;
+        public int FocusShots;
     }
 
     /// <summary>
@@ -400,6 +407,12 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>대형 신고: 큰 불에 여럿이 갇힌다. 다 구하면 보물상자.</summary>
         public static readonly float[] BigReportTimes = { 80f, 160f };
+
+        /// <summary>이 판의 대형 신고 시각: 수호자 규칙이면 스테이지 것(있으면), 아니면 BigReportTimes.</summary>
+        public float[] BigTimes
+        {
+            get { return Guardian && Stage.BigReportTimes != null ? Stage.BigReportTimes : BigReportTimes; }
+        }
         public const float BigReportFire = 0.7f;
         public const int BigReportPeople = 3;
         public const float ChestLife = 30f;
@@ -454,6 +467,27 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>호스 손잡이를 쥐고 있는지. 쥔 동안만 물대포·방수포가 나간다.</summary>
         public bool Spraying;
+
+        /// <summary>
+        /// 수호자 규칙(StageRules.Guardian에서 온다): 쥐지 않아도 가까운 불을 쏘고(자동 분사), 큰 신고에선 버티고,
+        /// 동네를 잃어도 끝나지 않으며, 레벨만큼 곁의 불이 자라지 못한다. 테스트가 꺼서 옛 규칙을 잰다.
+        /// </summary>
+        public bool Guardian;
+
+        /// <summary>이번 틱에 쥐지 않고 저절로 쏘고 있었다(그림용: 물줄기는 나가되 쥐는 손맛은 없다).</summary>
+        public bool AutoFiring;
+
+        /// <summary>물대포에서 물이 나가는 중(쥐었거나 자동).</summary>
+        public bool HoseOn
+        {
+            get { return Spraying || AutoFiring; }
+        }
+
+        /// <summary>자동 분사의 힘(쥐고 쏜 물 대비). 쥐면 온전한 힘에 증기까지 쌓인다.</summary>
+        public const float AutoPower = 0.7f;
+
+        /// <summary>자동 분사가 노리는 가장 먼 불(물줄기 사거리 16칸/초 × 0.6초 ≈ 9.6).</summary>
+        public const float AutoReach = 9.5f;
 
         /// <summary>호스 연사 간격. 촘촘해야 끊김 없는 물줄기로 보인다.</summary>
         public const float HoseInterval = 0.1f;
@@ -987,6 +1021,7 @@ namespace FireGame.Prototypes.Logic
         public SurvivorSim(int seed, int stage = 1, IReadOnlyList<UpgradeId> start = null)
         {
             Stage = SurvivorStages.Get(stage);
+            Guardian = Stage.Guardian;
             Structures = Stage.Map();
             HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
             if (Stage.Links != null)
@@ -1398,7 +1433,8 @@ namespace FireGame.Prototypes.Logic
                 Report();
             }
 
-            while (Reports && _bigDone < BigReportTimes.Length && Time >= BigReportTimes[_bigDone])
+            float[] bigTimes = BigTimes;
+            while (Reports && _bigDone < bigTimes.Length && Time >= bigTimes[_bigDone])
             {
                 _bigDone++;
                 StartBigReport();
@@ -1996,23 +2032,38 @@ namespace FireGame.Prototypes.Logic
         private void FireWeapons()
         {
             // 물대포: 겨눈 쪽으로, 쥐고 있을 때만. 예전 자동 조준(0.32초)과 초당 피해를 맞췄다.
+            // 수호자: 쥐지 않아도 가까운 불을 AutoPower배로 쏜다(증기는 안 쌓는다). 쥐면 겨눈 쪽으로 온전한 힘(집중 분사).
             int hose = Build.Level(UpgradeId.Hose);
             bool cannon = Build.Level(UpgradeId.Cannon) > 0;
             _hoseClock -= Dt;
-            if (Spraying && (hose > 0 || cannon) && _hoseClock <= 0f && (Aim.X != 0f || Aim.Y != 0f))
+            bool auto = false;
+            if (Guardian && !Spraying && (hose > 0 || cannon))
+            {
+                Vec2? target = AutoTarget();
+                if (target.HasValue)
+                {
+                    auto = true;
+                    Aim = new Vec2(target.Value.X - Player.X, target.Value.Y - Player.Y);
+                }
+            }
+            AutoFiring = auto;
+            if ((Spraying || auto) && (hose > 0 || cannon) && _hoseClock <= 0f && (Aim.X != 0f || Aim.Y != 0f))
             {
                 _hoseClock = HoseInterval;
                 float baseAngle = (float)Math.Atan2(Aim.Y, Aim.X);
+                float power = auto ? AutoPower : 1f;
+                if (auto) Stats.AutoShots++;
+                else Stats.FocusShots++;
                 if (cannon)
                 {
                     // 진화 후: 한 줄기로 모든 불을 꿰뚫는 고압 제트.
-                    FireDrop(baseAngle, 13.2f * (HoseInterval / 0.4f) * Build.HosePower, 18f, 0.55f, 999, 0.6f * Build.HoseRange, ShotKind.Jet, true);
+                    FireDrop(baseAngle, 13.2f * (HoseInterval / 0.4f) * Build.HosePower * power, 18f, 0.55f, 999, 0.6f * Build.HoseRange, ShotKind.Jet, true, !auto);
                 }
                 else
                 {
                     // 늘 한 줄기. 레벨이 오를수록 굵고(반경) 세고(피해) 멀리(수명) 나가며 더 많이 꿰뚫는다.
-                    float damage = 3f * (HoseInterval / 0.32f) * HosePower(hose) * Build.HosePower;
-                    FireDrop(baseAngle, damage, 16f, HoseRadius(hose), 1 + hose, 0.6f * (1f + (0.1f * (hose - 1))) * Build.HoseRange, ShotKind.Drop, true);
+                    float damage = 3f * (HoseInterval / 0.32f) * HosePower(hose) * Build.HosePower * power;
+                    FireDrop(baseAngle, damage, 16f, HoseRadius(hose), 1 + hose, 0.6f * (1f + (0.1f * (hose - 1))) * Build.HoseRange, ShotKind.Drop, true, !auto);
                 }
             }
 
@@ -2782,7 +2833,59 @@ namespace FireGame.Prototypes.Logic
             return RandomEnemyNear(12f) ?? new Vec2(Player.X + (Facing.X * 6f), Player.Y + (Facing.Y * 6f));
         }
 
-        private void FireDrop(float angle, float damage, float speed, float radius, int pierce, float life, ShotKind kind, bool hose = false)
+        /// <summary>
+        /// 자동 분사가 노릴 곳(숙련 봇의 순서): 코앞 1.5칸 큰 불·기름 → 4칸 안 타는 구조물 → 3칸 안 아무 불 → 사거리 안 타는 구조물 → 사거리 안 아무 불.
+        /// 없으면 null(쏘지 않는다).
+        /// </summary>
+        public Vec2? AutoTarget()
+        {
+            Vec2? heavy = NearestFire(1.5f, true);
+            if (heavy.HasValue) return heavy;
+            Structure near = NearestBurningStructure(4f);
+            if (near != null) return near.Pos;
+            Vec2? close = NearestFire(3f, false);
+            if (close.HasValue) return close;
+            Structure far = NearestBurningStructure(AutoReach);
+            if (far != null) return far.Pos;
+            return NearestFire(AutoReach, false);
+        }
+
+        private Vec2? NearestFire(float range, bool heavyOnly)
+        {
+            Vec2? best = null;
+            float bestD = range;
+            foreach (Enemy e in Enemies)
+            {
+                if (e.Dead) continue;
+                if (heavyOnly && e.Kind != EnemyKind.Blaze && e.Kind != EnemyKind.Oil) continue;
+                float d = e.Pos.DistanceTo(Player);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = e.Pos;
+                }
+            }
+            return best;
+        }
+
+        private Structure NearestBurningStructure(float range)
+        {
+            Structure best = null;
+            float bestD = range;
+            foreach (Structure s in Structures)
+            {
+                if (!s.Burning) continue;
+                float d = s.DistanceTo(Player);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = s;
+                }
+            }
+            return best;
+        }
+
+        private void FireDrop(float angle, float damage, float speed, float radius, int pierce, float life, ShotKind kind, bool hose = false, bool focus = true)
         {
             var vel = new Vec2((float)Math.Cos(angle) * speed, (float)Math.Sin(angle) * speed);
             Shots.Add(new Shot
@@ -2797,6 +2900,7 @@ namespace FireGame.Prototypes.Logic
                 Pierce = pierce,
                 Struck = pierce > 1 ? new List<Enemy>() : null,
                 Hose = hose,
+                Focus = focus,
             });
             ShotsFired++;
         }
@@ -2993,11 +3097,11 @@ namespace FireGame.Prototypes.Logic
                     if (s.Soaked == null) s.Soaked = new List<Structure>();
                     if (s.Soaked.Contains(st)) continue;
                     s.Soaked.Add(st);
-                    if (s.Hose) Warm(st);
+                    if (s.Hose && s.Focus) Warm(st);
                     Soak(st, s.Damage * WaterPerDamage);
                     continue;
                 }
-                if (s.Hose) Warm(st);
+                if (s.Hose && s.Focus) Warm(st);
                 Soak(st, s.Damage * WaterPerDamage);
                 s.Dead = true;
                 return true;

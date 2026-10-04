@@ -11,7 +11,7 @@ namespace FireGame.Prototypes.Tests
     {
         private static SurvivorSim Quiet()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Reports = false;
             sim.Structures.Clear();
             sim.Enemies.Clear();
@@ -153,7 +153,7 @@ namespace FireGame.Prototypes.Tests
         {
             for (int seed = 1; seed <= 6; seed++)
             {
-                var sim = new SurvivorSim(seed, 2);
+                var sim = new SurvivorSim(seed, 2) { Guardian = false };
                 sim.Reports = false;
                 int shifts = 0;
                 Vec2 last = default;
@@ -178,7 +178,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Factory_OneDrumLine_IgnitesItsPlant()
         {
-            var sim = new SurvivorSim(1, 3);
+            var sim = new SurvivorSim(1, 3) { Guardian = false };
             sim.Reports = false;
             // 북서 줄(인쇄소 앞): 끝 드럼 하나에 불을 붙이면 줄이 다 터지고 인쇄소에 불이 붙는다.
             Structure plant = sim.Structures.Find(s => s.Name == "인쇄소");
@@ -201,7 +201,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Bot_CrossesTheBridge()
         {
-            var sim = new SurvivorSim(1);
+            var sim = new SurvivorSim(1) { Guardian = false };
             sim.Reports = false;
             var bot = new SurvivorBot(sim);
             // 봇은 강 서쪽 빵집 밑, 불은 동쪽 서점(1.0, 주민 있음 → 문 앞으로 간다).

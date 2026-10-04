@@ -102,7 +102,7 @@ namespace FireGame.Prototypes.EditorTools
             // 2스테이지 산불 숲: 흙길·소나무, 불다람쥐, 막 날아온 재 박쥐 떼, 바람 화살표.
             failures += SurvivorShot(dir, "c17_forest", view => view.Sim.Time >= 40.5f && view.Sim.Enemies.Exists(e => (e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Squirrel) && e.Pos.DistanceTo(view.Sim.Player) < 6f), 10, false, null, 2);
             // 대형 신고(1:20): 갇힌 사람 얼굴 줄, "대형 화재!" 띠, 화면 밖이면 붉은 화살표.
-            failures += SurvivorShot(dir, "c18_big_report", view => view.Sim.BigReport != null && view.Sim.Time >= SurvivorSim.BigReportTimes[0] + 0.6f, 4, pro: true);
+            failures += SurvivorShot(dir, "c18_big_report", view => view.Sim.BigReport != null && view.Sim.Time >= view.Sim.BigTimes[0] + 0.6f, 4, pro: true);
             // 대형 신고를 다 구해 떨어진 보물상자, 그리고 상자가 열리며 카드가 뜨는 순간.
             // 상자는 한 명도 잃지 않고 다 구해야 나온다: 봇에게 맡기면 시드 따라 못 받으니 대형 신고가 뜨면 소방관을 문 앞에 세운다.
             failures += SurvivorShot(dir, "c18b_chest", view =>
