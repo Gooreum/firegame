@@ -1449,6 +1449,20 @@ namespace FireGame.Prototypes
                 Vector3 at = W(_sim.LanternFire(l)) + Up(LanternHeight);
                 Steam(at, 4, 0.8f);
             }
+            // 맵 특색 몹: 갈매기가 지붕에 불을 떨어뜨림, 풍등이 점포에 내려앉음.
+            foreach (Vec2 p in _sim.GullDrops)
+            {
+                Vector3 at = W(p);
+                Burst(at + Up(0.5f), 12, new Color(1f, 0.55f, 0.15f), 6f);
+                SpawnText(at + new Vector3(0f, 2.2f, 0f), "갈매기가 불을 떨어뜨렸다!", new Color(1f, 0.6f, 0.2f), 1.5f);
+                _trauma = Mathf.Min(1f, _trauma + 0.05f);
+            }
+            foreach (Vec2 p in _sim.LanternLands)
+            {
+                Vector3 at = W(p);
+                Flare(at + Up(0.6f), 4f, new Color(1f, 0.65f, 0.25f), 3);
+                SpawnText(at + new Vector3(0f, 2.2f, 0f), "풍등이 내려앉았다!", new Color(1f, 0.7f, 0.3f), 1.5f);
+            }
             if (_sim.JustLaunching != null)
             {
                 ShowAlert("불꽃 가판대가 터진다! 하늘에서 불이 떨어진다", new Color(1f, 0.6f, 0.3f));
@@ -1966,24 +1980,27 @@ namespace FireGame.Prototypes
                                 0.35f, 0.05f, new Color(1f, 0.8f, 0.3f), new Color(1f, 0.3f, 0.05f, 0f), 0f, true);
                         }
                         // 큰 불: 어두운 밑동 위에 큰 불꽃 하나와 양옆 작은 불꽃 둘이 서로 다른 프레임으로 흔들린다.
-                        _shadows.Put(at + new Vector3(0f, 0.05f, 0f), 1.9f * life, 0f, new Color(0.18f, 0.08f, 0.04f, 0.8f), null, 0.45f);
-                        _blazes.Put(at + new Vector3(-0.55f * life, 0.05f, 0f), 1.5f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i + 3));
-                        _blazes.Put(at + new Vector3(0.55f * life, 0.05f, 0f), 1.4f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i + 5));
-                        _blazes.Put(at + new Vector3(0f, 0.1f, 0f), 2f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i));
+                        // 대화재 고리의 질긴 큰 불(Heavy)은 1.25배 크고 발밑에 검붉은 고리가 돈다: 보통 큰 불과 구별된다.
+                        float heavy = e.Heavy ? 1.25f : 1f;
+                        if (e.Heavy) _auras.Put(at + new Vector3(0f, -0.05f, 0f), 2.4f * life, _time * 40f, new Color(0.7f, 0.05f, 0.05f, 0.7f));
+                        _shadows.Put(at + new Vector3(0f, 0.05f, 0f), 1.9f * life * heavy, 0f, new Color(0.18f, 0.08f, 0.04f, 0.8f), null, 0.45f);
+                        _blazes.Put(at + new Vector3(-0.55f * life, 0.05f, 0f), 1.5f * flicker * punch * heavy, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i + 3));
+                        _blazes.Put(at + new Vector3(0.55f * life, 0.05f, 0f), 1.4f * flicker * punch * heavy, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i + 5));
+                        _blazes.Put(at + new Vector3(0f, 0.1f, 0f), 2f * flicker * punch * heavy, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i));
                         break;
                     case EnemyKind.Squirrel:
                     {
-                        // 불다람쥐: 작은 불 몸통 + 뒤로 길게 흔들리는 불꼬리.
+                        // 불다람쥐: 몸+말린 꼬리 실루엣(주황)이 달리고, 꼬리 끝에 불이 붙어 흔들린다.
                         Vec2 goal = e.Goal != null ? e.Goal.Pos : _sim.Player;
                         float head = Mathf.Atan2(goal.Y - e.Pos.Y, goal.X - e.Pos.X);
                         var back = new Vector3(-Mathf.Cos(head), -Mathf.Sin(head), 0f);
                         var side = new Vector3(-back.y, back.x, 0f);
-                        float wag = Mathf.Sin((_time * 14f) + i) * 0.25f;
+                        float wag = Mathf.Sin((_time * 14f) + i) * 0.12f;
+                        float bob = 1f + (0.08f * Mathf.Sin((_time * 18f) + i));
                         _enemyGlow.Put(at, 1.5f * life, 0f, new Color(1f, 0.45f, 0.1f, 0.35f));
-                        _darts.Put(at + (back * 0.55f) + (side * wag), 1.2f * flicker * punch, (Mathf.Atan2(back.y + (side.y * wag), back.x + (side.x * wag)) * Mathf.Rad2Deg) - 90f,
-                            hit ? water : new Color(1f, 0.55f, 0.15f));
-                        _embers.Put(at + new Vector3(0f, 0.05f, 0f), 1.15f * flicker * punch, 0f, hit ? water : new Color(0.95f, 0.4f, 0.1f));
-                        if (!hit) _enemyCore.Put(at + (new Vector3(Mathf.Cos(head), Mathf.Sin(head), 0f) * 0.15f), 0.6f * life, 0f, new Color(1f, 0.85f, 0.4f, 0.9f));
+                        _bats.Put(at + new Vector3(0f, 0.08f, 0f) + (side * wag), 1.45f * punch * bob, head * Mathf.Rad2Deg, hit ? water : new Color(0.95f, 0.5f, 0.15f), SquirrelSprite());
+                        _darts.Put(at + (back * 0.5f) + new Vector3(0f, 0.35f, 0f) + (side * wag), 0.7f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_dartSheet, _time, i, 18f));
+                        if (!hit) _enemyCore.Put(at + (new Vector3(Mathf.Cos(head), Mathf.Sin(head), 0f) * 0.25f), 0.4f * life, 0f, new Color(1f, 0.85f, 0.4f, 0.9f));
                         break;
                     }
                     case EnemyKind.Bat:
@@ -2037,22 +2054,68 @@ namespace FireGame.Prototypes
                     }
                     case EnemyKind.Gull:
                     {
-                        // 불 갈매기: 흰회색 날개가 천천히 퍼덕이고 날개 끝과 꼬리에 불이 붙어 연기를 끈다. 높이 날아 그림자가 멀다.
-                        float head = Mathf.Atan2(_sim.Player.Y - e.Pos.Y, _sim.Player.X - e.Pos.X) * Mathf.Rad2Deg;
-                        float flap = 0.4f + (0.6f * Mathf.Abs(Mathf.Sin((_time * 9f) + e.Phase)));
-                        Vector3 high = at + Up(1.6f);
-                        _enemyGlow.Put(high, 1.6f * flicker, 0f, new Color(1f, 0.5f, 0.1f, 0.3f));
-                        _bats.Put(high, 1.7f * punch, head, hit ? water : new Color(0.9f, 0.9f, 0.95f), null, flap);
+                        // 불 갈매기(폭격기): 흰 갈매기가 불을 물고 지붕을 향해 내려오다(목표 6칸 안에서 급강하) 떨어뜨리고, 빈 몸으로 높이 바다로 돌아간다.
+                        // 노리는 지붕에는 주황 고리가 돈다: 어느 집을 지켜야 하는지 보인다.
+                        Vec2 aim = e.Dropped ? new Vec2(e.Pos.X, SurvivorSim.ArenaSize + 4f) : e.Goal != null ? e.Goal.Pos : _sim.Player;
+                        float head = Mathf.Atan2(aim.Y - e.Pos.Y, aim.X - e.Pos.X) * Mathf.Rad2Deg;
+                        float flap = 0.55f + (0.45f * Mathf.Abs(Mathf.Sin((_time * 7f) + e.Phase)));
+                        float dive = e.Dropped || e.Goal == null ? 1f : Mathf.Clamp01(e.Goal.DistanceTo(e.Pos) / 6f);
+                        Vector3 high = at + Up(e.Dropped ? 2.1f : Mathf.Lerp(0.6f, 1.6f, dive));
+                        _shadows.Put(at + new Vector3(0f, -0.1f, 0f), 1.2f * (0.6f + (0.4f * dive)), 0f, new Color(0f, 0f, 0f, 0.2f), null, 0.5f);
+                        _bats.Put(high, 2.0f * punch, head, hit ? water : Color.white, GullSprite(), flap);
+                        if (!e.Dropped)
+                        {
+                            // 물고 있는 불: 몸 밑에서 흔들리고 연기를 끈다.
+                            _enemyGlow.Put(high, 1.6f * flicker, 0f, new Color(1f, 0.5f, 0.1f, 0.3f));
+                            _embers.Put(high + Up(-0.35f), 0.75f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_emberSheet, _time, i));
+                            if (e.Goal != null && dive < 1f)
+                            {
+                                Vector3 roof = W(e.Goal.Pos) + Up(0.05f);
+                                _reticle.Put(roof, Mathf.Max(e.Goal.Half.X, e.Goal.Half.Y) * 2.2f * (1f + (0.08f * Mathf.Sin(_time * 8f))), _time * 90f, new Color(1f, 0.55f, 0.15f, 0.35f + (0.3f * (1f - dive))));
+                            }
+                            if (Random.value < 0.08f)
+                            {
+                                Emit("Effects/smoke_01", high, new Vector3(Random.Range(-0.4f, 0.4f), Random.Range(0.2f, 0.8f), 0f), 0.6f, 0.7f, 0.3f, 0.8f, new Color(0.3f, 0.25f, 0.25f, 0.6f), new Color(0.3f, 0.3f, 0.3f, 0f), 0f);
+                            }
+                        }
+                        break;
+                    }
+                    case EnemyKind.Crab:
+                    {
+                        // 불 게: 넓적한 빨간 게가 옆걸음으로 꿈틀거리며 온다. 등딱지 금에서 불이 새고, 바다 위에선 물을 튀긴다.
+                        Vec2 aim = e.Dropped ? _sim.Player : e.Goal != null ? e.Goal.Pos : _sim.Player;
+                        float head = Mathf.Atan2(aim.Y - e.Pos.Y, aim.X - e.Pos.X) * Mathf.Rad2Deg;
+                        float wiggle = 1f + (0.08f * Mathf.Sin(_time * 12f + i));
+                        _shadows.Put(at + new Vector3(0f, -0.1f, 0f), 1.5f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
+                        _enemyGlow.Put(at, 1.8f * flicker * life, 0f, new Color(1f, 0.3f, 0.1f, 0.3f));
+                        _bats.Put(at + Up(0.12f), 1.7f * punch, head, hit ? water : Color.white, CrabSprite(), wiggle);
                         if (!hit)
                         {
-                            float rad = head * Mathf.Deg2Rad;
-                            var wing = new Vector3(-Mathf.Sin(rad), Mathf.Cos(rad), 0f) * 0.75f * flap;
-                            _enemyCore.Put(high + wing, 0.5f * flicker, 0f, new Color(1f, 0.6f, 0.15f, 0.95f));
-                            _enemyCore.Put(high - wing, 0.5f * flicker, 0f, new Color(1f, 0.6f, 0.15f, 0.95f));
+                            _enemyCore.Put(at + Up(0.3f) + new Vector3(0.15f, 0.1f, 0f), 0.45f * flicker * life, 0f, new Color(1f, 0.6f, 0.15f, 0.95f));
+                            _enemyCore.Put(at + Up(0.3f) + new Vector3(-0.2f, -0.05f, 0f), 0.4f * flicker * life, 0f, new Color(1f, 0.6f, 0.15f, 0.95f));
                         }
-                        if (Random.value < 0.08f)
+                        if (_sim.Stage.Sea && e.Pos.Y > SurvivorHarbor.SeaFrom && Random.value < 0.1f) Splash(at, 1, 0.4f);
+                        break;
+                    }
+                    case EnemyKind.SkyLantern:
+                    {
+                        // 풍등: 높이 떠서 천천히 출렁이는 따뜻한 종이등. 안에 불이 일렁이고 바닥에 둥근 빛이 따라다닌다(밤 골목에서 환하다).
+                        float bobL = Mathf.Sin((_time * 1.6f) + i) * 0.2f;
+                        Vector3 high = at + Up(3f + bobL);
+                        _shadows.Put(at + new Vector3(0f, -0.1f, 0f), 0.7f, 0f, new Color(0f, 0f, 0f, 0.15f), null, 0.5f);
+                        _groundGlow.Put(at, 4.0f * flicker, 0f, new Color(1f, 0.6f, 0.25f, 0.4f));
+                        // 종이등 몸(불투명한 따뜻한 원) + 둘레 빛무리 + 안의 불꽃.
+                        _foam.Put(high, 1.3f * punch, 0f, hit ? water : new Color(1f, 0.6f, 0.28f, 1f), Art.Get("Effects/glow"), 1.3f);
+                        _siren.Put(high, 2.2f * punch * flicker, 0f, hit ? water : new Color(1f, 0.7f, 0.35f, 0.8f));
+                        _embers.Put(high + Up(-0.1f), 0.7f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_emberSheet, _time, i));
+                        if (e.Goal != null && e.Goal.DistanceTo(e.Pos) < 10f)
                         {
-                            Emit("Effects/smoke_01", high, new Vector3(Random.Range(-0.4f, 0.4f), Random.Range(0.2f, 0.8f), 0f), 0.6f, 0.7f, 0.3f, 0.8f, new Color(0.3f, 0.25f, 0.25f, 0.6f), new Color(0.3f, 0.3f, 0.3f, 0f), 0f);
+                            Vector3 roof = W(e.Goal.Pos) + Up(0.05f);
+                            _reticle.Put(roof, Mathf.Max(e.Goal.Half.X, e.Goal.Half.Y) * 2.2f, -_time * 60f, new Color(1f, 0.65f, 0.3f, 0.3f));
+                        }
+                        if (Random.value < 0.06f)
+                        {
+                            EmitFalling("Effects/spark_01", high, new Vector3(Random.Range(-0.4f, 0.4f), -0.3f, 0f), 0.8f, 0.2f, new Color(1f, 0.7f, 0.3f, 0.8f));
                         }
                         break;
                     }
@@ -3172,6 +3235,19 @@ namespace FireGame.Prototypes
                 Shockwave(at, new Color(1f, 0.5f, 0.3f, 0.9f), 2.2f, 0.25f);
                 _trauma = Mathf.Min(1f, _trauma + 0.04f);
             }
+            if (kind == EnemyKind.SkyLantern)
+            {
+                // 풍등은 종이가 타며 조각이 떨어진다.
+                for (int k = 0; k < 6; k++)
+                {
+                    EmitFalling("Effects/spark_0" + (1 + (k % 4)), at + Up(2.5f), new Vector3(Random.Range(-1.2f, 1.2f), Random.Range(-0.5f, 0.5f), 0f), Random.Range(0.8f, 1.4f), 0.3f, new Color(1f, 0.7f, 0.3f, 0.9f));
+                }
+            }
+            if (kind == EnemyKind.Crab)
+            {
+                // 게는 등딱지가 쪼개진다: 빨간 조각.
+                Burst(at, 10, new Color(1f, 0.3f, 0.2f), 5f);
+            }
         }
 
         /// <summary>물이 불에 닿으면 하얀 김이 뭉게뭉게 올라간다.</summary>
@@ -3447,6 +3523,111 @@ namespace FireGame.Prototypes
             texture.Apply();
             _batSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
             return _batSprite;
+        }
+
+        private static Sprite _gullSprite;
+        private static Sprite _crabSprite;
+        private static Sprite _squirrelSprite;
+
+        /// <summary>절차 스프라이트 공통: 64px, (u,v)∈[-0.5,0.5]로 픽셀을 칠한다. 앞은 +u(BatSprite와 같다), 날개·다리는 v 방향.</summary>
+        private static Sprite PaintSprite(System.Func<float, float, Color32> paint)
+        {
+            const int n = 64;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    pixels[(y * n) + x] = paint(((x + 0.5f) / n) - 0.5f, ((y + 0.5f) / n) - 0.5f);
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            return Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
+        }
+
+        private static bool InEllipse(float u, float v, float cu, float cv, float ru, float rv)
+        {
+            float du = (u - cu) / ru;
+            float dv = (v - cv) / rv;
+            return (du * du) + (dv * dv) <= 1f;
+        }
+
+        /// <summary>불 갈매기(맵 특색 몹): 흰 몸, 곧게 뻗은 가늘고 긴 날개(끝은 검정), 주황 부리. 박쥐 재탕이 아니라 갈매기로 읽힌다.</summary>
+        private static Sprite GullSprite()
+        {
+            if (_gullSprite != null) return _gullSprite;
+            _gullSprite = PaintSprite((u, v) =>
+            {
+                var none = new Color32(0, 0, 0, 0);
+                float span = Mathf.Abs(v);
+                // 날개: 몸에서 위아래로 길게, 바깥으로 갈수록 가늘고 살짝 뒤로 젖는다.
+                float lead = 0.11f - (span * 0.12f) + (0.05f * span * span);
+                float trail = -0.02f - (span * 0.1f);
+                if (span < 0.48f && u < lead && u > trail) return span > 0.36f ? new Color32(45, 45, 50, 255) : new Color32(245, 245, 250, 255);
+                if (InEllipse(u, v, 0.02f, 0f, 0.2f, 0.07f)) return new Color32(240, 240, 245, 255);
+                if (InEllipse(u, v, 0.21f, 0f, 0.07f, 0.06f)) return new Color32(240, 240, 245, 255);
+                if (u > 0.26f && u < 0.35f && Mathf.Abs(v) < 0.03f * (0.35f - u) / 0.09f + 0.005f) return new Color32(255, 150, 40, 255);
+                if (InEllipse(u, v, 0.22f, 0.025f, 0.015f, 0.015f)) return new Color32(20, 20, 20, 255);
+                return none;
+            });
+            return _gullSprite;
+        }
+
+        /// <summary>불 게(맵 특색 몹): 넓적한 빨간 몸, 앞으로 벌린 집게 둘, 양옆 다리 셋씩, 눈 둘.</summary>
+        private static Sprite CrabSprite()
+        {
+            if (_crabSprite != null) return _crabSprite;
+            _crabSprite = PaintSprite((u, v) =>
+            {
+                var none = new Color32(0, 0, 0, 0);
+                var shell = new Color32(230, 60, 40, 255);
+                var dark = new Color32(150, 30, 20, 255);
+                float av = Mathf.Abs(v);
+                // 다리 셋: 몸 옆에서 바깥으로 비스듬히.
+                for (int k = -1; k <= 1; k++)
+                {
+                    float lu = (k * 0.12f) - 0.05f;
+                    float t = (av - 0.12f) / 0.22f;
+                    if (t >= 0f && t <= 1f && Mathf.Abs(u - (lu - (t * 0.1f * (k + 2)))) < 0.035f) return dark;
+                }
+                // 집게: 앞(+u) 양옆의 굵은 원과 벌어진 틈.
+                if (InEllipse(u, v, 0.27f, 0.2f, 0.1f, 0.085f) || InEllipse(u, v, 0.27f, -0.2f, 0.1f, 0.085f))
+                {
+                    if (u > 0.3f && Mathf.Abs(av - 0.2f) < 0.025f) return none;
+                    return shell;
+                }
+                if (Mathf.Abs(u - 0.17f) < 0.04f && av > 0.1f && av < 0.2f) return dark;
+                if (InEllipse(u, v, 0f, 0f, 0.24f, 0.16f)) return InEllipse(u, v, -0.02f, 0f, 0.17f, 0.1f) ? new Color32(245, 90, 60, 255) : shell;
+                if (InEllipse(u, v, 0.2f, 0.06f, 0.025f, 0.025f) || InEllipse(u, v, 0.2f, -0.06f, 0.025f, 0.025f)) return new Color32(20, 20, 20, 255);
+                return none;
+            });
+            return _crabSprite;
+        }
+
+        /// <summary>불다람쥐: 작은 몸과 머리, 뒤로 굵게 말려 올라가는 꼬리(흰·회색: 뷰가 주황으로 물들인다).</summary>
+        private static Sprite SquirrelSprite()
+        {
+            if (_squirrelSprite != null) return _squirrelSprite;
+            _squirrelSprite = PaintSprite((u, v) =>
+            {
+                var none = new Color32(0, 0, 0, 0);
+                var fur = new Color32(255, 255, 255, 255);
+                var belly = new Color32(210, 210, 210, 255);
+                // 꼬리: (-0.2, 0.08) 둘레 반지름 0.2 호, 두께 0.11, 뒤에서 위로 말린다.
+                float tu = u + 0.2f;
+                float tv = v - 0.08f;
+                float r = Mathf.Sqrt((tu * tu) + (tv * tv));
+                float ang = Mathf.Atan2(tv, tu) * Mathf.Rad2Deg;
+                if (Mathf.Abs(r - 0.2f) < 0.06f && ang > -100f && ang < 110f) return fur;
+                if (InEllipse(u, v, 0.03f, -0.02f, 0.15f, 0.09f)) return v < -0.03f ? belly : fur;
+                if (InEllipse(u, v, 0.2f, 0.02f, 0.08f, 0.07f)) return fur;
+                if (InEllipse(u, v, 0.19f, 0.09f, 0.03f, 0.04f)) return fur;
+                if (InEllipse(u, v, 0.24f, 0.03f, 0.018f, 0.018f)) return new Color32(20, 20, 20, 255);
+                return none;
+            });
+            return _squirrelSprite;
         }
 
         private static Sprite HeliSprite()
@@ -5852,6 +6033,12 @@ namespace FireGame.Prototypes
         private void DrawEdgeArrows()
         {
             if (_sim.Outcome != SOutcome.Playing || _camera == null) return;
+            // 화면 밖에서 떠오는 풍등: 어느 쪽에서 오는지 보여 준다(쏘아 떨어뜨리러 갈 수 있게).
+            foreach (Enemy e in _sim.Enemies)
+            {
+                if (e.Dead || e.Kind != EnemyKind.SkyLantern) continue;
+                EdgeArrow(new Vector3(e.Pos.X, e.Pos.Y, 0f), new Color(1f, 0.75f, 0.4f), 1.3f, "풍등");
+            }
             foreach (Structure st in _sim.Structures)
             {
                 if (st.Burning && st.Kind == StructureKind.Boat && !st.Docked)

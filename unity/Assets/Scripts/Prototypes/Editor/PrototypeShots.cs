@@ -170,6 +170,28 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c60_forest_camp", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 20f, 0f), 14f), 2);
             failures += SurvivorShot(dir, "c61_harbor_quay", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 32f, 0f), 14f), 4);
             failures += SurvivorShot(dir, "c62_market_stalls", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 30f, 0f), 16f), 5);
+            // 맵 특색 몹: 갈매기가 지붕에 불을 떨어뜨린 직후(갈매기 실루엣·떨어뜨렸다 글자), 게가 상륙한 순간(목표 고리), 풍등이 점포 가까이(종이등·바닥 빛·고리).
+            failures += SurvivorShot(dir, "c63_gull_bomb", view => view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.Gull && e.Dropped), 8, false,
+                view =>
+                {
+                    Enemy g = view.Sim.Enemies.Find(e => e.Kind == EnemyKind.Gull && e.Dropped) ?? view.Sim.Enemies.Find(e => e.Kind == EnemyKind.Gull);
+                    Vec2 at = g != null ? g.Pos : view.Sim.Player;
+                    view.Frame(new Vector3(Mathf.Clamp(at.X, 12f, 48f), at.Y - 3f, 0f), 9f);
+                }, 4, null, true, true);
+            failures += SurvivorShot(dir, "c64_crab", view => view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.Crab && e.Pos.Y < SurvivorHarbor.SeaFrom - 0.5f), 1, false,
+                view =>
+                {
+                    Enemy c = view.Sim.Enemies.Find(e => e.Kind == EnemyKind.Crab);
+                    Vec2 at = c != null ? c.Pos : view.Sim.Player;
+                    view.Frame(new Vector3(Mathf.Clamp(at.X, 12f, 48f), at.Y - 2f, 0f), 8f);
+                }, 4, view => view.Sim.Spawn(EnemyKind.Crab, new Vec2(30f, 48f)), true, true);
+            failures += SurvivorShot(dir, "c65_sky_lantern", view => view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.SkyLantern && e.Goal != null && e.Goal.DistanceTo(e.Pos) < 8f), 1, false,
+                view =>
+                {
+                    Enemy l = view.Sim.Enemies.Find(e => e.Kind == EnemyKind.SkyLantern);
+                    Vec2 at = l != null ? l.Pos : view.Sim.Player;
+                    view.Frame(new Vector3(Mathf.Clamp(at.X, 12f, 48f), Mathf.Clamp(at.Y, 10f, 50f), 0f), 9f);
+                }, 5, view => view.Sim.Spawn(EnemyKind.SkyLantern, new Vec2(14f, 52f)), true, true);   // (30,52)에서 띄우면 가는 길의 불꽃 가판대에 내려앉는다
             // 판 시작 1.5초 뒤 할 일 한 줄("할 일: 부두 끝에 서서 바다 위 배를 쏘아 끈다")이 위 알림 줄에 뜬다.
             failures += SurvivorShot(dir, "c33c_goal_alert", view => view.Sim.Time > 1.7f, 0, false, null, 4);
             failures += StationShot(dir, "c33b_station_unlock", "stars=5;best=3,2,0;unlocked=rookie,rescue;selected=rescue", "pilot");
