@@ -166,6 +166,8 @@ namespace FireGame.Prototypes.EditorTools
             }, 1, view => view.Sim.Ignite(view.Sim.Structures.Find(st => st.Name == "빵집"), 1f));
             // 소방서: 켜면 먼저 보이는 화면(새 소방서)과, 별 5개로 드론 담당을 해금한 직후.
             failures += StationShot(dir, "c33_station", null);
+            // 판 시작 1.5초 뒤 할 일 한 줄("할 일: 부두 끝에 서서 바다 위 배를 쏘아 끈다")이 위 알림 줄에 뜬다.
+            failures += SurvivorShot(dir, "c33c_goal_alert", view => view.Sim.Time > 1.7f, 0, false, null, 4);
             failures += StationShot(dir, "c33b_station_unlock", "stars=5;best=3,2,0;unlocked=rookie,rescue;selected=rescue", "pilot");
             // 곧 무너진다: 사람이 갇힌 가게의 지붕 초읽기 라벨·붉은 고리와 위 알림 줄.
             failures += SurvivorShot(dir, "c31_collapse_warning", view => view.Sim.CollapseWarnings.Count > 0, 12, false,

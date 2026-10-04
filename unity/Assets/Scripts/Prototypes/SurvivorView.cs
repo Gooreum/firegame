@@ -112,6 +112,10 @@ namespace FireGame.Prototypes
         private float _cardAge;
         private float _overAge;
         private float _alertAge = 99f;
+
+        /// <summary>판 시작 띠 뒤 할 일 한 줄을 띄울 때(음수면 예약 없음).</summary>
+        private float _goalAlertAt = -1f;
+        private static readonly Color GoalGreen = new Color(0.7f, 1f, 0.6f);
         /// <summary>배너 팝인 배율(보통 1.6, 노란 장비 출동은 2.2).</summary>
         private float _alertScale = 1.6f;
         private float _bossBannerAge = 99f;
@@ -609,10 +613,11 @@ namespace FireGame.Prototypes
             BuildSigns();
             HideCards();
             _resultBack.gameObject.SetActive(false);
-            // 판 시작: "STAGE 2 · 산불 숲" 띠가 파랗게 지나간다.
+            // 판 시작: "STAGE 2 · 산불 숲" 띠가 파랗게 지나가고, 1.5초 뒤 할 일 한 줄이 알림으로 뜬다.
             _bossBandText.text = "STAGE " + _sim.Stage.Number + " · " + _sim.Stage.Name;
             _bandTint = new Color(0.05f, 0.25f, 0.6f);
             _bossBannerAge = 0f;
+            _goalAlertAt = _time + 1.5f;
             Refresh(0f);
         }
 
@@ -693,15 +698,19 @@ namespace FireGame.Prototypes
             }
 
             // 브리핑: 다음 스테이지의 위협 한 줄과, 그 위협을 막는 대비 장비 둘(하나를 골라 Lv1로 들고 간다).
-            Text threat = UiKit.OutlinedLabel(_stationLayer, "Threat", "위협: " + rules.Threat, 30, new Color(1f, 0.75f, 0.55f), TextAnchor.MiddleCenter);
-            UiKit.Place(threat.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 226f), new Vector2(1400f, 42f));
+            // 위협·할 일 두 줄 + 대비 버튼이 스테이지 버튼(268)과 소방관 카드(위 150) 사이 약 110px에 들어간다.
+            Text threat = UiKit.OutlinedLabel(_stationLayer, "Threat", "위협: " + rules.Threat, 28, new Color(1f, 0.75f, 0.55f), TextAnchor.MiddleCenter);
+            UiKit.Place(threat.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 222f), new Vector2(1400f, 36f));
+            // 할 일 한 줄: 이 스테이지에서 플레이어가 새로 배우는 결정("부두 끝에 서서 바다 위 배를 쏘아 끈다"). 판 시작에도 같은 줄이 알림으로 뜬다.
+            Text goal = UiKit.OutlinedLabel(_stationLayer, "Goal", "할 일: " + rules.Goal, 28, GoalGreen, TextAnchor.MiddleCenter);
+            UiKit.Place(goal.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 190f), new Vector2(1400f, 36f));
             UpgradeId[] counters = rules.Counters ?? new UpgradeId[0];
             for (int k = 0; k < counters.Length; k++)
             {
                 UpgradeId c = counters[k];
                 bool on = _station.Prep == c;
                 Button prep = UiKit.Button(_stationLayer, "Prep" + k, Art.Get(on ? "UI/button_yellow" : "UI/button_blue"), (on ? "대비 ✓ " : "대비: ") + SurvivorUpgrades.Name(c), 30, () => TapPrep(c));
-                UiKit.Place(prep.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2((k - ((counters.Length - 1) / 2f)) * 420f, 176f), new Vector2(400f, 56f));
+                UiKit.Place(prep.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2((k - ((counters.Length - 1) / 2f)) * 420f, 140f), new Vector2(400f, 50f));
             }
 
             Firefighter[] roster = Roster.All;
@@ -716,7 +725,8 @@ namespace FireGame.Prototypes
                 Button card = UiKit.Button(_stationLayer, "Firefighter" + i, Art.Get(sprite), "", 0, () => TapFirefighter(id));
                 RectTransform rect = card.GetComponent<RectTransform>();
                 float x = (i - ((roster.Length - 1) / 2f)) * 330f;
-                UiKit.Place(rect, new Vector2(0.5f, 0.5f), new Vector2(x, -70f), new Vector2(310f, 440f));
+                // 카드는 위 110까지(위협·할 일·대비 버튼 세 줄 자리를 비운다).
+                UiKit.Place(rect, new Vector2(0.5f, 0.5f), new Vector2(x, -90f), new Vector2(310f, 400f));
 
                 Text name = UiKit.OutlinedLabel(rect, "Name", f.Name, 42, Color.white, TextAnchor.MiddleCenter);
                 UiKit.Place(name.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -60f), new Vector2(290f, 60f));
@@ -780,10 +790,11 @@ namespace FireGame.Prototypes
             }
             ClearStation();
             _stationOpen = false;
-            // 소방서에 있는 동안 흘러간 시작 띠를 다시 띄운다.
+            // 소방서에 있는 동안 흘러간 시작 띠와 할 일 알림을 다시 띄운다.
             _bossBandText.text = "STAGE " + _sim.Stage.Number + " · " + _sim.Stage.Name;
             _bandTint = new Color(0.05f, 0.25f, 0.6f);
             _bossBannerAge = 0f;
+            _goalAlertAt = _time + 1.5f;
             _accumulator = 0f;
         }
 
@@ -1779,6 +1790,11 @@ namespace FireGame.Prototypes
         {
             _time += dt;
             _frameDt = dt;
+            if (_goalAlertAt >= 0f && _time >= _goalAlertAt && !_stationOpen)
+            {
+                _goalAlertAt = -1f;
+                if (!string.IsNullOrEmpty(_sim.Stage.Goal)) ShowAlert("할 일: " + _sim.Stage.Goal, GoalGreen);
+            }
             _trauma = Mathf.Max(0f, _trauma - (dt * 1.8f));
             _flash = Mathf.Max(0f, _flash - (dt * 2.2f));
             _hurt = Mathf.Max(0f, _hurt - (dt * 1.5f));
