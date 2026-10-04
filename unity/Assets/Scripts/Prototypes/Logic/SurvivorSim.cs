@@ -640,6 +640,17 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>잿더미 둥지: 무너진 집이 이 간격마다 불씨 RuinSpit개를 뱉는다(무너진 순간부터 한 간격 뒤).</summary>
         public const float RuinSpitEvery = 7f;
+
+        /// <summary>수호 반경: Lv1 GuardBase칸에서 레벨마다 GuardPerLevel씩, GuardMax까지. 강해질수록 지켜지는 범위가 넓어진다.</summary>
+        public const float GuardBase = 3f;
+        public const float GuardPerLevel = 0.25f;
+        public const float GuardMax = 8f;
+
+        /// <summary>지금 수호 반경(칸, 구조물 가장자리까지). 수호자 규칙이 아니면 0.</summary>
+        public float GuardRadius
+        {
+            get { return Guardian ? Math.Min(GuardMax, GuardBase + (GuardPerLevel * (Level - 1))) : 0f; }
+        }
         public const int RuinSpit = 2;
 
         /// <summary>이번 틱 불씨를 뱉은 잿더미(그림용).</summary>
@@ -3844,7 +3855,9 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
 
-                s.Fire = Math.Min(1f, s.Fire + (Stage.FireGrowth * Dt));
+                // 수호 반경 안: 불이 자라지도, 번지지도, 불씨·큰 불을 뱉지도 못한다(타는 동안 무너짐은 그대로).
+                bool held = Guardian && s.DistanceTo(Player) <= GuardRadius;
+                if (!held) s.Fire = Math.Min(1f, s.Fire + (Stage.FireGrowth * Dt));
                 s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding : s.Kind == StructureKind.Boat ? (s.Tanker ? BurnTanker : BurnBoat) : BurnSmall);
                 if (s.HoseHold > 0f) s.HoseHold = Math.Max(0f, s.HoseHold - (SteamCool * Dt));
                 if (s.Integrity <= 0f)
@@ -3858,6 +3871,8 @@ namespace FireGame.Prototypes.Logic
                     s.Warned = true;
                     CollapseWarnings.Add(s);
                 }
+
+                if (held) continue;
 
                 if (Stage.Wind && s.Kind == StructureKind.Tree && s.Fire >= SpreadAt)
                 {

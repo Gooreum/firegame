@@ -20,6 +20,16 @@ namespace FireGame.Prototypes.Tests
             return sim;
         }
 
+        /// <summary>물대포 없이(맨손) 조용한 판: 불이 저절로 어떻게 되는지 본다.</summary>
+        private static SurvivorSim Bare(int stage = 1)
+        {
+            var sim = new SurvivorSim(1, stage, new UpgradeId[0]);
+            sim.Reports = false;
+            sim.Structures.Clear();
+            sim.Enemies.Clear();
+            return sim;
+        }
+
         private static Structure House(SurvivorSim sim, float dx, float dy, int residents = 0)
         {
             var s = new Structure { Kind = StructureKind.House, Name = "가게", Pos = new Vec2(sim.Player.X + dx, sim.Player.Y + dy), Half = new Vec2(2f, 1.5f), Residents = residents };
@@ -517,6 +527,90 @@ namespace FireGame.Prototypes.Tests
             shop.Wet = 0f;
             sim.Step(0f, 0f);
             Assert.True(sim.Stats.HurtBy[(int)HurtKind.Heat] > 0f);
+        }
+
+        // --- 수호 반경 ---
+
+        [Fact]
+        public void GuardRadius_GrowsWithLevel_UpToEight()
+        {
+            var sim = Quiet();
+            Assert.Equal(3f, sim.GuardRadius, 3);
+            sim.Level = 5;
+            Assert.Equal(4f, sim.GuardRadius, 3);
+            sim.Level = 21;
+            Assert.Equal(8f, sim.GuardRadius, 3);
+            sim.Level = 40;
+            Assert.Equal(SurvivorSim.GuardMax, sim.GuardRadius, 3);
+            sim.Guardian = false;
+            Assert.Equal(0f, sim.GuardRadius);
+        }
+
+        [Fact]
+        public void InsideTheRadius_FireDoesNotGrow_ButStillBurnsDown()
+        {
+            var sim = Bare();
+            Structure near = House(sim, 0f, 3.5f);
+            Structure far = House(sim, 0f, -7.5f);
+            sim.Ignite(near, 0.4f);
+            sim.Ignite(far, 0.4f);
+            Run(sim, 5f);
+            Assert.Equal(0.4f, near.Fire, 3);
+            Assert.True(near.Integrity < 1f);
+            Assert.Equal(0.4f + (sim.Stage.FireGrowth * 5f), far.Fire, 2);
+        }
+
+        [Fact]
+        public void InsideTheRadius_NoEmbersNoBlazeNoSpread()
+        {
+            var sim = Bare();
+            Structure near = House(sim, 0f, 3.5f);
+            Structure next = House(sim, 6f, 3.5f);
+            sim.Ignite(near, 0.9f);
+            // 가장자리 스폰(17칸 밖)은 그대로 온다: 이번 틱 새로 생긴 불씨(Seeker)·큰 불이 집 가장자리 1.5칸 안이면 집이 뱉은 것이다.
+            var seen = new HashSet<Enemy>();
+            for (int i = 0; i < (int)(20f / SurvivorSim.Dt); i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                foreach (Enemy e in sim.Enemies)
+                {
+                    if (!seen.Add(e)) continue;
+                    // 집이 뱉는 것: 불씨(Seeker) 또는 큰 불. 가장자리에서 몰려와 가르는 작은 불은 아니다.
+                    bool fromHouse = (e.Seeker || e.Kind == EnemyKind.Blaze) && near.DistanceTo(e.Pos) <= 1.5f;
+                    Assert.False(fromHouse, "반경 안 집이 불 몹을 뱉었다: " + e.Kind + " t=" + sim.Time);
+                }
+            }
+            Assert.False(next.Burning);
+            Assert.Empty(sim.Spread);
+        }
+
+        [Fact]
+        public void InsideTheRadius_AutoWaterPutsOutABigFire()
+        {
+            var sim = Quiet();
+            Structure big = House(sim, 0f, 3.5f);
+            sim.Ignite(big, SurvivorSim.BigReportFire);
+            float t = -1f;
+            for (int i = 0; i < 60 * 60; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                if (!big.Burning) { t = sim.Time; break; }
+            }
+            Assert.True(t > 0f, "반경 안 큰 불도 자동 물로 꺼야: " + big.Fire);
+            Assert.True(t < 30f, "끄는 데 " + t + "초");
+        }
+
+        [Fact]
+        public void Forest_HasNoGuardRadius()
+        {
+            var sim = Bare(2);
+            Structure near = House(sim, 0f, 3.5f);
+            sim.Ignite(near, 0.4f);
+            Run(sim, 5f);
+            Assert.True(near.Fire > 0.45f);
         }
 
         [Fact]
