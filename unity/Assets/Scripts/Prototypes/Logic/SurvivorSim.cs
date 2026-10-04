@@ -793,10 +793,11 @@ namespace FireGame.Prototypes.Logic
         private float _lastRowY;
 
         /// <summary>공단 연쇄 폭발: ChainEvery(−ChainStep×압력, 최소 ChainMin)초마다 드럼 하나에 점화, 퓨즈 ChainFuse초 뒤 터진다. 끄면 막는다.</summary>
-        public const float ChainEvery = 12f;
+        // 측정 ①(2026-10-04): 12초·시작 둘·퓨즈 6이면 숙련 봇 5승(동네 패 17) — 드럼이 공장 곁이라 터질 때마다 공장이 붙는다 → 18초·시작 하나·퓨즈 8.
+        public const float ChainEvery = 18f;
         public const float ChainStep = 1.5f;
-        public const float ChainMin = 6f;
-        public const float ChainFuse = 6f;
+        public const float ChainMin = 8f;
+        public const float ChainFuse = 8f;
         public Structure JustChain;
         private float _chainClock;
 
@@ -812,9 +813,10 @@ namespace FireGame.Prototypes.Logic
         private int _leakCount;
 
         /// <summary>야시장 불꽃 폭주: 가판대가 전부 쏘고, StormEvery(−StormStep×압력, 최소 2)초마다 꺼진 가판대 하나가 다시 붙고 무대에서 가장 가까운 등줄이 탄다. 무대는 StageRocketEvery초마다 로켓.</summary>
-        public const float StormEvery = 6f;
+        // 측정 ①(2026-10-04): 가판대 셋이 동시에 쏘고(초당 3발) 6초마다 등줄이면 숙련 봇 3승(동네 패 26) → 시작은 무대 가까운 하나, 8초, 무대 로켓 3초.
+        public const float StormEvery = 8f;
         public const float StormStep = 1f;
-        public const float StageRocketEvery = 2f;
+        public const float StageRocketEvery = 8f;
         public bool JustStorm;
         private float _stormClock;
         private float _stageRocketClock;
@@ -1503,17 +1505,22 @@ namespace FireGame.Prototypes.Logic
                     _lastRowY = FrontStart + FrontRow;
                     break;
                 case FinaleKind.ChainBlast:
-                    // 시작과 함께 드럼 둘이 점화된다.
-                    ChainIgnite();
+                    // 시작과 함께 드럼 하나가 점화된다(둘은 과했다: 측정 ①).
                     ChainIgnite();
                     _chainClock = ChainEvery;
                     break;
                 case FinaleKind.RocketStorm:
+                    // 무대에서 가장 가까운 가판대 하나부터(셋이 한꺼번에 쏘면 초당 3발: 측정 ①). 나머지는 폭주 틱이 차례로 붙인다.
+                    Structure firstStand = null;
                     foreach (Structure s in Structures)
                     {
                         if (s.Kind != StructureKind.Fireworks || s.Collapsed) continue;
-                        s.Wet = 0f;
-                        Ignite(s, 0.6f);
+                        if (firstStand == null || s.DistanceTo(mark.Pos) < firstStand.DistanceTo(mark.Pos)) firstStand = s;
+                    }
+                    if (firstStand != null)
+                    {
+                        firstStand.Wet = 0f;
+                        Ignite(firstStand, 0.6f);
                     }
                     _stormClock = StormEvery;
                     _stageRocketClock = StageRocketEvery;
@@ -1638,12 +1645,16 @@ namespace FireGame.Prototypes.Logic
             _stormClock -= Dt;
             if (_stormClock > 0f) return;
             _stormClock = Math.Max(2f, StormEvery - (StormStep * FinalePressure));
-            foreach (Structure s in Structures)
+            // 가판대는 한 번에 하나만 쏜다: 꺼진 것을 틱마다 다시 붙이면 16초 뒤 셋이 다 쏜다(측정 ③: 5승 → 6승, 동네 패 23 그대로 — 주범은 풍등이었다).
+            if (!Structures.Exists(s => s.Kind == StructureKind.Fireworks && s.Burning))
             {
-                if (s.Kind != StructureKind.Fireworks || s.Collapsed || s.Burning) continue;
-                s.Wet = 0f;
-                Ignite(s, 0.4f);
-                break;
+                foreach (Structure s in Structures)
+                {
+                    if (s.Kind != StructureKind.Fireworks || s.Collapsed || s.Burning) continue;
+                    s.Wet = 0f;
+                    Ignite(s, 0.4f);
+                    break;
+                }
             }
             if (Landmark == null) return;
             Lantern pick = null;
@@ -1703,7 +1714,9 @@ namespace FireGame.Prototypes.Logic
             if (r < blaze + dart) return EnemyKind.Dart;
             if (r < blaze + dart + Stage.SquirrelShare) return EnemyKind.Squirrel;
             if (Time >= OilFrom && r < blaze + dart + Stage.SquirrelShare + Stage.OilShare) return EnemyKind.Oil;
-            float sea = blaze + dart + Stage.SquirrelShare + Stage.OilShare;
+            // 아직 안 나오는 몫(40초 전 기름)은 누적에서 뺀다: 전엔 그 몫이 갈매기로 떨어져 공단 초반 스폰의 12%가 갈매기였다
+            // (쫓아오기만 할 땐 티가 안 났지만 폭격기가 되자 공단이 15승 → 5승으로 무너졌다, 2026-10-04 맵 특색 측정 ②).
+            float sea = blaze + dart + Stage.SquirrelShare + (Time >= OilFrom ? Stage.OilShare : 0f);
             if (r < sea + Stage.GullShare) return EnemyKind.Gull;
             if (r < sea + Stage.GullShare + Stage.CrabShare) return EnemyKind.Crab;
             float shore = sea + Stage.GullShare + Stage.CrabShare;

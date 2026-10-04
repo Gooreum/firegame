@@ -68,7 +68,7 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(0f, SurvivorStages.Get(4).DartShare);
             Assert.Equal(0f, SurvivorStages.Get(5).DartShare);
             Assert.Equal(0.06f, SurvivorStages.Get(4).CrabShare);
-            Assert.Equal(0.08f, SurvivorStages.Get(5).LanternShare);
+            Assert.Equal(0.04f, SurvivorStages.Get(5).LanternShare);
             for (int n = 1; n <= 3; n++) Assert.True(SurvivorStages.Get(n).CrabShare == 0f && SurvivorStages.Get(n).LanternShare == 0f, n + " 전용 몹 비율");
         }
 
@@ -176,7 +176,7 @@ namespace FireGame.Prototypes.Tests
             Assert.False(market.ContainsKey(EnemyKind.Dart), "야시장에 다트");
             Assert.True(harbor.TryGetValue(EnemyKind.Crab, out int crabs) && crabs > 20, "게 " + crabs);
             Assert.True(harbor.TryGetValue(EnemyKind.Gull, out int gulls) && gulls > 50, "갈매기 " + gulls);
-            Assert.True(market.TryGetValue(EnemyKind.SkyLantern, out int lanterns) && lanterns > 40, "풍등 " + lanterns);
+            Assert.True(market.TryGetValue(EnemyKind.SkyLantern, out int lanterns) && lanterns > 20, "풍등 " + lanterns);
             Assert.True(market.TryGetValue(EnemyKind.Popper, out int poppers) && poppers > 40, "폭죽 " + poppers);
             Assert.False(harbor.ContainsKey(EnemyKind.SkyLantern) || market.ContainsKey(EnemyKind.Crab));
         }

@@ -73,12 +73,12 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void FactoryChain_IgnitesTwoDrumsAtOnce_ThenOneEveryTwelveSeconds_AndWaterCancelsTheFuse()
+        public void FactoryChain_IgnitesADrumAtOnce_ThenOneEveryEighteenSeconds_AndWaterCancelsTheFuse()
         {
             SurvivorSim sim = AtFinale(3);
             Assert.Equal(FinaleKind.ChainBlast, sim.Stage.Finale);
             List<Structure> lit = sim.Structures.FindAll(s => s.Kind == StructureKind.Gas && s.Burning);
-            Assert.True(lit.Count >= 2, "시작에 드럼 둘: " + lit.Count);
+            Assert.True(lit.Count >= 1, "시작에 드럼 하나: " + lit.Count);
             Assert.True(lit[0].Fuse > SurvivorSim.GasFuse, "연쇄 점화 퓨즈는 길다: " + lit[0].Fuse);
             // 하나를 물방울로 끈다: 퓨즈가 풀리고 그 자리는 안 터진다.
             Structure drum = lit[0];
@@ -88,13 +88,13 @@ namespace FireGame.Prototypes.Tests
             Assert.False(drum.Burning);
             Assert.True(drum.Fuse < 0f);
             bool chained = false;
-            float until = sim.Time + 13f;
+            float until = sim.Time + SurvivorSim.ChainEvery + 1f;
             while (sim.Time < until)
             {
                 RunRaw(sim, sim.Time + SurvivorSim.Dt);
                 if (sim.JustChain != null) chained = true;
             }
-            Assert.True(chained, "13초 안에 다음 드럼 점화");
+            Assert.True(chained, "ChainEvery 안에 다음 드럼 점화");
             Assert.DoesNotContain(sim.GasBlasts, at => at.DistanceTo(drum.Pos) < 0.1f);
             Assert.False(drum.Collapsed, "끈 드럼은 안 터진다");
         }
@@ -123,15 +123,13 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void MarketStorm_LightsEveryStand_RunsLanternLinesFromTheStage_AndTheStageFiresRockets()
+        public void MarketStorm_LightsTheNearestStand_RunsLanternLinesFromTheStage_AndTheStageFiresRockets()
         {
             SurvivorSim sim = AtFinale(5);
             Assert.Equal(FinaleKind.RocketStorm, sim.Stage.Finale);
             Assert.Equal(StructureKind.Depot, sim.Landmark.Kind);
-            foreach (Structure s in sim.Structures)
-            {
-                if (s.Kind == StructureKind.Fireworks && !s.Collapsed) Assert.True(s.Burning && s.Fire >= 0.6f, "가판대 전부 점화 " + s.Fire);
-            }
+            // 무대에서 가장 가까운 가판대 하나부터 탄다(전부 켜면 초당 3발이라 동네를 잃는다: 측정 ①).
+            Assert.Contains(sim.Structures, s => s.Kind == StructureKind.Fireworks && s.Burning && s.Fire >= 0.6f);
             bool storm = false;
             bool rockets = false;
             float until = sim.Time + 12f;

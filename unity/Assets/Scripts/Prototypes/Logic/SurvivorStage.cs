@@ -264,7 +264,8 @@ namespace FireGame.Prototypes.Logic
             // 다트는 마을 몹이다: 야시장은 폭죽·풍등으로 채운다(맵 특색 패스, 전 0.1 / 폭죽 0.1).
             DartShare = 0f,
             PopperShare = 0.08f,
-            LanternShare = 0.08f,
+            // 풍등 하나 = 점포 불 하나: 0.08이면 10초마다 점포가 붙어 숙련 봇 6승(동네 패 23). 0.04로(측정 ⑤).
+            LanternShare = 0.04f,
             // 점포끼리는 등줄로만 옮긴다(둘 다 켜면 다닥다닥 붙은 점포가 한 번에 탄다).
             SpreadEvery = 0f,
             TreeSpit = 0f,
