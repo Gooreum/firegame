@@ -617,6 +617,9 @@ namespace FireGame.Prototypes
             _hurt = 0f;
             _slowmo = 0f;
             _overAge = 0f;
+            _faceTaken = false;
+            _siegeEndAge = 99f;
+            _guardShown = 0f;
             _alertAge = 99f;
             _bossBannerAge = 99f;
             _shownXp = 0f;
@@ -4567,6 +4570,7 @@ namespace FireGame.Prototypes
         private void FollowCamera(float dt)
         {
             if (_camera == null) return;
+            if (ResultCamera()) return;
             // 줌 킥: +면 확 다가오고(레벨업·진화), −면 물러난다.
             float size = CameraSize * (1f - (0.12f * Mathf.Clamp(_zoomKick, -1.5f, 1.5f)));
             _camera.backgroundColor = new Color(0.05f, 0.05f, 0.07f);
@@ -6459,6 +6463,13 @@ namespace FireGame.Prototypes
             AnimateCards();
 
             bool over = _sim.Outcome != SOutcome.Playing;
+            LayoutResult(over && _sim.Guardian);
+            if (over && _sim.Guardian)
+            {
+                // 수호자: 글 대신 한 장면(모인 사람들 → 마을 전체). 장면이 다 그려진 뒤 별과 한 줄만.
+                GuardianResult();
+                return;
+            }
             _resultBack.gameObject.SetActive(over);
             if (over)
             {

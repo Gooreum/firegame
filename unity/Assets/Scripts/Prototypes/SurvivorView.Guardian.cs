@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.IO;
 using FireGame.Prototypes.Logic;
 using FireGame.UnityLayer;
 using FireGame.UnityLayer.Feel;
@@ -152,6 +154,7 @@ namespace FireGame.Prototypes
 
             DrawGuardRadius(dt);
             DrawHaven();
+            DrawCrowd();
             Siege siege = _sim.Siege;
             if (siege != null) DrawSiegeRing(W(siege.Center), siege.Radius, Mathf.Clamp01(_siegeAge / 0.35f), 1f, false);
             else if (_siegeEndAge < 1.2f)
@@ -247,6 +250,148 @@ namespace FireGame.Prototypes
                 _siegeGlow.Put(p, 1.8f * size, 0f, new Color(glow.r, glow.g, glow.b, glow.a * 0.8f));
                 _siegeFire.Put(p, size, 0f, flame, FlameArt.Frame(_emberSheet, _time, k));
             }
+        }
+        // ------------------------------------------------------------------
+        // 결과 한 장면: 구한 사람들이 곁에 모이고(0~1.2초) → 카메라가 마을 전체로 빠지고(1.2~3.2초) → 그 장면을 사진으로 남긴다.
+        // ------------------------------------------------------------------
+
+        /// <summary>사람들이 모이는 시간과 카메라가 빠지는 구간(초, 결과가 난 순간부터).</summary>
+        public const float CrowdTime = 1.2f;
+        public const float PullEnd = 3.2f;
+
+        /// <summary>모여 서는 사람 그림 상한(구한 사람이 더 많아도 무리 크기로 읽힌다).</summary>
+        private const int CrowdMax = 40;
+
+        /// <summary>판 끝 사진 크기.</summary>
+        private const int FaceWidth = 480;
+        private const int FaceHeight = 270;
+
+        /// <summary>스테이지별 마지막 판 끝 사진(소방서 배경·썸네일). 파일에서 한 번 읽는다.</summary>
+        private static readonly Dictionary<int, Texture2D> StageFaces = new Dictionary<int, Texture2D>();
+        private bool _faceTaken;
+
+        public static string FacePath(int stage)
+        {
+            return Path.Combine(Application.persistentDataPath, "guardian_stage" + stage + ".png");
+        }
+
+        /// <summary>그 스테이지의 마지막 사진. 없으면 null.</summary>
+        public static Texture2D Face(int stage)
+        {
+            if (StageFaces.TryGetValue(stage, out Texture2D tex) && tex != null) return tex;
+            string path = FacePath(stage);
+            if (!File.Exists(path)) return null;
+            var loaded = new Texture2D(2, 2, TextureFormat.RGB24, false);
+            if (!loaded.LoadImage(File.ReadAllBytes(path))) return null;
+            StageFaces[stage] = loaded;
+            return loaded;
+        }
+
+        /// <summary>판이 끝난 뒤 카메라: 소방관 클로즈업 → 마을 전체로 부드럽게. 수호자가 아니거나 판 중이면 false.</summary>
+        private bool ResultCamera()
+        {
+            if (!_sim.Guardian || _sim.Outcome == SOutcome.Playing) return false;
+            Vector3 me = new Vector3(_sim.Player.X, _sim.Player.Y, -10f);
+            var town = new Vector3(SurvivorSim.ArenaSize / 2f, (SurvivorSim.ArenaSize / 2f) - 1f, -10f);
+            float close = CameraSize * 0.7f;
+            float whole = SurvivorSim.ArenaSize * 0.52f;
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((_overAge - CrowdTime) / (PullEnd - CrowdTime)));
+            float amp = _trauma * _trauma * 0.3f * (1f - t);
+            float k = Time.realtimeSinceStartup * 25f;
+            Vector3 shake = new Vector3((Mathf.PerlinNoise(k, 0f) * 2f) - 1f, (Mathf.PerlinNoise(0f, k) * 2f) - 1f, 0f) * amp;
+            _cameraAt = Vector3.Lerp(me, town, t);
+            PlaceWorldCamera(_cameraAt + shake, Mathf.Lerp(close, whole, t));
+            return true;
+        }
+
+        /// <summary>구한 사람들이 사방에서 걸어와 소방관 둘레 동심원에 선다. 다 오면 만세.</summary>
+        private void DrawCrowd()
+        {
+            if (_sim.Outcome == SOutcome.Playing) return;
+            int n = Mathf.Min(CrowdMax, _sim.Rescued);
+            Vector3 me = W(_sim.Player);
+            int ring = 0;
+            int inRing = 0;
+            int ringSize = 6;
+            for (int i = 0; i < n; i++)
+            {
+                if (inRing >= ringSize)
+                {
+                    ring++;
+                    inRing = 0;
+                    ringSize = 6 + (ring * 6);
+                }
+                float a = ((inRing + (ring * 0.5f)) * Mathf.PI * 2f / ringSize) + 0.3f;
+                float r = 1.3f + (ring * 0.75f);
+                var dir = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
+                inRing++;
+                // 한 사람씩 조금씩 늦게 출발해 바깥에서 걸어 들어온다.
+                float walk = Mathf.Clamp01((_overAge - (i * 0.02f)) / CrowdTime);
+                float arrive = Mathf.SmoothStep(0f, 1f, walk);
+                Vector3 at = me + (dir * Mathf.Lerp(r + 7f, r, arrive));
+                _shadows.Put(at + new Vector3(0f, -0.3f, 0f), 0.8f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
+                _civilianRings.Put(at, 0.9f, 0f, new Color(0.4f, 1f, 0.5f, 0.25f * arrive));
+                GameObject person = _people.Get(CivilianModel(i));
+                if (person == null) continue;
+                Models3D.Pose(person, at, walk < 1f ? -dir : -dir + new Vector3(0f, -0.6f, 0f));
+                Models3D.Play(person, walk < 1f ? "Run" : "Victory", 1f, _time + i);
+                Models3D.Tint(person, Color.white, CivilianColor(i), 10 + CivilianKind(i));
+            }
+        }
+
+        /// <summary>장면이 다 빠진 순간 월드 화면을 한 장 찍어 그 스테이지의 얼굴로 남긴다(한 판에 한 번).</summary>
+        private void TakeFace()
+        {
+            if (_faceTaken || _overAge < PullEnd + 0.1f || _worldRt == null) return;
+            _faceTaken = true;
+            var small = RenderTexture.GetTemporary(FaceWidth, FaceHeight, 0, RenderTextureFormat.ARGB32);
+            Graphics.Blit(_worldRt, small);
+            RenderTexture before = RenderTexture.active;
+            RenderTexture.active = small;
+            var tex = new Texture2D(FaceWidth, FaceHeight, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, FaceWidth, FaceHeight), 0, 0);
+            tex.Apply();
+            RenderTexture.active = before;
+            RenderTexture.ReleaseTemporary(small);
+            StageFaces[_stage] = tex;
+            try
+            {
+                File.WriteAllBytes(FacePath(_stage), tex.EncodeToPNG());
+            }
+            catch (IOException e)
+            {
+                Debug.LogWarning("[SurvivorView] 판 끝 사진 저장 실패: " + e.Message);
+            }
+        }
+
+        /// <summary>결과창 배치: 수호자는 화면 아래 낮은 띠(마을이 보이게), 아니면 가운데 큰 판.</summary>
+        private void LayoutResult(bool guardian)
+        {
+            _resultBack.rectTransform.anchoredPosition = guardian ? new Vector2(0f, -400f) : Vector2.zero;
+            _resultBack.rectTransform.sizeDelta = guardian ? new Vector2(760f, 200f) : new Vector2(1100f, 560f);
+            _resultBack.color = new Color(0f, 0f, 0f, guardian ? 0.45f : 0.78f);
+            _result.alignment = guardian ? TextAnchor.LowerCenter : TextAnchor.MiddleCenter;
+            for (int i = 0; i < _stars.Count; i++) _stars[i].rectTransform.anchoredPosition = new Vector2((i - 1) * 130f, guardian ? 30f : 115f);
+        }
+
+        /// <summary>수호자 결과: 장면(사람들·마을)이 말하고, 다 빠진 뒤에야 별과 "탭하면 소방서로"만 뜬다.</summary>
+        private void GuardianResult()
+        {
+            TakeFace();
+            bool show = _overAge > PullEnd + 0.2f;
+            _resultBack.gameObject.SetActive(show);
+            if (!show) return;
+            bool won = _sim.Outcome == SOutcome.Won;
+            float since = _overAge - (PullEnd + 0.2f);
+            _result.text = since > 0.8f ? "탭하면 소방서로" : "";
+            for (int i = 0; i < _stars.Count; i++)
+            {
+                _stars[i].gameObject.SetActive(won);
+                float pop2 = Mathf.Clamp01((since - (i * 0.25f)) / 0.2f);
+                _stars[i].sprite = Art.Get(i < _sim.Stars ? "UI/star" : "UI/star_empty");
+                _stars[i].rectTransform.localScale = Vector3.one * (pop2 < 1f ? Mathf.Lerp(0f, 1.3f, pop2) : 1f);
+            }
+            _resultBack.rectTransform.localScale = Vector3.one;
         }
     }
 }
