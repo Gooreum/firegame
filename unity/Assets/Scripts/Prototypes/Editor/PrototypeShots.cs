@@ -186,6 +186,21 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c78_forest_yards", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(17f, 25f, 0f), 7f), 2);
             failures += SurvivorShot(dir, "c79_harbor_yards", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(30f, 33f, 0f), 11f), 4);
             failures += SurvivorShot(dir, "c80_factory_yards", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(14f, 36f, 0f), 7f), 3);
+            // 물 손맛: 쥔 동안 굵어진 줄기·달리는 결·끝 무지개·바닥 물길(낮 마을, 노즐 근접).
+            failures += SurvivorShot(dir, "c81_spray_pressure", view => view.Sim.Time >= 4f && view.Sim.PendingChoices == null, 0, false, view =>
+            {
+                // 빈 땅에서 왼쪽 아래로 길게 쏜 채 0.7초: 굵어진 줄기·달리는 결·끝 무지개·바닥 물길이 보인다.
+                view.Sim.Player = new Vec2(26f, 28f);
+                for (int i = 0; i < 42; i++)
+                {
+                    view.Sim.Enemies.Clear();
+                    view.Sim.Spraying = true;
+                    view.Sim.Aim = new Vec2(-1f, -0.45f);
+                    view.Step(new Vec2(0f, 0f));
+                    view.Refresh(SurvivorSim.Dt);
+                }
+                view.Frame(new Vector3(23f, 28f, 0f), 5f);
+            });
             // 항구 할 일 가독성: 불배가 떠 있는 동안 띠·부두 끝 "요격 지점" 고리·"N초 뒤 접안"·발밑 화살표.
             failures += SurvivorShot(dir, "c70_harbor_guide", view => view.Sim.Structures.Exists(s => s.Kind == StructureKind.Boat && !s.Docked && s.Burning && !s.Tanker && view.Sim.BoatEta(s) < 12f), 1, false,
                 view =>

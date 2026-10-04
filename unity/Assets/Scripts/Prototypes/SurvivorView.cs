@@ -247,6 +247,17 @@ namespace FireGame.Prototypes
         private RibbonPool _waterShine;
         private Pool _streamJoint;
         private Pool _blobShine;
+        /// <summary>물줄기 위를 노즐에서 끝으로 달리는 밝은 결, 끝 물안개의 무지개.</summary>
+        private Pool _streamGlint;
+        private Pool _rainbow;
+        private static Sprite _rainbowSprite;
+        /// <summary>쥔 지 몇 초(놓으면 0). 쥐는 순간 분출·줄기 굵어짐·잔떨림의 시계.</summary>
+        private float _sprayHeld;
+        /// <summary>쥔 동안 화면 잔떨림 바닥(트라우마, 진폭 = t²·0.6). 거슬리면 낮추는 손잡이.</summary>
+        private const float SprayTremor = 0.14f;
+        /// <summary>바닥 물길·물결 고리를 다음에 남길 때(_time).</summary>
+        private float _wetAt;
+        private float _rippleAt;
         private Pool _nozzle;
         private Pool _reticle;
         private Pool _shadows;
@@ -1877,6 +1888,7 @@ namespace FireGame.Prototypes
             _zoomKick *= Mathf.Exp(-6f * dt);
             // 쥔 동안은 물살을 버티느라 살짝 뒤로 기댄 자세를 유지한다(쏠 때마다 튕기지 않는다).
             _recoil = Mathf.MoveTowards(_recoil, _sim.Spraying ? 0.35f : 0f, dt * 4f);
+            UpdateSprayFeel(dt);
             _stance = Mathf.MoveTowards(_stance, _sim.Spraying ? 1f : 0f, dt * 6f);
             _hurtClock -= dt;
             _waveAge += dt;
@@ -2903,6 +2915,8 @@ namespace FireGame.Prototypes
             if (pts.Count < 2 || last == null) return;
             bool jet = last.Kind == ShotKind.Jet;
             float w = jet ? 1.5f : Mathf.Max(0.95f, last.Radius * 2.3f);
+            // 쥐는 순간 가늘게 나가다 0.25초에 확 굵어진다(압력이 차오르는 느낌). 놓은 뒤 날아가는 물은 굵은 채로.
+            if (last.Hose) w *= _sim.Spraying ? Mathf.Lerp(0.55f, 1.15f, Mathf.Clamp01(_sprayHeld / 0.25f)) : 1.15f;
             _ribbonIn.Clear();
             foreach (Vector3 p in pts) _ribbonIn.Add(new Vec2(p.x, p.y));
             // 방수포 제트는 고압이라 덜 출렁인다.
@@ -2929,10 +2943,16 @@ namespace FireGame.Prototypes
                 _blobShine.Put(at + (new Vector3(-0.2f, 0.2f, 0f) * b.Radius), b.Radius * 0.35f, 0f, new Color(1f, 1f, 1f, b.Alpha * 0.6f));
             }
             ShedDrops(_ribbon);
+            if (last.Hose) StreamGlints(_ribbon, lift);
 
             Vector3 end = pts[pts.Count - 1];
             Vector3 endDir = (end - pts[pts.Count - 2]).normalized;
             EmitSpray(end, endDir, jet ? 1.6f : Mathf.Max(1f, last.Radius / 0.3f * 0.75f));
+            if (last.Hose && _sim.Spraying)
+            {
+                Rainbow(end, endDir, _ribbon[_ribbon.Count - 1].Along);
+                GroundWet(end);
+            }
         }
 
         /// <summary>줄기 옆구리에서 가끔 물방울이 떨어져 나와 바깥으로 튄다. 노즐 1.5칸 안은 아직 뭉쳐 있어 안 튄다.</summary>
@@ -2946,6 +2966,85 @@ namespace FireGame.Prototypes
             var n = new Vector3(p.Normal.X, p.Normal.Y, 0f) * side;
             Vector3 at = new Vector3(p.Pos.X, p.Pos.Y, 0f) + (n * p.Half);
             EmitFalling("Effects/water_drop", at, (n * Random.Range(1.5f, 3.5f)) + new Vector3(0f, 1.5f, 0f), 0.3f, Random.Range(0.14f, 0.24f), new Color(0.75f, 0.95f, 1f, 0.9f));
+        }
+
+        /// <summary>
+        /// 쥐는 순간: 노즐에서 흰 분출 + 앞쪽 부채꼴 물방울 + 한 번 툭. 쥔 동안: 손에 물살을 버티는 잔떨림과 노즐 끝 작은 물보라.
+        /// </summary>
+        private void UpdateSprayFeel(float dt)
+        {
+            bool on = _sim.Spraying && _sim.Outcome == SOutcome.Playing && _sim.PendingChoices == null;
+            if (!on)
+            {
+                _sprayHeld = 0f;
+                return;
+            }
+            Vector3 tip = NozzleTip();
+            Vector3 look = Look();
+            if (_sprayHeld <= 0f)
+            {
+                Emit("Effects/glow", tip, Vector3.zero, 0f, 0.1f, 0.5f, 1.1f, new Color(1f, 1f, 1f, 0.9f), new Color(0.6f, 0.85f, 1f, 0f), 0f, true);
+                float baseDeg = Mathf.Atan2(look.y, look.x);
+                for (int i = 0; i < 8; i++)
+                {
+                    float a = baseDeg + Random.Range(-0.5f, 0.5f);
+                    EmitFalling("Effects/water_drop", tip, (new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Random.Range(4f, 7f)) + new Vector3(0f, 1.5f, 0f), 0.3f, Random.Range(0.2f, 0.3f), new Color(0.8f, 0.96f, 1f, 0.95f));
+                }
+                _trauma = Mathf.Min(1f, _trauma + 0.12f);
+            }
+            _sprayHeld += dt;
+            _trauma = Mathf.Max(_trauma, SprayTremor + (0.015f * _sim.Build.Level(UpgradeId.Hose)));
+            if (Random.value < 0.25f)
+            {
+                float a = Mathf.Atan2(look.y, look.x) + Random.Range(-0.35f, 0.35f);
+                Emit(Smokes[Random.Range(0, Smokes.Length)], tip, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Random.Range(1.5f, 2.5f), 3f, 0.25f, 0.2f, 0.6f,
+                    new Color(0.8f, 0.92f, 1f, 0.35f), new Color(0.7f, 0.85f, 1f, 0f), Random.Range(-90f, 90f), true);
+            }
+        }
+
+        /// <summary>물줄기 위를 노즐에서 끝으로 달리는 밝은 결 넷: 물이 달려가는 게 보인다.</summary>
+        private void StreamGlints(List<WaterRibbon.Point> ribbon, float lift)
+        {
+            float span = ribbon[ribbon.Count - 1].Along;
+            if (span < 1f) return;
+            Vector3 up = Up(lift) - Up(0f);
+            for (int k = 0; k < 4; k++)
+            {
+                float along = ((_time * 14f) + (k * span / 4f)) % span;
+                int i = 1;
+                while (i < ribbon.Count - 1 && ribbon[i].Along < along) i++;
+                WaterRibbon.Point p = ribbon[i];
+                var travel = new Vector3(p.Normal.Y, -p.Normal.X, 0f);
+                float deg = (Mathf.Atan2(travel.y, travel.x) * Mathf.Rad2Deg) - 90f;
+                float fade = Mathf.Clamp01(along / 1.2f) * Mathf.Clamp01((span - along) / 1.2f);
+                _streamGlint.Put(new Vector3(p.Pos.X, p.Pos.Y, 0f) + up, p.Half * 0.42f, deg, new Color(1f, 1f, 1f, 0.75f * fade), null, 4.5f);
+            }
+        }
+
+        /// <summary>낮 스테이지에서 줄기 길이 3칸 이상이면 끝 물안개 위에 옅은 무지개 띠(줄기 방향으로 굽는다).</summary>
+        private void Rainbow(Vector3 end, Vector3 dir, float span)
+        {
+            if (_sim.Stage.Number == 5 || span < 3f) return;
+            float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f + (Mathf.Sin(_time * 2.5f) * 6f);
+            float a = 0.3f + (0.05f * Mathf.Sin(_time * 7f));
+            _rainbow.Put(end - (dir * 0.3f), 2.6f, deg, new Color(1f, 1f, 1f, a));
+        }
+
+        /// <summary>줄기 끝이 땅이면(건물 위가 아니면) 젖은 물길과 물결 고리를 남긴다.</summary>
+        private void GroundWet(Vector3 end)
+        {
+            if (_time < _wetAt) return;
+            foreach (Structure st in _sim.Structures)
+            {
+                if (st.IsBuilding && !st.Collapsed && Mathf.Abs(end.x - st.Pos.X) < st.Half.X && Mathf.Abs(end.y - st.Pos.Y) < st.Half.Y) return;
+            }
+            _wetAt = _time + 0.12f;
+            AddWet(end + new Vector3(Random.Range(-0.15f, 0.15f), Random.Range(-0.15f, 0.15f), 0f), 0.9f, 2.5f, false);
+            if (_time >= _rippleAt)
+            {
+                _rippleAt = _time + 0.35f;
+                AddWet(end, 1.1f, 0.8f, true);
+            }
         }
 
         /// <summary>방화복을 갈아입는 순간: 금빛 고리 + 반짝이 + 글자.</summary>
@@ -3852,7 +3951,7 @@ namespace FireGame.Prototypes
 
         private void AddWet(Vector3 at, float size, float life, bool ring)
         {
-            if (_wetMarks.Count >= 24) _wetMarks.RemoveAt(0);
+            if (_wetMarks.Count >= 60) _wetMarks.RemoveAt(0);
             _wetMarks.Add(new WetMark { At = at, Size = size, Life = life, Ring = ring });
         }
 
@@ -5658,6 +5757,10 @@ namespace FireGame.Prototypes
             _blobShine = new Pool(_world, "WaterBlobShine", DiscSprite(), 13, Additive);
             _pools.Add(_streamJoint);
             _pools.Add(_blobShine);
+            _streamGlint = new Pool(_world, "WaterGlint", DiscSprite(), 14, Additive);
+            _rainbow = new Pool(_world, "Rainbow", RainbowSprite(), 13, null);
+            _pools.Add(_streamGlint);
+            _pools.Add(_rainbow);
             _nozzle = new Pool(_world, "Nozzle", Art.White, 16, null);
             _pools.Add(_hoseTubeEdge);
             _pools.Add(_hoseTube);
@@ -6607,6 +6710,41 @@ namespace FireGame.Prototypes
 
         /// <summary>물줄기 몸통. 가운데가 밝고 옆과 양 끝이 흐리다. 세로로 늘려 쓴다.</summary>
         /// <summary>물거품: 속이 비치고 테두리가 밝은 원 + 왼쪽 위 하이라이트.</summary>
+        /// <summary>무지개 반원 띠(64×32): 바깥 빨강 → 안 보라, 가장자리는 부드럽게 빠진다. 위(+y)가 둥근 쪽.</summary>
+        private static Sprite RainbowSprite()
+        {
+            if (_rainbowSprite != null) return _rainbowSprite;
+            const int w = 64;
+            const int h = 32;
+            var texture = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[w * h];
+            Color[] bands = { new Color(0.6f, 0.3f, 1f), new Color(0.3f, 0.5f, 1f), new Color(0.3f, 0.9f, 0.5f), new Color(1f, 0.95f, 0.3f), new Color(1f, 0.6f, 0.2f), new Color(1f, 0.25f, 0.25f) };
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float dx = ((x + 0.5f) / w * 2f) - 1f;
+                    float dy = (y + 0.5f) / h;
+                    float r = Mathf.Sqrt((dx * dx) + (dy * dy));
+                    float t = (r - 0.6f) / 0.35f;
+                    if (t < 0f || t > 1f)
+                    {
+                        pixels[(y * w) + x] = new Color32(255, 255, 255, 0);
+                        continue;
+                    }
+                    float f = t * (bands.Length - 1);
+                    int i = Mathf.Min(bands.Length - 2, (int)f);
+                    Color c = Color.Lerp(bands[i], bands[i + 1], f - i);
+                    float edge = Mathf.Sin(t * Mathf.PI) * Mathf.Clamp01(dy * 3f);
+                    pixels[(y * w) + x] = new Color(c.r, c.g, c.b, edge);
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            _rainbowSprite = Sprite.Create(texture, new Rect(0, 0, w, h), new Vector2(0.5f, 0f));
+            return _rainbowSprite;
+        }
+
         private static Sprite BubbleSprite()
         {
             if (_bubbleSprite != null) return _bubbleSprite;
