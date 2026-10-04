@@ -4470,13 +4470,14 @@ namespace FireGame.Prototypes
             bool harbor = _sim.Stage.Number == 4;
             bool night = _sim.Stage.Number == 5;
             // 야시장은 밤: 해를 낮추고 푸르게, 주변광을 어둡게. 다른 스테이지로 가면 되돌린다(등불·불꽃의 additive 글로우가 밤에 산다).
+            // 밤 값(맵 특색 패스): 해 0.3·주변광 (0.2,0.22,0.34)·바닥 0.22·비네트 0.55가 겹쳐 "어둡기만 하고 보기 불편"했다 → 해 0.5, 주변광 (0.34,0.36,0.5), 비네트 0.3.
             if (_sun != null)
             {
-                _sun.intensity = night ? 0.3f : 0.8f;
-                _sun.color = night ? new Color(0.7f, 0.75f, 1f) : new Color(1f, 0.96f, 0.88f);
+                _sun.intensity = night ? 0.5f : 0.8f;
+                _sun.color = night ? new Color(0.78f, 0.8f, 1f) : new Color(1f, 0.96f, 0.88f);
             }
-            RenderSettings.ambientLight = night ? new Color(0.2f, 0.22f, 0.34f) : new Color(0.42f, 0.45f, 0.52f);
-            if (_worldCam != null) _worldCam.backgroundColor = night ? new Color(0.02f, 0.02f, 0.05f) : new Color(0.05f, 0.05f, 0.07f);
+            RenderSettings.ambientLight = night ? new Color(0.34f, 0.36f, 0.5f) : new Color(0.42f, 0.45f, 0.52f);
+            if (_worldCam != null) _worldCam.backgroundColor = night ? new Color(0.04f, 0.04f, 0.09f) : new Color(0.05f, 0.05f, 0.07f);
             int size = (int)SurvivorSim.ArenaSize;
             float mid = size / 2f;
             // 바닥은 스테이지 전체를 그린 한 장(풀결·도로·광장·흙길이 이어진다). 해 그림자를 받는 Lit 쿼드에 깐다.
@@ -4496,6 +4497,8 @@ namespace FireGame.Prototypes
             // 숲은 나무 사이로 햇빛 띠가 더 진하다.
             Material screen = _worldScreen.GetComponent<MeshRenderer>().sharedMaterial;
             if (screen.HasProperty("_ShaftColor")) screen.SetColor("_ShaftColor", new Color(1f, 0.92f, 0.7f, forest ? 0.1f : 0.06f));
+            // 밤 골목의 구석이 비네트로 한 번 더 어두워지지 않게.
+            if (screen.HasProperty("_Vignette")) screen.SetFloat("_Vignette", night ? 0.3f : 0.55f);
 
             if (factory)
             {
@@ -4988,8 +4991,9 @@ namespace FireGame.Prototypes
                     bool dead = burn >= 0f && along <= burn;
                     float flick = 0.85f + (0.15f * Mathf.Sin((_time * 6f) + (k * 1.3f) + n));
                     Color lamp = wet ? new Color(0.5f, 0.75f, 1f, 0.8f) : dead ? new Color(0.15f, 0.1f, 0.08f, 0.9f) : new Color(1f, 0.6f, 0.25f, 0.95f * flick);
-                    _siren.Put(p, dead ? 0.55f : 0.9f, 0f, lamp);
-                    if (!dead) _groundGlow.Put(W(new Vec2(p.x, p.y)), 2.2f, 0f, new Color(lamp.r, lamp.g, lamp.b, 0.12f * flick));
+                    _siren.Put(p, dead ? 0.55f : 1.1f, 0f, lamp);
+                    // 등불 빛이 바닥을 물들인다(전 2.2/α0.12는 밤바닥에 안 보였다).
+                    if (!dead) _groundGlow.Put(W(new Vec2(p.x, p.y)), 3.6f, 0f, new Color(1f, 0.7f, 0.35f, 0.3f * flick));
                     if (wet && Random.value < 0.08f) EmitFalling("Effects/water_drop", p, new Vector3(0f, -1f, 0f), 0.5f, 0.3f, new Color(0.7f, 0.9f, 1f, 0.9f));
                 }
                 if (burn >= 0f)
@@ -5074,6 +5078,58 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>항구 노란 둘. 소방정: 바다 줄 예고 띠 + 흰 선체 모델 + 남쪽으로 두 물줄기 + 사이렌 + 뒤 물결. 큰 파도: 폭 60 흰·파랑 띠가 남쪽으로 쓸며 거품·젖은 자국을 남기고 부두선에서 충격파.</summary>
+        /// <summary>
+        /// 스테이지 모델의 빛(맵 특색): 야시장 점포 "Sign"은 색 네온(숨 쉬듯, 타거나 그을리면 꺼진다), 공연 무대 "Spot0..3"은 바닥에 4색 스포트라이트가
+        /// 좌우로 스윕(대화재·불이 나면 빨간 깜빡임), 항구 등대 "Lamp"는 돌며 바다 쪽으로 빔 한 줄.
+        /// </summary>
+        private void DrawModelLights(Structure st, int seed, float burnt)
+        {
+            GameObject model = _structModels[seed];
+            if (model == null || st.Collapsed) return;
+            string kind = model.name;
+            if (kind == "Stall")
+            {
+                Transform sign = model.transform.Find("Sign");
+                if (sign == null) return;
+                Color neon = StageModels.StallPalette[seed % StageModels.StallPalette.Length];
+                float on = st.Burning || burnt > 0.3f ? 0f : 1f;
+                float breath = 1f + (0.1f * Mathf.Sin((_time * 2.2f) + seed));
+                Vector3 at = sign.position + (Billboard * new Vector3(0f, 0f, -0.05f));
+                _siren.Put(at, 1.6f * breath * on, 0f, new Color(neon.r, neon.g, neon.b, 0.75f));
+                _groundGlow.Put(new Vector3(st.Pos.X, st.Pos.Y - st.Half.Y - 0.6f, 0f), 2.4f * on, 0f, new Color(neon.r, neon.g, neon.b, 0.18f));
+            }
+            else if (kind == "Stage")
+            {
+                bool alarm = st.Burning || _sim.Finale;
+                Color[] hues = { new Color(1f, 0.3f, 0.7f), new Color(0.3f, 0.85f, 1f), new Color(1f, 0.85f, 0.3f), new Color(0.5f, 1f, 0.4f) };
+                for (int k = 0; k < 4; k++)
+                {
+                    Transform spot = model.transform.Find("Spot" + k);
+                    if (spot == null) continue;
+                    float sweep = Mathf.Sin((_time * 0.7f) + (k * 1.6f)) * 4f;
+                    // 객석(무대 앞 광장)은 무대 북쪽: 빛이 그쪽 바닥을 쓴다.
+                    Vector3 foot = new Vector3(st.Pos.X + ((k - 1.5f) * st.Half.X * 0.45f) + sweep, st.Pos.Y + st.Half.Y + 3f, 0f);
+                    Color c = alarm ? (Mathf.Sin((_time * 8f) + k) > 0f ? new Color(1f, 0.2f, 0.1f) : new Color(0.4f, 0.05f, 0.02f)) : hues[k];
+                    _groundGlow.Put(foot, 5f, 0f, new Color(c.r, c.g, c.b, 0.35f), null, 0.6f);
+                    Vector3 head = spot.position;
+                    Vector3 d = foot - head;
+                    float len = d.magnitude;
+                    if (len > 0.5f) _band.Put((head + foot) * 0.5f, 0.5f, (Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg) - 90f, new Color(c.r, c.g, c.b, 0.15f), null, len / 0.5f);
+                }
+            }
+            else if (kind == "LighthouseCafe")
+            {
+                Transform lamp = model.transform.Find("Lamp");
+                if (lamp == null) return;
+                float deg = _time * 60f;
+                lamp.localRotation = Quaternion.Euler(0f, deg, 0f);
+                Vector3 head = lamp.position;
+                var dir = new Vector3(Mathf.Cos(deg * Mathf.Deg2Rad), Mathf.Abs(Mathf.Sin(deg * Mathf.Deg2Rad)) + 0.2f, 0f).normalized;
+                _siren.Put(head, 1.2f + (0.3f * Mathf.Abs(Mathf.Sin(deg * Mathf.Deg2Rad))), 0f, new Color(1f, 0.95f, 0.7f, 0.8f));
+                _band.Put(head + (dir * 5f), 1.2f, (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f, new Color(1f, 0.95f, 0.7f, 0.12f), null, 10f / 1.2f);
+            }
+        }
+
         /// <summary>숲 불 전선: 폭 60 검붉은 띠가 내려오고 그 위에 불꽃 벽이 선다. 꺼 놓은 자리(Out)는 김만 오르고 벽이 비어 "끊었다"가 보인다.</summary>
         private void DrawFront()
         {
@@ -5296,6 +5352,7 @@ namespace FireGame.Prototypes
             if (wet > 0f) tint = Color.Lerp(tint, new Color(0.65f, 0.82f, 1f), 0.3f * wet);
             float hgt = RoofHeight(seed);
             Models3D.Tint(_structModels[seed], tint);
+            DrawModelLights(st, seed, burnt);
 
             // 불이 나면 앞벽 창 자리(가운데 줄 셋)가 주황으로 일렁인다.
             if (st.Burning)

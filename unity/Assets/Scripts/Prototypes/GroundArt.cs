@@ -227,7 +227,11 @@ namespace FireGame.Prototypes
             Color c;
             if (aisle || apron)
             {
-                c = (apron ? new Color(0.3f, 0.28f, 0.33f) : new Color(0.27f, 0.26f, 0.3f)) * (0.92f + (0.1f * Noise(px, py, 26)) + (0.04f * grain));
+                // 골목은 따뜻한 벽돌(등불 빛을 받은 듯), 무대 앞은 보랏빛 돌. 점포 앞 1칸은 더 밝다(맵 특색 패스: 전엔 0.27 돌이라 밤에 바닥이 안 읽혔다).
+                float edge = aisleHalf - Mathf.Abs(y - mid);
+                float lit = edge < 1f ? 0.08f : 0f;
+                c = (apron ? new Color(0.42f, 0.38f, 0.42f) : new Color(0.5f + lit, 0.4f + lit, 0.33f + lit)) * (0.92f + (0.1f * Noise(px, py, 26)) + (0.04f * grain));
+                if (!apron && ((px / 8) + ((py / 4) % 2 == 0 ? 0 : 4)) % 8 == 0) c *= 0.85f;   // 벽돌 줄눈
                 // 점포 앞 노란 안내선(골목 양 가장자리).
                 if (Mathf.Abs(Mathf.Abs(y - mid) - (aisleHalf - 0.25f)) < 0.07f) c = new Color(0.8f, 0.68f, 0.25f);
             }
@@ -236,8 +240,8 @@ namespace FireGame.Prototypes
                 int tx = px / Ppu;
                 int ty = py / Ppu;
                 bool joint = (px % Ppu) == 0 || (py % Ppu) == 0;
-                c = new Color(0.22f, 0.21f, 0.25f) * (0.86f + (0.16f * Hash(tx, ty)) + (0.05f * Noise(px, py, 20)) + (0.04f * grain));
-                if (joint) c *= 0.7f;
+                c = new Color(0.36f, 0.34f, 0.38f) * (0.86f + (0.16f * Hash(tx, ty)) + (0.05f * Noise(px, py, 20)) + (0.04f * grain));
+                if (joint) c *= 0.75f;
             }
             // 색종이: 드문 점이 분홍·금·청록으로 반짝인다.
             if (grain > 0.9975f)

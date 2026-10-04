@@ -170,6 +170,9 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c60_forest_camp", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 20f, 0f), 14f), 2);
             failures += SurvivorShot(dir, "c61_harbor_quay", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 32f, 0f), 14f), 4);
             failures += SurvivorShot(dir, "c62_market_stalls", view => view.Sim.Time > 0.5f, 0, false, view => view.Frame(new Vector3(30f, 30f, 0f), 16f), 5);
+            // 야시장 밝기·특색: 밝아진 밤 골목(c62와 비교)과 색 네온 간판, 무대 스포트라이트.
+            failures += SurvivorShot(dir, "c71_market_night", view => view.Sim.Time > 1f, 0, false, view => view.Frame(new Vector3(30f, 30f, 0f), 18f), 5);
+            failures += SurvivorShot(dir, "c72_stage_lights", view => view.Sim.Time > 1f, 0, false, view => view.Frame(new Vector3(30f, 11f, 0f), 10f), 5);
             // 항구 할 일 가독성: 불배가 떠 있는 동안 띠·부두 끝 "요격 지점" 고리·"N초 뒤 접안"·발밑 화살표.
             failures += SurvivorShot(dir, "c70_harbor_guide", view => view.Sim.Structures.Exists(s => s.Kind == StructureKind.Boat && !s.Docked && s.Burning && !s.Tanker && view.Sim.BoatEta(s) < 12f), 1, false,
                 view =>
