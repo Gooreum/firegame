@@ -248,6 +248,23 @@ namespace FireGame.Prototypes
                     WoodDoor(c, c.W / 2, 30, sign0 - 4, Rgb(0.35f, 0.22f, 0.12f));
                     break;
 
+                // 마을 나머지 여섯 가게: 3D 주택은 지붕색으로만 구별되므로 default 회색 대신 저마다의 색(맵 특색 패스).
+                case "카페":
+                case "서점":
+                case "정육점":
+                case "미용실":
+                case "철물점":
+                case "치킨집":
+                    Color32 shopRoof = name == "카페" ? Rgb(0.45f, 0.3f, 0.2f) : name == "서점" ? Rgb(0.2f, 0.45f, 0.3f) : name == "정육점" ? Rgb(0.75f, 0.2f, 0.2f)
+                        : name == "미용실" ? Rgb(0.9f, 0.5f, 0.7f) : name == "철물점" ? Rgb(0.4f, 0.45f, 0.55f) : Rgb(0.9f, 0.5f, 0.15f);
+                    FlatRoof(c, front, shopRoof);
+                    Wall(c, front, Rgb(0.9f, 0.9f, 0.9f));
+                    c.Fill(0, sign0, c.W, front, Rgb(0.3f, 0.3f, 0.35f));
+                    windows.Add(Glass(c, 8, 8, (c.W / 2) - 24, sign0 - 5, false));
+                    windows.Add(Glass(c, (c.W / 2) + 24, 8, c.W - 8, sign0 - 5, false));
+                    WoodDoor(c, c.W / 2, 30, sign0 - 4, Rgb(0.45f, 0.3f, 0.2f));
+                    break;
+
                 default:
                     FlatRoof(c, front, Rgb(0.7f, 0.7f, 0.7f));
                     Wall(c, front, Rgb(0.9f, 0.9f, 0.9f));

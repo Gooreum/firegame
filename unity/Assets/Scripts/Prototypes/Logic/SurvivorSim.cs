@@ -26,11 +26,17 @@ namespace FireGame.Prototypes.Logic
         /// <summary>공단: 불붙은 폐유 덩어리. 느리고 튼튼하며, 걸어온 자리와 죽은 자리에 건물을 태우는 기름 불을 남긴다.</summary>
         Oil,
 
-        /// <summary>항구: 불 갈매기. 바다 쪽에서 날아와(물을 건넌다) 크게 출렁이며 소방관을 쫓는다.</summary>
+        /// <summary>항구: 불 갈매기(폭격기). 바다 쪽에서 날아와(물을 건넌다) 건물 지붕에 불을 떨어뜨리고 바다로 돌아간다.</summary>
         Gull,
 
         /// <summary>야시장: 폭죽. 깡충깡충 뛰어오고, 잡으면 불씨 둘이 튀어 점포를 노린다(점포 곁에서 터뜨리지 마라).</summary>
         Popper,
+
+        /// <summary>항구: 불 게. 바다에서 기어 올라 옆걸음으로 건물까지 가서 불을 지피고, 그 뒤 소방관을 쫓는다. 단단하고 잘 안 밀린다.</summary>
+        Crab,
+
+        /// <summary>야시장: 풍등. 하늘을 천천히 떠서 점포 지붕에 내려앉아 불을 내고 타 없어진다. 쏘아 떨어뜨린다.</summary>
+        SkyLantern,
     }
 
     public enum ShotKind
@@ -80,6 +86,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>대화재 고리의 큰 불: 레벨만큼 질기고 물줄기·장막·방화복에 거의 안 밀린다(3:00의 장비를 뚫고 몸에 닿는 압력).</summary>
         public bool Heavy;
+
+        /// <summary>갈매기: 불을 떨어뜨리고 바다로 돌아가는 중. 게: 건물에 불을 지핀 뒤 소방관을 쫓는 중.</summary>
+        public bool Dropped;
 
         /// <summary>지그재그·출렁임 위상(다람쥐·박쥐).</summary>
         public float Phase;

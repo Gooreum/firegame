@@ -93,6 +93,41 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이 스테이지에선 카드로 안 나오는 일반 장비(위협과 상관없는 것). 노란 카드는 Specials가 정한다.</summary>
         public UpgradeId[] Excluded = new UpgradeId[0];
+
+        /// <summary>소방서와 판 시작에 보여 주는 할 일 한 줄("부두 끝에 서서 바다 위 배를 쏘아 끈다").</summary>
+        public string Goal;
+
+        /// <summary>이 스테이지의 대화재 종류(3:00 뒤 SurvivorSim의 공통 감독 위에 하나씩 덧붙는다).</summary>
+        public FinaleKind Finale = FinaleKind.Warehouse;
+
+        /// <summary>대화재 띠에 뜨는 이름("불 전선")과 그때 할 일 한 줄.</summary>
+        public string FinaleName = "대화재";
+        public string FinaleGoal = "끝까지 지켜라";
+
+        /// <summary>항구: 가장자리 스폰에서 불 게 비율(바다에서 기어 올라온다).</summary>
+        public float CrabShare;
+
+        /// <summary>야시장: 가장자리 스폰에서 풍등 비율(하늘을 떠서 점포 지붕에 내려앉는다).</summary>
+        public float LanternShare;
+    }
+
+    /// <summary>대화재 종류: 공통 감독(압력·신고·불씨·큰 불 고리) 위에 스테이지마다 다른 사건 하나.</summary>
+    public enum FinaleKind
+    {
+        /// <summary>마을: 창고가 타오른다(기본 틀).</summary>
+        Warehouse,
+
+        /// <summary>숲: 북쪽 숲에서 불의 띠가 캠프로 내려온다. 줄의 불을 끄면 늦춰진다.</summary>
+        FireFront,
+
+        /// <summary>공단: 드럼이 하나씩 점화되어 카운트다운 뒤 터진다. 끄면 막는다.</summary>
+        ChainBlast,
+
+        /// <summary>항구: 큰 유조선이 부두 가운데 닿아 바다 위로 불기름을 흘린다. 선원이 갇혀 있다.</summary>
+        Tanker,
+
+        /// <summary>야시장: 가판대가 전부 쏘고 무대도 쏘며 등줄이 무대에서부터 차례로 탄다.</summary>
+        RocketStorm,
     }
 
     /// <summary>
@@ -115,6 +150,7 @@ namespace FireGame.Prototypes.Logic
             // 배우는 판: 모든 장비가 나온다. 대비는 구조와 발(큰 불에 갇힌 주민, 멀리 떨어진 신고).
             Threat = "큰 불에 주민이 갇힌다 · 신고가 멀리서 온다",
             Counters = new[] { UpgradeId.Partner, UpgradeId.Boots },
+            Goal = "큰 불부터, 갇힌 사람 먼저",
         };
 
         private static readonly StageRules Forest = new StageRules
@@ -149,6 +185,11 @@ namespace FireGame.Prototypes.Logic
             Threat = "바람이 불을 캠프로 민다 · 재 박쥐 떼",
             Counters = new[] { UpgradeId.Curtain, UpgradeId.Drone },
             Excluded = new[] { UpgradeId.Turret },
+            Goal = "바람 위쪽 나무부터 끈다",
+            // 숲의 대화재: 북쪽 숲에서 불의 띠가 캠프로 내려온다(맵 특색 패스).
+            Finale = FinaleKind.FireFront,
+            FinaleName = "불 전선",
+            FinaleGoal = "내려오는 불의 띠를 끊어라",
         };
 
         private static readonly StageRules Factory = new StageRules
@@ -169,6 +210,11 @@ namespace FireGame.Prototypes.Logic
             Threat = "드럼이 줄줄이 터져 기름 불이 깔린다",
             Counters = new[] { UpgradeId.Boots, UpgradeId.Turret },
             Excluded = new[] { UpgradeId.Drone },
+            Goal = "드럼 곁에서 기름 방울을 터뜨리지 마라",
+            // 공단의 대화재: 드럼이 하나씩 점화되어 카운트다운 뒤 터진다. 끄면 막는다(맵 특색 패스).
+            Finale = FinaleKind.ChainBlast,
+            FinaleName = "연쇄 폭발",
+            FinaleGoal = "점화된 드럼을 끄면 막는다",
         };
 
         private static readonly StageRules Harbor = new StageRules
@@ -182,10 +228,13 @@ namespace FireGame.Prototypes.Logic
             // 1.3이면 숙련 봇이 마을과 같은 수준(19~23 대 22승)이라 그만큼 뭍 스폰을 늘린다(docs §17).
             SpawnRate = 1.5f,
             BlazeMax = 0.3f,
-            DartShare = 0.1f,
+            // 다트는 마을 몹이다: 항구는 제 몹(갈매기·게)으로 채운다(맵 특색 패스, 전 0.1).
+            DartShare = 0f,
             // 항구의 난이도는 새 규칙(불배·갈매기)에서 온다(docs §17).
             // 0.08이면 기본 봇이 부두 끝에서 배를 기다리는 동안 곁에 아무것도 없어 빈 시간이 17%(마을 7%)였다: 바다에서 오는 갈매기를 늘린다(docs §17).
-            GullShare = 0.16f,
+            // 갈매기가 폭격기(지붕에 불을 떨어뜨린다)가 되며 0.16 → 0.12, 그 자리에 불 게 0.06(맵 특색 패스).
+            GullShare = 0.12f,
+            CrabShare = 0.06f,
             // 14로 자주 띄우자 오히려 쉬워졌다(21 → 27승): 배가 늘 떠 있으면 소방정·파도가 쉬지 않고 부둣가를 적셔 준다. 18로 두고 배 속도(BoatSpeed)를 올린다(docs §17).
             BoatEvery = 18f,
             Sea = true,
@@ -196,6 +245,11 @@ namespace FireGame.Prototypes.Logic
             Threat = "불붙은 배가 떠내려와 부두에 닿는다 · 바다에서 불 갈매기",
             Counters = new[] { UpgradeId.WaterBomb, UpgradeId.Turret },
             Excluded = new[] { UpgradeId.Curtain },
+            Goal = "부두 끝에 서서 바다 위 배를 쏘아 끈다",
+            // 항구의 대화재: 큰 유조선이 부두 가운데 닿아 바다 위로 불기름을 흘린다(맵 특색 패스).
+            Finale = FinaleKind.Tanker,
+            FinaleName = "유조선 좌초",
+            FinaleGoal = "유조선을 끄고 선원을 구하라",
         };
 
         private static readonly StageRules Market = new StageRules
@@ -207,8 +261,10 @@ namespace FireGame.Prototypes.Logic
             ReportTimes = SurvivorSim.ReportTimes,
             SpawnRate = 1.3f,
             BlazeMax = 0.3f,
-            DartShare = 0.1f,
-            PopperShare = 0.1f,
+            // 다트는 마을 몹이다: 야시장은 폭죽·풍등으로 채운다(맵 특색 패스, 전 0.1 / 폭죽 0.1).
+            DartShare = 0f,
+            PopperShare = 0.08f,
+            LanternShare = 0.08f,
             // 점포끼리는 등줄로만 옮긴다(둘 다 켜면 다닥다닥 붙은 점포가 한 번에 탄다).
             SpreadEvery = 0f,
             TreeSpit = 0f,
@@ -217,6 +273,11 @@ namespace FireGame.Prototypes.Logic
             Threat = "등줄을 타고 불이 점포를 건넌다 · 불꽃 가판대가 하늘로 불을 쏜다",
             Counters = new[] { UpgradeId.Curtain, UpgradeId.Partner },
             Excluded = new[] { UpgradeId.Turret },
+            Goal = "등줄을 적셔 끊고 가판대부터 끈다",
+            // 야시장의 대화재: 가판대가 전부 쏘고 무대도 쏘며 등줄이 무대에서부터 차례로 탄다(맵 특색 패스).
+            Finale = FinaleKind.RocketStorm,
+            FinaleName = "불꽃 폭주",
+            FinaleGoal = "무대부터 끄고 등줄을 적셔라",
         };
 
         /// <summary>번호순. 정적 초기화 순서상 위 다섯 뒤에 있어야 한다.</summary>

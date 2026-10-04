@@ -46,6 +46,32 @@ namespace FireGame.Prototypes.Tests
             Assert.True(two.Stage.FinaleWindChance > SurvivorSim.WindSpreadChance);
         }
 
+        /// <summary>맵 특색 패스: 스테이지마다 할 일 한 줄·대화재 이름·서로 다른 대화재 종류가 있고, 다트는 항구·야시장에 안 나온다.</summary>
+        [Fact]
+        public void EveryStage_HasAGoal_AFinaleName_AndADistinctFinaleKind()
+        {
+            var kinds = new HashSet<FinaleKind>();
+            for (int n = 1; n <= SurvivorStages.Count; n++)
+            {
+                StageRules r = SurvivorStages.Get(n);
+                Assert.False(string.IsNullOrWhiteSpace(r.Goal), n + " Goal");
+                Assert.False(string.IsNullOrWhiteSpace(r.FinaleName), n + " FinaleName");
+                Assert.False(string.IsNullOrWhiteSpace(r.FinaleGoal), n + " FinaleGoal");
+                Assert.True(kinds.Add(r.Finale), n + " Finale 중복");
+            }
+            Assert.Equal(FinaleKind.Warehouse, SurvivorStages.Get(1).Finale);
+            Assert.Equal(FinaleKind.FireFront, SurvivorStages.Get(2).Finale);
+            Assert.Equal(FinaleKind.ChainBlast, SurvivorStages.Get(3).Finale);
+            Assert.Equal(FinaleKind.Tanker, SurvivorStages.Get(4).Finale);
+            Assert.Equal(FinaleKind.RocketStorm, SurvivorStages.Get(5).Finale);
+            // 다트는 마을 몹: 항구·야시장은 제 몹(게·풍등)으로 채운다.
+            Assert.Equal(0f, SurvivorStages.Get(4).DartShare);
+            Assert.Equal(0f, SurvivorStages.Get(5).DartShare);
+            Assert.Equal(0.06f, SurvivorStages.Get(4).CrabShare);
+            Assert.Equal(0.08f, SurvivorStages.Get(5).LanternShare);
+            for (int n = 1; n <= 3; n++) Assert.True(SurvivorStages.Get(n).CrabShare == 0f && SurvivorStages.Get(n).LanternShare == 0f, n + " 전용 몹 비율");
+        }
+
         [Fact]
         public void YellowCards_ComeOnlyFromTheStagePool()
         {

@@ -86,6 +86,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>배: 노리는 부둣가 건물(그 x에서 남쳐 꺾는다).</summary>
         public Structure Target;
 
+        /// <summary>배: 유조선(항구 대화재). 크고 느리고 오래 타며, 닿으면 바다 위로 불기름을 흘린다. 선원이 갇혀 있다.</summary>
+        public bool Tanker;
+
         /// <summary>불꽃 가판대: 퓨즈가 다 타서 로켓을 쏘고 있다.</summary>
         public bool Launching;
 
