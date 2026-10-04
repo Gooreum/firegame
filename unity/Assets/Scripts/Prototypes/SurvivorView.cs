@@ -5640,7 +5640,8 @@ namespace FireGame.Prototypes
             }
 
             float sheet = seed < _hoseSheet.Length ? _hoseSheet[seed] : 0f;
-            if (st.Burning) DrawRoofFire(st, at, w, h, seed, hgt, 1f - (0.25f * sheet));
+            // 수호 반경 안의 불은 눌려 낮게 탄다(자라지 못한다).
+            if (st.Burning) DrawRoofFire(st, at, w, h, seed, hgt, (1f - (0.25f * sheet)) * (Held(st) ? 0.75f : 1f));
             if (sheet > 0f) DrawWaterSheet(seed, sheet, hgt);
 
             // 타는 동안은 위에 진압 게이지(파란 물이 차오른다 = 1 − 불 세기, 다 차면 꺼진다), 그 밑에 증기 충전 금,

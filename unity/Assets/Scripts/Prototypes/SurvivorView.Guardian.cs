@@ -17,6 +17,13 @@ namespace FireGame.Prototypes
         private Pool _siegeFire;
         private Pool _siegeGlow;
         private Pool _siegeRing;
+        private Pool _guardRing;
+
+        /// <summary>레벨업 뒤 흐른 시간(수호 반경이 한 번 크게 퍼지는 펄스).</summary>
+        private float _guardPulse = 99f;
+
+        /// <summary>그림에 쓰는 수호 반경(실제 값으로 부드럽게 따라간다).</summary>
+        private float _guardShown;
 
         /// <summary>버티기가 막 끝난 자리와 그때부터 흐른 시간(링 불꽃이 바깥으로 흩어진다).</summary>
         private Vector3 _siegeEndAt;
@@ -33,12 +40,49 @@ namespace FireGame.Prototypes
             _pools.Add(_siegeRing);
             _siegeFire = AddPool("SiegeFire", "Effects/fire_01", 9);
             _siegeFire.Upright = true;
+            _guardRing = new Pool(_world, "GuardRing", RingSprite(), 3, Additive);
+            _pools.Add(_guardRing);
+        }
+
+        /// <summary>수호 반경 안에서 타는 구조물(불꽃을 눌러 그린다).</summary>
+        private bool Held(Structure st)
+        {
+            return _sim.Guardian && st.Burning && st.DistanceTo(_sim.Player) <= _sim.GuardRadius;
+        }
+
+        /// <summary>
+        /// 수호 반경: 발밑 둘레에 옅은 물빛 띠가 천천히 돌고, 반경 안 타는 건물엔 물빛 테가 씌워진다(눌려 있다).
+        /// 레벨업하면 한 번 크게 퍼졌다 새 반경으로 내려앉는다.
+        /// </summary>
+        private void DrawGuardRadius(float dt)
+        {
+            float r = _sim.GuardRadius;
+            _guardShown = _guardShown <= 0f ? r : Mathf.MoveTowards(_guardShown, r, dt * 2f);
+            _guardPulse += dt;
+            if (_sim.Outcome != SOutcome.Playing) return;
+            Vector3 me = W(_sim.Player);
+            float breathe = 0.5f + (0.5f * Mathf.Sin(_time * 2f));
+            // 반경은 구조물 가장자리까지 잰다: 원은 몸 둘레 반지름 r(+몸 반폭).
+            float d = (_guardShown + 0.4f) * 2f / 0.85f;
+            _guardRing.Put(me, d, _time * 8f, new Color(0.45f, 0.8f, 1f, 0.16f + (0.06f * breathe)));
+            _guardRing.Put(me, d * 0.97f, -_time * 5f, new Color(0.6f, 0.9f, 1f, 0.08f));
+            if (_guardPulse < 0.8f)
+            {
+                float t = _guardPulse / 0.8f;
+                _guardRing.Put(me, d * (1f + (0.5f * Mathf.Sin(t * Mathf.PI))), 0f, new Color(0.7f, 0.95f, 1f, 0.6f * (1f - t)));
+            }
+            foreach (Structure st in _sim.Structures)
+            {
+                if (!Held(st)) continue;
+                _guardRing.Put(W(st.Pos), (Mathf.Max(st.Half.X, st.Half.Y) * 2.3f) + 0.5f, 0f, new Color(0.5f, 0.85f, 1f, 0.2f + (0.08f * breathe)));
+            }
         }
 
         /// <summary>시뮬 신호에 반응한다(React 안에서, 틱마다).</summary>
         private void ReactGuardian()
         {
             if (!_sim.Guardian) return;
+            if (_sim.JustLeveled) _guardPulse = 0f;
             if (_sim.JustSiegeStart && _sim.Siege != null)
             {
                 // 링이 닫힌다: 쿵, 붉은 충격파가 안쪽으로, 카메라가 살짝 물러나 링 전체를 담는다.
@@ -106,6 +150,7 @@ namespace FireGame.Prototypes
             _siegeAge += dt;
             _siegeEndAge += dt;
 
+            DrawGuardRadius(dt);
             DrawHaven();
             Siege siege = _sim.Siege;
             if (siege != null) DrawSiegeRing(W(siege.Center), siege.Radius, Mathf.Clamp01(_siegeAge / 0.35f), 1f, false);
