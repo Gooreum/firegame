@@ -424,6 +424,37 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.DropGem(view.Sim.Player, view.Sim.XpToNext);
             });
 
+            // 숲 개편(2026-10-08, 승인 샘플 그대로): 아이콘 카드, Lv1·Lv3·Lv5·Lv6 레벨업 연출, 구조대원 합류, 풀장비 판.
+            failures += SurvivorShot(dir, "f01_cards", view => view.Sim.PendingChoices != null && view.Sim.PendingChoices.Exists(Loadout.IsEvolution), 40, false, null, 2, view =>
+            {
+                Pick(view, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Sprinkler, UpgradeId.Sprinkler, UpgradeId.Tank, UpgradeId.Tank, UpgradeId.Tank, UpgradeId.Tank);
+                view.Sim.DropGem(view.Sim.Player, view.Sim.XpToNext);
+            });
+            failures += ForestLevelShot(dir, "f02_lv1", UpgradeId.Balloon, 1);
+            failures += ForestLevelShot(dir, "f03_lv3", UpgradeId.Sprinkler, 3);
+            failures += ForestLevelShot(dir, "f04_lv5", UpgradeId.Hose, 5);
+            failures += ForestLevelShot(dir, "f05_lv6", UpgradeId.Chain, 6);
+            Structure crewShop = null;
+            failures += SurvivorShot(dir, "f06_crew", view =>
+            {
+                // 시작 배너가 걷힌 뒤(5초) 가까운 가게 하나에 한 명을 가두고 그 문 앞에 선다.
+                if (view.Sim.Time < 5f) return false;
+                if (crewShop == null)
+                {
+                    crewShop = NearestHouse(view);
+                    crewShop.Residents = 1;
+                    view.Sim.Ignite(crewShop, 0.4f);
+                    Crowd(view, 10, 7f, 6f, true);
+                }
+                crewShop.Fire = 0.4f;
+                if (view.Sim.PendingChoices == null) view.Sim.Player = crewShop.Door;
+                return view.Sim.JustCrewJoined > 0;
+            }, 6, false, Near(10f), 2, view =>
+            {
+                for (int i = 0; i < 4; i++) view.Sim.CrewList.Add(new Crew { Pos = view.Sim.Player, Age = 5f });
+            });
+            failures += SurvivorShot(dir, "f07_forest_run", view => view.Sim.Time > 150f, 10, false, null, 2, null, true, true);
+
             // 마을 몹(2026-10-07): 불쥐 줄, 도깨비 예고, 불풍선 퓨즈, 불곰, 50초 습격, 3:00 화마와 쓰러지는 순간.
             failures += SurvivorShot(dir, "h40_rats", view =>
             {
@@ -608,6 +639,28 @@ namespace FireGame.Prototypes.EditorTools
         private static Action<SurvivorView> Near(float size)
         {
             return view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), size);
+        }
+
+        /// <summary>
+        /// 숲 레벨업 연출 한 장면: 아이템을 toLevel-1까지 고르고 둘레에 몹을 세운 뒤, 찍기 직전에 화면 경로(view.Choose)로 toLevel 카드를 고른다.
+        /// FIREGAME_FRAMES로 이어 찍으면 광선·별·글자·(Lv6) 암전과 이름 띠가 흐른다.
+        /// </summary>
+        private static int ForestLevelShot(string dir, string name, UpgradeId item, int toLevel)
+        {
+            bool fired = false;
+            UpgradeId card = toLevel >= 6 ? Loadout.EvolutionOf(item) ?? item : item;
+            return SurvivorShot(dir, name, view => view.Sim.Time > 5f, 0, false, view =>
+            {
+                view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 1.5f, 0f), 11f);
+                if (fired) return;
+                fired = true;
+                view.Sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { card };
+                view.Choose(0);
+            }, 2, view =>
+            {
+                for (int i = 0; i < Mathf.Min(toLevel - 1, Loadout.MaxLevel); i++) Pick(view, item);
+                Crowd(view, 14, 4f, 30f, true);
+            });
         }
 
         /// <summary>진화까지: 무기 Lv5(+불 몹 둘레) → 짝 보조 → 진화 카드.</summary>

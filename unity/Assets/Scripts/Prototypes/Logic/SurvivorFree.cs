@@ -121,7 +121,7 @@ namespace FireGame.Prototypes.Logic
 
         // --- 구조대원 ---
         public const int MaxCrew = 8;
-        public const float CrewRange = 6f;
+        public const float CrewRange = 8f;
         public const float CrewEvery = 0.5f;
         public const float CrewHit = 4f;
         public const float CrewSpeed = 7f;
@@ -359,9 +359,9 @@ namespace FireGame.Prototypes.Logic
             int row = i < 5 ? 0 : 1;
             int inRow = row == 0 ? Math.Min(5, CrewList.Count) : CrewList.Count - 5;
             int k = row == 0 ? i : i - 5;
-            float spread = 1.4f * (inRow <= 1 ? 0f : 1f);
+            float spread = 1.25f * (inRow <= 1 ? 0f : 1f);
             float a = face + (float)Math.PI + (inRow <= 1 ? 0f : -spread + (2f * spread * k / (inRow - 1)));
-            float r = 1.4f + (row * 0.9f);
+            float r = 2.2f + (row * 1.3f);
             return new Vec2(Player.X + ((float)Math.Cos(a) * r), Player.Y + ((float)Math.Sin(a) * r));
         }
 

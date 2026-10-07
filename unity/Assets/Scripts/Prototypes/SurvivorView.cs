@@ -535,6 +535,7 @@ namespace FireGame.Prototypes
 
             BuildPools();
             BuildHud();
+            BuildLevelUpFx();
             // 조이스틱은 HUD 맨 위에(카드·결과창은 따로 켜고 끈다).
             foreach (Image stick in new[] { _leftRing, _leftKnob, _rightRing, _rightKnob }) stick.transform.SetAsLastSibling();
             _stationLayer = UiKit.Node(canvas.transform, "Station");
@@ -564,6 +565,8 @@ namespace FireGame.Prototypes
                 _groundStage = _sim.Stage.Number;
             }
             _accumulator = 0f;
+            _lvAge = -1f;
+            HideLevelUpUi();
             _trauma = 0f;
             _flash = 0f;
             _hurt = 0f;
@@ -964,7 +967,12 @@ namespace FireGame.Prototypes
                 _cardsIn = 0.25f;
                 _cardAge = -1f;
             }
-            if (_sim.JustEvolved)
+            if (_sim.Build.Free && _sim.JustLeveledItem.HasValue)
+            {
+                // 숲: 승인 샘플 그대로의 레벨업 연출(SurvivorView.LevelUp.cs).
+                PlayLevelUp(_sim.JustLeveledItem.Value, _sim.JustLeveledTo);
+            }
+            else if (_sim.JustEvolved)
             {
                 // 진화: 금빛 물줄기가 사방으로 뻗고 고리가 두 겹 퍼진다. 화면이 확 다가왔다가 느리게 흐른다.
                 var gold = new Color(1f, 0.85f, 0.3f);
@@ -1022,6 +1030,7 @@ namespace FireGame.Prototypes
             ReactGuardian();
             ReactArsenal();
             ReactMobs();
+            ReactFree();
             int kills = 0;
             foreach (Hit h in _sim.Hits)
             {
@@ -1661,6 +1670,7 @@ namespace FireGame.Prototypes
             DrawEdgeArrows();
             DrawGuides(dt);
             DrawWeather();
+            TickLevelUp(dt);
             foreach (Pool p in _pools) p.End();
             EndTags();
             _people.End();
@@ -2132,6 +2142,7 @@ namespace FireGame.Prototypes
                 _aimAge = 99f;
             }
             DrawHoseStream();
+            if (Free) DrawFreeStreams();
 
             foreach (Shot s in _sim.Shots)
             {
@@ -2246,10 +2257,24 @@ namespace FireGame.Prototypes
             if (_ribbon.Count < 2) return;
 
             float lift = last.Hose ? HandHeight : 0f;
-            _waterSheath.Put(_ribbon, 1.35f, 0f, new Color(0.5f, 0.78f, 1f, 0.35f), 5f, lift);
-            _waterBody.Put(_ribbon, 1f, 0f, new Color(0.55f, 0.8f, 1f, jet ? 0.8f : 0.92f), 8f, lift);
-            // 빛은 왼쪽 위에서 온다: 하이라이트를 진행 방향 왼쪽으로 치우친다.
-            _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f, lift);
+            if (Free && last.Hose)
+            {
+                // 숲 등급 물줄기(샘플 tierStream): 바깥 빛 · 흰 심 · Lv5 금테 · Lv6 무지개.
+                int tier = Mathf.Max(TierLv(UpgradeId.Hose), TierLv(UpgradeId.Tank));
+                Color core = TierCore[Mathf.Clamp(tier, 1, 6)];
+                Color sheath = tier >= 6 ? Rainbow() : tier >= 5 ? new Color(1f, 0.8f, 0.35f) : core;
+                _waterSheath.Put(_ribbon, 1.35f + (0.15f * tier), 0f, new Color(sheath.r, sheath.g, sheath.b, 0.3f + (TierGlowA[tier] * 0.4f)), 5f, lift);
+                _waterBody.Put(_ribbon, 1f, 0f, new Color(core.r * 0.85f, core.g * 0.9f, core.b, jet ? 0.8f : 0.92f), 8f, lift);
+                _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f, lift);
+                if (TierWhite[tier] > 0f) _waterShine.Put(_ribbon, 0.2f, 0f, new Color(1f, 1f, 1f, TierWhite[tier] * 0.8f), 20f, lift);
+            }
+            else
+            {
+                _waterSheath.Put(_ribbon, 1.35f, 0f, new Color(0.5f, 0.78f, 1f, 0.35f), 5f, lift);
+                _waterBody.Put(_ribbon, 1f, 0f, new Color(0.55f, 0.8f, 1f, jet ? 0.8f : 0.92f), 8f, lift);
+                // 빛은 왼쪽 위에서 온다: 하이라이트를 진행 방향 왼쪽으로 치우친다.
+                _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f, lift);
+            }
             if (!jet && _sim.Build.Level(UpgradeId.Hose) >= Loadout.MaxLevel)
             {
                 // 물대포 MAX: 줄기 한가운데 금빛-흰 심지가 흐르고 끝에서 금빛 반짝이가 튄다.
@@ -2683,7 +2708,7 @@ namespace FireGame.Prototypes
             DrawHoseLine(at, look);
             DrawReticle(at);
             // 방화복 레벨만큼 옷을 갈아입는다: 파랑 → 노란 헬멧 → 빨간 헬멧 → 빨간 방화복 → 은색 방열복.
-            int suit = _sim.Build.Level(UpgradeId.Suit);
+            int suit = _sim.Build.PowerOf(UpgradeId.Suit);
             int outfit = Mathf.Min(suit, 4);
             if (outfit != _suitShown)
             {
@@ -3170,6 +3195,19 @@ namespace FireGame.Prototypes
             Emit("Effects/glow", at, Vector3.zero, 0f, 0.07f, 0.7f * s, 1.1f * s, new Color(1f, 1f, 1f, 0.7f), clear, 0f, true);
             Shockwave(at, c, 1.8f * s, 0.2f);
             if (level >= Loadout.MaxLevel) Shockwave(at, new Color(1f, 0.85f, 0.35f, 0.95f), 2.5f * s, 0.25f, 0.04f);
+            if (Free && level >= 5)
+            {
+                // 샘플 hitFx: Lv5 금 별 6개 + 약한 흔들림, Lv6 무지개 고리.
+                Sprite star = Art.Get("LevelUp/spark_star");
+                for (int i = 0; i < 6; i++)
+                {
+                    float a = Random.value * Mathf.PI * 2f;
+                    Color sc = level >= 6 ? Rainbow(Random.value) : LvGold;
+                    EmitSprite(star, at, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Random.Range(4f, 8.5f), 3f, 0.35f, 0.45f, 0.05f, sc, new Color(sc.r, sc.g, sc.b, 0f), 300f, true);
+                }
+                _trauma = Mathf.Min(0.6f, _trauma + 0.015f);
+                if (level >= 6) Shockwave(at, Rainbow(), 3f * s, 0.35f);
+            }
             int n = 4 + level;
             for (int i = 0; i < n; i++)
             {
@@ -5090,7 +5128,7 @@ namespace FireGame.Prototypes
             UiKit.Stretch(_xpTease.rectTransform, 16f);
 
             _level = UiKit.OutlinedLabel(_hud, "Level", "", 40, Color.white, TextAnchor.UpperLeft);
-            UiKit.Place(_level.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -48f), new Vector2(300f, 56f));
+            UiKit.Place(_level.rectTransform, new Vector2(0f, 1f), new Vector2(30f, -48f), new Vector2(700f, 56f));
 
             _timer = UiKit.OutlinedLabel(_hud, "Timer", "", 58, Color.white, TextAnchor.UpperCenter);
             UiKit.Place(_timer.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -46f), new Vector2(400f, 70f));
@@ -5190,7 +5228,7 @@ namespace FireGame.Prototypes
             // 수호자 마을은 동네를 잃어도 안 지므로, 지킨 비율이 대화재 감독의 "위험"(0.45) 밑이면 깜빡인다.
             bool edge = total > 0 && (_sim.Guardian ? _sim.VillageSaved < SurvivorSim.GuardTight : (_sim.HousesLost + 1) * 2 > total) && _sim.Outcome == SOutcome.Playing;
             _kills.color = edge && Mathf.Sin(_time * 10f) > 0f ? new Color(1f, 0.35f, 0.3f) : new Color(1f, 0.85f, 0.6f);
-            _level.text = "Lv " + _sim.Level;
+            _level.text = "Lv " + _sim.Level + (Free ? "    구조대원 " + _sim.CrewList.Count + "/" + SurvivorSim.MaxCrew : "");
 
             bool combo = _sim.Combo >= 3 && _sim.Outcome == SOutcome.Playing;
             _comboText.gameObject.SetActive(combo);
@@ -5224,7 +5262,7 @@ namespace FireGame.Prototypes
                 int lv = _sim.Build.Level(id);
                 if (Loadout.IsEvolution(id))
                 {
-                    build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append("  진화").Append("</color>\n");
+                    build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append(Free ? "  최고급" : "  진화").Append("</color>\n");
                     continue;
                 }
                 if (lv >= Loadout.MaxLevel) build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append("  ★MAX</color>\n");
@@ -5594,7 +5632,7 @@ namespace FireGame.Prototypes
                 GameAudio.Play(Cue.Rescued);
             }
             string head = _sim.ChoosingChest ? "보물상자!" : "레벨 업!";
-            Text title = UiKit.OutlinedLabel(_cardLayer, "Title", yellow ? head + "  진화 등장!" : head, yellow ? 70 : 80, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
+            Text title = UiKit.OutlinedLabel(_cardLayer, "Title", yellow ? head + (_sim.Build.Free ? "  최고급 등장!" : "  진화 등장!") : head, yellow ? 70 : 80, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
             UiKit.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 360f), new Vector2(900f, 110f));
             _cards.Add(title.rectTransform);
 
@@ -5625,6 +5663,12 @@ namespace FireGame.Prototypes
                 string tag = Loadout.IsEvolution(id) ? SurvivorUpgrades.Name(Loadout.BaseOf(id)) + " MAX + " + SurvivorUpgrades.Name(Loadout.PairOf(id))
                     : id == UpgradeId.Heal ? "" : next <= 1 ? "새로 얻음!" : toMax ? "Lv 5 · MAX!" : "Lv " + next;
 
+                if (_sim.Build.Free)
+                {
+                    FreeCard(rect, id, i);
+                    _cards.Add(rect);
+                    continue;
+                }
                 Text key = UiKit.OutlinedLabel(rect, "Key", (i + 1).ToString(), 44, Color.white, TextAnchor.UpperLeft);
                 UiKit.Place(key.rectTransform, new Vector2(0f, 1f), new Vector2(26f, -18f), new Vector2(80f, 60f));
                 Text kindLabel = UiKit.OutlinedLabel(rect, "Kind", kind, 30, new Color(1f, 1f, 1f, 0.85f), TextAnchor.UpperRight);
@@ -5639,6 +5683,52 @@ namespace FireGame.Prototypes
 
                 _cards.Add(rect);
             }
+        }
+
+        /// <summary>
+        /// 숲 카드(2026-10-08): 판 위에 큰 아이콘(승인 샘플 icon 그림) + 별 6칸 + NEW!/Lv N/Lv5 MAX/Lv6 최고급 + 샘플 문구.
+        /// Lv6 카드는 노랑 판 + 무지개 빛. "진화"·짝 조합 표기는 없다(숲은 짝 조건이 없다).
+        /// </summary>
+        private void FreeCard(RectTransform rect, UpgradeId id, int index)
+        {
+            bool top = Loadout.IsEvolution(id);
+            int next = top ? 6 : _sim.Build.Level(id) + 1;
+            string icon = SurvivorUpgrades.IconOf(id);
+            Color ring = top ? new Color(1f, 0.6f, 0.9f) : next >= 5 ? new Color(1f, 0.84f, 0.43f) : next >= 3 ? new Color(0.55f, 0.85f, 1f) : new Color(0.45f, 0.7f, 1f);
+
+            Image halo = UiKit.Image(rect, "IconGlow", Art.Get("Effects/glow"), new Color(ring.r, ring.g, ring.b, top ? 0.85f : 0.5f));
+            halo.raycastTarget = false;
+            UiKit.Place(halo.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -20f), new Vector2(300f, 300f));
+            if (icon != null)
+            {
+                Image art = UiKit.Image(rect, "Icon", Art.Get("LevelUp/icon_" + icon + (next >= 5 ? "_6" : "_1")), Color.white);
+                art.raycastTarget = false;
+                art.preserveAspect = true;
+                UiKit.Place(art.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -70f), new Vector2(200f, 200f));
+            }
+            for (int s = 0; s < 6; s++)
+            {
+                bool on = s < next;
+                string kind = !on ? "star_off" : s == 5 ? "star_rainbow" : next >= 5 ? "star_gold" : "star_blue";
+                Image star = UiKit.Image(rect, "Star" + s, Art.Get("LevelUp/" + kind), Color.white);
+                star.raycastTarget = false;
+                float size = s == next - 1 ? 50f : 40f;
+                UiKit.Place(star.rectTransform, new Vector2(0.5f, 1f), new Vector2((s - 2.5f) * 46f, -282f - ((50f - size) / 2f)), new Vector2(size, size));
+            }
+
+            Text key = UiKit.OutlinedLabel(rect, "Key", (index + 1).ToString(), 44, Color.white, TextAnchor.UpperLeft);
+            UiKit.Place(key.rectTransform, new Vector2(0f, 1f), new Vector2(26f, -18f), new Vector2(80f, 60f));
+            string kindText = top ? "최고급" : Loadout.IsWeapon(id) ? "무기" : "보조";
+            Text kindLabel = UiKit.OutlinedLabel(rect, "Kind", kindText, 30, new Color(1f, 1f, 1f, 0.85f), TextAnchor.UpperRight);
+            UiKit.Place(kindLabel.rectTransform, new Vector2(1f, 1f), new Vector2(-26f, -24f), new Vector2(200f, 44f));
+            Text name = UiKit.OutlinedLabel(rect, "Name", SurvivorUpgrades.Name(id), 46, Color.white, TextAnchor.MiddleCenter);
+            UiKit.Place(name.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -334f), new Vector2(410f, 60f));
+            string tag = top ? "Lv6 최고급!" : next <= 1 ? "NEW!" : next == Loadout.MaxLevel ? "Lv5 MAX" : "Lv " + next;
+            Text tagLabel = UiKit.OutlinedLabel(rect, "Tag", tag, 32, top ? new Color(1f, 0.75f, 0.95f) : new Color(1f, 0.95f, 0.5f), TextAnchor.MiddleCenter);
+            UiKit.Place(tagLabel.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -392f), new Vector2(400f, 42f));
+            Text desc = UiKit.OutlinedLabel(rect, "Desc", SurvivorUpgrades.DescribeFree(id, next), 27, Color.white, TextAnchor.UpperCenter);
+            UiKit.Place(desc.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -436f), new Vector2(390f, 84f));
+            desc.horizontalOverflow = HorizontalWrapMode.Wrap;
         }
 
         private void HideCards()
