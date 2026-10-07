@@ -1175,6 +1175,7 @@ namespace FireGame.Prototypes.Logic
             if (!Loadout.IsEvolution(id) && had < Loadout.MaxLevel && Build.Level(id) == Loadout.MaxLevel) JustMaxed = id;
             if (Loadout.IsEvolution(id)) JustEvolved = true;
             if (id == UpgradeId.Cannon) _jetClock = 0f;
+            PrimeWeapon(id);
         }
 
         /// <summary>작은 불 몹(불씨·다트·다람쥐·박쥐)이 닿아 있을 때 초당 피해. 큰 불·기름 방울은 10.</summary>

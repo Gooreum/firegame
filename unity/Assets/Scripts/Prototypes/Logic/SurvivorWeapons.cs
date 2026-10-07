@@ -281,6 +281,23 @@ namespace FireGame.Prototypes.Logic
             }
         }
 
+        /// <summary>카드를 고른 순간: 그 무기가 곧바로 한 번 나간다(고른 게 바로 보인다).</summary>
+        private void PrimeWeapon(UpgradeId id)
+        {
+            switch (Loadout.IsEvolution(id) ? Loadout.BaseOf(id) : id)
+            {
+                case UpgradeId.Balloon: _balloonClock = 0.05f; break;
+                case UpgradeId.Extinguisher: _boomClock = 0.05f; break;
+                case UpgradeId.Foam: _foamClock = 0.05f; break;
+                case UpgradeId.Bubble: _bubbleClock = 0.05f; break;
+                case UpgradeId.Manhole: _geyserClock = 0.05f; break;
+                case UpgradeId.Ladder: _ladderClock = 0.05f; break;
+                case UpgradeId.Mine: _mineClock = 0f; break;
+            }
+            if (id == UpgradeId.Tornado) _tornadoClock = 0.5f;
+            if (id == UpgradeId.Avalanche) _avalancheClock = 0.5f;
+        }
+
         private void TickNewWeapons()
         {
             TickDogs();

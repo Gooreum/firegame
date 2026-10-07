@@ -250,5 +250,182 @@ namespace FireGame.Prototypes.Tests
             float off = Math.Abs(((ember.Pos.X - l.From.X) * -l.Dir.Y) + ((ember.Pos.Y - l.From.Y) * l.Dir.X));
             Assert.True(off > 0.5f, "다리에서 밀려나야: " + off);
         }
+
+        // ------------------------------------------------------------------
+        // 물풍선
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public void Balloon_BouncesOffAWall_AndSplashesEachTime()
+        {
+            SurvivorSim sim = Quiet();
+            Shop(sim, 5f, 0f);
+            Take(sim, UpgradeId.Balloon);
+            Run(sim, 0.1f);
+            Assert.Single(sim.Balloons);
+            WaterBalloon b = sim.Balloons[0];
+            float vx = b.Vel.X;
+            int splashes = 0;
+            Run(sim, 1.5f, () => (splashes += sim.BalloonSplashes.Count) > 0);
+            Assert.True(splashes > 0, "벽에 튕기며 물보라가 터져야");
+            Assert.True(Math.Sign(b.Vel.X) != Math.Sign(vx), "벽에서 되튕겨야: " + vx + " → " + b.Vel.X);
+        }
+
+        [Fact]
+        public void Balloon_HitsEmbers_AndPopsAfterItsBounces()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Balloon);
+            Enemy ember = Dummy(sim, EnemyKind.Ember, 3f, 0f);
+            Run(sim, 0.05f);
+            WaterBalloon first = sim.Balloons[0];
+            Run(sim, 1f, () => ember.Hp < ember.MaxHp);
+            Assert.True(ember.Hp < ember.MaxHp);
+            Assert.Contains(sim.Hits, h => h.Source == HitSource.Balloon);
+            // 튕길 횟수나 수명이 다하면 사라진다.
+            Run(sim, SurvivorSim.BalloonLife + 0.5f, () => !sim.Balloons.Contains(first));
+            Assert.DoesNotContain(first, sim.Balloons);
+        }
+
+        [Fact]
+        public void Balloon_CountAndBouncesGrow()
+        {
+            Assert.Equal(new[] { 0, 1, 1, 2, 2, 3 }, SurvivorSim.BalloonCount);
+            Assert.Equal(new[] { 0, 3, 4, 4, 5, 6 }, SurvivorSim.BalloonBounces);
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Balloon, Loadout.MaxLevel);
+            Run(sim, 0.1f);
+            Assert.Equal(3, sim.Balloons.Count);
+            Assert.All(sim.Balloons, b => Assert.Equal(6, b.Bounces));
+        }
+
+        [Fact]
+        public void BalloonStorm_SplitsIntoSmallBalloons_OnBounce()
+        {
+            SurvivorSim sim = Quiet();
+            Shop(sim, 4f, 0f);
+            Evolve(sim, UpgradeId.BalloonStorm);
+            Run(sim, 2f, () => sim.Balloons.Exists(b => b.Small));
+            Assert.Contains(sim.Balloons, b => b.Small);
+        }
+
+        [Fact]
+        public void Balloon_SplashSoaksABurningShop()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = Shop(sim, 4f, 0f, 0.6f);
+            Take(sim, UpgradeId.Balloon);
+            float fire = shop.Fire;
+            Run(sim, 1.5f, () => sim.BalloonSplashes.Count > 0);
+            Assert.True(shop.Fire < fire, "물풍선 물보라가 불을 줄여야");
+        }
+
+        // ------------------------------------------------------------------
+        // 소화기 부메랑
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public void Extinguisher_FliesOut_AndComesBack_PiercingEmbers()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Extinguisher);
+            Enemy a = Dummy(sim, EnemyKind.Ember, 2f, 0f);
+            Enemy b = Dummy(sim, EnemyKind.Ember, 4.5f, 0f);
+            Run(sim, 0.1f);
+            Assert.Single(sim.Boomerangs);
+            Boomerang boom = sim.Boomerangs[0];
+            float far = 0f;
+            bool hit = false;
+            Run(sim, 2f, () =>
+            {
+                far = Math.Max(far, boom.Pos.DistanceTo(sim.Player));
+                hit |= sim.Hits.Exists(h => h.Source == HitSource.Extinguisher);
+                return boom.Dead;
+            });
+            Assert.True(far > 5.5f, "6칸쯤 나가야: " + far);
+            Assert.True(boom.Dead, "돌아와 손에 잡혀야");
+            Assert.True(a.Hp < a.MaxHp && b.Hp < b.MaxHp, "가는 길의 둘 다 꿰뚫어야");
+            Assert.True(hit);
+        }
+
+        [Fact]
+        public void Extinguisher_MoreAndFurtherWithLevel()
+        {
+            Assert.Equal(new[] { 0, 1, 1, 2, 2, 3 }, SurvivorSim.BoomCount);
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Extinguisher, Loadout.MaxLevel);
+            Run(sim, 0.1f);
+            Assert.Equal(3, sim.Boomerangs.Count);
+            Assert.All(sim.Boomerangs, b => Assert.Equal(9f, b.Range, 2));
+        }
+
+        [Fact]
+        public void Tornado_WandersAndPullsEmbersIn()
+        {
+            SurvivorSim sim = Quiet();
+            Evolve(sim, UpgradeId.Tornado);
+            Run(sim, 1.2f, () => sim.Tornadoes.Count > 0);
+            Assert.NotEmpty(sim.Tornadoes);
+            Tornado t = sim.Tornadoes[0];
+            Enemy ember = sim.Spawn(EnemyKind.Ember, new Vec2(t.Pos.X + 2.5f, t.Pos.Y));
+            ember.Speed = 0f;
+            ember.MaxHp = ember.Hp = 999f;
+            float before = ember.Pos.DistanceTo(t.Pos);
+            Run(sim, 0.5f);
+            Assert.True(ember.Hp < 999f, "회오리에 다쳐야");
+            Assert.True(ember.Pos.DistanceTo(t.Pos) < before, "가운데로 끌려와야: " + before + " → " + ember.Pos.DistanceTo(t.Pos));
+        }
+
+        // ------------------------------------------------------------------
+        // 거품 눈덩이
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public void Foam_RollsTowardTheCrowd_SwallowsAndGrows_ThenBursts()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Foam);
+            var crowd = new List<Enemy>();
+            for (int k = 0; k < 5; k++) crowd.Add(Dummy(sim, EnemyKind.Ember, 3f + (0.5f * k), 0f, 2f));
+            Run(sim, 0.1f);
+            Assert.Single(sim.FoamBalls);
+            FoamBall f = sim.FoamBalls[0];
+            Assert.True(f.Dir.X > 0.9f, "몹 쪽으로 굴러야: " + f.Dir.X);
+            float r0 = f.R;
+            float rMax = r0;
+            bool burst = false;
+            Run(sim, SurvivorSim.FoamLife + 0.5f, () =>
+            {
+                rMax = Math.Max(rMax, f.R);
+                return burst |= sim.FoamBursts.Count > 0;
+            });
+            Assert.True(rMax > r0, "삼킨 만큼 커져야: " + r0 + " → " + rMax);
+            Assert.True(burst, "끝에 터져야");
+            Assert.All(crowd, e => Assert.True(e.Dead, "무리가 녹아야"));
+        }
+
+        [Fact]
+        public void Foam_CountAndSizeGrow()
+        {
+            Assert.Equal(new[] { 0, 1, 1, 2, 2, 3 }, SurvivorSim.FoamCount);
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Foam, Loadout.MaxLevel);
+            Run(sim, 0.1f);
+            Assert.Equal(3, sim.FoamBalls.Count);
+            Assert.All(sim.FoamBalls, f => Assert.Equal(2.4f, f.MaxR, 2));
+        }
+
+        [Fact]
+        public void Avalanche_SweepsAcross_HittingEmbersAndSoakingShops()
+        {
+            SurvivorSim sim = Quiet();
+            Evolve(sim, UpgradeId.Avalanche);
+            Enemy ember = Dummy(sim, EnemyKind.Ember, 6f, 3f);
+            Structure shop = Shop(sim, -6f, -4f, 0.6f);
+            float fire = shop.Fire;
+            Run(sim, 2.5f + 2.5f);
+            Assert.True(ember.Hp < ember.MaxHp, "파도에 맞아야");
+            Assert.True(shop.Fire < fire, "파도가 불을 적셔야");
+        }
     }
 }
