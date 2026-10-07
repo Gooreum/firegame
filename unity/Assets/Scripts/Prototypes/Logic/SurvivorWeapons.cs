@@ -533,7 +533,7 @@ namespace FireGame.Prototypes.Logic
                 if (_balloonClock <= 0f)
                 {
                     _balloonClock = BalloonEvery;
-                    int n = BalloonCount[lv];
+                    int n = Table(BalloonCount, BalloonCountFree)[lv];
                     // 불 끄는 무기: 타는 집이 있으면 그 집 벽으로 던진다(벽에 튕겨 지붕에 물보라). 없으면 몹.
                     Structure hot = HottestNear(Player, 10f);
                     Enemy target = hot == null ? PickTarget(Player, 10f) : null;
@@ -542,7 +542,7 @@ namespace FireGame.Prototypes.Logic
                     for (int k = 0; k < n; k++)
                     {
                         double a = baseA + ((k - ((n - 1) / 2f)) * 0.5f);
-                        Balloons.Add(new WaterBalloon { Pos = Player, Vel = new Vec2((float)Math.Cos(a) * BalloonSpeed, (float)Math.Sin(a) * BalloonSpeed), Bounces = BalloonBounces[lv], Life = BalloonLife });
+                        Balloons.Add(new WaterBalloon { Pos = Player, Vel = new Vec2((float)Math.Cos(a) * BalloonSpeed, (float)Math.Sin(a) * BalloonSpeed), Bounces = Table(BalloonBounces, BalloonBouncesFree)[lv], Life = BalloonLife });
                     }
                     ShotsFired += n;
                 }
@@ -914,7 +914,7 @@ namespace FireGame.Prototypes.Logic
                 if (_bubbleClock <= 0f)
                 {
                     _bubbleClock = BubbleEvery;
-                    for (int k = 0; k < BubbleCount[lv]; k++)
+                    for (int k = 0; k < Table(BubbleCount, BubbleCountFree)[lv]; k++)
                     {
                         Enemy target = PickTarget(Player, BubbleSight, e => BubbleShots.Exists(b => b.Target == e));
                         if (target == null) break;
@@ -994,7 +994,7 @@ namespace FireGame.Prototypes.Logic
                 {
                     _geyserClock = GeyserEvery;
                     var used = new List<Vec2>();
-                    for (int k = 0; k < GeyserCount[lv]; k++)
+                    for (int k = 0; k < Table(GeyserCount, GeyserCountFree)[lv]; k++)
                     {
                         Vec2? pick = BusiestManhole(used) ?? BurningManhole(used);
                         if (!pick.HasValue) break;

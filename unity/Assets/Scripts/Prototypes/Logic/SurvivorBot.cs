@@ -76,7 +76,7 @@ namespace FireGame.Prototypes.Logic
                 }
             }
             // 4칸: 무기는 셋까지만 든다(넷째 칸은 진화 짝 보조 자리). 무기가 셋이면 새 무기 카드는 고르지 않는다.
-            if (build.WeaponCount >= Loadout.Slots - 1 && build.PassiveCount == 0)
+            if (!build.Free && build.WeaponCount >= Loadout.Slots - 1 && build.PassiveCount == 0)
             {
                 var keep = new List<UpgradeId>();
                 foreach (UpgradeId id in cards)

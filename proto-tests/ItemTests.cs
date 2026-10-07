@@ -87,10 +87,12 @@ namespace FireGame.Prototypes.Tests
             {
                 var id = (UpgradeId)i;
                 Assert.Equal(System.Array.IndexOf(passives, id) >= 0, Loadout.IsPassive(id));
-                Assert.True(Loadout.IsWeapon(id) || Loadout.IsPassive(id), id + "는 무기도 보조도 아니다");
+                // 보조 Lv6(숲 개편 2026-10-08: 초고압 펌프·제트 장화·불사조 방화복)은 보조의 진화다.
+                bool passiveTop = Loadout.IsEvolution(id) && Loadout.IsPassive(Loadout.BaseOf(id));
+                Assert.True(Loadout.IsWeapon(id) || Loadout.IsPassive(id) || passiveTop, id + "는 무기도 보조도 아니다");
                 if (Loadout.IsEvolution(id)) evolutions++;
             }
-            Assert.Equal(10, evolutions);
+            Assert.Equal(13, evolutions);
             Assert.Equal(4, Loadout.Slots);
         }
 

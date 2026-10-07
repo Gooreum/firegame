@@ -235,6 +235,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>증기 폭발: 건물 불에 물줄기를 이어 맞혀 터진 김.</summary>
         Steam,
+
+        /// <summary>구조대원 물줄기(숲).</summary>
+        Crew,
     }
 
     /// <summary>화면용: 한 번에 크게 줄인 건물 불(물폭탄·헬기·장막 등). 지붕 위에 "−N%"를 띄운다.</summary>
@@ -1039,6 +1042,8 @@ namespace FireGame.Prototypes.Logic
             _rng = new Rng(seed == 0 ? 1 : seed);
             _kitRng = new Rng(((seed == 0 ? 1 : seed) * 7919) + 13);
             _kitClock = NextKitWait();
+            // 숲 개편(2026-10-08): 칸 없음 · 모든 아이템 Lv6 · 구조대원. 다른 스테이지는 그대로.
+            Build.Free = Stage.Number == 2;
             foreach (UpgradeId id in start ?? DefaultStart) Build.Add(id);
             // 방화복으로 시작하면 최대 체력이 다르다.
             Hp = MaxHp;
@@ -1135,6 +1140,7 @@ namespace FireGame.Prototypes.Logic
             Measure();
             Sweep();
 
+            TryPhoenix();
             if (Hp <= 0f)
             {
                 Hp = 0f;
@@ -1219,6 +1225,7 @@ namespace FireGame.Prototypes.Logic
             }
             if (id == UpgradeId.Cannon) _jetClock = 0f;
             PrimeWeapon(id);
+            if (Build.Free) LevelBurst(id);
         }
 
         /// <summary>작은 불 몹(불씨·다트·다람쥐·박쥐)이 닿아 있을 때 초당 피해. 큰 불·기름 방울은 10.</summary>
@@ -1278,6 +1285,7 @@ namespace FireGame.Prototypes.Logic
         {
             ClearWeaponSignals();
             ClearMobSignals();
+            ClearFreeSignals();
             RuinSpat.Clear();
             Hits.Clear();
             Footprints.Clear();
@@ -2128,6 +2136,7 @@ namespace FireGame.Prototypes.Logic
             }
 
             TickNewWeapons();
+            TickFree();
         }
 
         private static float SegmentDistance(Vec2 p, Vec2 a, Vec2 b)
@@ -3387,6 +3396,8 @@ namespace FireGame.Prototypes.Logic
             JustRescued = true;
             Stats.Events++;
             RescuedFrom.Add(s);
+            // 숲: 구한 사람이 방화복 대원이 되어 뒤에 줄을 선다(8명까지). 다 찼으면 예전처럼 뛰어 나간다.
+            if (JoinCrew(s.Door)) return;
             for (int k = 0; k < n; k++) Civilians.Add(new Civilian { Pos = new Vec2(s.Door.X + ((k - ((n - 1) / 2f)) * 0.5f), s.Door.Y), Life = 1.5f });
         }
 
