@@ -60,6 +60,15 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>방화복에 튕긴 뒤 다시 튕기기까지(초).</summary>
         public float BounceCool;
+
+        /// <summary>액체질소에 언 남은 시간(초). 언 동안 못 움직이고 닿아도 안 덴다. 풀릴 때 깨지며 피해.</summary>
+        public float Frozen;
+
+        /// <summary>비눗방울에 갇힌 남은 시간(초). 갇힌 동안 떠 있고, 다 되면 터지며 잡힌다.</summary>
+        public float Captured;
+
+        /// <summary>채찍에 다시 맞기까지(초).</summary>
+        public float WhipCool;
         public float Slowed;
         public float Dot;
 
@@ -305,7 +314,7 @@ namespace FireGame.Prototypes.Logic
     /// 소방관은 움직이기만 하고 무기는 알아서 쏜다. 불 괴물을 끄면 구슬이 떨어지고, 구슬이 모이면 카드 3장 중 하나를 고른다.
     /// 1:20·2:40에 대형 신고, 3:00부터 대화재. 4:00까지 동네를 절반 넘게 지키면 이기고, 체력이 0이 되거나 동네를 잃으면 진다.
     /// </summary>
-    public sealed class SurvivorSim
+    public sealed partial class SurvivorSim
     {
         public const float Dt = 1f / 60f;
         public const float ArenaSize = 60f;
@@ -984,6 +993,7 @@ namespace FireGame.Prototypes.Logic
             Guardian = Stage.Guardian;
             Structures = Stage.Map();
             HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
+            PlaceManholes();
             if (Stage.Links != null)
             {
                 foreach (int[] ab in Stage.Links(Structures)) Lanterns.Add(new Lantern { A = Structures[ab[0]], B = Structures[ab[1]] });
@@ -1215,6 +1225,7 @@ namespace FireGame.Prototypes.Logic
 
         private void ClearSignals()
         {
+            ClearWeaponSignals();
             RuinSpat.Clear();
             Hits.Clear();
             Footprints.Clear();
@@ -1846,6 +1857,20 @@ namespace FireGame.Prototypes.Logic
                 if (e.HitFlash > 0f) e.HitFlash -= Dt;
                 if (e.BounceCool > 0f) e.BounceCool -= Dt;
                 if (e.Slowed > 0f) e.Slowed -= Dt;
+                if (e.WhipCool > 0f) e.WhipCool -= Dt;
+                // 언 몹은 제자리에 서 있다가 풀리는 순간 깨진다. 갇힌 몹은 방울 속에 떠 있다가 터진다.
+                if (e.Frozen > 0f)
+                {
+                    e.Frozen -= Dt;
+                    if (e.Frozen <= 0f) Damage(e, MineShatter, default, true, HitSource.Mine, e.Pos);
+                    continue;
+                }
+                if (e.Captured > 0f)
+                {
+                    e.Captured -= Dt;
+                    if (e.Captured <= 0f) PopBubble(e);
+                    continue;
+                }
 
                 Vec2 chase = Player;
                 if (e.Kind == EnemyKind.Squirrel)
@@ -2030,6 +2055,8 @@ namespace FireGame.Prototypes.Logic
                     FireDrop(_jetAngle, 2.2f * 2f * 3f * Build.HosePower, 16f, 0.55f, 999, 0.8f * Build.HoseRange, ShotKind.Jet);
                 }
             }
+
+            TickNewWeapons();
         }
 
         private static float SegmentDistance(Vec2 p, Vec2 a, Vec2 b)
@@ -2947,6 +2974,7 @@ namespace FireGame.Prototypes.Logic
             float push = Build.SuitPush;
             foreach (Enemy e in _near)
             {
+                if (e.Frozen > 0f || e.Captured > 0f) continue;
                 Burn(e.Touch * Dt, HurtKind.Contact);
                 if (push <= 0f || e.BounceCool > 0f) continue;
                 e.BounceCool = SuitBounceCool;
@@ -2964,7 +2992,7 @@ namespace FireGame.Prototypes.Logic
         public float HeatHurt;
 
         /// <summary>
-        /// 열기: 타는 건물 곁(가장자리 2.5칸)에 서 있으면 가장 센 불 하나만큼 초당 피해. 방화복이 줄이고, 물의 방벽 안에선 절반.
+        /// 열기: 타는 건물 곁(가장자리 2.5칸)에 서 있으면 가장 센 불 하나만큼 초당 피해. 방화복이 줄인다.
         /// 활활 타는 건물에 갇힌 사람은 "먼저 끄고 들어갈지, 몸으로 버티며 바로 들어갈지" 고르게 된다.
         /// </summary>
         private void TickHeat()
