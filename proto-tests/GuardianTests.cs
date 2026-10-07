@@ -206,7 +206,7 @@ namespace FireGame.Prototypes.Tests
             return -1f;
         }
 
-        // --- 버티기 ---
+        // --- 링 없음(2026-10-07 삭제: 이동을 뺏는 강제는 금지) ---
 
         /// <summary>대형 신고까지 시간을 보내고(적 없이) 신고 건물을 돌려준다.</summary>
         private static Structure ToBigReport(SurvivorSim sim)
@@ -221,218 +221,38 @@ namespace FireGame.Prototypes.Tests
             return sim.BigReport;
         }
 
-        /// <summary>건물 가장자리 dist칸 아래(남쪽)로 순간이동.</summary>
-        private static void StandBelow(SurvivorSim sim, Structure s, float dist)
-        {
-            sim.Player = new Vec2(s.Pos.X, s.Pos.Y - s.Half.Y - dist);
-        }
-
         [Fact]
-        public void Siege_ClosesWhenTheFirefighterArrives()
+        public void BigReport_HasNoRing_TheFirefighterWalksAwayFreely()
         {
             var sim = new SurvivorSim(1, 1);
             Structure big = ToBigReport(sim);
             Assert.NotNull(big);
-            Assert.InRange(sim.Time, 50f, 50.1f);
-            Assert.Contains(big, sim.SiegeTargets);
-            StandBelow(sim, big, 6.5f);
+            sim.Player = new Vec2(big.Pos.X, big.Pos.Y - big.Half.Y - 2f);
             sim.Step(0f, 0f);
-            Assert.Null(sim.Siege);
-            StandBelow(sim, big, 4.5f);
-            sim.Step(0f, 0f);
-            Assert.NotNull(sim.Siege);
-            Assert.Same(big, sim.Siege.Target);
-            Assert.True(sim.JustSiegeStart);
+            Run(sim, 1f);
+            // 옛 링 반경(8칸) 밖 한 걸음: 끌려 돌아오지 않는다.
+            Vec2 before = sim.Player;
+            Run(sim, 1f, 0f, -1f);
+            Assert.True(sim.Player.Y < before.Y - 1f, "걸어 나가야: " + before.Y + " → " + sim.Player.Y);
         }
 
         [Fact]
-        public void SiegeTarget_IsSealed_UntilTheRingCloses()
+        public void BigReport_WaterWorksFromAfar()
         {
             var sim = new SurvivorSim(1, 1);
             Structure big = ToBigReport(sim);
             float fire = big.Fire;
-            // 8칸 아래에서 쥐고 3초 쏜다: 링 밖이라 안 먹힌다.
-            StandBelow(sim, big, 8f);
+            // 8칸 아래에서 쥐고 3초 쏜다: 봉인이 없으니 먹힌다.
+            sim.Player = new Vec2(big.Pos.X, big.Pos.Y - big.Half.Y - 8f);
             for (int i = 0; i < 180; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Spraying = true;
-                sim.Aim = new Vec2(big.Pos.X - sim.Player.X, big.Pos.Y - sim.Player.Y);
-                sim.Step(0f, 0f);
-            }
-            Assert.Null(sim.Siege);
-            Assert.True(big.Fire >= fire, "봉인된 불이 줄었다: " + fire + " → " + big.Fire);
-            Assert.True(sim.Sealed(big));
-            // 링 안으로 들어가면 먹힌다.
-            StandBelow(sim, big, 2.5f);
-            sim.Step(0f, 0f);
-            Assert.NotNull(sim.Siege);
-            Assert.False(sim.Sealed(big));
-            float inside = big.Fire;
-            for (int i = 0; i < 120; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Spraying = true;
-                sim.Aim = new Vec2(big.Pos.X - sim.Player.X, big.Pos.Y - sim.Player.Y);
-                sim.Step(0f, 0f);
-            }
-            Assert.True(big.Fire < inside, "링 안에선 먹혀야: " + inside + " → " + big.Fire);
-        }
-
-        [Fact]
-        public void Siege_KeepsTheFirefighterInsideTheRing()
-        {
-            var sim = new SurvivorSim(1, 1);
-            Structure big = ToBigReport(sim);
-            StandBelow(sim, big, 4f);
-            sim.Step(0f, 0f);
-            Assert.NotNull(sim.Siege);
-            for (int i = 0; i < 180; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, -1f);
-            }
-            Assert.NotNull(sim.Siege);
-            Assert.True(sim.Player.DistanceTo(sim.Siege.Center) <= SurvivorSim.SiegeRadius + 0.01f, "링 밖으로 나갔다: " + sim.Player.DistanceTo(sim.Siege.Center));
-        }
-
-        [Fact]
-        public void Siege_SendsWavesFromTheRingEdge()
-        {
-            var sim = new SurvivorSim(1, 1);
-            Structure big = ToBigReport(sim);
-            StandBelow(sim, big, 4f);
-            sim.Step(0f, 0f);
-            sim.Enemies.Clear();
-            bool waved = false;
-            for (int i = 0; i < 160 && !waved; i++)
-            {
-                sim.Step(0f, 0f);
-                waved = sim.JustSiegeWave;
-            }
-            Assert.True(waved);
-            int edge = sim.Enemies.FindAll(e => e.Kind == EnemyKind.Ember && e.Pos.DistanceTo(sim.Siege.Center) >= SurvivorSim.SiegeRadius - 0.5f).Count;
-            Assert.True(edge >= SurvivorSim.SiegeWaveBase, "가장자리 불씨 " + edge);
-        }
-
-        [Fact]
-        public void Siege_DousingTheTarget_ReleasesAndClearsTheBlock()
-        {
-            var sim = new SurvivorSim(1, 1);
-            Structure big = ToBigReport(sim);
-            StandBelow(sim, big, 4f);
-            sim.Step(0f, 0f);
-            Vec2 c = sim.Siege.Center;
-            float start = sim.Time;
-            Enemy near = sim.Spawn(EnemyKind.Blaze, new Vec2(c.X + 6f, c.Y));
-            near.Speed = 0f;
-            Enemy far = sim.Spawn(EnemyKind.Ember, new Vec2(c.X + 20f, c.Y));
-            far.Speed = 0f;
-            Structure neighbour = sim.Structures.Find(s => s != big && s.IsBuilding && !s.Collapsed && s.DistanceTo(c) <= SurvivorSim.SiegeReliefRange);
-            int xp = sim.Xp;
-            int level = sim.Level;
-            sim.Hp = 50f;
-            big.Fire = 0.001f;
-            big.Residents = 2;
-            // 링 가장자리 파도가 코앞에 오면 자동 물은 그쪽을 노린다: 쥐고 건물을 겨눠 끈다.
-            float before = sim.Hp;
-            for (int i = 0; i < (int)((SurvivorSim.SiegeMinTime + 2f) / SurvivorSim.Dt) && sim.Siege != null; i++)
-            {
-                // 링 안 몹은 지운다(풀릴 때 사그라드는지 볼 near·far만 남긴다).
-                sim.Enemies.RemoveAll(e => e != near && e != far);
-                near.Hp = near.MaxHp;
-                far.Pos = new Vec2(c.X + 20f, c.Y);
-                sim.Hp = Math.Max(sim.Hp, 50f);
-                before = sim.Hp;
-                sim.Spraying = true;
-                sim.Aim = new Vec2(big.Pos.X - sim.Player.X, big.Pos.Y - sim.Player.Y);
-                sim.Step(0f, 0f);
-            }
-            Assert.True(sim.Siege == null, "안 풀렸다: 불 " + big.Fire);
-            Assert.True(sim.Time - start >= SurvivorSim.SiegeMinTime - 0.1f, "불을 일찍 꺼도 최소 시간은 버틴다: " + (sim.Time - start));
-            Assert.Equal(1, sim.Stats.SiegesWon);
-            Assert.True(near.Dead, "링 안 큰 불이 사그라들어야");
-            Assert.False(far.Dead, "멀리 있는 불씨는 그대로");
-            Assert.True(sim.Level > level || sim.PendingChoices != null || sim.Xp >= xp + SurvivorSim.SiegeXp - 1, "경험치 " + xp + " → " + sim.Xp);
-            Assert.True(sim.Hp >= before + SurvivorSim.SiegeHeal - 1f, "풀리는 틱 회복: " + before + " → " + sim.Hp);
-            if (neighbour != null) Assert.True(neighbour.Wet >= SurvivorSim.SiegeReliefWet - 1f);
-            Assert.DoesNotContain(big, sim.SiegeTargets);
-        }
-
-        [Fact]
-        public void Siege_CollapseOpensTheRing_AsALoss()
-        {
-            var sim = new SurvivorSim(1, 1);
-            Structure big = ToBigReport(sim);
-            StandBelow(sim, big, 4f);
-            sim.Step(0f, 0f);
-            big.Integrity = 0.0001f;
-            big.Fire = 1f;
-            for (int i = 0; i < 10 && sim.Siege != null; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Step(0f, 0f);
-            }
-            Assert.Null(sim.Siege);
-            Assert.True(big.Collapsed);
-            Assert.Equal(1, sim.Stats.SiegesLost);
-            Assert.True(sim.JustSiegeLost || sim.Stats.SiegesLost == 1);
-        }
-
-        [Fact]
-        public void Siege_RestsTheFinaleRing()
-        {
-            var sim = new SurvivorSim(1, 1);
-            Structure big = ToBigReport(sim);
-            StandBelow(sim, big, 4f);
-            sim.Step(0f, 0f);
-            sim.Finale = true;
-            sim.FinalePressure = 3;
-            sim.Reports = false;
-            for (int i = 0; i < 60 * 9; i++)
-            {
-                sim.Hp = sim.MaxHp;
-                big.Fire = 0.9f;
-                big.Integrity = 1f;
-                sim.Step(0f, 0f);
-                // 버티기 파도도 질긴 큰 불을 섞으니, 대화재 고리 신호(JustWave)로 본다.
-                Assert.False(sim.JustWave, "버티기 중에 대화재 고리가 왔다");
-            }
-        }
-
-        [Fact]
-        public void Forest_HasNoSiege()
-        {
-            var sim = new SurvivorSim(1, 2);
-            Structure big = null;
-            while (sim.BigReport == null && sim.Time < 90f)
             {
                 sim.Enemies.Clear();
                 if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Spraying = true;
+                sim.Aim = new Vec2(big.Pos.X - sim.Player.X, big.Pos.Y - sim.Player.Y);
                 sim.Step(0f, 0f);
             }
-            big = sim.BigReport;
-            Assert.NotNull(big);
-            StandBelow(sim, big, 3f);
-            sim.Step(0f, 0f);
-            Assert.Null(sim.Siege);
-            Assert.Empty(sim.SiegeTargets);
-        }
-
-        [Fact]
-        public void Siege_LandmarkIsATarget()
-        {
-            var sim = new SurvivorSim(1, 1);
-            sim.Time = SurvivorSim.FinaleAt - SurvivorSim.Dt;
-            sim.Step(0f, 0f);
-            Assert.True(sim.Finale);
-            Assert.NotNull(sim.Landmark);
-            Assert.Contains(sim.Landmark, sim.SiegeTargets);
-            StandBelow(sim, sim.Landmark, 3f);
-            sim.Step(0f, 0f);
-            Assert.NotNull(sim.Siege);
-            Assert.Same(sim.Landmark, sim.Siege.Target);
+            Assert.True(big.Fire < fire, "멀리서 쏜 물도 먹혀야: " + fire + " → " + big.Fire);
         }
 
         // --- 생명줄 ---

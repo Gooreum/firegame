@@ -260,30 +260,6 @@ namespace FireGame.Prototypes.Logic
         public Vec2 From;
     }
 
-    /// <summary>재미 밀도 계측: 봇 판을 스테이지끼리 비교한다(docs/prototype-c-balance.md).</summary>
-    /// <summary>버티기: 큰 신고 건물에 다가가면 링이 닫히고, 끄고 다 구할 때까지 링 가장자리에서 불이 몰려온다(수호자 규칙).</summary>
-    public sealed class Siege
-    {
-        public Structure Target;
-        public Vec2 Center;
-        public float Radius;
-        public float WaveClock;
-        public int Waves;
-        public float Age;
-
-        /// <summary>이 판에서 몇 번째 버티기인지(0부터). 파도가 그만큼 커진다.</summary>
-        public int Index;
-
-        /// <summary>대상 불이 꺼진 때(Age). 아직 타면 -1.</summary>
-        public float OutAt = -1f;
-
-        /// <summary>링이 풀리기까지 남은 비율(1 → 0). 불이 다 꺼져야 줄어들기 시작하는 게 아니라 닫힌 순간부터 줄고, 불이 남아 있으면 0에서 멈춘다.</summary>
-        public float Left
-        {
-            get { return Math.Max(0f, 1f - (Age / SurvivorSim.SiegeMinTime)); }
-        }
-    }
-
     /// <summary>소방관이 받은 피해의 출처(RunStats.HurtBy 칸).</summary>
     public enum HurtKind
     {
@@ -293,6 +269,7 @@ namespace FireGame.Prototypes.Logic
         Blast,
     }
 
+    /// <summary>재미 밀도 계측: 봇 판을 스테이지끼리 비교한다(docs/prototype-c-balance.md).</summary>
     public sealed class RunStats
     {
         /// <summary>레벨업한 시각들.</summary>
@@ -350,14 +327,6 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>수호자 쉼터(지킨 집 곁)에서 찬 체력.</summary>
         public float HealHaven;
-
-        /// <summary>버티기 성공·실패와 링 안에서 보낸 시간.</summary>
-        public int SiegesWon;
-        public int SiegesLost;
-        public float SiegeTime;
-
-        /// <summary>링 안에서의 최저 체력 비율(버티기가 몸으로 아슬했나). 버티기가 없으면 1.</summary>
-        public float SiegeMinHp = 1f;
 
         /// <summary>수호자: 쥐지 않아 저절로 나간 물줄기 수와 쥐고 쏜 물줄기 수.</summary>
         public int AutoShots;
@@ -624,43 +593,6 @@ namespace FireGame.Prototypes.Logic
         public readonly List<Pickup> Chests = new List<Pickup>();
         public bool JustBigReport;
 
-        /// <summary>버티기 중(링이 닫혀 있다). 없으면 null.</summary>
-        public Siege Siege;
-        public bool JustSiegeStart;
-        public bool JustSiegeWon;
-        public bool JustSiegeLost;
-
-        /// <summary>이번 틱 링 가장자리에 파도가 왔다.</summary>
-        public bool JustSiegeWave;
-
-        /// <summary>버티기 후보: 다가가면 링이 닫힐 건물(대형 신고·대화재 랜드마크). 끝나면 빠진다.</summary>
-        public readonly List<Structure> SiegeTargets = new List<Structure>();
-
-        /// <summary>건물 가장자리에서 이 거리 안에 들어오면 링이 닫힌다.</summary>
-        public const float SiegeEnter = 5f;
-
-        /// <summary>링 반경(건물 중심 기준). 건물 반폭 3 안팎이라 문 앞 구조는 링 안이다.</summary>
-        public const float SiegeRadius = 8f;
-        /// <summary>파도 간격과 불씨 수(SiegeWaveBase + SiegeWaveStep × 순번).</summary>
-        public const float SiegeWaveEvery = 2.5f;
-
-        /// <summary>링이 풀리기까지 최소 시간(초). 불을 일찍 꺼도 이때까지는 버틴다.</summary>
-        public const float SiegeMinTime = 12f;
-
-        /// <summary>
-        /// 파도마다 섞이는 질긴 큰 불 수(이 값 + 순번). 대화재 고리처럼 레벨만큼 질기다(FinaleRingToughness).
-        /// 링의 몸 압박은 이것이 정한다: 불씨 수(6→9)는 링 최저 체력을 안 바꿨고(70→73%, 바로 녹는다), 큰 불 1·2·3이면 70·57·47%(docs §20).
-        /// </summary>
-        public const int SiegeHeavyBase = 2;
-        public const int SiegeWaveBase = 6;
-        public const int SiegeWaveStep = 2;
-
-        /// <summary>풀릴 때: 이 범위 불 몹은 처치되고 구조물 불은 꺼져 SiegeReliefWet초 젖는다.</summary>
-        public const float SiegeReliefRange = 12f;
-        public const float SiegeReliefWet = 20f;
-        public const int SiegeXp = 60;
-        public const float SiegeHeal = 15f;
-
         /// <summary>잿더미 둥지: 무너진 집이 이 간격마다 불씨 RuinSpit개를 뱉는다(무너진 순간부터 한 간격 뒤).</summary>
         public const float RuinSpitEvery = 7f;
 
@@ -719,7 +651,6 @@ namespace FireGame.Prototypes.Logic
                 return;
             }
         }
-        private int _siegeCount;
         public bool JustFinale;
         public bool JustChest;
 
@@ -1242,7 +1173,6 @@ namespace FireGame.Prototypes.Logic
             Time += Dt;
             MovePlayer(moveX, moveY);
             BlockPlayer();
-            if (Guardian) TickSiege();
             Direct();
             if (Stage.BoatEvery > 0f) TickBoats();
             RebuildHash();
@@ -1407,12 +1337,7 @@ namespace FireGame.Prototypes.Logic
 
         private void ClearSignals()
         {
-            JustSiegeStart = false;
-            JustSiegeWon = false;
-            JustSiegeLost = false;
-            JustSiegeWave = false;
             RuinSpat.Clear();
-            SealHits.Clear();
             Hits.Clear();
             Explosions.Clear();
             DroneDrops.Clear();
@@ -1628,7 +1553,7 @@ namespace FireGame.Prototypes.Logic
                 // 2단계부터: 큰 불 고리가 소방관을 에워싼다. 서서 끄지 못하게 하는 몸 압박(3:00의 장비는 불만으론 못 누른다).
                 _ringClock -= Dt;
                 // 버티기 중엔 쉰다: 링 파도가 이미 몸 압박이다.
-                if (FinalePressure >= FinaleRingFrom && _ringClock <= 0f && Siege == null)
+                if (FinalePressure >= FinaleRingFrom && _ringClock <= 0f)
                 {
                     _ringClock = FinaleRingEvery;
                     int ring = FinaleRingCount;
@@ -1673,7 +1598,6 @@ namespace FireGame.Prototypes.Logic
             Ignite(pick, BigReportFire);
             pick.Residents += BigReportPeople;
             BigReport = pick;
-            if (Guardian) SiegeTargets.Add(pick);
             _bigFailed = false;
             JustBigReport = true;
             Stats.Events++;
@@ -1695,7 +1619,6 @@ namespace FireGame.Prototypes.Logic
             mark.Wet = 0f;
             Ignite(mark, 1f);
             mark.Residents += FinalePeople;
-            if (Guardian) SiegeTargets.Add(mark);
             switch (Stage.Finale)
             {
                 case FinaleKind.FireFront:
@@ -1875,133 +1798,6 @@ namespace FireGame.Prototypes.Logic
             pick.Storm = true;
             JustStorm = true;
         }
-
-        /// <summary>
-        /// 버티기: 링이 없으면 후보 중 SiegeEnter 안에 온 타는 건물로 닫는다. 닫혀 있으면 소방관을 링 안에 가두고,
-        /// 파도를 보내고, 대상이 꺼지면 풀고(성공), 무너지면 연다(실패). 링 밖에서 꺼지거나 무너진 후보는 그냥 빠진다.
-        /// </summary>
-        private void TickSiege()
-        {
-            if (Siege == null)
-            {
-                SiegeTargets.RemoveAll(t => !t.Burning);
-                foreach (Structure t in SiegeTargets)
-                {
-                    if (t.Burning && t.DistanceTo(Player) <= SiegeEnter)
-                    {
-                        BeginSiege(t);
-                        break;
-                    }
-                }
-                return;
-            }
-            Siege.Age += Dt;
-            Stats.SiegeTime += Dt;
-            Stats.SiegeMinHp = Math.Min(Stats.SiegeMinHp, Math.Max(0f, Hp) / MaxHp);
-            // 링 밖으로 못 나간다(탕탕 보스 링).
-            float dx = Player.X - Siege.Center.X;
-            float dy = Player.Y - Siege.Center.Y;
-            float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
-            float r = Siege.Radius - PlayerRadius;
-            if (d > r)
-            {
-                Player.X = Siege.Center.X + (dx / d * r);
-                Player.Y = Siege.Center.Y + (dy / d * r);
-            }
-            Siege.WaveClock -= Dt;
-            if (Siege.WaveClock <= 0f)
-            {
-                Siege.WaveClock = SiegeWaveEvery;
-                SpawnSiegeWave();
-            }
-            if (Siege.Target.Collapsed) EndSiege(false);
-            // 불이 꺼지면 갇힌 사람도 풀린다(구조는 타는 동안의 일). 그래도 링은 SiegeMinTime까지 버텨야 풀린다:
-            // 높은 레벨 장비는 큰 불을 1~5초에 지우므로, 끄는 시간이 아니라 몰려오는 불을 몸으로 버티는 시간이 디펜스다.
-            else if (!Siege.Target.Burning)
-            {
-                if (Siege.OutAt < 0f) Siege.OutAt = Siege.Age;
-                if (Siege.Age >= SiegeMinTime) EndSiege(true);
-            }
-        }
-
-        private void BeginSiege(Structure t)
-        {
-            Siege = new Siege { Target = t, Center = t.Pos, Radius = SiegeRadius, WaveClock = 1f, Index = _siegeCount++ };
-            JustSiegeStart = true;
-            Stats.Events++;
-        }
-
-        /// <summary>링 가장자리(반경 + 0.5)에 고르게 불씨 SiegeWaveBase + SiegeWaveStep × 순번, 그리고 질긴 큰 불 SiegeHeavyBase + 순번.</summary>
-        private void SpawnSiegeWave()
-        {
-            Siege.Waves++;
-            JustSiegeWave = true;
-            int n = SiegeWaveBase + (SiegeWaveStep * Siege.Index);
-            double turn = Rand() * Math.PI * 2;
-            float rr = Siege.Radius + 0.5f;
-            for (int k = 0; k < n && Enemies.Count < MaxEnemies; k++)
-            {
-                double a = turn + (Math.PI * 2 * k / n);
-                Vec2 at = ClampToArena(new Vec2(Siege.Center.X + (float)(Math.Cos(a) * rr), Siege.Center.Y + (float)(Math.Sin(a) * rr)));
-                if (HasWater) PushOutOfWater(ref at, 0.4f);
-                Spawn(EnemyKind.Ember, at);
-            }
-            // 질긴 큰 불: 장비가 세질수록 질기다(대화재 고리와 같은 규칙) — 레벨이 높아도 링은 몸으로 버틴다.
-            int heavy = SiegeHeavyBase + Siege.Index;
-            for (int k = 0; k < heavy && Enemies.Count < MaxEnemies; k++)
-            {
-                double a = turn + (Math.PI / n) + (Math.PI * 2 * k / heavy);
-                Vec2 at = ClampToArena(new Vec2(Siege.Center.X + (float)(Math.Cos(a) * rr), Siege.Center.Y + (float)(Math.Sin(a) * rr)));
-                if (HasWater) PushOutOfWater(ref at, 0.6f);
-                Enemy e = Spawn(EnemyKind.Blaze, at);
-                e.Heavy = true;
-                e.MaxHp *= FinaleRingToughness;
-                e.Hp = e.MaxHp;
-                e.Speed *= HeavySpeed;
-            }
-        }
-
-        private void EndSiege(bool won)
-        {
-            if (won)
-            {
-                // 풀린다: 둘레 불 몹이 한꺼번에 사그라들고(처치·구슬), 둘레 구조물 불은 꺼져 한동안 젖어 잠잠하다.
-                foreach (Enemy e in Enemies)
-                {
-                    if (!e.Dead && e.Pos.DistanceTo(Siege.Center) <= SiegeReliefRange) Kill(e);
-                }
-                foreach (Structure st in Structures)
-                {
-                    if (st.Collapsed || st.DistanceTo(Siege.Center) > SiegeReliefRange) continue;
-                    if (st.Burning) Soak(st, 1f, false);
-                    st.Wet = Math.Max(st.Wet, SiegeReliefWet);
-                }
-                Xp += SiegeXp;
-                Hp = Math.Min(MaxHp, Hp + SiegeHeal);
-                Stats.SiegesWon++;
-                JustSiegeWon = true;
-            }
-            else
-            {
-                Stats.SiegesLost++;
-                JustSiegeLost = true;
-            }
-            SiegeTargets.Remove(Siege.Target);
-            LastSiege = Siege;
-            Siege = null;
-        }
-
-        /// <summary>버티기 후보인데 아직 링이 안 닫혔다(물이 안 먹힌다).</summary>
-        public bool Sealed(Structure s)
-        {
-            return Guardian && s.Burning && (Siege == null || Siege.Target != s) && SiegeTargets.Contains(s);
-        }
-
-        /// <summary>이번 틱 봉인된 건물에 물이 튕겼다(그림용).</summary>
-        public readonly List<Structure> SealHits = new List<Structure>();
-
-        /// <summary>방금 끝난 버티기(그림용: 풀린 자리에 물빛 충격파).</summary>
-        public Siege LastSiege;
 
         private Structure PickUnburntHouse()
         {
@@ -3343,12 +3139,6 @@ namespace FireGame.Prototypes.Logic
         private void Soak(Structure s, float water, bool resist = true)
         {
             if (s.Collapsed) return;
-            // 수호자: 버티기 후보는 봉인 — 링 밖에서 쏜 물은 안 먹힌다. 가서 링 안에 들어가야 끈다(진격 → 도착 → 버티기).
-            if (Sealed(s))
-            {
-                SealHits.Add(s);
-                return;
-            }
             if (s.Burning)
             {
                 // 큰 불일수록 물이 덜 먹힌다: 일찍 잡으면 쉽고, 놓치면 오래 걸린다.

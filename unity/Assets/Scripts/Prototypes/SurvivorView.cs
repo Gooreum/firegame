@@ -619,7 +619,6 @@ namespace FireGame.Prototypes
             _overAge = 0f;
             _faceTaken = false;
             if (_help != null) _help.text = _sim.Guardian ? GuardianHelp() : _helpDefault;
-            _siegeEndAge = 99f;
             _guardShown = 0f;
             _alertAge = 99f;
             _bossBannerAge = 99f;
@@ -1400,7 +1399,7 @@ namespace FireGame.Prototypes
                 var red = new Color(1f, 0.25f, 0.05f);
                 for (int k = 0; k < 2; k++) Shockwave(at, red, 8f + (5f * k), 0.6f, k * 0.15f);
                 Burst(at, 30, new Color(1f, 0.5f, 0.1f), 10f);
-                _bossBandText.text = "대형 화재! " + _sim.BigReport.Name + " " + _sim.BigReport.Residents + "명 갇힘" + (_sim.Guardian ? " · 가서 버텨라" : "");
+                _bossBandText.text = "대형 화재! " + _sim.BigReport.Name + " " + _sim.BigReport.Residents + "명 갇힘";
                 _bandTint = new Color(0.6f, 0.05f, 0f);
                 _bossBannerAge = 0f;
                 _trauma = Mathf.Min(1f, _trauma + 0.5f);

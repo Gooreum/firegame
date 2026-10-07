@@ -202,13 +202,9 @@ namespace FireGame.Prototypes.EditorTools
                 view.Frame(new Vector3(23f, 28f, 0f), 5f);
             });
             // 건물에 물이 맞는 동안: 물 왕관·치익 김·벽 타고 흐르는 물·눌린 지붕 불꽃. 끄는 순간: 히트스톱·솟는 물 왕관·무지개 반짝이.
-            // 수호자 마을 샘플(docs §20): 수호 반경·버티기 링·풀리는 순간·쉼터·잿더미 둥지·결과 한 장면·소방서 얼굴.
+            // 수호자 마을 샘플(docs §20): 수호 반경·쉼터·잿더미 둥지·결과 한 장면·소방서 얼굴.
             failures += SurvivorShot(dir, "g80_guard_radius", view => view.Sim.Time >= 30f && view.Sim.PendingChoices == null, 4, false,
                 view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), 8f), 1, null, true, true);
-            failures += SurvivorShot(dir, "g81_siege_ring", view => view.Sim.Siege != null && view.Sim.Siege.Age > 4f && view.Sim.PendingChoices == null, 0, false,
-                view => view.Frame(new Vector3(view.Sim.Siege.Center.X, view.Sim.Siege.Center.Y - 1f, 0f), 11f), 1, null, true, true);
-            failures += SurvivorShot(dir, "g82_siege_relief", view => view.Sim.LastSiege != null && view.Sim.Siege == null && view.Sim.PendingChoices == null, 10, false,
-                view => view.Frame(new Vector3(view.Sim.LastSiege.Center.X, view.Sim.LastSiege.Center.Y - 1f, 0f), 13f), 1, null, true, true);
             failures += SurvivorShot(dir, "g83_haven", view => view.Sim.Haven != null && view.Sim.PendingChoices == null, 6, false,
                 view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), 6f), 1,
                 view => view.Sim.Hp = view.Sim.MaxHp * 0.5f, false, true);
