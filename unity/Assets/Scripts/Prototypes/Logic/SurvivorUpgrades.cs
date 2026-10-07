@@ -368,7 +368,7 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Foam: return fresh ? "굴러가며 불을 삼키고 커지다 터지는 거품" : n == 3 ? "거품 2개" : n == 5 ? "거품 3개 · 더 크게" : "더 크게 부푼다";
                 case UpgradeId.Bubble: return fresh ? "불을 방울에 가둬 띄웠다가 터뜨린다" : "방울 " + (n == 2 || n == 3 ? 2 : n == 4 ? 3 : 4) + "발 · 더 큰 불도 가둔다";
                 case UpgradeId.Manhole: return fresh ? "불이 몰린 맨홀에서 물기둥이 솟는다" : n == 3 ? "맨홀 2곳에서" : n == 4 ? "맨홀 3곳에서" : n == 5 ? "맨홀 4곳 · 더 큰 물기둥" : "물기둥이 굵어진다";
-                case UpgradeId.Chain: return fresh ? "물줄기가 몹 3마리를 번개처럼 튀며 꿰뚫는다" : n == 3 ? "두 줄기" : n == 5 ? "6마리 · 두 줄기" : "한 마리 더 튄다";
+                case UpgradeId.Chain: return fresh ? "물줄기가 몹 3마리를 번개처럼 튀며 꿰뚫는다 · 타는 집의 사람도 끌어낸다" : n == 3 ? "두 줄기" : n == 5 ? "6마리 · 두 줄기" : "한 마리 더 튄다";
                 case UpgradeId.Whip: return fresh ? "호스를 휘둘러 둘레 불을 밀어낸다" : n == 3 ? "두 갈래로 휘두른다" : n == 5 ? "세 갈래 · 더 넓게" : "더 넓게 휘두른다";
                 case UpgradeId.Tank: return "모든 물이 굵고 세진다 · 증기 폭발이 빨리 찬다";
                 case UpgradeId.Boots: return fresh ? "더 빨리 달린다 · 불 바닥을 밟아 끈다" : "더 빨리 달린다";

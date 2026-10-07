@@ -75,20 +75,11 @@ namespace FireGame.Prototypes.Logic
         public bool Burst;
     }
 
-    /// <summary>사다리: 뻗었다 내려찍는다. 다리(진화)는 Life 동안 남아 길을 막는다.</summary>
-    public sealed class Ladder
+    /// <summary>물 사슬 한 줄기: 플레이어 → 몹 → 몹… 꼭짓점(그림은 Age 동안 지그재그 번개).</summary>
+    public sealed class ChainBolt
     {
-        public Vec2 From;
-        public Vec2 Dir;
-        public float Len;
+        public readonly List<Vec2> Points = new List<Vec2>();
         public float Age;
-        public float Life;
-        public bool Struck;
-
-        public Vec2 Tip
-        {
-            get { return new Vec2(From.X + (Dir.X * Len), From.Y + (Dir.Y * Len)); }
-        }
     }
 
     /// <summary>바닥에 남아 잠깐 도는 물 고리(물 회오리) 한 점.</summary>
@@ -114,16 +105,18 @@ namespace FireGame.Prototypes.Logic
         public static readonly int[] FoamCount = { 0, 1, 1, 2, 2, 3 };
         public static readonly int[] BubbleCount = { 0, 1, 2, 2, 3, 4 };
         public static readonly int[] GeyserCount = { 0, 1, 1, 2, 3, 4 };
-        public static readonly int[] LadderDirs = { 0, 1, 1, 2, 2, 3 };
+        public static readonly int[] ChainHops = { 0, 3, 4, 4, 5, 6 };
+        public static readonly int[] ChainCount = { 0, 1, 1, 2, 2, 2 };
         public static readonly int[] WhipArms = { 0, 1, 1, 2, 2, 3 };
 
         // --- 회전 스프링클러 ---
         public const float SprinklerSpin = 2.6f;
         public const float SprinklerReach = 0.6f;
-        public const float SprinklerHit = 7f;
+        public const float SprinklerHit = 4f;
         public const float SprinklerCool = 0.3f;
         public const float SprinklerPush = 4f;
         public const float SprinklerSoak = 0.4f;
+        public const float SprinklerRescueEvery = 2f;
         public const int CrownJets = 8;
         public const float CrownJetLen = 3.5f;
         public const float CrownJetTurn = 1.4f;
@@ -183,14 +176,18 @@ namespace FireGame.Prototypes.Logic
         public const float ManholeGrid = 6f;
         public const float GeyserSoak = 1f;
 
-        // --- 사다리차 ---
-        public const float LadderEvery = 4f;
-        public const float LadderReach = 0.25f;
-        public const float LadderHit = 16f;
-        public const float LadderWidth = 0.6f;
-        public const float LadderSoak = 1.2f;
-        public const float BridgeLife = 6f;
-        public const float BridgeDps = 8f;
+        // --- 물 사슬 ---
+        public const float BoltEvery = 0.95f;
+        public const float BoltEveryMax = 0.75f;
+        public const float ChainRange = 7f;
+        public const float ChainHopRange = 4f;
+        public const float ChainHit = 6.5f;
+        public const float ChainSoak = 0.6f;
+        public const float ChainShow = 0.28f;
+        public const int SurgeHops = 8;
+        public const float SurgeSplash = 1.5f;
+        public const float ChainRescueEvery = 2.5f;
+        public const float SurgeHit = 6f;
 
         // --- 채찍 ---
         public const float WhipTurn = 1.2f;
@@ -207,7 +204,7 @@ namespace FireGame.Prototypes.Logic
         public readonly List<BubbleShot> BubbleShots = new List<BubbleShot>();
         public readonly List<Vec2> Manholes = new List<Vec2>();
         public readonly List<Geyser> Geysers = new List<Geyser>();
-        public readonly List<Ladder> Ladders = new List<Ladder>();
+        public readonly List<ChainBolt> ChainBolts = new List<ChainBolt>();
         public readonly List<WhirlMark> WhirlMarks = new List<WhirlMark>();
 
         /// <summary>스프링클러 첫 머리의 지금 각도(라디안)와 물 왕관 분사의 각도.</summary>
@@ -229,7 +226,7 @@ namespace FireGame.Prototypes.Logic
         public readonly List<Vec2> FoamBursts = new List<Vec2>();
         public readonly List<Vec2> BubblePops = new List<Vec2>();
         public readonly List<Vec2> GeyserBursts = new List<Vec2>();
-        public readonly List<Ladder> LadderStrikes = new List<Ladder>();
+        public readonly List<ChainBolt> ChainStrikes = new List<ChainBolt>();
 
         /// <summary>이번 틱 거품 파도(산사태)가 일었다.</summary>
         public bool JustAvalanche;
@@ -242,7 +239,7 @@ namespace FireGame.Prototypes.Logic
         private float _avalancheClock = 2f;
         private float _bubbleClock = 0.5f;
         private float _geyserClock = 1f;
-        private float _ladderClock = 0.5f;
+        private float _boltClock = 0.5f;
         private float _whirlMarkClock;
         private readonly List<Enemy> _avalancheHit = new List<Enemy>();
         private readonly List<Structure> _avalancheSoaked = new List<Structure>();
@@ -255,7 +252,7 @@ namespace FireGame.Prototypes.Logic
             FoamBursts.Clear();
             BubblePops.Clear();
             GeyserBursts.Clear();
-            LadderStrikes.Clear();
+            ChainStrikes.Clear();
             JustAvalanche = false;
         }
 
@@ -292,7 +289,7 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Foam: _foamClock = 0.05f; break;
                 case UpgradeId.Bubble: _bubbleClock = 0.05f; break;
                 case UpgradeId.Manhole: _geyserClock = 0.05f; break;
-                case UpgradeId.Chain: _ladderClock = 0.05f; break;
+                case UpgradeId.Chain: _boltClock = 0.05f; break;
                 case UpgradeId.Mine: _mineClock = 0f; break;
             }
             if (id == UpgradeId.Tornado) _tornadoClock = 0.5f;
@@ -308,7 +305,7 @@ namespace FireGame.Prototypes.Logic
             TickFoam();
             TickBubbles();
             TickGeysers();
-            TickLadders();
+            TickChains();
             TickWhip();
         }
 
@@ -407,6 +404,18 @@ namespace FireGame.Prototypes.Logic
         }
 
         /// <summary>소방관 range 안에서 가장 센 불이 난 건물(없으면 null).</summary>
+        /// <summary>range 안의 타는 건물 중 갇힌 사람이 있는 가장 가까운 곳.</summary>
+        private Structure TrappedNear(Vec2 at, float range)
+        {
+            Structure best = null;
+            foreach (Structure st in Structures)
+            {
+                if (!st.IsBuilding || !st.Burning || st.Collapsed || st.Residents <= 0 || st.DistanceTo(at) > range) continue;
+                if (best == null || st.DistanceTo(at) < best.DistanceTo(at)) best = st;
+            }
+            return best;
+        }
+
         private Structure HottestNear(Vec2 at, float range)
         {
             Structure best = null;
@@ -461,7 +470,18 @@ namespace FireGame.Prototypes.Logic
                 Douse(h, 0.5f);
                 foreach (Structure st in Structures)
                 {
-                    if (st.Burning && st.Within(h, 0.5f)) Soak(st, SprinklerSoak * Dt, false);
+                    if (!st.Burning) continue;
+                    if (st.Within(h, 0.5f)) Soak(st, SprinklerSoak * Dt, false);
+                    // 머리가 타는 집 문 앞을 지나면 갇힌 사람을 한 명 끌어낸다(집마다 2초에 한 명, 옛 구조견 무리의 몫).
+                    if (st.Residents > 0 && st.IsBuilding && h.DistanceTo(st.Door) < 1f)
+                    {
+                        _sprinklerRescue.TryGetValue(st, out float last);
+                        if (Time - last >= SprinklerRescueEvery || last == 0f)
+                        {
+                            _sprinklerRescue[st] = Time;
+                            RescueOne(st);
+                        }
+                    }
                 }
             }
             if (!crown) return;
@@ -1045,77 +1065,67 @@ namespace FireGame.Prototypes.Logic
         }
 
         // ------------------------------------------------------------------
-        // 사다리차 · 사다리 다리
+        // 물 사슬 · 해일 사슬
         // ------------------------------------------------------------------
 
-        private void TickLadders()
+        private readonly HashSet<Enemy> _chained = new HashSet<Enemy>();
+        private float _chainRescueClock;
+        private readonly Dictionary<Structure, float> _sprinklerRescue = new Dictionary<Structure, float>();
+
+        /// <summary>
+        /// 물줄기가 가장 가까운 몹(마을 노리는 몹 먼저)에 꽂히고, 거기서 4칸 안 다음 몹으로 번개처럼 튄다.
+        /// 몹이 끊기면 둘레의 타는 건물로 한 번 튀어 적신다. 해일 사슬: 맞은 몹마다 물이 터져 둘레까지 휩쓴다.
+        /// </summary>
+        private void TickChains()
         {
+            foreach (ChainBolt bolt in ChainBolts) bolt.Age += Dt;
+            if (_chainRescueClock > 0f) _chainRescueClock -= Dt;
+            ChainBolts.RemoveAll(bolt => bolt.Age >= ChainShow);
             int lv = Build.PowerOf(UpgradeId.Chain);
-            bool bridge = Build.Level(UpgradeId.Surge) > 0;
-            if (lv > 0)
+            if (lv == 0) return;
+            bool surge = Build.Level(UpgradeId.Surge) > 0;
+            _boltClock -= Dt;
+            if (_boltClock > 0f) return;
+            _boltClock = lv >= Loadout.MaxLevel ? BoltEveryMax : BoltEvery;
+
+            int count = surge ? ChainCount[Loadout.MaxLevel] : ChainCount[lv];
+            int hops = surge ? SurgeHops : ChainHops[lv];
+            _chained.Clear();
+            for (int c = 0; c < count; c++)
             {
-                _ladderClock -= Dt;
-                if (_ladderClock <= 0f)
+                var bolt = new ChainBolt();
+                Vec2 at = Player;
+                bolt.Points.Add(at);
+                for (int h = 0; h < hops; h++)
                 {
-                    _ladderClock = LadderEvery;
-                    float len = 6f + (lv - 1);
-                    // 불 끄는 무기: 사다리 끝이 닿는 곳에 타는 집이 있으면 그 지붕으로 먼저 뻗는다(물 + 갇힌 사람). 없으면 몹 쪽.
-                    Structure hot = HottestNear(Player, len);
-                    Vec2 first = hot != null ? Toward(Player, hot.Pos) : CrowdDirection(Player, len);
-                    double a0 = Math.Atan2(first.Y, first.X);
-                    int n = LadderDirs[lv];
-                    for (int k = 0; k < n; k++)
+                    float range = h == 0 ? ChainRange : ChainHopRange;
+                    Enemy e = PickTarget(at, range, x => _chained.Contains(x));
+                    if (e == null)
                     {
-                        double a = a0 + (k * Math.PI * 2 / n);
-                        Ladders.Add(new Ladder { From = Player, Dir = new Vec2((float)Math.Cos(a), (float)Math.Sin(a)), Len = len, Life = bridge ? BridgeLife : 0.6f });
+                        // 몹이 끊기면 타는 집으로 튄다: 갇힌 사람이 있으면 한 명을 끌어내고(옛 사다리차의 구조), 없으면 적신다.
+                        Structure st = (_chainRescueClock <= 0f ? TrappedNear(at, range) : null) ?? HottestNear(at, range);
+                        if (st != null && st.Burning)
+                        {
+                            if (st.Residents > 0 && _chainRescueClock <= 0f)
+                            {
+                                RescueOne(st);
+                                _chainRescueClock = ChainRescueEvery;
+                            }
+                            else Soak(st, ChainSoak, false);
+                            bolt.Points.Add(st.Pos);
+                        }
+                        break;
                     }
+                    _chained.Add(e);
+                    bolt.Points.Add(e.Pos);
+                    Damage(e, ChainHit, Knockback(at, e.Pos, 2f), true, HitSource.Chain, at);
+                    if (surge) Splash(e.Pos, SurgeSplash, SurgeHit, 0.3f, 3f, HitSource.Chain);
+                    at = e.Pos;
                 }
+                if (bolt.Points.Count < 2) continue;
+                ChainBolts.Add(bolt);
+                ChainStrikes.Add(bolt);
             }
-            foreach (Ladder l in Ladders)
-            {
-                l.Age += Dt;
-                if (!l.Struck && l.Age >= LadderReach)
-                {
-                    l.Struck = true;
-                    LadderStrikes.Add(l);
-                    Vec2 tip = l.Tip;
-                    var mid = new Vec2((l.From.X + tip.X) / 2f, (l.From.Y + tip.Y) / 2f);
-                    Near(mid, (l.Len / 2f) + LadderWidth, _near);
-                    var side = new Vec2(-l.Dir.Y, l.Dir.X);
-                    foreach (Enemy e in _near)
-                    {
-                        if (SegmentDistance(e.Pos, l.From, tip) > LadderWidth + e.Radius) continue;
-                        float s = ((e.Pos.X - l.From.X) * side.X) + ((e.Pos.Y - l.From.Y) * side.Y) >= 0f ? 1f : -1f;
-                        Damage(e, LadderHit, new Vec2(side.X * s * 6f, side.Y * s * 6f), true, HitSource.Ladder, e.Pos);
-                    }
-                    foreach (Structure st in Structures)
-                    {
-                        if (st.Collapsed || !st.IsBuilding) continue;
-                        if (SegmentDistance(st.Pos, l.From, tip) > Math.Max(st.Half.X, st.Half.Y) + 0.3f) continue;
-                        // 지붕 위 사다리: 갇힌 사람 한 명을 내리고(불이 꺼지기 전에) 지붕을 적신다.
-                        if (st.Residents > 0 && st.Burning) RescueOne(st);
-                        if (st.Burning) Soak(st, LadderSoak, false);
-                    }
-                    Douse(mid, l.Len / 2f);
-                }
-                // 사다리 다리: 남아서 몹이 못 지나가게 밀어내고 지진다.
-                if (bridge && l.Struck)
-                {
-                    Vec2 tip = l.Tip;
-                    var mid = new Vec2((l.From.X + tip.X) / 2f, (l.From.Y + tip.Y) / 2f);
-                    Near(mid, (l.Len / 2f) + 0.8f, _near);
-                    var side = new Vec2(-l.Dir.Y, l.Dir.X);
-                    foreach (Enemy e in _near)
-                    {
-                        if (SegmentDistance(e.Pos, l.From, tip) > 0.7f + e.Radius) continue;
-                        float s = ((e.Pos.X - l.From.X) * side.X) + ((e.Pos.Y - l.From.Y) * side.Y) >= 0f ? 1f : -1f;
-                        e.Knock.X += side.X * s * 30f * Dt;
-                        e.Knock.Y += side.Y * s * 30f * Dt;
-                        Damage(e, BridgeDps * Dt, default, false, HitSource.Ladder, e.Pos);
-                    }
-                }
-            }
-            Ladders.RemoveAll(l => l.Age >= l.Life);
         }
 
         // ------------------------------------------------------------------

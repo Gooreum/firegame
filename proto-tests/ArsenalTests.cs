@@ -119,6 +119,20 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void Sprinkler_PassingABurningDoor_PullsSomeoneOut()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Sprinkler);
+            Structure shop = Shop(sim, 10f, 10f, 1f, 2);
+            // 문에서 집 반대쪽으로 반경만큼 물러선다: 도는 머리가 문 앞을 지난다.
+            float away = shop.Door.Y >= shop.Pos.Y ? 1f : -1f;
+            sim.Player = new Vec2(shop.Door.X, shop.Door.Y + (away * SurvivorSim.SprinklerRadius[1]));
+            int rescued = sim.Rescued;
+            Run(sim, 4f);
+            Assert.True(sim.Rescued > rescued, "머리가 문 앞을 지나며 사람을 끌어내야: 남은 " + shop.Residents);
+        }
+
+        [Fact]
         public void Crown_JetsReachPastTheRing()
         {
             SurvivorSim sim = Quiet();
@@ -185,60 +199,82 @@ namespace FireGame.Prototypes.Tests
         }
 
         // ------------------------------------------------------------------
-        // 사다리차
+        // 물 사슬
         // ------------------------------------------------------------------
 
         [Fact]
-        public void Ladder_StrikesAWholeLineOfEmbers()
+        public void Chain_JumpsFromEmberToEmber_ThreeAtLevelOne()
         {
             SurvivorSim sim = Quiet();
             Take(sim, UpgradeId.Chain);
             var row = new List<Enemy>();
-            for (int k = 0; k < 4; k++) row.Add(Dummy(sim, EnemyKind.Ember, 1.5f + (1.2f * k), 0f));
-            Run(sim, 1f, () => sim.LadderStrikes.Count > 0);
-            Assert.NotEmpty(sim.LadderStrikes);
-            Assert.All(row, e => Assert.True(e.Hp < e.MaxHp, "한 줄이 다 맞아야"));
+            for (int k = 0; k < 5; k++) row.Add(Dummy(sim, EnemyKind.Ember, 2f + (2.5f * k), 0f));
+            Run(sim, 1f, () => sim.ChainStrikes.Count > 0);
+            Assert.Single(sim.ChainStrikes);
+            Assert.Equal(1 + SurvivorSim.ChainHops[1], sim.ChainStrikes[0].Points.Count);
+            Assert.Equal(3, row.FindAll(e => e.Hp < e.MaxHp).Count);
+            Assert.Contains(sim.Hits, h => h.Source == HitSource.Chain);
         }
 
         [Fact]
-        public void Ladder_SoaksTheShopItLandsOn_AndBringsSomeoneDown()
+        public void Chain_StopsWhereTheNextEmberIsOutOfReach()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Chain);
+            Enemy near = Dummy(sim, EnemyKind.Ember, 2f, 0f);
+            Enemy far = Dummy(sim, EnemyKind.Ember, 2f + SurvivorSim.ChainHopRange + 1f, 0f);
+            Run(sim, 1f, () => sim.ChainStrikes.Count > 0);
+            Assert.True(near.Hp < near.MaxHp);
+            Assert.Equal(far.MaxHp, far.Hp);
+        }
+
+        [Fact]
+        public void Chain_TwoBoltsAndMoreHops_AtLevelFive()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Chain, Loadout.MaxLevel);
+            for (int k = 0; k < 14; k++) Dummy(sim, EnemyKind.Ember, 1.5f + (1.5f * (k % 7)), k < 7 ? 1f : -1f);
+            Run(sim, 1f, () => sim.ChainStrikes.Count > 0);
+            Assert.Equal(2, sim.ChainStrikes.Count);
+            Assert.All(sim.ChainStrikes, bolt => Assert.Equal(1 + SurvivorSim.ChainHops[Loadout.MaxLevel], bolt.Points.Count));
+        }
+
+        [Fact]
+        public void Chain_WithNoEmber_JumpsIntoABurningShop_AndSoaksIt()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Chain);
+            Structure shop = Shop(sim, 5f, 0f, 0.5f);
+            float fire = shop.Fire;
+            Run(sim, 1f, () => sim.ChainStrikes.Count > 0);
+            Assert.True(shop.Fire < fire, "사슬이 타는 가게를 적셔야");
+        }
+
+        [Fact]
+        public void Chain_WithNoEmber_PullsSomeoneOutOfABurningShop()
         {
             SurvivorSim sim = Quiet();
             Take(sim, UpgradeId.Chain);
             Structure shop = Shop(sim, 5f, 0f, 0.5f, 2);
-            float fire = shop.Fire;
-            Run(sim, 1f, () => sim.LadderStrikes.Count > 0);
-            Assert.True(shop.Fire < fire, "사다리 물이 지붕에 닿아야");
+            int rescued = sim.Rescued;
+            Run(sim, 1f, () => sim.ChainStrikes.Count > 0);
             Assert.Equal(1, shop.Residents);
+            Assert.Equal(rescued + 1, sim.Rescued);
         }
 
         [Fact]
-        public void Ladder_ReachesFurther_AndSplitsWithLevel()
-        {
-            SurvivorSim sim = Quiet();
-            Take(sim, UpgradeId.Chain, Loadout.MaxLevel);
-            Run(sim, 1f, () => sim.LadderStrikes.Count > 0);
-            Assert.Equal(3, sim.LadderStrikes.Count);
-            Assert.All(sim.LadderStrikes, l => Assert.Equal(10f, l.Len, 2));
-        }
-
-        [Fact]
-        public void LadderBridge_StaysAndPushesEmbersOffTheLine()
+        public void Surge_EveryHitBurstsAndSplashesItsNeighbour()
         {
             SurvivorSim sim = Quiet();
             Evolve(sim, UpgradeId.Surge);
-            Run(sim, 1f, () => sim.LadderStrikes.Count > 0);
-            Ladder l = sim.Ladders[0];
-            Assert.Equal(SurvivorSim.BridgeLife, l.Life);
-            // 다리 위에 놓인 불씨는 옆으로 밀려나며 지진다.
-            var on = new Vec2(l.From.X + (l.Dir.X * 4f), l.From.Y + (l.Dir.Y * 4f));
-            Enemy ember = sim.Spawn(EnemyKind.Ember, on);
-            ember.Speed = 0f;
-            ember.MaxHp = ember.Hp = 999f;
-            Run(sim, 0.6f);
-            Assert.True(ember.Hp < 999f);
-            float off = Math.Abs(((ember.Pos.X - l.From.X) * -l.Dir.Y) + ((ember.Pos.Y - l.From.Y) * l.Dir.X));
-            Assert.True(off > 0.5f, "다리에서 밀려나야: " + off);
+            Enemy target = Dummy(sim, EnemyKind.Ember, 3f, 0f);
+            Run(sim, 0.05f);
+            Enemy beside = Dummy(sim, EnemyKind.Ember, 3f, 1f);
+            sim.Enemies.Remove(beside);
+            sim.Enemies.Insert(0, beside);
+            Run(sim, 1f, () => sim.ChainStrikes.Count > 0, new List<Enemy> { target, beside });
+            Assert.True(target.Hp < target.MaxHp);
+            Assert.True(beside.Hp < beside.MaxHp, "해일: 곁의 몹도 물보라에 맞아야");
         }
 
         // ------------------------------------------------------------------

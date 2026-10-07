@@ -230,7 +230,7 @@ namespace FireGame.Prototypes.Logic
         Foam,
         Bubble,
         Geyser,
-        Ladder,
+        Chain,
         Whip,
 
         /// <summary>증기 폭발: 건물 불에 물줄기를 이어 맞혀 터진 김.</summary>
