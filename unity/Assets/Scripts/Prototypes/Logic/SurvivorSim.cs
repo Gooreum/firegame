@@ -272,6 +272,13 @@ namespace FireGame.Prototypes.Logic
         /// <summary>레벨업한 시각들.</summary>
         public readonly List<float> LevelTimes = new List<float>();
 
+        /// <summary>진화한 수와 첫 진화 시각(없으면 -1).</summary>
+        public int Evolutions;
+        public float FirstEvolveAt = -1f;
+
+        /// <summary>3:00(대화재 시작) 때 쥔 아이템 수(무기·보조, 진화는 그 무기 칸).</summary>
+        public int FinaleItems;
+
         /// <summary>7칸 안에 불 몹도, 8칸 안에 타는 구조물도 없던 시간(걷기만 한 시간).</summary>
         public float IdleTime;
 
@@ -724,6 +731,16 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>불 세기 1로 이만큼 타면 건물이 무너진다(초). 나무·차는 BurnSmall.</summary>
         public const float BurnBuilding = 32f;
+
+        /// <summary>
+        /// 건물이 무너지기까지 BurnBuilding의 이만큼 배(2026-10-07, 모든 스테이지). 노란 장비(스프링클러·헬기·소방차…)와
+        /// 옛 무기(물폭탄·드론·대원)의 "맵 곳곳 건물 물"이 빠져 소방관이 달려갈 여유를 준다.
+        /// 마을 이동만 봇 지킨 비율: 1배 28%, 2배 40%, 2.5배(+신고 여섯·수호 반경 식힘) 64%, 3배 56%.
+        /// </summary>
+        public const float BuildingBurnScale = 2.5f;
+
+        /// <summary>수호 반경 안 타는 구조물이 초당 잦아드는 불 세기(곁에 서 있으면 지켜진다).</summary>
+        public const float GuardCool = 0.03f;
         public const float BurnSmall = 20f;
         public const float EmberSight = 9f;
         public const float SpreadAt = 0.4f;
@@ -983,9 +1000,6 @@ namespace FireGame.Prototypes.Logic
         private float _jetClock;
         private int _jetQueue;
         private float _jetAngle;
-        private float _droneAngle;
-        private float _droneDrop;
-        private int _droneTurn;
         private int _reportsDone;
         private int _bigDone;
         private bool _bigFailed;
@@ -1194,7 +1208,12 @@ namespace FireGame.Prototypes.Logic
             Build.Add(id);
             Hp += MaxHp - before;
             if (!Loadout.IsEvolution(id) && had < Loadout.MaxLevel && Build.Level(id) == Loadout.MaxLevel) JustMaxed = id;
-            if (Loadout.IsEvolution(id)) JustEvolved = true;
+            if (Loadout.IsEvolution(id))
+            {
+                JustEvolved = true;
+                Stats.Evolutions++;
+                if (Stats.FirstEvolveAt < 0f) Stats.FirstEvolveAt = Time;
+            }
             if (id == UpgradeId.Cannon) _jetClock = 0f;
             PrimeWeapon(id);
         }
@@ -1521,6 +1540,7 @@ namespace FireGame.Prototypes.Logic
             _finaleClock = FinaleReportEvery;
             Stats.Events++;
             Stats.FinaleLevel = Level;
+            Stats.FinaleItems = Build.WeaponCount + Build.PassiveCount;
             // 항구는 창고 대신 유조선이 랜드마크(부두 가운데 닿아 불기름을 흘리고 선원이 갇혀 있다).
             Structure mark = Stage.Finale == FinaleKind.Tanker ? SpawnTanker() : Structures.Find(x => x.Kind == StructureKind.Depot && !x.Collapsed) ?? PickUnburntHouse();
             if (mark == null) return;
@@ -2883,10 +2903,12 @@ namespace FireGame.Prototypes.Logic
                     }
                 }
 
-                // 수호 반경 안: 불이 자라지도, 번지지도, 불씨·큰 불을 뱉지도 못한다(타는 동안 무너짐은 그대로).
+                // 수호 반경 안: 불이 자라지도, 번지지도, 불씨·큰 불을 뱉지도 못하고 GuardCool만큼 잦아든다(타는 동안 무너짐은 그대로).
                 bool held = Guardian && s.DistanceTo(Player) <= GuardRadius;
                 if (!held) s.Fire = Math.Min(1f, s.Fire + (Stage.FireGrowth * Dt));
-                s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding : s.Kind == StructureKind.Boat ? (s.Tanker ? BurnTanker : BurnBoat) : BurnSmall);
+                // 잦아들되 0.02 밑으로는 스스로 꺼지지 않는다(끄는 건 물). 물을 맞아 이미 그 밑이면 끌어올리지 않는다.
+                else s.Fire = Math.Max(Math.Min(s.Fire, 0.02f), s.Fire - (GuardCool * Dt));
+                s.Integrity -= s.Fire * Dt / (s.IsBuilding ? BurnBuilding * BuildingBurnScale : s.Kind == StructureKind.Boat ? (s.Tanker ? BurnTanker : BurnBoat) : BurnSmall);
                 if (s.HoseHold > 0f) s.HoseHold = Math.Max(0f, s.HoseHold - (SteamCool * Dt));
                 if (s.Integrity <= 0f)
                 {

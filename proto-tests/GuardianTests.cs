@@ -376,7 +376,7 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void InsideTheRadius_FireDoesNotGrow_ButStillBurnsDown()
+        public void InsideTheRadius_FireCoolsDown_ButStillBurnsTheHouse()
         {
             var sim = Bare();
             Structure near = House(sim, 0f, 3.5f);
@@ -384,7 +384,8 @@ namespace FireGame.Prototypes.Tests
             sim.Ignite(near, 0.4f);
             sim.Ignite(far, 0.4f);
             Run(sim, 5f);
-            Assert.Equal(0.4f, near.Fire, 3);
+            // 반경 안: 자라지 않고 GuardCool만큼 잦아든다(곁에 서 있으면 지켜진다). 타는 동안 무너짐은 그대로.
+            Assert.Equal(0.4f - (SurvivorSim.GuardCool * 5f), near.Fire, 2);
             Assert.True(near.Integrity < 1f);
             Assert.Equal(0.4f + (sim.Stage.FireGrowth * 5f), far.Fire, 2);
         }

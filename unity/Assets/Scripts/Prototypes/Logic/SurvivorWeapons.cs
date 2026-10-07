@@ -145,7 +145,7 @@ namespace FireGame.Prototypes.Logic
         public const float BalloonSpeed = 8f;
         public const float BalloonSplash = 1.2f;
         public const float BalloonHit = 8f;
-        public const float BalloonSoak = 0.6f;
+        public const float BalloonSoak = 0.8f;
         public const float BalloonLife = 6f;
 
         // --- 소화기 ---
@@ -154,6 +154,9 @@ namespace FireGame.Prototypes.Logic
         public const float BoomBackSpeed = 12f;
         public const float BoomHit = 10f;
         public const float BoomReach = 0.7f;
+
+        /// <summary>소화기가 지나가는 지붕에 초당 뿌리는 분말(저항 없이).</summary>
+        public const float BoomSoak = 2.5f;
         public const float TornadoEvery = 8f;
         public const float TornadoLife = 6f;
         public const float TornadoRadius = 3f;
@@ -188,12 +191,14 @@ namespace FireGame.Prototypes.Logic
         public const float GeyserHit = 14f;
         public const float GeyserSight = 10f;
         public const float ManholeGrid = 6f;
+        public const float GeyserSoak = 1f;
 
         // --- 사다리차 ---
         public const float LadderEvery = 4f;
         public const float LadderReach = 0.25f;
         public const float LadderHit = 16f;
         public const float LadderWidth = 0.6f;
+        public const float LadderSoak = 1.2f;
         public const float BridgeLife = 6f;
         public const float BridgeDps = 8f;
 
@@ -236,7 +241,6 @@ namespace FireGame.Prototypes.Logic
         /// <summary>이번 틱 거품 파도(산사태)가 일었다.</summary>
         public bool JustAvalanche;
 
-        private float _dogClock;
         private float _balloonClock = 1f;
         private float _boomClock = 0.5f;
         private float _tornadoClock = 1f;
@@ -514,8 +518,10 @@ namespace FireGame.Prototypes.Logic
                 {
                     _balloonClock = BalloonEvery;
                     int n = BalloonCount[lv];
-                    Enemy target = PickTarget(Player, 10f);
-                    Vec2 dir = target != null ? Toward(Player, target.Pos) : Facing;
+                    // 불 끄는 무기: 타는 집이 있으면 그 집 벽으로 던진다(벽에 튕겨 지붕에 물보라). 없으면 몹.
+                    Structure hot = HottestNear(Player, 10f);
+                    Enemy target = hot == null ? PickTarget(Player, 10f) : null;
+                    Vec2 dir = hot != null ? Toward(Player, hot.Pos) : target != null ? Toward(Player, target.Pos) : Facing;
                     double baseA = Math.Atan2(dir.Y, dir.X);
                     for (int k = 0; k < n; k++)
                     {
@@ -619,8 +625,10 @@ namespace FireGame.Prototypes.Logic
                     _boomClock = BoomEvery;
                     int n = BoomCount[lv];
                     float range = 6f + (0.75f * (lv - 1));
-                    Enemy target = PickTarget(Player, range + 2f);
-                    Vec2 dir = target != null ? Toward(Player, target.Pos) : Facing;
+                    // 불 끄는 무기: 타는 집이 사거리 안이면 그 지붕을 지나 돌아온다. 없으면 몹.
+                    Structure hot = HottestNear(Player, range);
+                    Enemy target = hot == null ? PickTarget(Player, range + 2f) : null;
+                    Vec2 dir = hot != null ? Toward(Player, hot.Pos) : target != null ? Toward(Player, target.Pos) : Facing;
                     double baseA = Math.Atan2(dir.Y, dir.X);
                     for (int k = 0; k < n; k++)
                     {
@@ -655,7 +663,7 @@ namespace FireGame.Prototypes.Logic
                 Douse(b.Pos, BoomReach);
                 foreach (Structure st in Structures)
                 {
-                    if (st.Burning && st.Within(b.Pos, BoomReach)) Soak(st, 0.6f * Dt, false);
+                    if (st.Burning && st.Within(b.Pos, BoomReach)) Soak(st, BoomSoak * Dt, false);
                 }
                 Near(b.Pos, BoomReach, _near);
                 foreach (Enemy e in _near)
@@ -972,7 +980,7 @@ namespace FireGame.Prototypes.Logic
                     var used = new List<Vec2>();
                     for (int k = 0; k < GeyserCount[lv]; k++)
                     {
-                        Vec2? pick = BusiestManhole(used);
+                        Vec2? pick = BusiestManhole(used) ?? BurningManhole(used);
                         if (!pick.HasValue) break;
                         used.Add(pick.Value);
                         if (line)
@@ -994,10 +1002,30 @@ namespace FireGame.Prototypes.Logic
                 g.Fuse -= Dt;
                 if (g.Fuse > 0f || g.Burst) continue;
                 g.Burst = true;
-                Splash(g.Pos, g.Radius, GeyserHit, 0.6f, 10f, HitSource.Geyser);
+                Splash(g.Pos, g.Radius + 1f, GeyserHit, GeyserSoak, 10f, HitSource.Geyser);
                 GeyserBursts.Add(g.Pos);
             }
             Geysers.RemoveAll(g => g.Burst);
+        }
+
+        /// <summary>몹이 없으면: 소방관 GeyserSight 안에서 가장 센 불이 난 집 곁(3칸) 맨홀. 없으면 null.</summary>
+        private Vec2? BurningManhole(List<Vec2> used)
+        {
+            Structure hot = HottestNear(Player, GeyserSight);
+            if (hot == null) return null;
+            Vec2? best = null;
+            float bestD = 3f;
+            foreach (Vec2 m in Manholes)
+            {
+                if (used.Exists(u => u.DistanceTo(m) < 0.1f)) continue;
+                float d = hot.DistanceTo(m);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = m;
+                }
+            }
+            return best;
         }
 
         /// <summary>소방관 GeyserSight 안 맨홀 중 2.5칸 안 몹이 가장 많은 곳(마을을 노리는 몹은 두 배). 한 마리도 없으면 null.</summary>
@@ -1035,7 +1063,9 @@ namespace FireGame.Prototypes.Logic
                 {
                     _ladderClock = LadderEvery;
                     float len = 6f + (lv - 1);
-                    Vec2 first = CrowdDirection(Player, len);
+                    // 불 끄는 무기: 사다리 끝이 닿는 곳에 타는 집이 있으면 그 지붕으로 먼저 뻗는다(물 + 갇힌 사람). 없으면 몹 쪽.
+                    Structure hot = HottestNear(Player, len);
+                    Vec2 first = hot != null ? Toward(Player, hot.Pos) : CrowdDirection(Player, len);
                     double a0 = Math.Atan2(first.Y, first.X);
                     int n = LadderDirs[lv];
                     for (int k = 0; k < n; k++)
@@ -1068,7 +1098,7 @@ namespace FireGame.Prototypes.Logic
                         if (SegmentDistance(st.Pos, l.From, tip) > Math.Max(st.Half.X, st.Half.Y) + 0.3f) continue;
                         // 지붕 위 사다리: 갇힌 사람 한 명을 내리고(불이 꺼지기 전에) 지붕을 적신다.
                         if (st.Residents > 0 && st.Burning) RescueOne(st);
-                        if (st.Burning) Soak(st, 0.8f, false);
+                        if (st.Burning) Soak(st, LadderSoak, false);
                     }
                     Douse(mid, l.Len / 2f);
                 }

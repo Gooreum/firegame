@@ -587,13 +587,14 @@ namespace FireGame.Prototypes.Tests
             Assert.Contains(sim.Enemies, e => e.Kind == EnemyKind.Ember);
 
             bool fell = false;
-            for (int i = 0; i < 60 * 60 && !fell; i++)
+            // 불 세기 1로 BurnBuilding × BuildingBurnScale(32 × 2.5 = 80초) 타면 무너진다.
+            for (int i = 0; i < 60 * 120 && !fell; i++)
             {
                 sim.Hp = sim.MaxHp;
                 sim.Step(0f, 0f);
                 if (sim.Fell.Contains(shop)) fell = true;
             }
-            Assert.True(fell, "방치한 가게가 85초 안에 안 무너졌다");
+            Assert.True(fell, "방치한 가게가 145초 안에 안 무너졌다");
             Assert.True(shop.Collapsed);
             Assert.Equal(1, sim.HousesLost);
             Assert.Equal(2, sim.CiviliansLost);
@@ -743,9 +744,13 @@ namespace FireGame.Prototypes.Tests
                 for (int k = 0; k < shops; k++) times.Add(sim.Time);
                 if (shops >= 2) pairs++;
             }
-            Assert.Equal(Array.FindAll(SurvivorSim.ReportTimes, r => r < until).Length, times.Count);
-            Assert.InRange(times[0], SurvivorSim.ReportTimes[0], SurvivorSim.ReportTimes[0] + 0.05f);
-            Assert.Equal(1, pairs);
+            Assert.Equal(Array.FindAll(sim.Stage.ReportTimes, r => r < until).Length, times.Count);
+            Assert.InRange(times[0], sim.Stage.ReportTimes[0], sim.Stage.ReportTimes[0] + 0.05f);
+            // 같은 시각 신고 둘(옛 표의 2:00)은 한 틱에 두 곳이다.
+            float[] early = Array.FindAll(sim.Stage.ReportTimes, r => r < until);
+            int same = 0;
+            for (int k = 1; k < early.Length; k++) if (early[k] == early[k - 1]) same++;
+            Assert.Equal(same, pairs);
         }
 
         [Fact]
@@ -881,7 +886,7 @@ namespace FireGame.Prototypes.Tests
         {
             var sim = new SurvivorSim(1, 1, Roster.Get("veteran").Start) { Guardian = false };
             Assert.Equal(1, sim.Build.Level(UpgradeId.Hose));
-            Assert.Equal(1, sim.Build.Level(UpgradeId.Whip));
+            Assert.Equal(1, sim.Build.Level(UpgradeId.Ladder));
             Assert.Equal(1, sim.Build.Level(UpgradeId.Suit));
             Assert.Equal(0, sim.Build.Level(UpgradeId.Dog));
             Assert.Equal(sim.MaxHp, sim.Hp);

@@ -27,7 +27,7 @@ namespace FireGame.Prototypes.Logic
             new Firefighter { Id = "rescue", Name = "구조견 조련사", Story = "소방견 한 마리와 함께 출동한다", Start = new[] { UpgradeId.Hose, UpgradeId.Dog }, Cost = 3 },
             new Firefighter { Id = "pilot", Name = "사다리차 기사", Story = "사다리차를 몰고 시작한다", Start = new[] { UpgradeId.Hose, UpgradeId.Ladder }, Cost = 5 },
             new Firefighter { Id = "pump", Name = "펌프 기사", Story = "고압 펌프를 달고 시작한다", Start = new[] { UpgradeId.Hose, UpgradeId.Tank }, Cost = 5 },
-            new Firefighter { Id = "veteran", Name = "베테랑", Story = "방화복을 입고 호스 채찍을 휘두른다", Start = new[] { UpgradeId.Hose, UpgradeId.Whip, UpgradeId.Suit }, Cost = 8 },
+            new Firefighter { Id = "veteran", Name = "베테랑", Story = "방화복을 입고 사다리차를 몬다", Start = new[] { UpgradeId.Hose, UpgradeId.Ladder, UpgradeId.Suit }, Cost = 8 },
         };
 
         public const string Default = "rookie";

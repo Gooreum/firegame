@@ -75,6 +75,16 @@ namespace FireGame.Prototypes.Logic
                     if (build.Level(Loadout.BaseOf(evo)) >= 3) return i;
                 }
             }
+            // 4칸: 무기는 셋까지만 든다(넷째 칸은 진화 짝 보조 자리). 무기가 셋이면 새 무기 카드는 고르지 않는다.
+            if (build.WeaponCount >= Loadout.Slots - 1 && build.PassiveCount == 0)
+            {
+                var keep = new List<UpgradeId>();
+                foreach (UpgradeId id in cards)
+                {
+                    if (!(Loadout.IsWeapon(id) && !Loadout.IsEvolution(id) && build.Level(id) == 0)) keep.Add(id);
+                }
+                if (keep.Count > 0) return cards.IndexOf(keep[PickCard(keep)]);
+            }
             return PickCard(cards);
         }
 

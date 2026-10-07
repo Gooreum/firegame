@@ -8,7 +8,7 @@ namespace FireGame.Prototypes.Tests
 {
     /// <summary>
     /// 수호자 마을 측정(docs §20). 숙련 봇, 이동만 하는 봇(쥐지 않음: 사람 대리), 옛 마을 숙련 봇을 같은 씨앗으로 끝까지 돌려
-    /// 승패·지킨 비율·최저 체력·쓰러진 까닭을 나란히 본다.
+    /// 승패·지킨 비율·습격·화마·진화·최저 체력·쓰러진 까닭을 나란히 본다.
     /// dotnet test proto-tests --filter GuardianReport --logger "console;verbosity=detailed"
     /// </summary>
     [Collection("Heavy")]
@@ -40,6 +40,14 @@ namespace FireGame.Prototypes.Tests
             public float Focus;
             public float Level;
             public float Pressure;
+            public float Raids;
+            public float RaiderKill;
+            public int BossDown;
+            public int BossSeen;
+            public float FinaleItems;
+            public float Evolutions;
+            public float FirstEvolve;
+            public int Evolved;
             public readonly float[] Hurt = new float[4];
 
             /// <summary>쓰러진 판에서 가장 많이 받은 피해 출처별 판 수.</summary>
@@ -66,6 +74,8 @@ namespace FireGame.Prototypes.Tests
                     + " | 구조 " + Rescued.ToString("0.0") + " 잃음 " + PeopleLost.ToString("0.0")
                     + " | 쉼터 회복 " + Haven.ToString("0") + " | 자동/쥠 " + Auto.ToString("0") + "/" + Focus.ToString("0")
                     + " | 끝 레벨 " + Level.ToString("0.0") + " 감독 " + Pressure.ToString("0.0")
+                    + " | 습격 " + Raids.ToString("0.0") + " 마을 몹 처치 " + Pct(RaiderKill) + " 화마 " + BossDown + "/" + BossSeen
+                    + " | 3:00 아이템 " + FinaleItems.ToString("0.0") + " 진화 " + Evolutions.ToString("0.0") + " 첫 진화 " + (Evolved > 0 ? (FirstEvolve / Evolved).ToString("0") + "초" : "-")
                     + " | 피해 " + share + " | 쓰러진 까닭 닿음 " + DownBy[0] + " 열기 " + DownBy[1] + " 바닥 " + DownBy[2] + " 폭발 " + DownBy[3];
             }
 
@@ -107,6 +117,17 @@ namespace FireGame.Prototypes.Tests
                 row.Focus += sim.Stats.FocusShots;
                 row.Level += sim.Level;
                 row.Pressure += sim.Stats.PressurePeak;
+                row.Raids += sim.Raids.Count;
+                row.RaiderKill += sim.RaidersSpawned > 0 ? sim.RaidersKilled / (float)sim.RaidersSpawned : 0f;
+                if (sim.Boss != null) row.BossSeen++;
+                if (sim.BossKilled) row.BossDown++;
+                row.FinaleItems += sim.Stats.FinaleItems;
+                row.Evolutions += sim.Stats.Evolutions;
+                if (sim.Stats.FirstEvolveAt >= 0f)
+                {
+                    row.FirstEvolve += sim.Stats.FirstEvolveAt;
+                    row.Evolved++;
+                }
                 for (int k = 0; k < 4; k++) row.Hurt[k] += sim.Stats.HurtBy[k];
             }
             float d = 1f / seeds;
@@ -120,10 +141,14 @@ namespace FireGame.Prototypes.Tests
             row.Focus *= d;
             row.Level *= d;
             row.Pressure *= d;
+            row.Raids *= d;
+            row.RaiderKill *= d;
+            row.FinaleItems *= d;
+            row.Evolutions *= d;
             return row;
         }
 
-        [Fact(Skip = "아이템·몹 개편 중(2026-10-07): 새 무기 동작 전이라 봇이 약하다 — Phase 2·6에서 다시 켠다")]
+        [Fact]
         public void GuardianReport_MoveOnlySurvives_SkillSavesMore()
         {
             int seeds = FunTests.Seeds;
@@ -142,6 +167,12 @@ namespace FireGame.Prototypes.Tests
             Assert.True(move.Spread >= 0.3f, "판마다 상처가 비슷하다: 폭 " + move.Spread);
             // 서는 곳이 실력: 불에 안 다가가는 걸음은 확실히 덜 지킨다.
             Assert.True(basic.Saved <= move.Saved - 0.15f, "다가가는 걸음이 더 지켜야: 기본 " + basic.Saved + " 숙련 걸음 " + move.Saved);
+            // 2026-10-07 몹·무기 개편: 습격은 두 번 온다, 3:00엔 네 칸이 거의 찬다, 진화를 본다, 화마는 이동만으로 셋에 하나쯤 쓰러진다.
+            Assert.True(move.Raids >= 1.8f, "습격이 덜 온다: " + move.Raids);
+            Assert.True(move.FinaleItems >= 3.5f, "3:00에 칸이 덜 찼다: " + move.FinaleItems);
+            Assert.True(move.Evolutions >= 0.6f, "진화를 거의 못 본다: " + move.Evolutions);
+            float boss = move.BossSeen > 0 ? move.BossDown / (float)move.BossSeen : 0f;
+            Assert.InRange(boss, 0.2f, 0.75f);
         }
     }
 }

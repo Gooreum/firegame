@@ -140,7 +140,8 @@ namespace FireGame.Prototypes.Logic
             Number = 1,
             Name = "마을",
             Map = SurvivorTown.Build,
-            ReportTimes = SurvivorSim.ReportTimes,
+            // 수호자 마을: 불은 이제 몹이 낸다(불쥐·도깨비·불풍선·불곰). 저절로 나는 신고는 30초마다 여섯 번(예전 15번).
+            ReportTimes = new[] { 10f, 40f, 70f, 100f, 130f, 160f },
             // 불 규칙 강화(측정 5): 불이 오래 버티는 만큼 몰려오는 불 몹을 늘려 몸 압박(위기 판)을 되살린다.
             SpawnRate = 1.3f,
             Threat = "큰 불에 주민이 갇힌다 · 신고가 멀리서 온다",
@@ -224,8 +225,9 @@ namespace FireGame.Prototypes.Logic
             // 항구의 난이도는 새 규칙(불배·갈매기)에서 온다(docs §17).
             // 0.08이면 기본 봇이 부두 끝에서 배를 기다리는 동안 곁에 아무것도 없어 빈 시간이 17%(마을 7%)였다: 바다에서 오는 갈매기를 늘린다(docs §17).
             // 갈매기가 폭격기(지붕에 불을 떨어뜨린다)가 되며 0.16 → 0.12, 그 자리에 불 게 0.06(맵 특색 패스).
-            GullShare = 0.12f,
-            CrabShare = 0.06f,
+            // 2026-10-07: 소방정·큰 파도·물폭탄·포탑(대비 장비)이 빠져 부둣가를 지킬 손이 줄었다. 항구가 야시장보다 어려워져(7 대 15승) 0.12 → 0.1, 게 0.06 → 0.05.
+            GullShare = 0.1f,
+            CrabShare = 0.05f,
             // 14로 자주 띄우자 오히려 쉬워졌다(21 → 27승): 배가 늘 떠 있으면 소방정·파도가 쉬지 않고 부둣가를 적셔 준다. 18로 두고 배 속도(BoatSpeed)를 올린다(docs §17).
             BoatEvery = 18f,
             Sea = true,

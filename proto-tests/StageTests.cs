@@ -23,7 +23,8 @@ namespace FireGame.Prototypes.Tests
         {
             var sim = new SurvivorSim(1) { Guardian = false };
             Assert.Equal(1, sim.Stage.Number);
-            Assert.Equal(SurvivorSim.ReportTimes, sim.Stage.ReportTimes);
+            // 수호자 마을은 불을 몹이 내므로 저절로 나는 신고는 30초마다 여섯 번(2026-10-07).
+            Assert.Equal(new[] { 10f, 40f, 70f, 100f, 130f, 160f }, sim.Stage.ReportTimes);
             Assert.Equal(SurvivorSim.FireGrowth, sim.Stage.FireGrowth);
             Assert.Equal(1f, sim.Stage.EnemyHp);
             Assert.Equal(1.3f, sim.Stage.SpawnRate);
@@ -67,7 +68,7 @@ namespace FireGame.Prototypes.Tests
             // 다트는 마을 몹: 항구·야시장은 제 몹(게·풍등)으로 채운다.
             Assert.Equal(0f, SurvivorStages.Get(4).DartShare);
             Assert.Equal(0f, SurvivorStages.Get(5).DartShare);
-            Assert.Equal(0.06f, SurvivorStages.Get(4).CrabShare);
+            Assert.Equal(0.05f, SurvivorStages.Get(4).CrabShare);
             Assert.Equal(0.04f, SurvivorStages.Get(5).LanternShare);
             for (int n = 1; n <= 3; n++) Assert.True(SurvivorStages.Get(n).CrabShare == 0f && SurvivorStages.Get(n).LanternShare == 0f, n + " 전용 몹 비율");
         }
@@ -88,7 +89,7 @@ namespace FireGame.Prototypes.Tests
         /// 밸런스 측정: 숙련 봇(사람 대리, docs §15)이 스테이지마다 30판을 돈다. 표는 출력만 하고(목표는 docs/prototype-c-balance.md),
         /// 검사는 "뒤 스테이지가 더 어렵다" 하나만 한다. 기본 봇은 대화재 고리에 늘 쓰러져 승 3·0·4처럼 바닥 노이즈만 남는다.
         /// </summary>
-        [Fact(Skip = "아이템·몹 개편 중(2026-10-07): 노란·옛 무기가 빠져 띠가 무의미 — Phase 6에서 다시 잰다")]
+        [Fact]
         public void BalanceReport_LaterStageIsHarder()
         {
             var lost = new int[SurvivorStages.Count + 1];
