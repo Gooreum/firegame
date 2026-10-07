@@ -203,11 +203,15 @@ namespace FireGame.Prototypes.Logic
             foreach (Enemy e in _sim.Enemies)
             {
                 if (Pro && e.Dead) continue;
-                if (Pro && !hurt && e.Kind != EnemyKind.Blaze && e.Kind != EnemyKind.Oil) continue;
+                // 숙련: 큰 불·기름·불곰·화마는 늘 피하고, 퓨즈가 타는 불풍선은 터지는 범위(3칸) 밖으로.
+                bool fusing = e.Kind == EnemyKind.FireBalloon && e.Phase > 0f;
+                bool heavy = e.Kind == EnemyKind.Blaze || e.Kind == EnemyKind.Oil || e.Kind == EnemyKind.Bear || e.Kind == EnemyKind.Hwama;
+                if (Pro && !hurt && !heavy && !fusing) continue;
                 float dx = p.X - e.Pos.X;
                 float dy = p.Y - e.Pos.Y;
                 float d2 = (dx * dx) + (dy * dy);
-                if (d2 > avoid2 || d2 < 0.0001f) continue;
+                float reach2 = fusing ? 9f : e.Kind == EnemyKind.Hwama ? 16f : avoid2;
+                if (d2 > Math.Max(avoid2, reach2) || d2 < 0.0001f) continue;
                 float w = 1f / d2;
                 fx += dx * w;
                 fy += dy * w;

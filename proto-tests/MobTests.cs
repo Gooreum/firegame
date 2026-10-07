@@ -306,5 +306,105 @@ namespace FireGame.Prototypes.Tests
             Assert.True(hit >= 2, "막지 않으면 표적이 타야: " + hit + "/" + raid.Targets.Count);
         }
 
+
+        // ------------------------------------------------------------------
+        // 화마(보스)
+        // ------------------------------------------------------------------
+
+        /// <summary>마을을 3:00 직전까지 빨리 감는다(몹 지움, 소방관 안 다침).</summary>
+        private static SurvivorSim ToFinale(int seed = 1)
+        {
+            var sim = new SurvivorSim(seed, 1);
+            while (sim.Time < SurvivorSim.FinaleAt - 0.05f)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                foreach (Structure st in sim.Structures) if (st.Burning) st.Fire = 0f;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+            }
+            return sim;
+        }
+
+        [Fact]
+        public void Hwama_RisesBesideTheLandmark_At3Minutes()
+        {
+            SurvivorSim sim = ToFinale();
+            bool rose = false;
+            for (int i = 0; i < 30 && !rose; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                rose = sim.JustBossRise;
+            }
+            Assert.True(rose);
+            Assert.NotNull(sim.Boss);
+            Assert.Equal(EnemyKind.Hwama, sim.Boss.Kind);
+            Assert.NotNull(sim.Landmark);
+            Assert.True(sim.Boss.Pos.DistanceTo(sim.Landmark.Door) < 1f);
+            Assert.True(sim.Boss.MaxHp >= SurvivorSim.BossHp);
+        }
+
+        [Fact]
+        public void Hwama_PoursRatLines_AsItWalksToTheCenter()
+        {
+            SurvivorSim sim = ToFinale();
+            Run(sim, 0.5f, () => sim.Boss != null, true);
+            Enemy boss = sim.Boss;
+            boss.MaxHp = boss.Hp = 999999f;
+            sim.Player = new Vec2(2f, 58f);
+            float d0 = boss.Pos.DistanceTo(new Vec2(30f, 30f));
+            int lines = 0;
+            for (int i = 0; i < 60 * 7; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+                lines += sim.RatLines.Count;
+            }
+            Assert.True(lines >= 2, "3초마다 쥐 줄: " + lines);
+            Assert.True(boss.Pos.DistanceTo(new Vec2(30f, 30f)) < d0, "가운데로 걸어야");
+        }
+
+        [Fact]
+        public void Hwama_Alive_RestsTheHeavyRing_Dead_DropsAChestAndGems()
+        {
+            SurvivorSim sim = ToFinale();
+            Run(sim, 0.5f, () => sim.Boss != null, true);
+            Enemy boss = sim.Boss;
+            boss.MaxHp = boss.Hp = 999999f;
+            sim.Player = new Vec2(2f, 58f);
+            bool ring = false;
+            for (int i = 0; i < 60 * 30; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                sim.FinalePressure = 3;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+                ring |= sim.JustWave;
+            }
+            Assert.False(ring, "화마가 살아 있는 동안 큰 불 고리는 쉰다");
+            int gems = sim.Gems.Count;
+            sim.Kill(boss);
+            Assert.True(sim.JustBossDown || sim.BossKilled);
+            Assert.True(sim.BossKilled);
+            Assert.Contains(sim.Chests, c => c.Pos.DistanceTo(boss.Pos) < 0.01f);
+            Assert.True(sim.Gems.Count >= gems + SurvivorSim.BossGems);
+        }
+
+        [Fact]
+        public void Forest_Finale_HasNoHwama()
+        {
+            var sim = new SurvivorSim(1, 2);
+            while (sim.Time < SurvivorSim.FinaleAt + 1f && sim.Outcome == SOutcome.Playing)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                foreach (Structure st in sim.Structures) if (st.Burning) st.Fire = 0f;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+            }
+            Assert.Null(sim.Boss);
+        }
     }
 }
