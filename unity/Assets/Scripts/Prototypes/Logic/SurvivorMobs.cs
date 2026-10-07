@@ -183,22 +183,25 @@ namespace FireGame.Prototypes.Logic
             RatLines.Add(from);
         }
 
-        /// <summary>from에서 가장 가까운 안 탄 건물(강을 건너지 않는 쪽 먼저, 빼놓을 것 제외). 없으면 null.</summary>
+        /// <summary>
+        /// from에서 노릴 건물: 안 탄 집 → 강을 건너지 않는 쪽 → 가까운 순. 안 탄 집이 하나도 없으면 타는(무너지지 않은) 집이라도.
+        /// skip에 든 건 빼고, 없으면 null.
+        /// </summary>
         private Structure RaidGoal(Vec2 from, List<Structure> skip)
         {
             Structure best = null;
+            int bestRank = -1;
             float bestD = float.MaxValue;
-            bool bestDry = false;
             foreach (Structure s in Structures)
             {
-                if (!s.IsBuilding || s.Collapsed || s.Burning || (skip != null && skip.Contains(s))) continue;
-                bool dry = !CrossesWater(from, s.Pos);
+                if (!s.IsBuilding || s.Collapsed || (skip != null && skip.Contains(s))) continue;
+                int rank = (s.Burning ? 0 : 2) + (CrossesWater(from, s.Pos) ? 0 : 1);
                 float d = s.DistanceTo(from);
-                if ((dry && !bestDry) || (dry == bestDry && d < bestD))
+                if (rank > bestRank || (rank == bestRank && d < bestD))
                 {
                     best = s;
+                    bestRank = rank;
                     bestD = d;
-                    bestDry = dry;
                 }
             }
             return best;

@@ -230,5 +230,81 @@ namespace FireGame.Prototypes.Tests
             Assert.False(before, "첫 습격 전엔 도깨비가 없다");
             Assert.True(after, "55초 뒤엔 도깨비가 섞인다");
         }
+
+        // ------------------------------------------------------------------
+        // 불곰 · 습격
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public void Bear_PlowsThroughHouses_SettingEachOnFire()
+        {
+            SurvivorSim sim = Unarmed();
+            Structure a = House(sim);
+            Enemy bear = sim.Spawn(EnemyKind.Bear, new Vec2(a.Pos.X - a.Half.X - 3f, a.Pos.Y));
+            bear.Goal = a;
+            bear.MaxHp = bear.Hp = 99999f;
+            Run(sim, 12f);
+            int burning = sim.Structures.FindAll(s => s.IsBuilding && (s.Burning || s.Collapsed)).Count;
+            Assert.True(a.Burning || a.Collapsed, "첫 집에 불");
+            Assert.True(burning >= 2, "지나간 집마다 불이 붙어야: " + burning);
+        }
+
+        [Fact]
+        public void Bear_DropsAChest_WhenKilled()
+        {
+            SurvivorSim sim = Unarmed();
+            Enemy bear = sim.Spawn(EnemyKind.Bear, new Vec2(20f, 20f));
+            sim.Kill(bear);
+            Assert.Single(sim.Chests);
+            Assert.True(sim.Chests[0].Pos.DistanceTo(new Vec2(20f, 20f)) < 0.01f);
+            Assert.Single(sim.BearsDown);
+            Assert.Equal(1, sim.RaidersKilled);
+        }
+
+        [Fact]
+        public void Town_At50s_ARaidComesFromOneEdge_NotABigReportFire()
+        {
+            var sim = new SurvivorSim(1, 1);
+            Raid raid = null;
+            for (int i = 0; i < 60 * 52 && raid == null; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+                raid = sim.JustRaid;
+            }
+            Assert.NotNull(raid);
+            Assert.InRange(sim.Time, 49.9f, 50.1f);
+            Assert.Null(sim.BigReport);
+            Assert.InRange(raid.Targets.Count, 2, 3);
+            // 안 탄 집을 먼저 노린다(다 타고 있으면 타는 집이라도).
+            if (sim.Structures.Exists(x => x.IsBuilding && !x.Burning && !x.Collapsed)) Assert.False(raid.Targets[0].Burning, "첫 표적은 안 탄 집");
+            // 가장자리 한 곳에 곰 하나, 쥐 줄 둘(6+6), 도깨비 둘.
+            List<Enemy> near = sim.Enemies.FindAll(e => e.Pos.DistanceTo(raid.From) < 4f);
+            Assert.Equal(1, near.FindAll(e => e.Kind == EnemyKind.Bear).Count);
+            Assert.Equal(2, near.FindAll(e => e.Kind == EnemyKind.Goblin).Count);
+            Assert.True(near.FindAll(e => e.Kind == EnemyKind.Rat).Count >= 2 * SurvivorSim.RatLineStart - 2);
+            Assert.All(near.FindAll(e => SurvivorSim.IsRaider(e.Kind)), e => Assert.Contains(e.Goal, raid.Targets));
+        }
+
+        [Fact]
+        public void Raid_LeftAlone_BurnsItsTargets()
+        {
+            var sim = new SurvivorSim(1, 1, new UpgradeId[0]);
+            Raid raid = null;
+            for (int i = 0; i < 60 * 80; i++)
+            {
+                sim.Hp = sim.MaxHp;
+                // 소방관은 습격 반대편 구석에 숨어 있다.
+                if (raid != null) sim.Player = new Vec2(raid.From.X < 30f ? 57f : 3f, raid.From.Y < 30f ? 57f : 3f);
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+                raid = raid ?? sim.JustRaid;
+            }
+            Assert.True(raid != null, "습격이 안 왔다: " + sim.Time + " " + sim.Outcome + " 레벨 " + sim.Level);
+            int hit = raid.Targets.FindAll(t => t.Burning || t.Collapsed || t.Integrity < 1f).Count;
+            Assert.True(hit >= 2, "막지 않으면 표적이 타야: " + hit + "/" + raid.Targets.Count);
+        }
+
     }
 }
