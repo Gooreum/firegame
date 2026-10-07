@@ -1034,7 +1034,9 @@ namespace FireGame.Prototypes
             {
                 Vector3 at = W(h.Pos);
                 WeaponHit(h, at);
-                if (h.Killed) DeathBurst(at, h.Kind, crowded);
+                // 맨홀 물기둥에 쓰러진 요괴는 하늘로 날아갔다 떨어지며 터진다(샘플).
+                if (h.Killed && h.Source == HitSource.Geyser && IsYokai(h.Kind)) Fling(at, h.Kind, h.From);
+                else if (h.Killed) DeathBurst(at, h.Kind, crowded);
                 if (h.Source == HitSource.Hose) WaterHit(h, at, crowded);
                 else
                 {
@@ -1776,31 +1778,21 @@ namespace FireGame.Prototypes
                 switch (e.Kind)
                 {
                     case EnemyKind.Ember:
-                        _enemyGlow.Put(at, 1.4f * flicker * life, 0f, new Color(1f, 0.4f, 0.08f, 0.25f));
-                        // 흔들리는 불꽃 한 장(심은 그림에 들어 있다). 물을 맞으면 파랗게.
-                        _embers.Put(at + new Vector3(0f, 0.05f, 0f), 1.05f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_emberSheet, _time, i));
+                    {
+                        // 보라 요괴(작은 놈): 가는 쪽을 보며 통통 튄다.
+                        float face = (e.Goal != null ? e.Goal.Pos.X : _sim.Player.X) < e.Pos.X ? -1f : 1f;
+                        DrawYokai(at, i, hit, 0.75f * (hit ? 1.12f : 1f), false, face);
                         break;
+                    }
                     case EnemyKind.Blaze:
-                        _enemyGlow.Put(at, 2.4f * flicker * life, 0f, new Color(1f, 0.3f, 0.05f, 0.35f));
-                        if (Random.value < 0.03f)
-                        {
-                            Emit(Smokes[Random.Range(0, Smokes.Length)], at + new Vector3(0f, 0.8f * life, 0f), new Vector3(Random.Range(-0.3f, 0.3f), 1.2f, 0f), 0.5f, 1.2f,
-                                0.6f, 1.8f, new Color(0.25f, 0.22f, 0.22f, 0.45f), new Color(0.2f, 0.2f, 0.2f, 0f), Random.Range(-60f, 60f));
-                        }
-                        if (Random.value < 0.04f)
-                        {
-                            Emit(Sparks[Random.Range(0, Sparks.Length)], at, new Vector3(Random.Range(-0.8f, 0.8f), Random.Range(1.5f, 3f), 0f), 1f, 0.6f,
-                                0.35f, 0.05f, new Color(1f, 0.8f, 0.3f), new Color(1f, 0.3f, 0.05f, 0f), 0f, true);
-                        }
-                        // 큰 불: 어두운 밑동 위에 큰 불꽃 하나와 양옆 작은 불꽃 둘이 서로 다른 프레임으로 흔들린다.
-                        // 대화재 고리의 질긴 큰 불(Heavy)은 1.25배 크고 발밑에 검붉은 고리가 돈다: 보통 큰 불과 구별된다.
+                    {
+                        // 보라 요괴(큰 놈, 뿔). 대화재 고리의 질긴 큰 불(Heavy)은 더 크고 발밑에 검붉은 고리가 돈다.
+                        float face = _sim.Player.X < e.Pos.X ? -1f : 1f;
                         float heavy = e.Heavy ? 1.25f : 1f;
-                        if (e.Heavy) _auras.Put(at + new Vector3(0f, -0.05f, 0f), 2.4f * life, _time * 40f, new Color(0.7f, 0.05f, 0.05f, 0.7f));
-                        _shadows.Put(at + new Vector3(0f, 0.05f, 0f), 1.9f * life * heavy, 0f, new Color(0.18f, 0.08f, 0.04f, 0.8f), null, 0.45f);
-                        _blazes.Put(at + new Vector3(-0.55f * life, 0.05f, 0f), 1.5f * flicker * punch * heavy, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i + 3));
-                        _blazes.Put(at + new Vector3(0.55f * life, 0.05f, 0f), 1.4f * flicker * punch * heavy, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i + 5));
-                        _blazes.Put(at + new Vector3(0f, 0.1f, 0f), 2f * flicker * punch * heavy, 0f, hit ? water : Color.white, FlameArt.Frame(_blazeSheet, _time, i));
+                        if (e.Heavy) _auras.Put(at + new Vector3(0f, -0.05f, 0f), 2.4f * heavy, _time * 40f, new Color(0.55f, 0.1f, 0.8f, 0.7f));
+                        DrawYokai(at, i, hit, 1.1f * heavy * (hit ? 1.06f : 1f), true, face, 6f);
                         break;
+                    }
                     case EnemyKind.Squirrel:
                     {
                         // 불다람쥐: 몸+말린 꼬리 실루엣(주황)이 달리고, 꼬리 끝에 불이 붙어 흔들린다.
@@ -2797,6 +2789,11 @@ namespace FireGame.Prototypes
         /// <summary>불이 꺼지는 순간: 흰 번쩍 + 하얀 수증기 + 불똥. 큰 불은 충격파와 짧은 멈춤까지.</summary>
         private void DeathBurst(Vector3 at, EnemyKind kind, bool crowded)
         {
+            if (IsYokai(kind))
+            {
+                YokaiPoof(at, kind, crowded);
+                return;
+            }
             bool big = kind == EnemyKind.Blaze;
             Emit("Effects/glow", at, Vector3.zero, 0f, 0.1f, big ? 2.4f : 1.3f, big ? 3f : 1.7f, new Color(1f, 1f, 1f, 0.9f), new Color(0.7f, 0.9f, 1f, 0f), 0f, true);
             int sparks = big ? 13 : crowded ? 4 : 8;
@@ -3495,6 +3492,8 @@ namespace FireGame.Prototypes
 
         private void SpawnNumber(Vector3 at, float damage, bool crit)
         {
+            // 2026-10-07 승인 샘플엔 피해 숫자가 없었다: 작은 숫자가 화면을 덮어 무기 움직임을 가린다. 치명타만 띄운다.
+            if (!crit) return;
             if (_numbers.Count >= MaxNumbers && !crit) return;
             string text = Mathf.Max(1, Mathf.RoundToInt(damage)).ToString();
             SpawnText(at, crit ? text + "!" : text, crit ? new Color(1f, 0.85f, 0.2f) : new Color(1f, 1f, 0.92f), crit ? 1.5f : 1f);
@@ -4770,6 +4769,7 @@ namespace FireGame.Prototypes
             BuildGuardianPools();
             BuildArsenalPools();
             BuildMobPools();
+            BuildYokaiPools();
             _tank = AddPool("Tank", "Effects/glow", 10, true);
             _radar = new Pool(_world, "Radar", BeamSprite(), 10, Additive);
             _pools.Add(_radar);

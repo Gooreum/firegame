@@ -15,16 +15,9 @@ namespace FireGame.Prototypes
     {
         private static readonly Color RaidRed = new Color(1f, 0.25f, 0.1f, 1f);
 
-        /// <summary>서 있는 몹 그림(카메라를 본다).</summary>
-        private Pool _mobs;
         private Pool _mobGlow;
         private Pool _mobBar;
 
-        private static Sprite _ratSprite;
-        private static Sprite _goblinSprite;
-        private static Sprite _fireBalloonSprite;
-        private static Sprite _bearSprite;
-        private static Sprite _eyesSprite;
 
         /// <summary>이번 프레임에 표식을 그린 집(겹쳐 그리지 않는다).</summary>
         private readonly HashSet<Structure> _marked = new HashSet<Structure>();
@@ -37,9 +30,6 @@ namespace FireGame.Prototypes
 
         private void BuildMobPools()
         {
-            _mobs = new Pool(_world, "Mob", RatSprite(), 9, null);
-            _mobs.Upright = true;
-            _pools.Add(_mobs);
             _mobGlow = AddPool("MobGlow", "Effects/glow", 8, true);
             _mobBar = new Pool(_world, "MobBar", Art.White, 15, null);
             _mobBar.Upright = true;
@@ -157,96 +147,74 @@ namespace FireGame.Prototypes
             {
                 case EnemyKind.Rat:
                 {
-                    // 불쥐: 작은 몸이 통통 튀고 꼬리 끝에 불이 흔들린다.
-                    float hop = Mathf.Abs(Mathf.Sin((_time * 18f) + i)) * 0.12f;
-                    _mobs.Put(at + Up(hop), 1.25f * face * punch, 0f, body, RatSprite());
-                    _embers.Put(at + new Vector3(-face * 0.55f, 0f, 0f) + Up(0.3f + hop), 0.6f * flicker, 0f, flame, FlameArt.Frame(_emberSheet, _time, i));
-                    if (e.Leader == null) DrawPath(e.Pos, e.Goal, new Color(1f, 0.4f, 0.15f, 0.35f));
+                    // 불쥐 → 작은 요괴: 더 작고 더 빨리 통통 튀며 한 줄로 달린다.
+                    DrawYokai(at, i, hit, 0.6f, false, face, 16f);
                     MarkGoal(e.Goal);
                     break;
                 }
                 case EnemyKind.Goblin:
                 {
-                    // 도깨비: 뿔 달린 몸, 머리 위 횃불이 예고만큼 부푼다(다 차면 던진다).
+                    // 도깨비 → 횃불 든 요괴: 예고만큼 횃불이 커지고 빛난다(다 차면 던진다).
                     float windup = Mathf.Clamp01(e.Phase / SurvivorSim.GoblinWindup);
-                    float sway = Mathf.Sin((_time * 6f) + i) * 4f;
-                    _mobs.Put(at, 2f * face * punch, sway, body, GoblinSprite());
-                    Vector3 torch = at + new Vector3(face * 0.35f, 0f, 0f) + Up(2.1f + (0.3f * windup));
-                    _mobGlow.Put(torch, (1f + (1.6f * windup)) * flicker, 0f, new Color(1f, 0.5f, 0.1f, 0.3f + (0.4f * windup)));
-                    _embers.Put(torch, (0.45f + (0.6f * windup)) * flicker, 0f, flame, FlameArt.Frame(_emberSheet, _time, i + 2));
-                    if (windup > 0.6f && Random.value < 0.3f) Burst(torch, 1, new Color(1f, 0.6f, 0.2f), 3f);
+                    Vector3 top = DrawYokai(at, i, hit, 0.95f, false, face, 7f);
+                    Vector3 torch = at + new Vector3(face * 0.55f, 0f, 0f) + Up(0.9f + (0.25f * windup));
+                    _mobGlow.Put(torch + Up(0.3f), (1f + (1.6f * windup)) * flicker, 0f, new Color(1f, 0.5f, 0.1f, 0.3f + (0.4f * windup)));
+                    _yokai.Put(torch, (0.9f + (0.5f * windup)) * face, (Mathf.Sin(_time * 7f) * 8f) - (face * 20f * windup), Color.white, SkillSprite("torch"));
+                    if (windup > 0.6f && Random.value < 0.3f) Burst(torch + Up(0.6f), 1, new Color(1f, 0.6f, 0.2f), 3f);
                     MarkGoal(e.Goal, windup);
                     break;
                 }
                 case EnemyKind.FireBalloon:
                 {
-                    // 불풍선: 붉은 풍선과 바구니가 떠 있고 밑에서 불이 흔들린다. 퓨즈가 타면 빨갛게 깜빡인다.
+                    // 불풍선 → 요괴가 매달린 불풍선: 높이 떠서 집으로, 퓨즈가 타면 빨갛게 깜빡인다.
                     float fuse = Mathf.Clamp01(e.Phase / SurvivorSim.FireBalloonFuse);
                     float bob = Mathf.Sin((_time * 3f) + i) * 0.12f;
-                    Vector3 high = at + Up(1.6f + bob);
-                    _shadows.Put(at, 1.1f, 0f, new Color(0f, 0f, 0f, 0.25f), null, 0.5f);
+                    Vector3 high = at + Up(1.4f + bob);
                     bool blink = fuse > 0f && Mathf.Repeat(_time * (4f + (10f * fuse)), 1f) < 0.5f;
-                    _mobs.Put(high, 1.5f * punch, bob * 20f, hit ? water : blink ? new Color(1f, 0.55f, 0.45f) : Color.white, FireBalloonSprite());
-                    _embers.Put(high + Up(-0.15f), 0.5f * flicker, 0f, flame, FlameArt.Frame(_emberSheet, _time, i + 4));
+                    _shadows.Put(at, 1.1f, 0f, new Color(0f, 0f, 0f, 0.25f), null, 0.5f);
+                    DrawYokai(high, i, hit, 0.55f, false, face, 2f);
+                    _yokai.Put(high + Up(0.55f), 1.9f * punch, bob * 20f, blink ? new Color(1f, 0.55f, 0.45f) : Color.white, SkillSprite("fire_balloon"));
                     if (fuse > 0f) _mobGlow.Put(at, SurvivorSim.FireBalloonBlast * 2f * (0.6f + (0.4f * fuse)), 0f, new Color(1f, 0.3f, 0.1f, 0.15f + (0.25f * fuse)));
-                    if (e.Goal != null) DrawPath(e.Pos, e.Goal, new Color(1f, 0.5f, 0.2f, 0.25f));
                     MarkGoal(e.Goal, fuse);
                     break;
                 }
                 case EnemyKind.Bear:
                 {
-                    // 불곰: 큰 덩치, 등에 큰 불이 타고, 지나간 자리는 그을린다.
-                    float step = Mathf.Sin((_time * 8f) + i) * 0.06f;
-                    _shadows.Put(at, 2.6f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.5f);
-                    _mobs.Put(at + Up(step), 3.4f * face * punch, step * 30f, body, BearSprite());
-                    _mobGlow.Put(at + Up(1.2f), 3.2f * flicker, 0f, new Color(1f, 0.35f, 0.08f, 0.35f));
-                    _blazes.Put(at + new Vector3(-face * 0.3f, 0f, 0f) + Up(1.7f), 1.5f * flicker * punch, 0f, flame, FlameArt.Frame(_blazeSheet, _time, i));
-                    _auras.Put(at, 3f, _time * 40f, new Color(1f, 0.4f, 0.1f, 0.45f));
-                    DrawPath(e.Pos, e.Goal, new Color(1f, 0.3f, 0.1f, 0.4f));
+                    // 불곰 → 큰 뿔 요괴(엘리트): 쿵쿵 걷고 발밑에 불 고리, 머리 위 체력 막대.
+                    _auras.Put(at, 3f, _time * 40f, new Color(0.6f, 0.2f, 1f, 0.45f));
+                    Vector3 top = DrawYokai(at, i, hit, 2f, true, face, 5f);
                     MarkGoal(e.Goal);
-                    DrawHealthBar(at + Up(3.6f), 2.2f, e.Hp / Mathf.Max(1f, e.MaxHp), new Color(1f, 0.45f, 0.1f));
+                    DrawHealthBar(top + Up(0.6f), 2.2f, e.Hp / Mathf.Max(1f, e.MaxHp), new Color(0.75f, 0.35f, 1f));
                     break;
                 }
                 case EnemyKind.Hwama:
                 {
-                    // 화마: 거대한 불 기둥 셋과 검은 눈. 숨 쉬듯 부풀고, 발밑이 붉게 탄다.
-                    float breathe = 1f + (0.06f * Mathf.Sin(_time * 3f));
-                    _shadows.Put(at, 5f, 0f, new Color(0f, 0f, 0f, 0.45f), null, 0.5f);
-                    _groundGlow.Put(at, 7f * breathe, 0f, new Color(1f, 0.25f, 0.05f, 0.4f));
-                    _mobGlow.Put(at + Up(2.5f), 8f * flicker, 0f, new Color(1f, 0.35f, 0.08f, 0.45f));
-                    _blazes.Put(at + new Vector3(-1f, 0f, 0f), 3.2f * breathe * punch, 0f, flame, FlameArt.Frame(_blazeSheet, _time, i));
-                    _blazes.Put(at + new Vector3(1f, 0f, 0f), 3.2f * breathe * punch, 0f, flame, FlameArt.Frame(_blazeSheet, _time, i + 3));
-                    _blazes.Put(at + new Vector3(0f, 0.2f, 0f), 4.4f * breathe * punch, 0f, hit ? water : flame, FlameArt.Frame(_blazeSheet, _time, i + 6));
-                    _mobs.Put(at + Up(2.6f * breathe), 1.8f * face, 0f, Color.white, EyesSprite());
-                    if (Random.value < 0.4f) Emit("Effects/smoke_02", at + Up(4f), new Vector3(Random.Range(-1f, 1f), Random.Range(0.5f, 1.5f), 0f), 0.5f, 1.4f, 1.2f, 3f, new Color(0.25f, 0.2f, 0.2f, 0.5f), new Color(0.2f, 0.2f, 0.2f, 0f), 0f);
-                    DrawHealthBar(at + Up(5.6f), 5f, e.Hp / Mathf.Max(1f, e.MaxHp), new Color(1f, 0.2f, 0.05f));
+                    // 화마 → 요괴 왕: 거대한 뿔 요괴가 왕관을 쓰고 숨 쉬듯 부푼다. 발밑이 보랏빛으로 탄다.
+                    float breathe = 1f + (0.05f * Mathf.Sin(_time * 3f));
+                    _groundGlow.Put(at, 7f * breathe, 0f, new Color(0.6f, 0.2f, 1f, 0.35f));
+                    _mobGlow.Put(at + Up(2.5f), 7f * flicker, 0f, new Color(0.7f, 0.3f, 1f, 0.35f));
+                    Vector3 top = DrawYokai(at, i, hit, 4.2f * breathe, true, face, 2.5f);
+                    _yokai.Put(top + Up(0.2f), 2.2f * breathe, 0f, Color.white, SkillSprite("crown"));
+                    if (Random.value < 0.3f) Emit("Effects/smoke_02", top, new Vector3(Random.Range(-1f, 1f), Random.Range(0.5f, 1.5f), 0f), 0.5f, 1.4f, 1.2f, 3f, new Color(0.35f, 0.25f, 0.45f, 0.5f), new Color(0.3f, 0.2f, 0.4f, 0f), 0f);
+                    DrawHealthBar(top + Up(2f), 5f, e.Hp / Mathf.Max(1f, e.MaxHp), new Color(0.75f, 0.3f, 1f));
                     break;
                 }
             }
         }
 
-        /// <summary>노리는 집 지붕에 붉은 표식(예고·퓨즈가 차면 조여 들며 진해진다). 한 집에 한 번만.</summary>
+        /// <summary>
+        /// 노리는 집(샘플 그대로): 지붕 위에 빨간 "!" 원이 통통 뛰고, 집 둘레가 붉게 맥박친다(예고·퓨즈가 차면 빨라진다). 한 집에 한 번만.
+        /// </summary>
         private void MarkGoal(Structure goal, float urgency = 0f)
         {
             if (goal == null || goal.Collapsed || !_marked.Add(goal)) return;
-            Vector3 roof = W(goal.Pos) + Up(0.05f);
-            float size = Mathf.Max(goal.Half.X, goal.Half.Y) * 2.4f * (1.15f - (0.25f * urgency));
-            _reticle.Put(roof, size * (1f + (0.06f * Mathf.Sin(_time * 8f))), _time * 80f, new Color(1f, 0.3f, 0.12f, 0.35f + (0.45f * urgency)));
-        }
-
-        /// <summary>몹에서 노리는 집까지 점선(어디로 가는지).</summary>
-        private void DrawPath(Vec2 from, Structure goal, Color c)
-        {
-            if (goal == null) return;
-            float len = from.DistanceTo(goal.Pos);
-            int n = Mathf.Min(14, (int)(len / 1.2f));
-            float drift = Mathf.Repeat(_time * 2f, 1f);
-            for (int k = 1; k <= n; k++)
-            {
-                float t = (k - drift) / (n + 1f);
-                var p = new Vector3(Mathf.Lerp(from.X, goal.Pos.X, t), Mathf.Lerp(from.Y, goal.Pos.Y, t), 0f);
-                _mobGlow.Put(p, 0.45f, 0f, c);
-            }
+            Vector3 roof = W(goal.Pos);
+            float rate = 8f + (10f * urgency);
+            float pulse = 0.5f + (0.5f * Mathf.Sin(_time * rate));
+            float size = (Mathf.Max(goal.Half.X, goal.Half.Y) * 2.3f) + 0.6f;
+            _mobGlow.Put(roof + Up(0.05f), size * (1f + (0.05f * pulse)), 0f, new Color(1f, 0.2f, 0.12f, 0.25f + (0.25f * pulse) + (0.2f * urgency)));
+            float k = 1f + (0.12f * Mathf.Sin(_time * rate));
+            _yokai.Put(roof + Up(1f), 1.25f * k, 0f, Color.white, SkillSprite("warn_mark"));
         }
 
         /// <summary>몸 위 체력 막대(검은 바탕 + 색 막대).</summary>
@@ -290,105 +258,6 @@ namespace FireGame.Prototypes
                 else if (e.Kind == EnemyKind.Hwama) EdgeArrow(new Vector3(e.Pos.X, e.Pos.Y, 0f), new Color(1f, 0.2f, 0.05f), 2.2f, "화마");
                 else if (e.Kind == EnemyKind.FireBalloon) EdgeArrow(new Vector3(e.Pos.X, e.Pos.Y, 0f), new Color(1f, 0.6f, 0.3f), 1.3f, "불풍선");
             }
-        }
-
-        // ------------------------------------------------------------------
-        // 그림(절차 스프라이트, 64px, 서 있는 모습)
-        // ------------------------------------------------------------------
-
-        /// <summary>불쥐(옆모습, 머리가 +u): 짙은 붉은 몸, 큰 귀, 노란 눈, 가는 꼬리.</summary>
-        private static Sprite RatSprite()
-        {
-            if (_ratSprite != null) return _ratSprite;
-            _ratSprite = PaintSprite((u, v) =>
-            {
-                var body = new Color32(150, 35, 25, 255);
-                if (InEllipse(u, v, 0.26f, -0.02f, 0.025f, 0.025f)) return new Color32(255, 220, 60, 255);
-                if (InEllipse(u, v, 0.15f, 0.09f, 0.07f, 0.08f)) return new Color32(200, 70, 55, 255);
-                if (InEllipse(u, v, 0.22f, -0.05f, 0.13f, 0.09f)) return body;
-                if (InEllipse(u, v, 0.36f, -0.08f, 0.03f, 0.025f)) return new Color32(255, 120, 110, 255);
-                if (InEllipse(u, v, -0.04f, -0.1f, 0.22f, 0.13f)) return body;
-                if (u < -0.24f && u > -0.44f && Mathf.Abs(v + 0.12f - ((u + 0.24f) * -0.6f)) < 0.02f) return new Color32(120, 30, 20, 255);
-                if ((InEllipse(u, v, 0.1f, -0.25f, 0.03f, 0.05f) || InEllipse(u, v, -0.15f, -0.25f, 0.03f, 0.05f))) return new Color32(90, 20, 15, 255);
-                return new Color32(0, 0, 0, 0);
-            });
-            return _ratSprite;
-        }
-
-        /// <summary>횃불 도깨비(앞모습): 주황 몸, 흰 뿔 둘, 큰 노란 눈, 횃불 든 팔.</summary>
-        private static Sprite GoblinSprite()
-        {
-            if (_goblinSprite != null) return _goblinSprite;
-            _goblinSprite = PaintSprite((u, v) =>
-            {
-                var skin = new Color32(225, 90, 40, 255);
-                if (Mathf.Abs(u) > 0.07f && Mathf.Abs(u) < 0.13f && v > 0.22f && v < 0.36f + ((0.13f - Mathf.Abs(u)) * 1.2f)) return new Color32(245, 240, 225, 255);
-                if (InEllipse(u, v, -0.06f, 0.12f, 0.04f, 0.045f) || InEllipse(u, v, 0.06f, 0.12f, 0.04f, 0.045f)) return new Color32(255, 230, 60, 255);
-                if (InEllipse(u, v, 0f, 0.04f, 0.07f, 0.025f)) return new Color32(70, 15, 10, 255);
-                if (InEllipse(u, v, 0f, 0.1f, 0.16f, 0.15f)) return skin;
-                if (InEllipse(u, v, 0f, -0.16f, 0.17f, 0.18f)) return new Color32(120, 40, 30, 255);
-                if (u > 0.12f && u < 0.2f && v > -0.1f && v < 0.3f) return skin;
-                if ((InEllipse(u, v, -0.08f, -0.37f, 0.05f, 0.07f) || InEllipse(u, v, 0.08f, -0.37f, 0.05f, 0.07f))) return new Color32(90, 30, 20, 255);
-                return new Color32(0, 0, 0, 0);
-            });
-            return _goblinSprite;
-        }
-
-        /// <summary>불풍선(앞모습): 줄무늬 붉은 풍선, 줄, 갈색 바구니.</summary>
-        private static Sprite FireBalloonSprite()
-        {
-            if (_fireBalloonSprite != null) return _fireBalloonSprite;
-            _fireBalloonSprite = PaintSprite((u, v) =>
-            {
-                if (InEllipse(u, v, 0f, 0.12f, 0.3f, 0.32f))
-                {
-                    bool stripe = Mathf.Repeat((u + 0.3f) * 6f, 1f) < 0.5f;
-                    bool shine = InEllipse(u, v, -0.12f, 0.24f, 0.06f, 0.08f);
-                    if (shine) return new Color32(255, 220, 200, 255);
-                    return stripe ? new Color32(220, 40, 30, 255) : new Color32(250, 150, 40, 255);
-                }
-                if (v < -0.2f && v > -0.3f && Mathf.Abs(Mathf.Abs(u) - (0.08f + ((v + 0.2f) * -0.2f))) < 0.012f) return new Color32(60, 40, 30, 255);
-                if (v < -0.3f && v > -0.42f && Mathf.Abs(u) < 0.1f) return new Color32(140, 90, 45, 255);
-                return new Color32(0, 0, 0, 0);
-            });
-            return _fireBalloonSprite;
-        }
-
-        /// <summary>불곰(옆모습, 머리가 +u): 큰 검붉은 몸, 둥근 귀, 노란 눈, 굵은 다리.</summary>
-        private static Sprite BearSprite()
-        {
-            if (_bearSprite != null) return _bearSprite;
-            _bearSprite = PaintSprite((u, v) =>
-            {
-                var fur = new Color32(95, 30, 22, 255);
-                if (InEllipse(u, v, 0.33f, 0.04f, 0.025f, 0.025f)) return new Color32(255, 210, 60, 255);
-                if (InEllipse(u, v, 0.43f, -0.04f, 0.03f, 0.03f)) return new Color32(20, 10, 8, 255);
-                if (InEllipse(u, v, 0.25f, 0.17f, 0.05f, 0.05f)) return fur;
-                if (InEllipse(u, v, 0.32f, 0.02f, 0.14f, 0.12f)) return fur;
-                if (InEllipse(u, v, 0.38f, -0.04f, 0.07f, 0.05f)) return new Color32(140, 55, 40, 255);
-                if (InEllipse(u, v, -0.04f, -0.02f, 0.3f, 0.2f)) return fur;
-                bool leg = (u > 0.08f && u < 0.18f || u > -0.26f && u < -0.14f) && v < -0.12f && v > -0.38f;
-                if (leg) return new Color32(70, 22, 16, 255);
-                return new Color32(0, 0, 0, 0);
-            });
-            return _bearSprite;
-        }
-
-        /// <summary>화마의 눈: 검은 바탕에 노랗게 타는 두 눈과 찢어진 입.</summary>
-        private static Sprite EyesSprite()
-        {
-            if (_eyesSprite != null) return _eyesSprite;
-            _eyesSprite = PaintSprite((u, v) =>
-            {
-                bool eye = InEllipse(u, v, -0.17f, 0.08f, 0.1f, 0.06f) || InEllipse(u, v, 0.17f, 0.08f, 0.1f, 0.06f);
-                bool pupil = InEllipse(u, v, -0.15f, 0.07f, 0.035f, 0.035f) || InEllipse(u, v, 0.15f, 0.07f, 0.035f, 0.035f);
-                if (pupil) return new Color32(255, 255, 220, 255);
-                if (eye) return new Color32(255, 200, 30, 255);
-                bool mouth = Mathf.Abs(v + 0.14f + (0.08f * Mathf.Cos(u * 9f))) < 0.025f && Mathf.Abs(u) < 0.26f;
-                if (mouth) return new Color32(30, 8, 5, 255);
-                return new Color32(0, 0, 0, 0);
-            });
-            return _eyesSprite;
         }
     }
 }
