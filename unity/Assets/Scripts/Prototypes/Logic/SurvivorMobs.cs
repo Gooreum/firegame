@@ -60,6 +60,9 @@ namespace FireGame.Prototypes.Logic
         public Raid JustRaid;
         public bool JustBossRise;
         public bool JustBossDown;
+
+        /// <summary>화마가 쓰러진 자리(그림용).</summary>
+        public Vec2 BossDownAt;
         public readonly List<Vec2> RatLines = new List<Vec2>();
 
         /// <summary>도깨비가 횃불을 던진 줄(어디서 → 어느 지붕).</summary>
@@ -407,6 +410,7 @@ namespace FireGame.Prototypes.Logic
             {
                 BossKilled = true;
                 JustBossDown = true;
+                BossDownAt = e.Pos;
                 Chests.Add(new Pickup { Pos = e.Pos, Life = ChestLife });
                 for (int i = 0; i < BossGems; i++)
                 {

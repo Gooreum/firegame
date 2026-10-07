@@ -424,6 +424,85 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.DropGem(view.Sim.Player, view.Sim.XpToNext);
             });
 
+            // 마을 몹(2026-10-07): 불쥐 줄, 도깨비 예고, 불풍선 퓨즈, 불곰, 50초 습격, 3:00 화마와 쓰러지는 순간.
+            failures += SurvivorShot(dir, "h40_rats", view =>
+            {
+                Only(view, EnemyKind.Rat);
+                if (view.Sim.Time > 3f && view.Sim.RatLines.Count == 0 && !view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.Rat))
+                {
+                    Structure goal = NearestHouse(view);
+                    view.Sim.SpawnRatLine(new Vec2(goal.Pos.X + 9f, goal.Pos.Y - 5f), goal, 8);
+                    view.Sim.SpawnRatLine(new Vec2(goal.Pos.X - 8f, goal.Pos.Y - 6f), goal, 6);
+                    foreach (Enemy e in view.Sim.Enemies) e.MaxHp = e.Hp = 999f;
+                }
+                return view.Sim.Time > 4.2f;
+            }, 1, false, Near(9f), 1, view => view.Sim.Reports = false);
+            failures += SurvivorShot(dir, "h41_goblin", view =>
+            {
+                Only(view, EnemyKind.Goblin);
+                return view.Sim.Time > 3.4f && view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.Goblin && e.Phase > 0.9f);
+            }, 1, false, view =>
+            {
+                Enemy g = view.Sim.Enemies.Find(e => e.Kind == EnemyKind.Goblin);
+                Vec2 c = g != null ? g.Pos : view.Sim.Player;
+                view.Frame(new Vector3(c.X, c.Y + 1.5f, 0f), 6f);
+            }, 1, view =>
+            {
+                view.Sim.Reports = false;
+                Structure goal = NearestHouse(view);
+                Enemy g = view.Sim.Spawn(EnemyKind.Goblin, new Vec2(goal.Pos.X + 1f, goal.Pos.Y - goal.Half.Y - 1.8f));
+                g.Goal = goal;
+                g.MaxHp = g.Hp = 9999f;
+                view.Sim.Player = new Vec2(goal.Pos.X - 5f, goal.Pos.Y - goal.Half.Y - 6f);
+            }, true, false);
+            failures += SurvivorShot(dir, "h43_bear", view =>
+            {
+                Only(view, EnemyKind.Bear);
+                return view.Sim.Time > 4.5f;
+            }, 1, false, view =>
+            {
+                Enemy b = view.Sim.Enemies.Find(e => e.Kind == EnemyKind.Bear);
+                Vec2 c = b != null ? b.Pos : view.Sim.Player;
+                view.Frame(new Vector3(c.X, c.Y + 1.5f, 0f), 9f);
+            }, 1, view =>
+            {
+                view.Sim.Reports = false;
+                Structure goal = NearestHouse(view);
+                Enemy bear = view.Sim.Spawn(EnemyKind.Bear, new Vec2(goal.Pos.X - 9f, goal.Pos.Y));
+                bear.Goal = goal;
+                bear.MaxHp = 99999f;
+                bear.Hp = bear.MaxHp * 0.7f;
+                view.Sim.Player = new Vec2(goal.Pos.X - 3f, goal.Pos.Y - 7f);
+            }, true, false);
+            failures += SurvivorShot(dir, "h42_fire_balloon", view => view.Sim.Time > 3.4f && view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.FireBalloon && e.Phase > 0.5f), 1, false, Near(8f), 1, view =>
+            {
+                Structure goal = NearestHouse(view);
+                for (int k = 0; k < 2; k++)
+                {
+                    Enemy b = view.Sim.Spawn(EnemyKind.FireBalloon, new Vec2(goal.Pos.X + (k * 1.5f), goal.Pos.Y + 2.5f));
+                    b.Goal = goal;
+                    b.MaxHp = b.Hp = 9999f;
+                    b.Phase = -2.2f;
+                }
+                view.Sim.Player = new Vec2(goal.Pos.X - 4f, goal.Pos.Y - goal.Half.Y - 3f);
+            }, true, false);
+            failures += SurvivorShot(dir, "h44_raid", view => view.Sim.Raids.Count > 0 && view.Sim.Time > view.Sim.Raids[0].At + 1.2f, 1, false, view =>
+            {
+                Raid r = view.Sim.Raids.Count > 0 ? view.Sim.Raids[0] : null;
+                Vec2 p = view.Sim.Player;
+                view.Frame(r != null ? new Vector3((r.From.X + p.X) / 2f, (r.From.Y + p.Y) / 2f, 0f) : new Vector3(p.X, p.Y, 0f), 13f);
+            }, 1, null, true, true);
+            failures += SurvivorShot(dir, "h45_hwama", view => view.Sim.Boss != null && view.Sim.Time > SurvivorSim.FinaleAt + 4f, 1, true, view =>
+            {
+                Vec2 b = view.Sim.Boss != null ? view.Sim.Boss.Pos : view.Sim.Player;
+                view.Frame(new Vector3(b.X, b.Y + 1.5f, 0f), 12f);
+            }, 1, null, true, true);
+            failures += SurvivorShot(dir, "h46_hwama_down", view =>
+            {
+                if (view.Sim.Boss != null && !view.Sim.Boss.Dead && view.Sim.Time > SurvivorSim.FinaleAt + 3f) view.Sim.Kill(view.Sim.Boss);
+                return view.Sim.BossKilled;
+            }, 6, true, view => view.Frame(new Vector3(view.Sim.BossDownAt.X, view.Sim.BossDownAt.Y + 1f, 0f), 11f), 1, null, true, true);
+
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
         }
@@ -517,6 +596,12 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { id };
                 view.Sim.Choose(0);
             }
+        }
+
+        /// <summary>캡처 장면을 깨끗하게: 이 종류 말고 가장자리에서 새로 나온 몹은 지운다.</summary>
+        private static void Only(SurvivorView view, EnemyKind kind)
+        {
+            view.Sim.Enemies.RemoveAll(e => e.Kind != kind);
         }
 
         /// <summary>소방관을 가운데 두고 size 크기로 찍는다.</summary>

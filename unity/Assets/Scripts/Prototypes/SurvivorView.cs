@@ -571,6 +571,7 @@ namespace FireGame.Prototypes
             _overAge = 0f;
             _faceTaken = false;
             ResetArsenal();
+            ResetMobs();
             if (_help != null) _help.text = _sim.Guardian ? GuardianHelp() : _helpDefault;
             _guardShown = 0f;
             _alertAge = 99f;
@@ -1020,6 +1021,7 @@ namespace FireGame.Prototypes
         {
             ReactGuardian();
             ReactArsenal();
+            ReactMobs();
             int kills = 0;
             foreach (Hit h in _sim.Hits)
             {
@@ -1650,6 +1652,7 @@ namespace FireGame.Prototypes
             DrawEnemies();
             DrawShots();
             DrawArsenal(dt);
+            DrawMobsAfter(dt);
             DrawPlayer();
             DrawGear(dt);
             DrawStageAir();
@@ -1862,6 +1865,13 @@ namespace FireGame.Prototypes
                         }
                         break;
                     }
+                    case EnemyKind.Rat:
+                    case EnemyKind.Goblin:
+                    case EnemyKind.FireBalloon:
+                    case EnemyKind.Bear:
+                    case EnemyKind.Hwama:
+                        DrawRaider(e, at, i, hit, punch, flicker);
+                        break;
                     case EnemyKind.Gull:
                     {
                         // 불 갈매기(폭격기): 흰 갈매기가 불을 물고 지붕을 향해 내려오다(목표 6칸 안에서 급강하) 떨어뜨리고, 빈 몸으로 높이 바다로 돌아간다.
@@ -4759,6 +4769,7 @@ namespace FireGame.Prototypes
             _pools.Add(_auras);
             BuildGuardianPools();
             BuildArsenalPools();
+            BuildMobPools();
             _tank = AddPool("Tank", "Effects/glow", 10, true);
             _radar = new Pool(_world, "Radar", BeamSprite(), 10, Additive);
             _pools.Add(_radar);
@@ -5322,6 +5333,7 @@ namespace FireGame.Prototypes
         private void DrawEdgeArrows()
         {
             if (_sim.Outcome != SOutcome.Playing || _camera == null) return;
+            RaiderArrows();
             // 화면 밖에서 떠오는 풍등: 어느 쪽에서 오는지 보여 준다(쏘아 떨어뜨리러 갈 수 있게).
             foreach (Enemy e in _sim.Enemies)
             {
