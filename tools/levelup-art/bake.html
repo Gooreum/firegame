@@ -1,0 +1,155 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>levelup art bake</title></head>
+<body>
+<pre id="out"></pre>
+<!-- 2026-10-08 사용자가 승인한 레벨업 웹 캔버스 샘플(scratchpad/levelup)의 js를 손대지 않고 그대로 불러 그리기 함수로 스프라이트를 굽는다. -->
+<script src="base.js"></script>
+<script src="core.js"></script>
+<script src="items-a.js"></script>
+<script src="items-b.js"></script>
+<script src="items-c.js"></script>
+<script src="items-d.js"></script>
+<script src="items-e.js"></script>
+<script>
+'use strict';
+const lines = [];
+const T_ICON = 0.3;
+// 금속 글자 빛줄기(sx)가 글자 오른쪽 밖으로 빠지는 시각: (t*1.6 % 1.6)/1.2 ≈ 1.3 → 빛줄기 안 보임. Unity가 자기 빛줄기를 얹는다.
+const T_TEXT = 0.975;
+
+function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function emit(name, c) { lines.push(name + '|' + c.toDataURL('image/png')); }
+
+// 그림의 가운데에서 가장 먼 진한(알파>110, 옅은 빛 제외) 픽셀까지 거리(px). 아이콘을 칸의 80%에 맞추는 데 쓴다.
+function maxRadius(c) {
+  const g = c.getContext('2d'), d = g.getImageData(0, 0, c.width, c.height).data, cx = c.width / 2, cy = c.height / 2;
+  let m = 0;
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 110) m = Math.max(m, Math.hypot(x + .5 - cx, y + .5 - cy));
+  return m;
+}
+
+// 가운데에서 바깥으로 0이 되는 원형 가림(가산 빛이 칸 가장자리에서 잘리지 않게).
+function fadeEdge(c, inner) {
+  const g = c.getContext('2d'), cx = c.width / 2, cy = c.height / 2, R = Math.min(cx, cy);
+  g.save(); g.globalCompositeOperation = 'destination-in';
+  const m = g.createRadialGradient(cx, cy, R * inner, cx, cy, R - 1); m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = m; g.fillRect(0, 0, c.width, c.height); g.restore();
+}
+
+// ---------------------------------------------------------------- 아이콘 256×256
+// 샘플은 머리 위에 tierGlow(r=13)+icon(r=12)로 그린다. 선 굵기가 고정이라 g.scale로 키운다.
+const S = 256, ICON_R = 12, FILL = 0.4;   // 가운데에서 가장자리까지 80% → 반지름 0.4*256
+function drawIcon(it, lv, k, glow) {
+  const c = canvas(S, S), g = c.getContext('2d');
+  if (glow) {
+    // 등급 빛은 넓게 퍼지므로 따로 그려 가장자리에서 0으로 접고 깐다.
+    const gc = canvas(S, S), gg = gc.getContext('2d');
+    gg.translate(S / 2, S / 2); gg.scale(k, k); tierGlow(gg, 0, 0, ICON_R + 1, lv, T_ICON);
+    fadeEdge(gc, .55); g.drawImage(gc, 0, 0);
+  }
+  g.save(); g.translate(S / 2, S / 2); g.scale(k, k); it.icon(g, 0, 0, ICON_R, lv, T_ICON); g.restore();
+  // Lv6 아이콘의 옅은 고리·빛이 칸 밖으로 넘치면 잘린 자국이 남으니, 진한 몸(반지름 80%) 바깥만 0으로 접는다.
+  if (glow) fadeEdge(c, .86);
+  return c;
+}
+const IDS = ['hose', 'sprinkler', 'balloon', 'extinguisher', 'mine', 'foam', 'bubble', 'manhole', 'chain', 'whip', 'tank', 'boots', 'suit'];
+const scaleFor = {};
+for (const id of IDS.concat(['crew'])) {
+  const it = ITEMS.find(i => i.id === id); if (!it) throw new Error('item 없음: ' + id);
+  // 크기 재기: 배율 4로 그려 반지름을 재고, 두 레벨 중 큰 쪽이 80%에 오도록 배율을 정한다.
+  const probe = Math.max(maxRadius(drawIcon(it, 1, 4, false)), id === 'crew' ? 0 : maxRadius(drawIcon(it, 6, 4, false)));
+  const k = 4 * (S * FILL) / Math.max(1, probe);
+  scaleFor[id] = k;
+  if (id === 'crew') { emit('icon_crew', drawIcon(it, 1, k, false)); continue; }
+  emit(`icon_${id}_1`, drawIcon(it, 1, k, true));
+  emit(`icon_${id}_6`, drawIcon(it, 6, k, true));
+}
+
+// ---------------------------------------------------------------- 별 128×128
+// 샘플 별 r=4.4, 빛 반지름 r*2.2. 빛이 칸(반지름 64) 안에서 끝나도록 r=28(배율 6.36).
+for (const kind of ['blue', 'gold', 'rainbow', 'off']) {
+  const c = canvas(128, 128), g = c.getContext('2d'), k = 28 / 4.4;
+  g.translate(64, 64); g.scale(k, k); starShape(g, 0, 0, 4.4, kind, T_ICON);
+  emit('star_' + kind, c);
+}
+
+// ---------------------------------------------------------------- 금속 글자
+function textSprite(name, str, w, h, size, kind) {
+  const c = canvas(w, h), g = c.getContext('2d');
+  // 너비가 넘치면 글자 크기를 줄인다(테 두께 .34*size 포함).
+  g.font = `900 ${size}px "Apple SD Gothic Neo","Noto Sans KR",sans-serif`;
+  const tw = g.measureText(str).width + size * .4;
+  const s = Math.min(size, size * (w * .96) / tw);
+  metalText(g, str, w / 2, h / 2 - s * .03, s, kind, T_TEXT);
+  emit(name, c);
+}
+const TXT = [
+  ['txt_new', 'NEW!', 'silver'], ['txt_lv2', 'Lv2', 'silver'], ['txt_lv3', 'Lv3', 'silver'], ['txt_lv4', 'Lv4', 'silver'],
+  ['txt_lv5max', 'Lv5  MAX', 'gold'], ['txt_next_top', '다음은 최고급!', 'gold'], ['txt_top', '최고급!', 'gold'],
+  ['txt_crew', '구조대원 합류!', 'gold'], ['txt_allcrew', '전원 집결!', 'rainbow'], ['txt_phoenix', '불사조 부활!', 'rainbow'],
+];
+for (const [n, s, k] of TXT) textSprite(n, s, 512, 128, 64, k);
+for (const id of IDS) textSprite('name_' + id, ITEMS.find(i => i.id === id).evoName, 768, 128, 64, 'rainbow');
+
+// ---------------------------------------------------------------- 광선 64×512
+// 샘플 drawRays 쐐기: 아래 가운데(중심)에서 뾰족하게 시작해 위로 넓어진다. 흰색, 아래 알파 1 → 위 0. Unity가 색을 입힌다.
+{
+  const c = canvas(64, 512), g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 508, 0, 0); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.beginPath(); g.moveTo(32, 508); g.lineTo(1, 0); g.lineTo(63, 0); g.closePath(); g.fill();
+  emit('ray', c);
+}
+// ---------------------------------------------------------------- 꽃가루 32×16, 알갱이 64×64, 반짝 별 64×64
+{
+  const c = canvas(32, 16), g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.beginPath(); g.roundRect(1, 1, 30, 14, 4); g.fill();
+  emit('confetti', c);
+}
+{
+  const c = canvas(64, 64), g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 31); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.35, 'rgba(255,255,255,.75)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 31, 0, TAU); g.fill();
+  emit('mote', c);
+}
+{
+  // core.js 'star' 파티클: 8갈래(안쪽 .28r) + 가운데 흰 점(.25r). 흰색이라 별은 조금 옅게, 가운데는 꽉 차게.
+  const c = canvas(64, 64), g = c.getContext('2d'), r = 30;
+  g.translate(32, 32);
+  const gl = g.createRadialGradient(0, 0, 0, 0, 0, r * .6); gl.addColorStop(0, 'rgba(255,255,255,.5)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gl; g.beginPath(); g.arc(0, 0, r * .6, 0, TAU); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.82)';
+  g.beginPath(); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, rr = i % 2 ? r * .28 : r; g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } g.closePath(); g.fill();
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(0, 0, r * .25, 0, TAU); g.fill();
+  emit('spark_star', c);
+}
+
+// ---------------------------------------------------------------- 날개 512×256 (왼쪽 날개, 뿌리 = 오른쪽 가운데)
+// items-d.js drawWing(물 불사조 날개)과 같은 깃털 6장 모양. 샘플은 깃털마다 무지개 색(hue(t))이라
+// 여기서는 물 날개답게 파랑~하늘 색으로만 칠한다. side=-1로 왼쪽으로 펼친다.
+{
+  const c = canvas(512, 256), g = c.getContext('2d');
+  const span = 300, k = 1;
+  g.translate(500, 150); g.scale(-1.55, .62); g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 6; i++) {
+    const a = -.9 + i * .32, L = span * (1 - i * .09) * k, wdt = span * .2 * k;
+    const ex = Math.cos(a) * L, ey = Math.sin(a) * L * .8;
+    const gr = g.createLinearGradient(0, 0, ex, ey);
+    gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(.4, `hsla(${185 + i * 8},100%,72%,.7)`); gr.addColorStop(1, 'rgba(120,200,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(ex * .5 - ey * .3 * wdt / span * 4, ey * .5 - wdt, ex, ey); g.quadraticCurveTo(ex * .5, ey * .5 + wdt * .5, 0, 0); g.fill();
+  }
+  emit('wing', c);
+}
+
+// ---------------------------------------------------------------- 카드 판 128×160 (아이콘 없이)
+{
+  const c = canvas(128, 160), g = c.getContext('2d'), k = 3.9;
+  g.translate(64, 80); g.scale(k, k);
+  const gr = g.createLinearGradient(0, -18, 0, 18); gr.addColorStop(0, '#2f4f86'); gr.addColorStop(1, '#16274a');
+  g.fillStyle = gr; g.strokeStyle = '#bfe3ff'; g.lineWidth = 2; g.beginPath(); g.roundRect(-15, -18, 30, 36, 6); g.fill(); g.stroke();
+  emit('card_mini', c);
+}
+
+document.getElementById('out').textContent = lines.join('\n');
+</script>
+</body>
+</html>
