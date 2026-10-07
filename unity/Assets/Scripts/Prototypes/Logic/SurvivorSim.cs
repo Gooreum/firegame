@@ -37,6 +37,21 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>야시장: 풍등. 하늘을 천천히 떠서 점포 지붕에 내려앉아 불을 내고 타 없어진다. 쏘아 떨어뜨린다.</summary>
         SkyLantern,
+
+        /// <summary>마을: 불쥐. 떼로 한 줄, 앞 쥐를 따라 집으로 달려가 닿으면 불을 붙이고 사라진다.</summary>
+        Rat,
+
+        /// <summary>마을: 횃불 도깨비. 집 앞에 멈춰 머리 불을 키우고(예고) 지붕에 횃불을 던진다. 맞으면 예고가 끊긴다.</summary>
+        Goblin,
+
+        /// <summary>마을: 불풍선. 떠서 집 위로 가 퓨즈 뒤 터지며 둘레 집 여럿에 불을 낸다. 퓨즈 전에 터뜨리면 그냥 꺼진다.</summary>
+        FireBalloon,
+
+        /// <summary>마을(엘리트): 불곰. 습격을 이끈다. 집들을 밀고 지나가며 불을 내고, 잡으면 보물상자.</summary>
+        Bear,
+
+        /// <summary>마을(보스): 화마. 3:00 랜드마크에서 일어나 마을 한가운데로 걸으며 불쥐를 쏟는다.</summary>
+        Hwama,
     }
 
     public enum ShotKind
@@ -69,6 +84,12 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>채찍에 다시 맞기까지(초).</summary>
         public float WhipCool;
+
+        /// <summary>불쥐: 따라가는 앞 쥐(맨 앞이면 null).</summary>
+        public Enemy Leader;
+
+        /// <summary>불곰: 마지막으로 불을 낸 집(같은 집에 연달아 내지 않는다).</summary>
+        public Structure LastBurnt;
         public float Slowed;
         public float Dot;
 
@@ -1203,7 +1224,14 @@ namespace FireGame.Prototypes.Logic
                 case EnemyKind.Crab: e.MaxHp = 9f * scale; e.Speed = 1.1f; e.Radius = 0.5f; e.Touch = 10f; e.Xp = 4; e.Seeker = true; break;
                 // 풍등: 하늘을 떠서 점포 지붕에 내려앉는다. 닿아도 소방관을 안 태운다(Touch 0) — 떨어뜨려야 할 표적.
                 case EnemyKind.SkyLantern: e.MaxHp = 1.5f * scale; e.Speed = 0.9f; e.Radius = 0.35f; e.Touch = 0f; e.Xp = 2; e.Seeker = true; break;
+                // 마을 몹(수호자): 나보다 집을 노린다. 움직임은 MoveRaider.
+                case EnemyKind.Rat: e.MaxHp = 1.5f * scale; e.Speed = 3.6f; e.Radius = 0.28f; e.Touch = SmallTouch; e.Xp = 1; break;
+                case EnemyKind.Goblin: e.MaxHp = 8f * scale; e.Speed = 1.6f; e.Radius = 0.45f; e.Touch = 8f; e.Xp = 4; break;
+                case EnemyKind.FireBalloon: e.MaxHp = 4f * scale; e.Speed = 1f; e.Radius = 0.5f; e.Touch = 0f; e.Xp = 3; break;
+                case EnemyKind.Bear: e.MaxHp = 60f * scale; e.Speed = 2f; e.Radius = 0.9f; e.Touch = 15f; e.Xp = 20; e.Heavy = true; break;
+                case EnemyKind.Hwama: e.MaxHp = BossHp; e.Speed = 0.9f; e.Radius = 1.8f; e.Touch = 25f; e.Xp = 100; e.Heavy = true; break;
             }
+            if (IsRaider(kind)) RaidersSpawned++;
             e.Hp = e.MaxHp;
             Enemies.Add(e);
             return e;
@@ -1227,6 +1255,7 @@ namespace FireGame.Prototypes.Logic
         private void ClearSignals()
         {
             ClearWeaponSignals();
+            ClearMobSignals();
             RuinSpat.Clear();
             Hits.Clear();
             Footprints.Clear();
@@ -1389,11 +1418,15 @@ namespace FireGame.Prototypes.Logic
                 Report();
             }
 
+            if (Guardian && Reports) DirectTownMobs();
+
             float[] bigTimes = BigTimes;
             while (Reports && _bigDone < bigTimes.Length && Time >= bigTimes[_bigDone])
             {
                 _bigDone++;
-                StartBigReport();
+                // 수호자 마을: 큰 신고 대신 습격(가장자리에서 몰려오는 무리, 강제 없음).
+                if (Guardian) StartRaid();
+                else StartBigReport();
             }
 
             if (Reports && !Finale && Time >= FinaleAt) StartFinale();
@@ -1428,7 +1461,8 @@ namespace FireGame.Prototypes.Logic
                 // 2단계부터: 큰 불 고리가 소방관을 에워싼다. 서서 끄지 못하게 하는 몸 압박(3:00의 장비는 불만으론 못 누른다).
                 _ringClock -= Dt;
                 // 버티기 중엔 쉰다: 링 파도가 이미 몸 압박이다.
-                if (FinalePressure >= FinaleRingFrom && _ringClock <= 0f)
+                // 화마가 살아 있는 동안 큰 불 고리는 쉰다: 보스가 그 압력을 맡는다.
+                if (FinalePressure >= FinaleRingFrom && _ringClock <= 0f && (Boss == null || Boss.Dead))
                 {
                     _ringClock = FinaleRingEvery;
                     int ring = FinaleRingCount;
@@ -1494,6 +1528,7 @@ namespace FireGame.Prototypes.Logic
             mark.Wet = 0f;
             Ignite(mark, 1f);
             mark.Residents += FinalePeople;
+            if (Guardian) RaiseBoss();
             switch (Stage.Finale)
             {
                 case FinaleKind.FireFront:
@@ -1718,6 +1753,8 @@ namespace FireGame.Prototypes.Logic
             float shore = sea + Stage.GullShare + Stage.CrabShare;
             if (Time >= PopperFrom && r < shore + Stage.PopperShare) return EnemyKind.Popper;
             if (Time >= PopperFrom && r < shore + Stage.PopperShare + Stage.LanternShare) return EnemyKind.SkyLantern;
+            // 마을(수호자): 55초부터 횃불 도깨비가 섞인다.
+            if (r > 1f - GoblinShare) return EnemyKind.Goblin;
             return EnemyKind.Ember;
         }
 
@@ -1870,6 +1907,15 @@ namespace FireGame.Prototypes.Logic
                 {
                     e.Captured -= Dt;
                     if (e.Captured <= 0f) PopBubble(e);
+                    continue;
+                }
+                if (IsRaider(e.Kind))
+                {
+                    if (MoveRaider(e))
+                    {
+                        e.Knock.X *= knockDecay;
+                        e.Knock.Y *= knockDecay;
+                    }
                     continue;
                 }
 
@@ -3325,6 +3371,8 @@ namespace FireGame.Prototypes.Logic
             if (crit) amount *= 2f;
             e.Hp -= amount;
             e.HitFlash = 0.08f;
+            // 도깨비는 맞으면 던지려던 횃불을 놓친다(예고가 처음부터).
+            if (e.Kind == EnemyKind.Goblin) e.Phase = 0f;
             float heavy = KnockScale(e);
             e.Knock.X += knock.X * heavy;
             e.Knock.Y += knock.Y * heavy;
@@ -3352,6 +3400,7 @@ namespace FireGame.Prototypes.Logic
             Kills++;
             ComboAdd(1);
             DropGem(e.Pos, e.Xp * ComboMult);
+            if (IsRaider(e.Kind)) RaiderKilled(e);
             if (e.Kind == EnemyKind.Blaze)
             {
                 BurningGround.Add(new Puddle { Pos = e.Pos, Radius = 0.9f, Life = 3f, MaxLife = 3f });

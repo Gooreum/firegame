@@ -206,54 +206,7 @@ namespace FireGame.Prototypes.Tests
             return -1f;
         }
 
-        // --- 링 없음(2026-10-07 삭제: 이동을 뺏는 강제는 금지) ---
-
-        /// <summary>대형 신고까지 시간을 보내고(적 없이) 신고 건물을 돌려준다.</summary>
-        private static Structure ToBigReport(SurvivorSim sim)
-        {
-            while (sim.BigReport == null && sim.Time < 60f)
-            {
-                sim.Enemies.Clear();
-                if (sim.PendingChoices != null) sim.Choose(0);
-                sim.Step(0f, 0f);
-            }
-            sim.Enemies.Clear();
-            return sim.BigReport;
-        }
-
-        [Fact]
-        public void BigReport_HasNoRing_TheFirefighterWalksAwayFreely()
-        {
-            var sim = new SurvivorSim(1, 1);
-            Structure big = ToBigReport(sim);
-            Assert.NotNull(big);
-            sim.Player = new Vec2(big.Pos.X, big.Pos.Y - big.Half.Y - 2f);
-            sim.Step(0f, 0f);
-            Run(sim, 1f);
-            // 옛 링 반경(8칸) 밖 한 걸음: 끌려 돌아오지 않는다.
-            Vec2 before = sim.Player;
-            Run(sim, 1f, 0f, -1f);
-            Assert.True(sim.Player.Y < before.Y - 1f, "걸어 나가야: " + before.Y + " → " + sim.Player.Y);
-        }
-
-        [Fact]
-        public void BigReport_WaterWorksFromAfar()
-        {
-            var sim = new SurvivorSim(1, 1);
-            Structure big = ToBigReport(sim);
-            float fire = big.Fire;
-            // 8칸 아래에서 쥐고 3초 쏜다: 봉인이 없으니 먹힌다.
-            sim.Player = new Vec2(big.Pos.X, big.Pos.Y - big.Half.Y - 8f);
-            for (int i = 0; i < 180; i++)
-            {
-                sim.Enemies.Clear();
-                if (sim.PendingChoices != null) sim.Choose(0);
-                sim.Spraying = true;
-                sim.Aim = new Vec2(big.Pos.X - sim.Player.X, big.Pos.Y - sim.Player.Y);
-                sim.Step(0f, 0f);
-            }
-            Assert.True(big.Fire < fire, "멀리서 쏜 물도 먹혀야: " + fire + " → " + big.Fire);
-        }
+        // 링·봉인 버티기는 2026-10-07에 없앴다(이동을 뺏는 강제는 금지). 큰 신고 자리의 습격은 MobTests.
 
         // --- 생명줄 ---
 
