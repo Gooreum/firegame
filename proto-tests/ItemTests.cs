@@ -5,8 +5,8 @@ using Xunit;
 namespace FireGame.Prototypes.Tests
 {
     /// <summary>
-    /// 아이템 재구성: 모든 아이템이 건물 불 끄기·사람 구하기·현장에 빨리 가기를 돕는다.
-    /// 무기 6 중 4칸, 보조 6 중 4칸, 무기마다 짝 보조로 진화.
+    /// 아이템 표(2026-10-07): 무기 10 · 보조 3 · 진화 10, 무기·보조 합쳐 4칸, 무기마다 짝 보조로 진화.
+    /// 새 무기 9종의 동작은 ArsenalTests가 본다.
     /// </summary>
     public class ItemTests
     {
@@ -35,16 +35,9 @@ namespace FireGame.Prototypes.Tests
             for (int i = 0; i < ticks; i++)
             {
                 sim.Hp = sim.MaxHp;
-                if (sim.PendingChoices != null) sim.Choose(NoPartner(sim.PendingChoices));
+                if (sim.PendingChoices != null) sim.Choose(0);
                 sim.Step(0f, 0f);
             }
-        }
-
-        /// <summary>도중 레벨업에선 대원 카드를 피한다: 대원이 구하면 드론·도끼 같은 다른 아이템의 구조를 가린다.</summary>
-        private static int NoPartner(List<UpgradeId> cards)
-        {
-            int k = cards.FindIndex(c => c != UpgradeId.Partner && c != UpgradeId.Squad);
-            return k >= 0 ? k : 0;
         }
 
         private static Structure Shop(SurvivorSim sim, float dx, float dy, int residents = 0)
@@ -69,66 +62,92 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Items_AreSixWeaponsThreePassivesSixEvolutions()
+        public void Items_AreTenWeaponsThreePassivesTenEvolutions()
         {
-            UpgradeId[] weapons = { UpgradeId.Hose, UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Turret };
+            UpgradeId[] weapons = { UpgradeId.Hose, UpgradeId.Dog, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Mine, UpgradeId.Foam, UpgradeId.Bubble, UpgradeId.Manhole, UpgradeId.Ladder, UpgradeId.Whip };
             UpgradeId[] passives = { UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit };
-            UpgradeId[] evolutions = { UpgradeId.Cannon, UpgradeId.Squad, UpgradeId.AirBomb, UpgradeId.RescueDrone, UpgradeId.WaterWall, UpgradeId.RescuePost };
+            var pairs = new Dictionary<UpgradeId, int>();
             foreach (UpgradeId id in weapons)
             {
                 Assert.True(Loadout.IsWeapon(id) && !Loadout.IsEvolution(id), id + "는 무기");
-                Assert.NotNull(Loadout.EvolutionOf(id));
+                UpgradeId? evo = Loadout.EvolutionOf(id);
+                Assert.NotNull(evo);
+                Assert.True(Loadout.IsEvolution(evo.Value) && Loadout.IsWeapon(evo.Value));
+                Assert.Equal(id, Loadout.BaseOf(evo.Value));
+                UpgradeId pair = Loadout.PairOf(evo.Value);
+                Assert.Contains(pair, passives);
+                pairs[pair] = pairs.TryGetValue(pair, out int n) ? n + 1 : 1;
             }
-            foreach (UpgradeId id in passives) Assert.True(Loadout.IsPassive(id) && !Loadout.IsEvolution(id), id + "는 보조");
-            // 보조는 셋뿐: enum에서 IsPassive인 것은 이 셋이 전부다.
-            for (int i = 0; i <= (int)UpgradeId.Heal; i++)
+            // 짝 보조: 펌프 넷, 장화 셋, 방화복 셋.
+            Assert.Equal(4, pairs[UpgradeId.Tank]);
+            Assert.Equal(3, pairs[UpgradeId.Boots]);
+            Assert.Equal(3, pairs[UpgradeId.Suit]);
+            int evolutions = 0;
+            for (int i = 0; i < (int)UpgradeId.Heal; i++)
             {
                 var id = (UpgradeId)i;
                 Assert.Equal(System.Array.IndexOf(passives, id) >= 0, Loadout.IsPassive(id));
+                Assert.True(Loadout.IsWeapon(id) || Loadout.IsPassive(id), id + "는 무기도 보조도 아니다");
+                if (Loadout.IsEvolution(id)) evolutions++;
             }
-            // 진화 짝: 보조 셋이 무기 둘씩 맡는다.
-            Assert.Equal(UpgradeId.Tank, Loadout.PairOf(UpgradeId.Cannon));
-            Assert.Equal(UpgradeId.Tank, Loadout.PairOf(UpgradeId.AirBomb));
-            Assert.Equal(UpgradeId.Boots, Loadout.PairOf(UpgradeId.Squad));
-            Assert.Equal(UpgradeId.Boots, Loadout.PairOf(UpgradeId.RescueDrone));
-            Assert.Equal(UpgradeId.Suit, Loadout.PairOf(UpgradeId.WaterWall));
-            Assert.Equal(UpgradeId.Suit, Loadout.PairOf(UpgradeId.RescuePost));
-            foreach (UpgradeId id in evolutions)
-            {
-                Assert.True(Loadout.IsEvolution(id));
-                Assert.Contains(Loadout.BaseOf(id), weapons);
-            }
-            Assert.Equal(3, Loadout.WeaponSlots);
-            Assert.Equal(2, Loadout.PassiveSlots);
+            Assert.Equal(10, evolutions);
+            Assert.Equal(4, Loadout.Slots);
         }
 
         [Fact]
-        public void Loadout_HoldsAtMostTwoPassives()
+        public void Loadout_HoldsFourItems_WeaponsAndPassivesTogether()
         {
             var l = new Loadout();
+            l.Add(UpgradeId.Hose);
+            l.Add(UpgradeId.Whip);
             l.Add(UpgradeId.Tank);
-            Assert.True(l.CanTake(UpgradeId.Boots), "보조 하나일 땐 둘째를 들 수 있어야 한다");
-            l.Add(UpgradeId.Boots);
-            Assert.Equal(2, l.PassiveCount);
-            // 둘을 들면 올릴 수는 있어도 새로 들 보조는 없다: 셋 중 둘을 고른다.
+            Assert.True(l.CanTake(UpgradeId.Dog), "셋일 땐 넷째를 들 수 있어야 한다");
+            Assert.True(l.CanTake(UpgradeId.Suit), "넷째는 보조여도 된다");
+            l.Add(UpgradeId.Suit);
+            Assert.Equal(4, l.WeaponCount + l.PassiveCount);
+            // 넷을 들면 올릴 수는 있어도 새로 들 것은 없다.
+            Assert.True(l.CanTake(UpgradeId.Whip));
             Assert.True(l.CanTake(UpgradeId.Tank));
-            Assert.False(l.CanTake(UpgradeId.Suit));
-            int passivesOffered = 0;
-            for (int i = 0; i <= (int)UpgradeId.Heal; i++)
+            for (int i = 0; i < (int)UpgradeId.Heal; i++)
             {
                 var id = (UpgradeId)i;
-                if (Loadout.IsPassive(id) && l.Level(id) == 0 && l.CanTake(id)) passivesOffered++;
+                if (Loadout.IsEvolution(id) || l.Level(id) > 0) continue;
+                Assert.False(l.CanTake(id), "네 칸이 찼는데 " + id + "를 새로 들 수 있다");
             }
-            Assert.Equal(0, passivesOffered);
+            var rng = new FireGame.Core.Sim.Rng(7);
+            for (int k = 0; k < 30; k++)
+            {
+                foreach (UpgradeId id in SurvivorUpgrades.Roll(l, 5, ref rng)) Assert.True(l.Level(id) > 0, "넷 찬 뒤 새 카드 " + id);
+            }
+        }
+
+        [Fact]
+        public void Loadout_WithThreeItems_CanStillPickANewOne()
+        {
+            var l = new Loadout();
+            l.Add(UpgradeId.Hose);
+            l.Add(UpgradeId.Mine);
+            l.Add(UpgradeId.Boots);
+            var rng = new FireGame.Core.Sim.Rng(3);
+            bool fresh = false;
+            for (int k = 0; k < 30 && !fresh; k++)
+            {
+                foreach (UpgradeId id in SurvivorUpgrades.Roll(l, 5, ref rng)) fresh |= l.Level(id) == 0;
+            }
+            Assert.True(fresh, "셋일 땐 새 아이템 카드가 나와야 한다");
         }
 
         [Theory]
         [InlineData(UpgradeId.Cannon)]
-        [InlineData(UpgradeId.Squad)]
-        [InlineData(UpgradeId.AirBomb)]
-        [InlineData(UpgradeId.RescueDrone)]
-        [InlineData(UpgradeId.WaterWall)]
-        [InlineData(UpgradeId.RescuePost)]
+        [InlineData(UpgradeId.DogPack)]
+        [InlineData(UpgradeId.BalloonStorm)]
+        [InlineData(UpgradeId.Tornado)]
+        [InlineData(UpgradeId.IceField)]
+        [InlineData(UpgradeId.Avalanche)]
+        [InlineData(UpgradeId.BubbleFall)]
+        [InlineData(UpgradeId.Waterline)]
+        [InlineData(UpgradeId.LadderBridge)]
+        [InlineData(UpgradeId.Whirl)]
         public void MaxWeaponPlusPair_OffersItsEvolution_ThatTakesTheWeaponSlot(UpgradeId evolution)
         {
             SurvivorSim sim = Quiet();
@@ -137,128 +156,6 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(0, sim.Build.Level(Loadout.BaseOf(evolution)));
             Assert.True(sim.Build.Has(Loadout.BaseOf(evolution)));
             Assert.False(sim.Build.CanTake(Loadout.BaseOf(evolution)), "진화한 무기를 다시 얻으면 안 된다");
-        }
-
-        [Fact]
-        public void WaterBomb_GoesForTheBurningBuildingFirst()
-        {
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 6f, 0f);
-            sim.Ignite(shop, 0.8f);
-            sim.Spawn(EnemyKind.Blaze, new Vec2(sim.Player.X - 5f, sim.Player.Y));
-            Take(sim, UpgradeId.WaterBomb);
-            Shot bomb = null;
-            for (int i = 0; i < 60 * 3 && bomb == null; i++)
-            {
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-                bomb = sim.Shots.Find(s => s.Kind == ShotKind.Bomb);
-            }
-            Assert.NotNull(bomb);
-            Assert.Equal(shop.Pos, bomb.Target);
-            float before = shop.Fire;
-            Run(sim, 0.6f);
-            Assert.True(shop.Fire < before, "물폭탄이 건물 불을 못 줄였다");
-        }
-
-        /// <summary>드론 level로 seconds 동안 돌며 물폭탄을 몇 번 떨어뜨렸나. shop은 9칸 앞 불 0.8 가게.</summary>
-        private static int DroneDrops(int level, float seconds, out Structure shop, out SurvivorSim sim)
-        {
-            sim = Quiet();
-            shop = Shop(sim, 9f, 0f);
-            sim.Ignite(shop, 0.8f);
-            Take(sim, UpgradeId.Drone, level);
-            int drops = 0;
-            int ticks = (int)(seconds / SurvivorSim.Dt);
-            for (int i = 0; i < ticks; i++)
-            {
-                sim.Hp = sim.MaxHp;
-                if (sim.PendingChoices != null) sim.Choose(NoPartner(sim.PendingChoices));
-                sim.Step(0f, 0f);
-                drops += sim.DroneDrops.Count;
-            }
-            return drops;
-        }
-
-        [Fact]
-        public void PatrolDrone_DivesAndDropsWater()
-        {
-            SurvivorSim control = Quiet();
-            Structure c = Shop(control, 9f, 0f);
-            control.Ignite(c, 0.8f);
-            Run(control, 4f);
-
-            int drops = DroneDrops(1, 4f, out Structure shop, out SurvivorSim sim);
-            Assert.Same(shop, sim.DroneTarget);
-            Assert.True(drops >= 1, "4초 동안 물폭탄을 한 번도 안 떨어뜨렸다");
-            Assert.True(shop.Fire < c.Fire - 0.15f, "드론 불 " + shop.Fire + " / 없을 때 " + c.Fire);
-
-            // 드론이 많을수록 자주 떨어뜨린다.
-            int many = DroneDrops(5, 4f, out _, out _);
-            Assert.True(many > drops, "Lv5 투하 " + many + "회가 Lv1 " + drops + "회보다 많아야 한다");
-        }
-
-        [Fact]
-        public void PatrolDrone_WithoutAFire_CirclesThePlayer_AndDropsNothing()
-        {
-            int drops = 0;
-            SurvivorSim sim = Quiet();
-            Take(sim, UpgradeId.Drone);
-            for (int i = 0; i < 120; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Step(0f, 0f);
-                drops += sim.DroneDrops.Count;
-            }
-            Assert.Null(sim.DroneTarget);
-            Assert.Equal(0, drops);
-            Assert.True(sim.Drones[0].DistanceTo(sim.Player) < 4f);
-        }
-
-        [Fact]
-        public void Partner_StaysOne_AndDousesWhileRescuing()
-        {
-            SurvivorSim control = Quiet();
-            Structure c = Shop(control, 12f, 0f, 3);
-            control.Ignite(c, 0.5f);
-            Run(control, 8f);
-
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 12f, 0f, 3);
-            sim.Ignite(shop, 0.5f);
-            Take(sim, UpgradeId.Partner);
-            Run(sim, 8f);
-            Assert.Single(sim.Partners);
-            Assert.True(sim.Rescued >= 1, "대원이 못 구했다");
-            Assert.True(shop.Fire < c.Fire, "대원이 불을 안 줄였다");
-
-            // 레벨이 올라도 한 명이다(docs §16): 사람 수 대신 달리기·구조 배율이 오른다.
-            Take(sim, UpgradeId.Partner, 2);
-            Run(sim, 0.1f);
-            Assert.Single(sim.Partners);
-            Assert.Equal(1.25f, sim.PartnerSpeedScale);
-            Take(sim, UpgradeId.Partner, 2);
-            Run(sim, 0.1f);
-            Assert.Single(sim.Partners);
-            Assert.Equal(1.5f, sim.PartnerRescueBoost);
-        }
-
-        [Fact]
-        public void Turret_StandsWhereYouWere_AndShootsNearbyFire()
-        {
-            SurvivorSim sim = Quiet();
-            Vec2 spot = sim.Player;
-            Enemy blaze = sim.Spawn(EnemyKind.Blaze, new Vec2(spot.X + 2f, spot.Y));
-            blaze.Speed = 0f;
-            Take(sim, UpgradeId.Turret);
-            for (int i = 0; i < 60; i++)
-            {
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-            }
-            Assert.Single(sim.Turrets);
-            Assert.True(sim.Turrets[0].Pos.DistanceTo(spot) < 0.1f);
-            Assert.True(blaze.Hp < blaze.MaxHp || blaze.Dead, "포탑이 곁 불을 안 쐈다");
         }
 
         /// <summary>펌프 level로 세기 1.0 가게에 물대포를 쏴 첫 증기 폭발까지 걸린 틱. 폭발 틱에 dx칸 밖 불씨가 맞았는지도 돌려준다.</summary>
@@ -328,12 +225,22 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Describe_MentionsTheVisibleAction()
+        public void Describe_ShowsTheVisibleChange_NotPercentages()
         {
-            Assert.Contains("투하", SurvivorUpgrades.Describe(UpgradeId.Drone, 1));
-            Assert.Contains("물줄기 +25%", SurvivorUpgrades.Describe(UpgradeId.Partner, 4));
-            Assert.DoesNotContain("구조", SurvivorUpgrades.Describe(UpgradeId.Partner, 4));
-            foreach (int lv in new[] { 2, 3, 4, 5 }) Assert.Contains("지속 +1초", SurvivorUpgrades.Describe(UpgradeId.Turret, lv));
+            for (int i = 0; i < (int)UpgradeId.Heal; i++)
+            {
+                var id = (UpgradeId)i;
+                for (int lv = 1; lv <= Loadout.MaxLevelOf(id); lv++)
+                {
+                    string text = SurvivorUpgrades.Describe(id, lv);
+                    Assert.False(string.IsNullOrEmpty(text), id + " Lv" + lv);
+                    Assert.DoesNotContain("%", text);
+                    Assert.NotEqual("응급 처치", SurvivorUpgrades.Name(id));
+                }
+            }
+            Assert.Contains("2마리", SurvivorUpgrades.Describe(UpgradeId.Dog, 3));
+            Assert.Contains("두 갈래", SurvivorUpgrades.Describe(UpgradeId.Whip, 3));
+            Assert.Contains("세 방향", SurvivorUpgrades.Describe(UpgradeId.Ladder, 5));
             Assert.Contains("증기", SurvivorUpgrades.Describe(UpgradeId.Tank, 1));
             Assert.Contains("불 바닥", SurvivorUpgrades.Describe(UpgradeId.Boots, 1));
             Assert.Contains("튕겨", SurvivorUpgrades.Describe(UpgradeId.Suit, 1));
@@ -396,74 +303,6 @@ namespace FireGame.Prototypes.Tests
             plain.Step(0f, 0f);
             Assert.Empty(plain.SuitBounces);
             Assert.Equal(0f, e2.Knock.X);
-        }
-
-        [Fact]
-        public void Squad_FieldsTwoPartners()
-        {
-            SurvivorSim sim = Quiet();
-            Evolve(sim, UpgradeId.Squad);
-            Run(sim, 0.1f);
-            // 넷이면 사람 구하기가 플레이어 일이 아니게 됐다: 분대는 둘, 대신 물·구조가 두 배.
-            Assert.Equal(2, sim.Partners.Count);
-            Assert.Equal(2f, sim.PartnerRescueBoost);
-            Assert.Equal(1.3f, sim.PartnerSpeedScale);
-        }
-
-        [Fact]
-        public void AirBomb_HitsBurningBuildingsAnywhere()
-        {
-            SurvivorSim sim = Quiet();
-            Evolve(sim, UpgradeId.AirBomb);
-            Structure far = Shop(sim, 25f, 20f);
-            sim.Ignite(far, 0.8f);
-            bool hit = false;
-            for (int i = 0; i < 60 * 4 && !hit; i++)
-            {
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-                hit = sim.AirBlasts.Exists(p => p.DistanceTo(far.Pos) < 0.1f);
-            }
-            Assert.True(hit, "멀리 불난 건물에 소화탄이 안 떨어졌다");
-        }
-
-        [Fact]
-        public void RescueDrone_LiftsPeopleOut()
-        {
-            SurvivorSim sim = Quiet();
-            Evolve(sim, UpgradeId.RescueDrone);
-            // 큰 불: 드론이 끄기 전에 먼저 끌어올리는 걸 본다(불이 꺼지면 갇힌 사람도 풀린다).
-            Structure shop = Shop(sim, 8f, 0f, 2);
-            sim.Ignite(shop, 1f);
-            Run(sim, 4f);
-            Assert.True(sim.Rescued >= 1, "구조 드론이 한 명도 못 구했다");
-            Assert.True(shop.Door.DistanceTo(sim.Player) > SurvivorSim.RescueRange);
-            Assert.Empty(sim.Partners);
-        }
-
-        [Fact]
-        public void WaterWall_IsABiggerRing()
-        {
-            SurvivorSim sim = Quiet();
-            Take(sim, UpgradeId.Curtain);
-            float ring = sim.CurtainRadiusNow;
-            Evolve(sim, UpgradeId.WaterWall);
-            Assert.True(sim.CurtainRadiusNow > ring + 2f);
-        }
-
-        [Fact]
-        public void RescuePost_StopsSmokeNearTheTurret()
-        {
-            SurvivorSim sim = Quiet();
-            Evolve(sim, UpgradeId.RescuePost);
-            Structure shop = Shop(sim, 0f, 5f, 1);
-            sim.Ignite(shop, 1f);
-            shop.Integrity = 100f;
-            // 소방관은 가만히 서 있고(포탑이 여기 선다), 문 앞엔 안 간다.
-            sim.Player = new Vec2(shop.Pos.X + 3.5f, shop.Pos.Y - 2f);
-            Run(sim, SurvivorSim.SmokeTime + 5f);
-            Assert.Equal(0, sim.CiviliansLost);
-            Assert.Equal(1, shop.Residents);
         }
 
     }

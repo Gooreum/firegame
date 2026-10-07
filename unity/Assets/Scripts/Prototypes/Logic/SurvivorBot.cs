@@ -11,10 +11,9 @@ namespace FireGame.Prototypes.Logic
     {
         private static readonly UpgradeId[] Priority =
         {
-            UpgradeId.Cannon, UpgradeId.Squad, UpgradeId.AirBomb, UpgradeId.RescueDrone, UpgradeId.WaterWall, UpgradeId.RescuePost,
-            UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Hose,
-            UpgradeId.Tank, UpgradeId.Drone, UpgradeId.WaterBomb, UpgradeId.Turret,
-            UpgradeId.Suit, UpgradeId.Boots,
+            UpgradeId.Cannon, UpgradeId.DogPack, UpgradeId.BalloonStorm, UpgradeId.Tornado, UpgradeId.IceField, UpgradeId.Avalanche, UpgradeId.BubbleFall, UpgradeId.Waterline, UpgradeId.LadderBridge, UpgradeId.Whirl,
+            UpgradeId.Hose, UpgradeId.Whip, UpgradeId.Dog, UpgradeId.Ladder, UpgradeId.Manhole, UpgradeId.Foam, UpgradeId.Mine, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Bubble,
+            UpgradeId.Tank, UpgradeId.Suit, UpgradeId.Boots,
         };
 
         private readonly SurvivorSim _sim;

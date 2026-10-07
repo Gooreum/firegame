@@ -33,16 +33,16 @@ namespace FireGame.Prototypes.Tests
         {
             SurvivorSim sim = Quiet();
             int maxedSignals = 0;
-            for (int guard = 0; guard < 60 && sim.Build.Level(UpgradeId.WaterBomb) < Loadout.MaxLevel; guard++)
+            for (int guard = 0; guard < 60 && sim.Build.Level(UpgradeId.Whip) < Loadout.MaxLevel; guard++)
             {
-                int before = sim.Build.Level(UpgradeId.WaterBomb);
-                UpgradeId pick = LevelUp(sim, UpgradeId.WaterBomb);
-                bool maxedNow = pick == UpgradeId.WaterBomb && before == Loadout.MaxLevel - 1;
-                if (maxedNow) Assert.Equal(UpgradeId.WaterBomb, sim.JustMaxed);
-                else if (sim.JustMaxed == UpgradeId.WaterBomb) Assert.Fail("물폭탄 Lv" + (before + 1) + "에서 MAX 신호가 왔다");
-                if (sim.JustMaxed == UpgradeId.WaterBomb) maxedSignals++;
+                int before = sim.Build.Level(UpgradeId.Whip);
+                UpgradeId pick = LevelUp(sim, UpgradeId.Whip);
+                bool maxedNow = pick == UpgradeId.Whip && before == Loadout.MaxLevel - 1;
+                if (maxedNow) Assert.Equal(UpgradeId.Whip, sim.JustMaxed);
+                else if (sim.JustMaxed == UpgradeId.Whip) Assert.Fail("채찍 Lv" + (before + 1) + "에서 MAX 신호가 왔다");
+                if (sim.JustMaxed == UpgradeId.Whip) maxedSignals++;
             }
-            Assert.Equal(Loadout.MaxLevel, sim.Build.Level(UpgradeId.WaterBomb));
+            Assert.Equal(Loadout.MaxLevel, sim.Build.Level(UpgradeId.Whip));
             Assert.Equal(1, maxedSignals);
             sim.Step(0f, 0f);
             Assert.Null(sim.JustMaxed);

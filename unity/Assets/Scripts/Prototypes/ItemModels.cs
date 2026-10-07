@@ -20,48 +20,6 @@ namespace FireGame.Prototypes
         private static readonly Dictionary<Color, Material> Mats = new Dictionary<Color, Material>();
         private static Material _template;
 
-        /// <summary>드론: 빨간 몸체 + 흰 덮개 + 대각 팔 + 네 날개(자식 "Rotor0..3") + 배 밑 물통. 폭 약 1칸.</summary>
-        public static GameObject Drone(Transform parent)
-        {
-            GameObject root = Root("DroneModel", parent);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0f, 0f), new Vector3(0.46f, 0.14f, 0.46f), FireRed);
-            Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.08f, 0f), new Vector3(0.3f, 0.16f, 0.3f), Paint);
-            Part(PrimitiveType.Sphere, root, new Vector3(0f, -0.13f, 0f), new Vector3(0.26f, 0.2f, 0.26f), Water);
-            Part(PrimitiveType.Cube, root, Vector3.zero, new Vector3(1.05f, 0.05f, 0.08f), Dark, new Vector3(0f, 45f, 0f));
-            Part(PrimitiveType.Cube, root, Vector3.zero, new Vector3(1.05f, 0.05f, 0.08f), Dark, new Vector3(0f, -45f, 0f));
-            for (int k = 0; k < 4; k++)
-            {
-                float a = (45f + (k * 90f)) * Mathf.Deg2Rad;
-                var at = new Vector3(Mathf.Cos(a) * 0.37f, 0.07f, Mathf.Sin(a) * 0.37f);
-                Part(PrimitiveType.Cylinder, root, at, new Vector3(0.09f, 0.05f, 0.09f), Dark);
-                Rotor(root, "Rotor" + k, at + new Vector3(0f, 0.06f, 0f), 0.42f, 0.05f, Paint);
-            }
-            return root;
-        }
-
-        /// <summary>방수 포탑: 받침 + 세 다리 + 빨간 물탱크 + 돌아가는 머리(자식 "Head", 앞 +Z로 포신). 높이 약 1.1칸.</summary>
-        public static GameObject Turret(Transform parent)
-        {
-            GameObject root = Root("TurretModel", parent);
-            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.05f, 0f), new Vector3(0.8f, 0.05f, 0.8f), Dark);
-            for (int k = 0; k < 3; k++)
-            {
-                float deg = k * 120f;
-                float a = deg * Mathf.Deg2Rad;
-                Part(PrimitiveType.Cube, root, new Vector3(Mathf.Sin(a) * 0.22f, 0.3f, Mathf.Cos(a) * 0.22f), new Vector3(0.06f, 0.5f, 0.06f), Steel, new Vector3(-20f, deg, 0f));
-            }
-            Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.6f, 0f), new Vector3(0.5f, 0.46f, 0.5f), FireRed);
-            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.6f, 0f), new Vector3(0.52f, 0.03f, 0.52f), Paint);
-            var head = new GameObject("Head");
-            head.transform.SetParent(root.transform, false);
-            head.transform.localPosition = new Vector3(0f, 0.88f, 0f);
-            Part(PrimitiveType.Sphere, head, Vector3.zero, new Vector3(0.24f, 0.2f, 0.24f), Steel);
-            // 원기둥은 Y축으로 길다: X로 90도 눕혀 앞(+Z)을 보게 한다.
-            Part(PrimitiveType.Cylinder, head, new Vector3(0f, 0f, 0.32f), new Vector3(0.11f, 0.26f, 0.11f), Steel, new Vector3(90f, 0f, 0f));
-            Part(PrimitiveType.Cylinder, head, new Vector3(0f, 0f, 0.6f), new Vector3(0.15f, 0.04f, 0.15f), Water, new Vector3(90f, 0f, 0f));
-            return root;
-        }
-
         /// <summary>불배(항구): 어두운 적갈색 선체 + 뱃머리 쐐기 + 선실 + 굴뚝. 길이 약 2.4칸(앞 +Z), 폭 약 1.2칸.</summary>
         public static GameObject Boat(Transform parent)
         {
@@ -129,17 +87,6 @@ namespace FireGame.Prototypes
             return root;
         }
 
-        /// <summary>물폭탄: 파란 물풍선 + 흰 띠 + 꼭지. 지름 약 1칸.</summary>
-        public static GameObject Bomb(Transform parent)
-        {
-            GameObject root = Root("BombModel", parent);
-            Part(PrimitiveType.Sphere, root, Vector3.zero, Vector3.one, Water);
-            Part(PrimitiveType.Cylinder, root, Vector3.zero, new Vector3(1.03f, 0.06f, 1.03f), Paint);
-            Part(PrimitiveType.Cylinder, root, Vector3.zero, new Vector3(1.03f, 0.06f, 1.03f), Paint, new Vector3(90f, 0f, 0f));
-            Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.52f, 0f), new Vector3(0.22f, 0.16f, 0.22f), Paint);
-            return root;
-        }
-
         /// <summary>
         /// 모델을 땅 위 ground(XY)에서 height칸 떠서 두고 땅 방향 dir을 보게 한다(Models3D.Pose와 같은 yaw). size는 균일 축척.
         /// </summary>
@@ -163,15 +110,6 @@ namespace FireGame.Prototypes
                 var axis = c.name.StartsWith("TailRotor") ? Vector3.right : Vector3.up;
                 c.localRotation = Quaternion.AngleAxis((time * degPerSec) + (i * 37f), axis);
             }
-        }
-
-        /// <summary>포탑 머리를 땅 방향 dir로 돌린다(모델 몸체 yaw와 상관없이 월드 방향).</summary>
-        public static void Aim(GameObject turret, Vector3 dir)
-        {
-            Transform head = turret != null ? turret.transform.Find("Head") : null;
-            if (head == null || dir.sqrMagnitude < 0.0001f) return;
-            float yaw = Mathf.Atan2(-dir.x, -dir.y) * Mathf.Rad2Deg;
-            head.rotation = turret.transform.parent.rotation * Models3D.Stand * Quaternion.Euler(0f, yaw, 0f);
         }
 
         internal static GameObject Root(string name, Transform parent)

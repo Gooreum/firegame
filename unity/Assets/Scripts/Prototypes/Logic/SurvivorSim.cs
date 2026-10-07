@@ -42,7 +42,6 @@ namespace FireGame.Prototypes.Logic
     public enum ShotKind
     {
         Drop,
-        Bomb,
         Jet,
     }
 
@@ -58,7 +57,6 @@ namespace FireGame.Prototypes.Logic
         public float Touch;
         public int Xp;
         public float HitFlash;
-        public float DroneCooldown;
 
         /// <summary>방화복에 튕긴 뒤 다시 튕기기까지(초).</summary>
         public float BounceCool;
@@ -121,12 +119,6 @@ namespace FireGame.Prototypes.Logic
         /// <summary>쥐고 쏜 물(집중 분사). 이 물만 건물에 쌓여 증기 폭발을 낸다. 수호자 자동 분사는 false.</summary>
         public bool Focus = true;
 
-        /// <summary>공중 소화탄(진화): 하늘에서 떨어진다.</summary>
-        public bool Air;
-
-        /// <summary>순찰 드론이 급강하해 떨어뜨린 물폭탄. 저항 없이 DroneDropWater만큼 끈다.</summary>
-        public bool Drone;
-
         /// <summary>산소통이 떨어질 건물.</summary>
         public Structure At;
     }
@@ -142,19 +134,6 @@ namespace FireGame.Prototypes.Logic
         public float Radius;
         public float Life;
         public float MaxLife;
-    }
-
-    /// <summary>맵에 떨어진 공구상자. 주우면 가장 약한 건물을 고친다(일회성).</summary>
-    /// <summary>방수 포탑: 선 자리에서 몇 초 동안 곁 불 몹과 건물에 물을 쏜다.</summary>
-    public sealed class Turret
-    {
-        public Vec2 Pos;
-        public float Life;
-        public float MaxLife;
-        public float Clock;
-
-        /// <summary>지금 쏘는 곳(그림용). 없으면 null.</summary>
-        public Vec2? Aim;
     }
 
     public sealed class Pickup
@@ -211,12 +190,15 @@ namespace FireGame.Prototypes.Logic
     public enum HitSource : byte
     {
         Hose,
-        Bomb,
-        Drone,
-        Partner,
-        Curtain,
-        Turret,
-        Special,
+        Dog,
+        Balloon,
+        Extinguisher,
+        Mine,
+        Foam,
+        Bubble,
+        Geyser,
+        Ladder,
+        Whip,
 
         /// <summary>증기 폭발: 건물 불에 물줄기를 이어 맞혀 터진 김.</summary>
         Steam,
@@ -446,15 +428,6 @@ namespace FireGame.Prototypes.Logic
         public readonly List<Shot> Shots = new List<Shot>();
         public readonly List<Puddle> BurningGround = new List<Puddle>();
         public readonly List<Civilian> Civilians = new List<Civilian>();
-        public readonly List<Vec2> Drones = new List<Vec2>();
-
-        /// <summary>구조대원들이 서 있는 곳(레벨에 따라 1~3명, 구조 분대는 4명).</summary>
-        public readonly List<Vec2> Partners = new List<Vec2>();
-
-        /// <summary>순찰 드론이 도는 가운데와 노리는 건물(없으면 소방관 곁을 돈다).</summary>
-        public Vec2 DroneCenter = new Vec2(ArenaSize / 2f, ArenaSize / 2f);
-        public Structure DroneTarget;
-        public readonly List<Turret> Turrets = new List<Turret>();
 
         /// <summary>이 판의 스테이지 규칙(맵·신고·배율·보스·특수 카드 풀).</summary>
         public readonly StageRules Stage;
@@ -653,10 +626,6 @@ namespace FireGame.Prototypes.Logic
 
         // --- 한 틱 신호(화면·소리용) ---
         public readonly List<Hit> Hits = new List<Hit>();
-        public readonly List<Vec2> Explosions = new List<Vec2>();
-
-        /// <summary>이번 틱에 순찰 드론의 물폭탄이 떨어진 자리.</summary>
-        public readonly List<Vec2> DroneDrops = new List<Vec2>();
 
         /// <summary>이번 틱에 장화가 남긴 젖은 발자국 자리(밟은 바닥 불을 끌 때, 걷는 동안 간간이).</summary>
         public readonly List<Vec2> Footprints = new List<Vec2>();
@@ -815,21 +784,6 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>이번 틱에 물로 완전히 꺼진 구조물.</summary>
         public readonly List<Structure> Doused = new List<Structure>();
-
-        /// <summary>이번 틱에 물의 장막이 터졌다(소방관 자리에서).</summary>
-        public bool JustCurtain;
-
-        /// <summary>이번 틱에 방수 포탑을 세운 자리.</summary>
-        public readonly List<Vec2> TurretsPlaced = new List<Vec2>();
-
-        /// <summary>이번 틱에 공중 소화탄이 떨어진 자리(일반 물폭탄은 Explosions).</summary>
-        public readonly List<Vec2> AirBlasts = new List<Vec2>();
-
-        /// <summary>물의 장막이 다음에 터지기까지 남은 초(없으면 MaxValue). 화면이 발밑 빛을 채운다.</summary>
-        public float CurtainIn
-        {
-            get { return Build.Has(UpgradeId.Curtain) ? _curtainClock : float.MaxValue; }
-        }
 
         /// <summary>항구: 이번 틱에 바다에 나타난 불배(없으면 null).</summary>
         public Structure JustBoat;
@@ -996,12 +950,7 @@ namespace FireGame.Prototypes.Logic
         private Rng _rng;
         private float _spawnDebt;
         private float _hoseClock;
-        private float _bombClock;
-        private float _turretClock = 1f;
-        private float _airClock;
-        private float[] _partnerClocks = new float[4];
         private float _jetClock;
-        private float _curtainClock;
         private int _jetQueue;
         private float _jetAngle;
         private float _droneAngle;
@@ -1216,8 +1165,6 @@ namespace FireGame.Prototypes.Logic
             if (!Loadout.IsEvolution(id) && had < Loadout.MaxLevel && Build.Level(id) == Loadout.MaxLevel) JustMaxed = id;
             if (Loadout.IsEvolution(id)) JustEvolved = true;
             if (id == UpgradeId.Cannon) _jetClock = 0f;
-            if (id == UpgradeId.Curtain || id == UpgradeId.WaterWall) _curtainClock = 0.5f;
-            if (id == UpgradeId.Turret) _turretClock = 0.3f;
         }
 
         /// <summary>작은 불 몹(불씨·다트·다람쥐·박쥐)이 닿아 있을 때 초당 피해. 큰 불·기름 방울은 10.</summary>
@@ -1270,8 +1217,6 @@ namespace FireGame.Prototypes.Logic
         {
             RuinSpat.Clear();
             Hits.Clear();
-            Explosions.Clear();
-            DroneDrops.Clear();
             Footprints.Clear();
             SuitBounces.Clear();
             Extinguished.Clear();
@@ -1287,9 +1232,6 @@ namespace FireGame.Prototypes.Logic
             JustLandmarkSaved = false;
             Fell.Clear();
             Doused.Clear();
-            JustCurtain = false;
-            TurretsPlaced.Clear();
-            AirBlasts.Clear();
             GasBlasts.Clear();
             RescuedFrom.Clear();
             PeopleLost.Clear();
@@ -1902,7 +1844,6 @@ namespace FireGame.Prototypes.Logic
                 Enemy e = Enemies[i];
                 if (e.Dead) continue;
                 if (e.HitFlash > 0f) e.HitFlash -= Dt;
-                if (e.DroneCooldown > 0f) e.DroneCooldown -= Dt;
                 if (e.BounceCool > 0f) e.BounceCool -= Dt;
                 if (e.Slowed > 0f) e.Slowed -= Dt;
 
@@ -2089,237 +2030,7 @@ namespace FireGame.Prototypes.Logic
                     FireDrop(_jetAngle, 2.2f * 2f * 3f * Build.HosePower, 16f, 0.55f, 999, 0.8f * Build.HoseRange, ShotKind.Jet);
                 }
             }
-
-            int bomb = Build.PowerOf(UpgradeId.WaterBomb);
-            if (bomb > 0)
-            {
-                _bombClock -= Dt;
-                if (_bombClock <= 0f)
-                {
-                    _bombClock = 2.2f;
-                    float radius = Build.BombRadius;
-                    for (int k = 0; k < bomb; k++)
-                    {
-                        // 불난 건물을 먼저(센 불부터, 폭탄마다 다른 건물), 없으면 불 떼 한가운데.
-                        Structure building = BombBuilding(k);
-                        Vec2 target = building != null ? building.Pos : RandomEnemyNear(10f) ?? new Vec2(Player.X + ((Rand() - 0.5f) * 8f), Player.Y + ((Rand() - 0.5f) * 8f));
-                        Shots.Add(new Shot { Kind = ShotKind.Bomb, From = Player, Pos = Player, Target = target, Life = 0.5f, Damage = 9f, Radius = radius });
-                        ShotsFired++;
-                    }
-                }
-            }
-
-            TickDrones();
-            TickAirBombs();
-            TickTurrets();
-
-            if (Build.Has(UpgradeId.Curtain))
-            {
-                _curtainClock -= Dt;
-                if (_curtainClock <= 0f)
-                {
-                    bool wall = Build.Level(UpgradeId.WaterWall) > 0;
-                    int lv = Build.PowerOf(UpgradeId.Curtain);
-                    float radius = CurtainRadiusNow;
-                    _curtainClock = CurtainInterval - (0.4f * (lv - 1));
-                    JustCurtain = true;
-                    Douse(Player, radius);
-                    if (Lanterns.Count > 0) WetLanterns(Player, radius);
-                    foreach (Structure st in Structures)
-                    {
-                        if (st.Within(Player, radius)) Soak(st, wall ? 0.8f : 0.5f, false);
-                    }
-                    Near(Player, radius, _near);
-                    foreach (Enemy e in _near) Damage(e, wall ? 20f : 12f, Knockback(Player, e.Pos, wall ? 12f : 8f), true, HitSource.Curtain, Player);
-                }
-            }
-
         }
-
-        /// <summary>소방차: 12초마다 소방관이 선 가로줄을 3초 동안 가로지른다. 곁 1.5칸 불은 20 피해와 밀림, 3칸 안 구조물은 적신다.</summary>
-        /// <summary>물폭탄 k번째가 노릴 불난 건물: 10칸 안에서 불이 센 순서로 k번째. 없으면 null.</summary>
-        private Structure BombBuilding(int k)
-        {
-            var hot = new List<Structure>();
-            foreach (Structure st in Structures)
-            {
-                if (st.IsBuilding && st.Burning && st.DistanceTo(Player) <= 10f) hot.Add(st);
-            }
-            if (k >= hot.Count) return null;
-            hot.Sort((a, b) => b.Fire.CompareTo(a.Fire));
-            return hot[k];
-        }
-
-        /// <summary>
-        /// 순찰 드론: 소방관 12칸 안에서 불이 센(구조 드론은 사람 갇힌 곳 먼저) 건물로 날아가 지붕 위를 돌며 물을 뿌린다.
-        /// 없으면 소방관 곁을 돈다. 도는 길에 닿은 불 몹은 친다. 구조 드론은 건물 위 2초마다 한 명씩 끌어올린다.
-        /// </summary>
-        private void TickDrones()
-        {
-            int drones = Build.PowerOf(UpgradeId.Drone);
-            Drones.Clear();
-            if (drones <= 0)
-            {
-                DroneTarget = null;
-                DroneCenter = Player;
-                return;
-            }
-            bool rescue = Build.Level(UpgradeId.RescueDrone) > 0;
-            Structure target = null;
-            float best = float.MinValue;
-            foreach (Structure st in Structures)
-            {
-                if (!st.IsBuilding || !st.Burning || st.DistanceTo(Player) > DroneRange) continue;
-                float score = st.Fire + (rescue && st.Residents > 0 ? 10f : 0f);
-                if (score > best)
-                {
-                    best = score;
-                    target = st;
-                }
-            }
-            DroneTarget = target;
-            Vec2 home = target != null ? target.Pos : Player;
-            float dx = home.X - DroneCenter.X;
-            float dy = home.Y - DroneCenter.Y;
-            float len = (float)Math.Sqrt((dx * dx) + (dy * dy));
-            float step = 9f * Dt;
-            if (len > step) DroneCenter = new Vec2(DroneCenter.X + (dx / len * step), DroneCenter.Y + (dy / len * step));
-            else DroneCenter = home;
-            bool over = target != null && len <= 0.5f;
-
-            float radius = target != null ? Math.Max(target.Half.X, target.Half.Y) + 0.6f : 2.3f;
-            _droneAngle += 3f * Dt;
-            for (int k = 0; k < drones; k++)
-            {
-                double a = _droneAngle + (Math.PI * 2 * k / drones);
-                var at = new Vec2(DroneCenter.X + (float)(Math.Cos(a) * radius), DroneCenter.Y + (float)(Math.Sin(a) * radius));
-                Drones.Add(at);
-                Near(at, 0.5f, _near);
-                foreach (Enemy e in _near)
-                {
-                    if (e.DroneCooldown > 0f) continue;
-                    e.DroneCooldown = 0.5f;
-                    Damage(e, 6f, Knockback(at, e.Pos, 3f), true, HitSource.Drone, at);
-                }
-            }
-            if (!over) return;
-            // 지붕 위: 드론마다 DroneDropEvery에 한 번씩, 번갈아 급강하해 물폭탄을 떨어뜨린다(저항 무시 한 방).
-            _droneDrop -= Dt;
-            if (_droneDrop <= 0f && target.Burning)
-            {
-                _droneDrop = DroneDropEvery / drones;
-                Vec2 from = Drones[_droneTurn % Drones.Count];
-                _droneTurn++;
-                Shots.Add(new Shot { Kind = ShotKind.Bomb, From = from, Pos = from, Target = target.Pos, Life = 0.35f, Damage = 6f, Radius = 1.6f, Drone = true });
-            }
-            if (rescue && target.Burning && target.Residents > 0)
-            {
-                target.DroneRescue += Dt;
-                if (target.DroneRescue >= DroneRescueTime)
-                {
-                    target.DroneRescue = 0f;
-                    RescueOne(target);
-                }
-            }
-        }
-
-        /// <summary>공중 소화탄: 3초마다 맵 어디든 불난 건물마다 소화탄이 떨어진다.</summary>
-        private void TickAirBombs()
-        {
-            if (Build.Level(UpgradeId.AirBomb) == 0) return;
-            _airClock -= Dt;
-            if (_airClock > 0f) return;
-            _airClock = AirBombEvery;
-            foreach (Structure st in Structures)
-            {
-                if (!st.IsBuilding || !st.Burning) continue;
-                var from = new Vec2(st.Pos.X - 6f, st.Pos.Y + 14f);
-                Shots.Add(new Shot { Kind = ShotKind.Bomb, From = from, Pos = from, Target = st.Pos, Life = 0.9f, Damage = 10f, Radius = 2.2f, Air = true });
-                ShotsFired++;
-            }
-        }
-
-        /// <summary>
-        /// 방수 포탑: 7초마다 선 자리에 세운다(Lv3·5에 동시 +1). 0.4초마다 4칸 안 가장 가까운 불 몹을 쏘고, 곁 건물 불을 줄인다.
-        /// 현장 구조소는 두 배 오래 서 있고, 6칸 안 건물은 연기로 사람을 잃지 않는다.
-        /// </summary>
-        private void TickTurrets()
-        {
-            int lv = Build.PowerOf(UpgradeId.Turret);
-            if (lv <= 0)
-            {
-                Turrets.Clear();
-                return;
-            }
-            bool post = Build.Level(UpgradeId.RescuePost) > 0;
-            int most = 1 + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0);
-            _turretClock -= Dt;
-            if (_turretClock <= 0f)
-            {
-                _turretClock = TurretEvery;
-                float life = (5f + (lv - 1)) * (post ? 2f : 1f);
-                Turrets.Add(new Turret { Pos = Player, Life = life, MaxLife = life });
-                TurretsPlaced.Add(Player);
-                while (Turrets.Count > most) Turrets.RemoveAt(0);
-            }
-            for (int i = Turrets.Count - 1; i >= 0; i--)
-            {
-                Turret tu = Turrets[i];
-                tu.Life -= Dt;
-                if (tu.Life <= 0f)
-                {
-                    Turrets.RemoveAt(i);
-                    continue;
-                }
-                foreach (Structure st in Structures)
-                {
-                    if (st.IsBuilding && st.Burning && st.Within(tu.Pos, TurretRange)) Soak(st, TurretWater * Dt);
-                }
-                tu.Clock -= Dt;
-                if (tu.Clock > 0f) continue;
-                tu.Clock = 0.4f;
-                Near(tu.Pos, TurretRange, _near);
-                Enemy target = null;
-                float close = float.MaxValue;
-                foreach (Enemy e in _near)
-                {
-                    float d = e.Pos.DistanceTo(tu.Pos);
-                    if (d < close)
-                    {
-                        close = d;
-                        target = e;
-                    }
-                }
-                tu.Aim = target != null ? target.Pos : (Vec2?)null;
-                if (target != null) Damage(target, TurretHit, Knockback(tu.Pos, target.Pos, 3f), true, HitSource.Turret, tu.Pos);
-            }
-        }
-
-        /// <summary>현장 구조소 곁(6칸)의 건물: 연기가 차지 않는다.</summary>
-        private bool Sheltered(Structure s)
-        {
-            if (Build.Level(UpgradeId.RescuePost) == 0) return false;
-            foreach (Turret tu in Turrets)
-            {
-                if (s.Within(tu.Pos, PostRange)) return true;
-            }
-            return false;
-        }
-
-        /// <summary>소방정(3초)과 같은 틱에 뜨지 않게 2초 늦게 시작한다(배너가 겹친다).</summary>
-        private float _waveClock = 6f;
-        private readonly List<Structure> _waveSoaked = new List<Structure>();
-        private readonly List<Enemy> _waveHit = new List<Enemy>();
-
-        private float _shellClock = 3f;
-
-        private float _mistClock = 2f;
-
-        private float _rainClock = 2f;
-
-        private float _foamClock = 2f;
-
-        private float _retardantClock = 3f;
 
         private static float SegmentDistance(Vec2 p, Vec2 a, Vec2 b)
         {
@@ -2341,33 +2052,6 @@ namespace FireGame.Prototypes.Logic
         {
             return 0.3f + (0.12f * (level - 1));
         }
-
-
-        public const float CurtainInterval = 4f;
-        public const float CurtainRadius = 4.5f;
-
-        /// <summary>지금 물의 장막 고리 반경: Lv1 4.5칸, 레벨마다 +0.5칸, 물의 방벽 7칸.</summary>
-        public float CurtainRadiusNow
-        {
-            get { return Build.Level(UpgradeId.WaterWall) > 0 ? 7f : CurtainRadius + (0.5f * (Build.PowerOf(UpgradeId.Curtain) - 1)); }
-        }
-        public const float PartnerSpeed = 4.5f;
-        public const float PartnerWaterBase = 0.05f;
-        public const float PartnerHit = 4f;
-        public const float DroneWater = 0.05f;
-
-        /// <summary>순찰 드론 한 대의 투하 간격(초. 드론이 n대면 n배 자주)과 물폭탄 하나가 끄는 불 세기(저항 무시).</summary>
-        public const float DroneDropEvery = 2.5f;
-        public const float DroneDropWater = 0.25f;
-
-        public const float DroneRange = 12f;
-        public const float DroneRescueTime = 2f;
-        public const float AirBombEvery = 3f;
-        public const float TurretEvery = 7f;
-        public const float TurretRange = 4f;
-        public const float TurretHit = 5f;
-        public const float TurretWater = 0.05f;
-        public const float PostRange = 6f;
 
         /// <summary>한 명 구할 때 차는 체력(예전 20: 구조만 하면 체력이 늘 차서 방화복이 쓸모없었다).</summary>
         public const float RescueHeal = 5f;
@@ -2455,26 +2139,6 @@ namespace FireGame.Prototypes.Logic
             {
                 if (s.Dead) continue;
                 s.Age += Dt;
-
-                if (s.Kind == ShotKind.Bomb)
-                {
-                    float t = Math.Min(1f, s.Age / s.Life);
-                    s.Pos = new Vec2(s.From.X + ((s.Target.X - s.From.X) * t), s.From.Y + ((s.Target.Y - s.From.Y) * t));
-                    if (t >= 1f)
-                    {
-                        s.Dead = true;
-                        (s.Air ? AirBlasts : s.Drone ? DroneDrops : Explosions).Add(s.Target);
-                        Douse(s.Target, s.Radius);
-                        if (Lanterns.Count > 0) WetLanterns(s.Target, s.Radius);
-                        foreach (Structure st in Structures)
-                        {
-                            if (st.Within(s.Target, s.Radius)) Soak(st, s.Drone ? DroneDropWater : s.Damage * WaterPerDamage, false);
-                        }
-                        Near(s.Target, s.Radius, _near);
-                        foreach (Enemy e in _near) Damage(e, s.Damage, Knockback(s.Target, e.Pos, 7f), true, HitSource.Bomb, s.Target);
-                    }
-                    continue;
-                }
 
                 s.Pos.X += s.Vel.X * Dt;
                 s.Pos.Y += s.Vel.Y * Dt;
@@ -3315,11 +2979,10 @@ namespace FireGame.Prototypes.Logic
             }
             HeatHurt = 0f;
             if (worst <= 0f) return;
-            float wall = Build.Level(UpgradeId.WaterWall) > 0 ? 0.5f : 1f;
             // 대화재 감독: 단계마다 열기가 세진다(1 → 1.5 → 2 → 2.5배). 3:00의 장비는 불을 다 끄므로, 서서 끄는 몸이 압력을 받는다.
             float heat = HeatDps * (1f + (PressureHeatStep * FinalePressure));
-            HeatHurt = heat * worst * Build.HeatScale * wall * Dt;
-            Burn(heat * worst * wall * Dt, HurtKind.Heat);
+            HeatHurt = heat * worst * Build.HeatScale * Dt;
+            Burn(heat * worst * Dt, HurtKind.Heat);
         }
 
         /// <summary>불에 데는 피해: 방화복(HeatScale)만큼 덜 받는다. 원값은 통계에 남긴다.</summary>
@@ -3542,134 +3205,12 @@ namespace FireGame.Prototypes.Logic
         /// 불난 가게 문 앞에 잠깐 서 있으면 갇힌 사람을 한 명씩 데리고 나온다.
         /// 나온 사람은 잠깐 뛰어 나가는 모습으로만 남는다(Civilians는 화면용).
         /// </summary>
-        /// <summary>구조대원 수: 한 명, 구조 분대는 두 명. 셋·넷이면 사람 구하기가 플레이어 일이 아니게 됐다(docs §16).
-        /// 레벨은 사람 수가 아니라 Lv2 구조·물 +25%, Lv3 달리기 +25%, Lv4 물 +25%, Lv5 구조 +25%.</summary>
-        public int PartnerCount
-        {
-            get
-            {
-                if (Build.Level(UpgradeId.Squad) > 0) return 2;
-                return Build.Level(UpgradeId.Partner) > 0 ? 1 : 0;
-            }
-        }
-
-        /// <summary>문 앞에 대원이 있을 때 구조가 빨라지는 배율(Lv2 1.25, Lv5 1.5, 구조 분대 2).</summary>
-        public float PartnerRescueBoost
-        {
-            get
-            {
-                if (Build.Level(UpgradeId.Squad) > 0) return 2f;
-                int lv = Build.Level(UpgradeId.Partner);
-                return lv >= 5 ? 1.5f : lv >= 2 ? 1.25f : 1f;
-            }
-        }
-
-        /// <summary>대원 달리기 배율(Lv3 1.25, 구조 분대 1.3).</summary>
-        public float PartnerSpeedScale
-        {
-            get { return Build.Level(UpgradeId.Squad) > 0 ? 1.3f : Build.Level(UpgradeId.Partner) >= 3 ? 1.25f : 1f; }
-        }
-
-        /// <summary>대원 한 명이 곁 건물 불을 초당 줄이는 양(Lv2·Lv4에 +25%, 구조 분대 두 배).</summary>
-        public float PartnerWater
-        {
-            get
-            {
-                if (Build.Level(UpgradeId.Squad) > 0) return PartnerWaterBase * 1.5625f * 2f;
-                int lv = Build.Level(UpgradeId.Partner);
-                return PartnerWaterBase * (lv >= 2 ? 1.25f : 1f) * (lv >= 4 ? 1.25f : 1f);
-            }
-        }
-
-        private bool PartnerAt(Vec2 door)
-        {
-            foreach (Vec2 p in Partners)
-            {
-                if (door.DistanceTo(p) <= RescueRange) return true;
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// 구조대원: 저마다 다른 불난 건물을 맡는다. 갇힌 사람이 있는 건물의 문이 먼저, 없으면 소방관 10칸 안 불난 건물 곁,
-        /// 그것도 없으면 소방관 곁을 따른다. 건물 곁에선 물을 뿌려 불을 줄이고, 곁 불 몹을 쏜다.
-        /// </summary>
-        private void MovePartners()
-        {
-            int want = PartnerCount;
-            while (Partners.Count < want) Partners.Add(new Vec2(Player.X - 1.2f, Player.Y - (0.6f * Partners.Count)));
-            while (Partners.Count > want) Partners.RemoveAt(Partners.Count - 1);
-            if (want == 0) return;
-
-            float speed = PartnerSpeed * PartnerSpeedScale;
-            var taken = new List<Structure>();
-            for (int i = 0; i < Partners.Count; i++)
-            {
-                Vec2 at = Partners[i];
-                Structure job = null;
-                float best = float.MaxValue;
-                foreach (Structure s in Structures)
-                {
-                    if (!s.Burning || !s.IsBuilding || taken.Contains(s)) continue;
-                    bool people = s.Residents > 0;
-                    if (!people && s.DistanceTo(Player) > 10f) continue;
-                    float d = s.Door.DistanceTo(at) - (people ? 100f : 0f);
-                    if (d < best)
-                    {
-                        best = d;
-                        job = s;
-                    }
-                }
-                Vec2 goal = new Vec2(Player.X - 1.2f + (0.8f * i), Player.Y - 0.6f);
-                if (job != null)
-                {
-                    taken.Add(job);
-                    goal = job.Door;
-                }
-                float dx = goal.X - at.X;
-                float dy = goal.Y - at.Y;
-                float len = (float)Math.Sqrt((dx * dx) + (dy * dy));
-                float step = speed * Dt;
-                if (len > 0.2f)
-                {
-                    at.X += dx / len * Math.Min(step, len);
-                    at.Y += dy / len * Math.Min(step, len);
-                }
-                at = ClampToArena(at);
-                Partners[i] = at;
-
-                // 곁(가장자리 3칸) 불난 건물에 물을 뿌린다.
-                if (job != null && job.DistanceTo(at) <= 3f) Soak(job, PartnerWater * Dt);
-
-                // 곁 불 몹을 0.5초마다 쏜다.
-                _partnerClocks[i] -= Dt;
-                if (_partnerClocks[i] <= 0f)
-                {
-                    _partnerClocks[i] = 0.5f;
-                    Near(at, 2.5f, _near);
-                    Enemy target = null;
-                    float close = float.MaxValue;
-                    foreach (Enemy e in _near)
-                    {
-                        float d = e.Pos.DistanceTo(at);
-                        if (d < close)
-                        {
-                            close = d;
-                            target = e;
-                        }
-                    }
-                    if (target != null) Damage(target, PartnerHit * (Build.Level(UpgradeId.Squad) > 0 ? 2f : 1f), Knockback(at, target.Pos, 4f), true, HitSource.Partner, at);
-                }
-            }
-        }
-
         private void TickRescue()
         {
-            MovePartners();
             foreach (Structure s in Structures)
             {
                 // 큰 불 속에 오래 갇혀 있으면 연기에 한 명씩 잃는다: 멀리서 끄기만 할 게 아니라 빨리 가야 한다.
-                if (s.Burning && s.Residents > 0 && s.Fire >= SmokeFire && !Sheltered(s))
+                if (s.Burning && s.Residents > 0 && s.Fire >= SmokeFire)
                 {
                     s.Smoke += Dt;
                     if (s.Smoke >= SmokeTime)
@@ -3683,14 +3224,12 @@ namespace FireGame.Prototypes.Logic
                 }
 
                 bool player = s.Door.DistanceTo(Player) <= RescueRange;
-                bool partner = PartnerAt(s.Door);
-                if (!s.Burning || s.Residents <= 0 || !(player || partner))
+                if (!s.Burning || s.Residents <= 0 || !player)
                 {
                     s.RescueHold = 0f;
                     continue;
                 }
-                // 문 앞에 대원이 있으면 대원 레벨만큼 더 빠르다.
-                s.RescueHold += Dt * (partner ? PartnerRescueBoost : 1f);
+                s.RescueHold += Dt;
                 if (s.RescueHold < RescueTime) continue;
                 s.RescueHold = 0f;
                 RescueOne(s);

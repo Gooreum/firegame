@@ -5,25 +5,43 @@ using FireGame.Core.Sim;
 namespace FireGame.Prototypes.Logic
 {
     /// <summary>
-    /// 레벨업 카드. 게임의 목표(건물과 사람 지키기)에 맞춰, 모든 아이템이 불 끄기·사람 구하기·현장에 빨리 가기 중 하나 이상을 돕는다.
-    /// 무기 6 중 4칸, 보조 6 중 4칸만 들 수 있어 판마다 고른다. 무기마다 짝 보조가 있어 무기 Lv5 + 짝 보조면 진화한다.
-    /// 모든 스테이지가 같은 풀이고, 노란 특수 카드는 없다(2026-10-07).
+    /// 레벨업 카드(2026-10-07 개편). 무기 10 · 보조 3 · 진화 10. 무기·보조를 합쳐 4칸만 든다(탕탕처럼).
+    /// 무기는 하나가 맡는 공간 하나(앞·둘레·하늘·바닥·마을)이고, 모두 불 몹과 건물 불을 둘 다 맞힌다.
+    /// 레벨업은 개수·크기·갈래로 눈에 보이게 오른다. 무기 Lv5 + 짝 보조면 진화한다.
+    /// 모든 스테이지가 같은 풀이고 노란 특수 카드는 없다. enum 순서가 IsWeapon/IsPassive/IsEvolution의 범위다.
     /// </summary>
     public enum UpgradeId
     {
-        // --- 무기 6 ---
+        // --- 무기 10 ---
+        /// <summary>물대포: 시작 무기. 겨눈 쪽(수호자는 저절로) 한 줄기.</summary>
         Hose,
-        WaterBomb,
 
-        /// <summary>순찰 드론: 주변 타는 건물로 날아가 지붕 위를 돌며 물을 뿌린다.</summary>
-        Drone,
+        /// <summary>소방견: 마을을 노리는 몹에게 달려가 문다. 없으면 타는 건물 곁에서 짖으며 적신다.</summary>
+        Dog,
 
-        /// <summary>구조대원: 갇힌 사람이 있는 건물로 달려가 문 앞 불을 끄며 구한다.</summary>
-        Partner,
-        Curtain,
+        /// <summary>물풍선: 건물 벽과 경기장 끝에 튕기며 닿을 때마다 물보라.</summary>
+        Balloon,
 
-        /// <summary>방수 포탑: 선 자리에 세우면 몇 초 동안 곁 불 몹과 건물에 물을 쏜다.</summary>
-        Turret,
+        /// <summary>소화기 부메랑: 나갔다 돌아오며 지나는 몹을 꿰뚫고 분말을 남긴다.</summary>
+        Extinguisher,
+
+        /// <summary>액체질소 지뢰: 발밑에 깔리고, 밟은 몹 둘레가 얼어붙는다.</summary>
+        Mine,
+
+        /// <summary>거품 눈덩이: 몹 무리 쪽으로 굴러가며 삼킬수록 커지다 터진다.</summary>
+        Foam,
+
+        /// <summary>비눗방울: 몹을 가둬 띄웠다가 터뜨린다(아래로 물이 쏟아진다).</summary>
+        Bubble,
+
+        /// <summary>맨홀 간헐천: 몹이 몰린 맨홀에서 물기둥이 솟아 날려 보낸다.</summary>
+        Manhole,
+
+        /// <summary>사다리차: 몹이 많은 쪽으로 사다리를 뻗어 한 줄을 내려찍는다. 지붕 위 사람도 구한다.</summary>
+        Ladder,
+
+        /// <summary>소방 호스 채찍: 내 둘레를 휘둘러 닿은 몹을 밀어낸다.</summary>
+        Whip,
 
         // --- 보조 3 ---
         Tank,
@@ -32,13 +50,17 @@ namespace FireGame.Prototypes.Logic
         /// <summary>방화복: 열기·바닥 불 피해를 줄이고 최대 체력을 올린다.</summary>
         Suit,
 
-        // --- 진화 6 (무기 Lv5 + 짝 보조) ---
+        // --- 진화 10 (무기 Lv5 + 짝 보조) ---
         Cannon,
-        Squad,
-        AirBomb,
-        RescueDrone,
-        WaterWall,
-        RescuePost,
+        DogPack,
+        BalloonStorm,
+        Tornado,
+        IceField,
+        Avalanche,
+        BubbleFall,
+        Waterline,
+        LadderBridge,
+        Whirl,
 
         Heal,
     }
@@ -47,20 +69,23 @@ namespace FireGame.Prototypes.Logic
     public sealed class Loadout
     {
         public const int MaxLevel = 5;
-        /// <summary>무기 6 중 3, 보조 3 중 2. 넷·셋이면 3:00에 모든 판이 같은 풀장비가 됐다(docs §16).</summary>
-        public const int WeaponSlots = 3;
-        public const int PassiveSlots = 2;
 
+        /// <summary>무기·보조를 합쳐 4칸(탕탕처럼). 4칸 × Lv5 = 20레벨 ≈ 4분 판의 레벨업 수라 판 끝에 풀장비가 된다.</summary>
+        public const int Slots = 4;
 
-        /// <summary>진화 표: (진화, 원래 무기, 짝 보조).</summary>
+        /// <summary>진화 표: (진화, 원래 무기, 짝 보조). 펌프 넷, 장화 셋, 방화복 셋.</summary>
         private static readonly UpgradeId[,] Evolutions =
         {
             { UpgradeId.Cannon, UpgradeId.Hose, UpgradeId.Tank },
-            { UpgradeId.Squad, UpgradeId.Partner, UpgradeId.Boots },
-            { UpgradeId.AirBomb, UpgradeId.WaterBomb, UpgradeId.Tank },
-            { UpgradeId.RescueDrone, UpgradeId.Drone, UpgradeId.Boots },
-            { UpgradeId.WaterWall, UpgradeId.Curtain, UpgradeId.Suit },
-            { UpgradeId.RescuePost, UpgradeId.Turret, UpgradeId.Suit },
+            { UpgradeId.DogPack, UpgradeId.Dog, UpgradeId.Boots },
+            { UpgradeId.BalloonStorm, UpgradeId.Balloon, UpgradeId.Tank },
+            { UpgradeId.Tornado, UpgradeId.Extinguisher, UpgradeId.Tank },
+            { UpgradeId.IceField, UpgradeId.Mine, UpgradeId.Suit },
+            { UpgradeId.Avalanche, UpgradeId.Foam, UpgradeId.Suit },
+            { UpgradeId.BubbleFall, UpgradeId.Bubble, UpgradeId.Suit },
+            { UpgradeId.Waterline, UpgradeId.Manhole, UpgradeId.Boots },
+            { UpgradeId.LadderBridge, UpgradeId.Ladder, UpgradeId.Boots },
+            { UpgradeId.Whirl, UpgradeId.Whip, UpgradeId.Tank },
         };
 
         private readonly int[] _levels = new int[(int)UpgradeId.Heal + 1];
@@ -78,7 +103,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>진화 카드인가.</summary>
         public static bool IsEvolution(UpgradeId id)
         {
-            return id >= UpgradeId.Cannon && id <= UpgradeId.RescuePost;
+            return id >= UpgradeId.Cannon && id <= UpgradeId.Whirl;
         }
 
         /// <summary>진화의 원래 무기(진화가 아니면 자기 자신).</summary>
@@ -113,7 +138,7 @@ namespace FireGame.Prototypes.Logic
 
         public static bool IsWeapon(UpgradeId id)
         {
-            return id <= UpgradeId.Turret || IsEvolution(id);
+            return id <= UpgradeId.Whip || IsEvolution(id);
         }
 
         public static bool IsPassive(UpgradeId id)
@@ -192,14 +217,16 @@ namespace FireGame.Prototypes.Logic
             if (_levels[i] < MaxLevelOf(id)) _levels[i]++;
         }
 
-        /// <summary>모든 무기·보조를 최대로 올리고 물대포는 방수포로 진화시킨다. 특수 장비는 주어진 풀 전부(시험용 풀장비).</summary>
+        /// <summary>시험용 풀장비: 4칸을 최대로 채우고 진화 둘까지(캡처·풀장비 측정).</summary>
         public void MaxAll()
         {
-            for (int i = 0; i <= (int)UpgradeId.Suit; i++) _levels[i] = MaxLevelOf((UpgradeId)i);
+            // 4칸: 물대포·채찍·사다리차 + 펌프 → 고압 방수포·물 회오리 진화.
+            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.Whip, UpgradeId.Ladder, UpgradeId.Tank }) _levels[(int)id] = MaxLevel;
             Add(UpgradeId.Cannon);
+            Add(UpgradeId.Whirl);
         }
 
-        /// <summary>시험용: 여섯 무기를 모두 진화시킨다(짝 보조도 채운다).</summary>
+        /// <summary>시험용: 칸을 무시하고 열 무기를 모두 진화시킨다(짝 보조도 채운다).</summary>
         public void EvolveAll()
         {
             for (int i = 0; i <= (int)UpgradeId.Suit; i++) _levels[i] = MaxLevelOf((UpgradeId)i);
@@ -240,8 +267,6 @@ namespace FireGame.Prototypes.Logic
         /// <summary>장화: 불 바닥을 밟아도 안 다치고 밟은 자리를 끈다.</summary>
         public bool WetBoots { get { return Level(UpgradeId.Boots) > 0; } }
 
-        public float BombRadius { get { return 1.5f * (1f + (0.15f * (PowerOf(UpgradeId.WaterBomb) - 1))); } }
-
         /// <summary>이 카드를 지금 뽑을 수 있나(최대 레벨·빈 슬롯·진화 조건).</summary>
         public bool CanTake(UpgradeId id)
         {
@@ -252,7 +277,7 @@ namespace FireGame.Prototypes.Logic
             if (level > 0) return true;
             UpgradeId? evo = EvolutionOf(id);
             if (evo.HasValue && Level(evo.Value) > 0) return false;
-            return IsWeapon(id) ? WeaponCount < WeaponSlots : PassiveCount < PassiveSlots;
+            return WeaponCount + PassiveCount < Slots;
         }
 
         private int Count(bool weapons)
@@ -302,45 +327,62 @@ namespace FireGame.Prototypes.Logic
             switch (id)
             {
                 case UpgradeId.Hose: return "물대포";
-                case UpgradeId.WaterBomb: return "물폭탄";
-                case UpgradeId.Drone: return "순찰 드론";
-                case UpgradeId.Partner: return "구조대원";
-                case UpgradeId.Curtain: return "물의 장막";
-                case UpgradeId.Turret: return "방수 포탑";
+                case UpgradeId.Dog: return "소방견";
+                case UpgradeId.Balloon: return "물풍선";
+                case UpgradeId.Extinguisher: return "소화기 부메랑";
+                case UpgradeId.Mine: return "액체질소 지뢰";
+                case UpgradeId.Foam: return "거품 눈덩이";
+                case UpgradeId.Bubble: return "비눗방울";
+                case UpgradeId.Manhole: return "맨홀 간헐천";
+                case UpgradeId.Ladder: return "사다리차";
+                case UpgradeId.Whip: return "호스 채찍";
                 case UpgradeId.Tank: return "고압 펌프";
                 case UpgradeId.Boots: return "장화";
                 case UpgradeId.Suit: return "방화복";
                 case UpgradeId.Cannon: return "고압 방수포";
-                case UpgradeId.Squad: return "구조 분대";
-                case UpgradeId.AirBomb: return "공중 소화탄";
-                case UpgradeId.RescueDrone: return "구조 드론";
-                case UpgradeId.WaterWall: return "물의 방벽";
-                case UpgradeId.RescuePost: return "현장 구조소";
+                case UpgradeId.DogPack: return "구조견 무리";
+                case UpgradeId.BalloonStorm: return "물풍선 폭우";
+                case UpgradeId.Tornado: return "분말 회오리";
+                case UpgradeId.IceField: return "빙결 지대";
+                case UpgradeId.Avalanche: return "거품 산사태";
+                case UpgradeId.BubbleFall: return "방울 폭포";
+                case UpgradeId.Waterline: return "수도관 폭발";
+                case UpgradeId.LadderBridge: return "사다리 다리";
+                case UpgradeId.Whirl: return "물 회오리";
                 default: return "응급 처치";
             }
         }
 
-        /// <summary>카드 설명. nextLevel은 고르면 될 레벨(1이면 새로 얻음).</summary>
+        /// <summary>카드 설명: 퍼센트가 아니라 화면에서 무엇이 달라지는지. nextLevel은 고르면 될 레벨(1이면 새로 얻음).</summary>
         public static string Describe(UpgradeId id, int nextLevel)
         {
             bool fresh = nextLevel <= 1;
+            int n = nextLevel;
             switch (id)
             {
-                case UpgradeId.Hose: return fresh ? "겨눈 쪽으로 물줄기를 뿜는다" : "물줄기 굵기·세기 +45%, 사거리 +10%";
-                case UpgradeId.WaterBomb: return fresh ? "불난 건물(없으면 불 떼)에 물폭탄을 던진다" : "폭탄 +1, 범위 +15%";
-                case UpgradeId.Drone: return fresh ? "드론이 가장 센 불난 건물로 날아가 2.5초마다 물폭탄을 투하한다" : "드론 +1 (투하가 그만큼 잦아진다)";
-                case UpgradeId.Partner: return fresh ? "대원 한 명이 갇힌 사람에게 달려가 불을 끄며 구한다" : nextLevel == 2 ? "구조·물줄기 +25%" : nextLevel == 3 ? "대원 달리기 +25%" : nextLevel == 4 ? "물줄기 +25%" : "구조 +25%";
-                case UpgradeId.Curtain: return fresh ? "몇 초마다 몸 주위로 물 고리가 터져 불을 밀어낸다" : "고리 범위 +0.5칸, 간격 −0.4초";
-                case UpgradeId.Turret: return fresh ? "7초마다 선 자리에 포탑을 세운다. 곁 불을 쏜다" : nextLevel == 3 || nextLevel == 5 ? "포탑 +1, 지속 +1초" : "포탑 지속 +1초";
-                case UpgradeId.Tank: return "물줄기 사거리·세기 +15%, 증기 폭발이 25% 빨리 차고 0.5칸 넓어진다";
-                case UpgradeId.Boots: return fresh ? "이동 +12%. 불 바닥을 밟아도 안 다치고 밟은 자리를 끈다" : "이동 속도 +12%";
-                case UpgradeId.Suit: return fresh ? "불 피해 −10%, 최대 체력 +10. 닿은 불 몹이 튕겨 나간다" : "불 피해 −10%, 최대 체력 +10, 더 세게 튕긴다";
+                case UpgradeId.Hose: return fresh ? "겨눈 쪽으로 물줄기를 뿜는다" : "물줄기가 더 굵고 멀리 · 한 번에 " + (1 + n) + "마리 꿰뚫는다";
+                case UpgradeId.Dog: return fresh ? "소방견이 마을을 노리는 불에게 달려가 문다" : n == 3 ? "소방견 2마리" : n == 5 ? "소방견 3마리" : "더 빨리 달리고 세게 문다";
+                case UpgradeId.Balloon: return fresh ? "벽에 튕기는 물풍선 · 닿을 때마다 물보라" : n == 3 ? "물풍선 2개 · 4번 튕긴다" : n == 5 ? "물풍선 3개 · 6번 튕긴다" : "더 오래 튕긴다";
+                case UpgradeId.Extinguisher: return fresh ? "소화기가 나갔다 돌아오며 불을 꿰뚫는다" : n == 3 ? "소화기 2개 · 더 멀리" : n == 5 ? "소화기 3개 · 9칸까지" : "더 멀리 날아간다";
+                case UpgradeId.Mine: return fresh ? "발밑에 지뢰 · 밟은 불이 얼어붙는다" : "지뢰 " + (1 + n) + "개까지 · 어는 범위가 넓다";
+                case UpgradeId.Foam: return fresh ? "굴러가며 불을 삼키고 커지다 터지는 거품" : n == 3 ? "거품 2개" : n == 5 ? "거품 3개 · 더 크게" : "더 크게 부푼다";
+                case UpgradeId.Bubble: return fresh ? "불을 방울에 가둬 띄웠다가 터뜨린다" : "방울 " + (n == 2 || n == 3 ? 2 : n == 4 ? 3 : 4) + "발 · 더 큰 불도 가둔다";
+                case UpgradeId.Manhole: return fresh ? "불이 몰린 맨홀에서 물기둥이 솟는다" : n == 3 ? "맨홀 2곳에서" : n == 4 ? "맨홀 3곳에서" : n == 5 ? "맨홀 4곳 · 더 큰 물기둥" : "물기둥이 굵어진다";
+                case UpgradeId.Ladder: return fresh ? "사다리를 뻗어 한 줄을 내려찍는다 · 지붕 위 사람도 구한다" : n == 3 ? "두 방향으로 뻗는다" : n == 5 ? "세 방향 · 10칸" : "사다리가 길어진다";
+                case UpgradeId.Whip: return fresh ? "호스를 휘둘러 둘레 불을 밀어낸다" : n == 3 ? "두 갈래로 휘두른다" : n == 5 ? "세 갈래 · 더 넓게" : "더 넓게 휘두른다";
+                case UpgradeId.Tank: return "모든 물이 굵고 세진다 · 증기 폭발이 빨리 찬다";
+                case UpgradeId.Boots: return fresh ? "더 빨리 달린다 · 불 바닥을 밟아 끈다" : "더 빨리 달린다";
+                case UpgradeId.Suit: return fresh ? "불에 덜 다치고 체력이 는다 · 닿은 불이 튕겨 나간다" : "더 단단해진다 · 더 세게 튕긴다";
                 case UpgradeId.Cannon: return "진화! 관통하는 물줄기가 사방을 휩쓴다";
-                case UpgradeId.Squad: return "진화! 대원 둘이 흩어져 두 건물을 동시에 구하고 물·구조가 두 배";
-                case UpgradeId.AirBomb: return "진화! 맵 어디든 불난 건물마다 소화탄이 떨어진다";
-                case UpgradeId.RescueDrone: return "진화! 드론이 갇힌 사람을 끌어올려 구한다";
-                case UpgradeId.WaterWall: return "진화! 커다란 물 고리가 건물 불을 크게 줄인다";
-                case UpgradeId.RescuePost: return "진화! 포탑 곁 건물에선 연기로 사람을 잃지 않는다";
+                case UpgradeId.DogPack: return "진화! 구조견 4마리 · 갇힌 사람을 물고 나온다";
+                case UpgradeId.BalloonStorm: return "진화! 튕길 때마다 풍선이 둘로 갈라진다";
+                case UpgradeId.Tornado: return "진화! 하얀 회오리가 떠돌며 불을 빨아들인다";
+                case UpgradeId.IceField: return "진화! 지뢰끼리 얼음 길로 이어진다";
+                case UpgradeId.Avalanche: return "진화! 화면을 가로지르는 거품 파도";
+                case UpgradeId.BubbleFall: return "진화! 갇힌 불을 한데 모아 큰 방울로 터뜨린다";
+                case UpgradeId.Waterline: return "진화! 맨홀이 줄지어 도미노처럼 터진다";
+                case UpgradeId.LadderBridge: return "진화! 사다리가 남아 불이 지나는 길을 막는다";
+                case UpgradeId.Whirl: return "진화! 휘두른 자리에 물 고리가 남아 돈다";
                 default: return "체력 30 회복";
             }
         }

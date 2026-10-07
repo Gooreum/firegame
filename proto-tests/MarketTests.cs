@@ -116,24 +116,6 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Curtain_WetsLinesAroundTheFirefighter()
-        {
-            var sim = Quiet();
-            Take(sim, UpgradeId.Curtain);
-            Structure a = Stall(sim, sim.Player.X - 3f, sim.Player.Y + 2f);
-            Structure b = Stall(sim, sim.Player.X + 3f, sim.Player.Y + 2f);
-            Lantern line = Link(sim, a, b);
-            bool burst = false;
-            for (int i = 0; i < 60 * 5 && !burst; i++)
-            {
-                sim.Step(0f, 0f);
-                burst = sim.JustCurtain;
-            }
-            Assert.True(burst);
-            Assert.True(line.Wet > 0f, "장막이 터지면 곁 등줄이 젖는다");
-        }
-
-        [Fact]
         public void FireworkStand_LaunchesRocketsAfterItsFuse_AndTheyStartFires()
         {
             var sim = Quiet();

@@ -24,10 +24,10 @@ namespace FireGame.Prototypes.Logic
         public static readonly Firefighter[] All =
         {
             new Firefighter { Id = "rookie", Name = "신입 소방관", Story = "물대포 하나로 시작한다", Start = new[] { UpgradeId.Hose }, Cost = 0 },
-            new Firefighter { Id = "rescue", Name = "구조반장", Story = "구조대원 한 명과 함께 출동한다", Start = new[] { UpgradeId.Hose, UpgradeId.Partner }, Cost = 3 },
-            new Firefighter { Id = "pilot", Name = "드론 담당", Story = "순찰 드론을 띄우고 시작한다", Start = new[] { UpgradeId.Hose, UpgradeId.Drone }, Cost = 5 },
+            new Firefighter { Id = "rescue", Name = "구조견 조련사", Story = "소방견 한 마리와 함께 출동한다", Start = new[] { UpgradeId.Hose, UpgradeId.Dog }, Cost = 3 },
+            new Firefighter { Id = "pilot", Name = "사다리차 기사", Story = "사다리차를 몰고 시작한다", Start = new[] { UpgradeId.Hose, UpgradeId.Ladder }, Cost = 5 },
             new Firefighter { Id = "pump", Name = "펌프 기사", Story = "고압 펌프를 달고 시작한다", Start = new[] { UpgradeId.Hose, UpgradeId.Tank }, Cost = 5 },
-            new Firefighter { Id = "veteran", Name = "베테랑", Story = "방화복을 입고 물의 장막을 두른다", Start = new[] { UpgradeId.Hose, UpgradeId.Curtain, UpgradeId.Suit }, Cost = 8 },
+            new Firefighter { Id = "veteran", Name = "베테랑", Story = "방화복을 입고 호스 채찍을 휘두른다", Start = new[] { UpgradeId.Hose, UpgradeId.Whip, UpgradeId.Suit }, Cost = 8 },
         };
 
         public const string Default = "rookie";

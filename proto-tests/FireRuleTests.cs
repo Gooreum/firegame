@@ -74,31 +74,6 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void OneShotWater_IgnoresBuildingWater()
-        {
-            // 드론 투하(한 방, resist=false)는 건물에도 DroneDropWater 전량이 먹힌다.
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 8f, 0f);
-            sim.Ignite(shop, 1f);
-            shop.Integrity = 100f;
-            sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { UpgradeId.Drone };
-            sim.Choose(0);
-            FireKnock? knock = null;
-            for (int i = 0; i < 60 * 6 && knock == null; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-                foreach (FireKnock k in sim.Knocked)
-                {
-                    if (k.At == shop) knock = k;
-                }
-            }
-            Assert.NotNull(knock);
-            Assert.Equal(SurvivorSim.DroneDropWater, knock.Value.Amount, 3);
-        }
-
-        [Fact]
         public void BigBuildingFire_SpreadsToTheNearestBuilding()
         {
             SurvivorSim sim = Quiet();

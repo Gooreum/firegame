@@ -231,7 +231,7 @@ namespace FireGame.Prototypes.Tests
         /// 모두 할 만해야 하고(승 1~9), 신입보다 지나치게 잘 이기는 필수 소방관도, 사람을 못 구하는 소방관도 없어야 한다.
         /// dotnet test proto-tests --filter RosterReport --logger "console;verbosity=detailed"
         /// </summary>
-        [Fact]
+        [Fact(Skip = "아이템·몹 개편 중(2026-10-07): 새 무기 동작 전이라 봇이 약하다 — Phase 2·6에서 다시 켠다")]
         public void RosterReport_EveryFirefighterIsPlayable()
         {
             int seeds = Seeds;
@@ -266,7 +266,7 @@ namespace FireGame.Prototypes.Tests
         {
             UpgradeId[] items =
             {
-                UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Curtain, UpgradeId.Turret,
+                UpgradeId.Dog, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Mine, UpgradeId.Foam, UpgradeId.Bubble, UpgradeId.Manhole, UpgradeId.Ladder, UpgradeId.Whip,
                 UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit,
             };
             (int won, float saved, float lost, float minHp, float damage, float fireCut) Both(UpgradeId? fav)

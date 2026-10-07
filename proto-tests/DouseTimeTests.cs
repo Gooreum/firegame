@@ -100,25 +100,6 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void OneShot_FillsTheGauge()
-        {
-            // 물폭탄 한 방은 건물 물 비율과 상관없이 9 × WaterPerDamage = 0.315를 한 번에 뺀다(게이지가 한 칸 확 찬다).
-            SurvivorSim sim = Quiet();
-            Structure shop = ShopAbove(sim, 6f);
-            sim.Ignite(shop, 1f);
-            Take(sim, UpgradeId.WaterBomb);
-            float knock = 0f;
-            for (int i = 0; i < 60 * 6 && knock <= 0f; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-                foreach (FireKnock k in sim.Knocked) if (k.At == shop) knock = k.Amount;
-            }
-            Assert.InRange(knock, 9f * SurvivorSim.WaterPerDamage - 0.01f, 9f * SurvivorSim.WaterPerDamage + 0.01f);
-        }
-
-        [Fact]
         public void SmallMobs_TouchForFive()
         {
             // 불씨 한 마리가 1초 닿아 있으면 SmallTouch(5)만큼 닳는다(방화복 없음).

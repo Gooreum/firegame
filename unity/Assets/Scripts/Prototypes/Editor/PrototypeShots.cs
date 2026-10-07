@@ -105,33 +105,6 @@ namespace FireGame.Prototypes.EditorTools
             }, 45, pro: true);
             // 대화재(3:00~): 붉은 가장자리, 남은 시간 막대와 랜드마크 갇힌 사람 수.
             failures += SurvivorShot(dir, "c20_finale", view => view.Sim.Finale && view.Sim.Time >= SurvivorSim.FinaleAt + 2f, 5);
-            // 새 무기(풀장비): 순찰 드론이 불난 지붕 위에서 물을 뿌리고, 구조대원 셋이 건물에 물을 뿜고, 방수 포탑이 쏜다.
-            failures += SurvivorShot(dir, "c22_new_weapons", view => view.Sim.Time >= 14f && view.Sim.DroneTarget != null && view.Sim.Turrets.Count > 0 && view.Sim.PendingChoices == null, 3, true);
-            // 여섯 진화를 모두 쥐고: 금빛 구조 분대, 하늘에서 떨어지는 공중 소화탄, 구조 드론의 구조 줄, 물의 방벽, 현장 구조소.
-            failures += SurvivorShot(dir, "c23_evolutions", view => view.Sim.Time >= 14f && view.Sim.Turrets.Count > 0 && view.Sim.Shots.Exists(s => s.Kind == ShotKind.Bomb && s.From.Y > s.Target.Y + 5f), 2, false, null, 1,
-                view => view.Sim.Build.EvolveAll());
-            // 무기 타격감: 무기 하나를 Lv5로 쥐고 곁에 불 몹을 세워 발사·적중 순간을 찍는다.
-            failures += SurvivorShot(dir, "c25a_bomb", view => view.Sim.Time > 3f && view.Sim.Explosions.Count > 0, 2, false, null, 1,
-                view => Armed(view, UpgradeId.WaterBomb));
-            failures += SurvivorShot(dir, "c25b_curtain", view => view.Sim.Time > 3f && view.Sim.JustCurtain, 3, false, null, 1,
-                view => Armed(view, UpgradeId.Curtain));
-            failures += SurvivorShot(dir, "c25c_turret", view => view.Sim.Turrets.Count >= 2 && view.Sim.Hits.Exists(h => h.Source == HitSource.Turret), 2, false, null, 1,
-                view => Armed(view, UpgradeId.Turret));
-            failures += SurvivorShot(dir, "c25d_partner", view => view.Sim.Time > 3f && view.Sim.Hits.Exists(h => h.Source == HitSource.Partner), 2, false, null, 1,
-                view => Armed(view, UpgradeId.Partner));
-            failures += SurvivorShot(dir, "c25e_drone", view => view.Sim.Time > 3f && view.Sim.Hits.Exists(h => h.Source == HitSource.Drone), 2, false, null, 1,
-                view => Armed(view, UpgradeId.Drone));
-            failures += SurvivorShot(dir, "c25f_airbomb", view => view.Sim.Time > 3.5f && view.Sim.AirBlasts.Count > 0, 3, false, null, 1, view =>
-            {
-                Armed(view, UpgradeId.WaterBomb);
-                Pick(view, Loadout.PairOf(UpgradeId.AirBomb), UpgradeId.AirBomb);
-                Structure near = null;
-                foreach (Structure st in view.Sim.Structures)
-                {
-                    if (st.IsBuilding && (near == null || st.DistanceTo(view.Sim.Player) < near.DistanceTo(view.Sim.Player))) near = st;
-                }
-                if (near != null) view.Sim.Ignite(near, 0.8f);
-            });
             // 불 규칙: 크게 타는 빵집이 옆 가게로 번지는 순간(빨간 알림 + 두 건물을 잇는 불길). 두 건물 가운데를 본다.
             failures += SurvivorShot(dir, "c26_fire_spread", view =>
             {
@@ -284,14 +257,6 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.Ignite(near, 1f);
                 view.Sim.Player = near.Door;
             }, false);
-            // 보조 재설계: 드론 투하, 도끼 문 부수기, 산소통 투척, 장화 발자국.
-            failures += SurvivorShot(dir, "c40_drone_drop", view => view.Sim.DroneDrops.Count > 0, 6, false,
-                view => view.Frame(new Vector3(view.Sim.DroneCenter.X, view.Sim.DroneCenter.Y, 0f), 7f), 1, view =>
-            {
-                Structure near = NearestHouse(view);
-                view.Sim.Ignite(near, 0.9f);
-                Pick(view, UpgradeId.Drone, UpgradeId.Drone, UpgradeId.Drone);
-            });
             // 발밑 안내 화살표: 가장 먼 집에 2명 갇힌 불이 나면 소방관 곁에서 그쪽으로 초록 화살표 + "이름 2명 갇힘".
             failures += SurvivorShot(dir, "c46_guide_arrow", view => view.Sim.Time > 0.4f, 3, false,
                 view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 0.5f, 0f), 7f), 1, view =>
