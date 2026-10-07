@@ -1376,7 +1376,8 @@ namespace FireGame.Prototypes.Logic
                 my /= len;
             }
             if (len > 0.01f) Facing = new Vec2(mx / Math.Max(len, 1f), my / Math.Max(len, 1f));
-            float speed = BaseSpeed * Build.SpeedScale;
+            // 숲: 장화 속도는 샘플 표(SampleSpeed, 장화 아이템이 정한다).
+            float speed = BaseSpeed * (Build.Free ? SampleSpeed : Build.SpeedScale);
             Player.X = Clamp(Player.X + (mx * speed * Dt), 0.5f, ArenaSize - 0.5f);
             Player.Y = Clamp(Player.Y + (my * speed * Dt), 0.5f, ArenaSize - 0.5f);
             // 장화: 걷는 동안 젖은 발자국을 남긴다(연출용, 한 칸마다).
@@ -3076,7 +3077,8 @@ namespace FireGame.Prototypes.Logic
             float push = Build.SuitPush;
             foreach (Enemy e in _near)
             {
-                if (e.Frozen > 0f || e.Captured > 0f) continue;
+                // 숲 샘플: 잡힌(거품·방울 속)·하늘로 날아간·샘플 얼음 요괴는 닿아도 안 덴다.
+                if (e.Frozen > 0f || e.Captured > 0f || e.Held || e.AirZ > 0f || e.SFrozen > 0f) continue;
                 Burn(e.Touch * Dt, HurtKind.Contact);
                 if (push <= 0f || e.BounceCool > 0f) continue;
                 e.BounceCool = SuitBounceCool;
@@ -3119,7 +3121,7 @@ namespace FireGame.Prototypes.Logic
         private void Burn(float raw, HurtKind kind)
         {
             Stats.FireDamageRaw += raw;
-            Hurt(raw * Build.HeatScale, kind);
+            Hurt(raw * Build.HeatScale * (Build.Free ? SampleHurt : 1f), kind);
         }
 
         private void Hurt(float amount, HurtKind kind)

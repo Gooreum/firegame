@@ -77,6 +77,7 @@ namespace FireGame.Prototypes
             _hudBand = UiKit.OutlinedLabel(_hud, "SampleHudBand", "", 42, new Color(0.91f, 0.96f, 1f), TextAnchor.MiddleCenter);
             UiKit.Place(_hudBand.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 64f), new Vector2(1600f, 64f));
             foreach (Text t in new[] { _hudName, _hudLv, _hudBand }) t.gameObject.SetActive(false);
+            BuildCrewHud();
         }
 
         private void AddSampleLayer(SampleCanvas c, int order, int kind)
@@ -188,7 +189,14 @@ namespace FireGame.Prototypes
         private void DrawSample(float dt)
         {
             foreach (SampleLayer l in _sLayers) l.Canvas.Clear();
-            if (!Free) return;
+            if (!Free)
+            {
+                if (_hudName != null && _hudName.gameObject.activeSelf)
+                {
+                    foreach (Text t in new[] { _hudName, _hudLv, _hudBand, _crewTitle, _crewCount, _crewX }) t.gameObject.SetActive(false);
+                }
+                return;
+            }
             // 흔들림·번쩍은 실제 시간으로 줄어든다(샘플 s.shake *= .002^real).
             _sim.SShake *= Mathf.Pow(0.002f, dt);
 
@@ -208,6 +216,7 @@ namespace FireGame.Prototypes
                 g.FillRect(cam.x - (w / 2f) - 40f, cam.y - (SampleH / 2f / TiltCos) - 40f, w + 80f, (SampleH / TiltCos) + 80f);
             }
             DrawRays(g);
+            DrawCrewGround(g);
             TierAura(g);
 
             // 공중 층: 아이템 몸·공중 그림 → 얼음덩이 → 파티클.
@@ -222,8 +231,8 @@ namespace FireGame.Prototypes
                 if (e.Dead || e.SFrozen <= 0f) continue;
                 IceBlock(a, SurvivorSim.SX(e.Pos), SurvivorSim.SY(e.Pos) - e.AirZ, SurvivorSim.SR(e), _sim.ST);
             }
+            DrawCrew(a);
             DrawParts(a);
-            DrawCrew();
 
             // 앞 층: 레벨업 머리 위 연출.
             DrawFxFront(_sf);
@@ -235,6 +244,7 @@ namespace FireGame.Prototypes
                 _ss.FillRect(0f, 0f, w, SampleH);
             }
             DrawSampleHud(_ss, dt);
+            DrawCrewScreen(_ss);
         }
 
         private void FlushSample()

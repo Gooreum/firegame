@@ -567,7 +567,7 @@ namespace FireGame.Prototypes
             _accumulator = 0f;
             // 숲: 샘플 화면 비율에서 소방관이 화면 높이 12%(샘플과 같은 몸 크기)로 보이게 키운다.
             if (_player != null) _player.transform.localScale = _personScale * (Free ? SamplePersonScale : 1f);
-            float hudDrop = Free ? -184f : 0f;
+            float hudDrop = Free ? -380f : 0f;
             _level.rectTransform.anchoredPosition = new Vector2(30f, -48f + hudDrop);
             _comboText.rectTransform.anchoredPosition = new Vector2(30f, -110f + hudDrop);
             _windLabel.rectTransform.anchoredPosition = new Vector2(30f, -128f + hudDrop);
@@ -1041,7 +1041,6 @@ namespace FireGame.Prototypes
             ReactGuardian();
             ReactArsenal();
             ReactMobs();
-            ReactFree();
             int kills = 0;
             foreach (Hit h in _sim.Hits)
             {
@@ -5242,7 +5241,7 @@ namespace FireGame.Prototypes
             // 수호자 마을은 동네를 잃어도 안 지므로, 지킨 비율이 대화재 감독의 "위험"(0.45) 밑이면 깜빡인다.
             bool edge = total > 0 && (_sim.Guardian ? _sim.VillageSaved < SurvivorSim.GuardTight : (_sim.HousesLost + 1) * 2 > total) && _sim.Outcome == SOutcome.Playing;
             _kills.color = edge && Mathf.Sin(_time * 10f) > 0f ? new Color(1f, 0.35f, 0.3f) : new Color(1f, 0.85f, 0.6f);
-            _level.text = "Lv " + _sim.Level + (Free ? "    구조대원 " + _sim.CrewList.Count + "/" + SurvivorSim.MaxCrew : "");
+            _level.text = "Lv " + _sim.Level;
 
             bool combo = _sim.Combo >= 3 && _sim.Outcome == SOutcome.Playing;
             _comboText.gameObject.SetActive(combo);

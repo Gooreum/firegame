@@ -238,6 +238,12 @@ namespace FireGame.Prototypes.Logic
             if (_levels[i] < MaxLevelOf(id)) _levels[i]++;
         }
 
+        /// <summary>시험·캡처용: 이 아이템을 내려놓는다(샘플 벤치는 아이템 하나만 든다).</summary>
+        public void Drop(UpgradeId id)
+        {
+            _levels[(int)id] = 0;
+        }
+
         /// <summary>시험용 풀장비: 4칸을 최대로 채우고 진화 둘까지(캡처·풀장비 측정).</summary>
         public void MaxAll()
         {

@@ -108,6 +108,12 @@ namespace FireGame.Prototypes.Logic
         /// <summary>샘플 시각(s.t): 숲 그림의 무지개·회전이 이 시계를 쓴다.</summary>
         public float ST;
 
+        /// <summary>숲 이동 속도 배율(샘플 장화 표 1/1.25/1.5/1.8/2.1/2.6). 장화가 없으면 1.</summary>
+        public float SampleSpeed = 1f;
+
+        /// <summary>숲 받는 피해 배율(샘플 방화복). 방화복 아이템이 정한다.</summary>
+        public float SampleHurt = 1f;
+
         /// <summary>샘플 s.player.moving: 이번 틱 소방관이 움직였나.</summary>
         public bool PlayerMoving;
 
@@ -690,6 +696,11 @@ namespace FireGame.Prototypes.Logic
             f = LevelFx;
             SDark = f != null && f.Lv == 6 ? (f.Age < f.BoomAt ? f.Age / f.BoomAt * 0.72f : Math.Max(0f, 0.72f - ((f.Age - f.BoomAt) * 1.4f))) : 0f;
             TickCds();
+            // 처음부터 든 아이템(시작 물대포 등)도 샘플 동작을 갖는다.
+            foreach (UpgradeId id in Build.Owned())
+            {
+                if (id != UpgradeId.Heal) SampleItemOf(id);
+            }
             foreach (SampleItem it in SampleItems)
             {
                 it.Surge = Math.Max(0f, it.Surge - (Dt * 1.6f));
