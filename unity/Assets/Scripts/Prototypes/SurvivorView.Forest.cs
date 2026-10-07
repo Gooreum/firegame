@@ -12,6 +12,9 @@ namespace FireGame.Prototypes
     /// </summary>
     public sealed partial class SurvivorView
     {
+        /// <summary>대원·구한 사람 3D 몸 배율: 샘플 대원 줄(30~52px 반원)에서 서로·소방관을 덮지 않는 크기.</summary>
+        private const float CrewScale = 1.15f;
+
         private Text _crewTitle;
         private Text _crewCount;
         private Text _crewX;
@@ -98,7 +101,7 @@ namespace FireGame.Prototypes
                 GameObject person = _people.Get(CivilianModel(c.Idx));
                 if (person != null)
                 {
-                    person.transform.localScale = _personScale * SamplePersonScale;
+                    person.transform.localScale = _personScale * CrewScale;
                     Models3D.Pose(person, SGround(new Vector2(c.X, c.Y)) + Up(c.Z * SurvivorSim.Px), new Vector3(0f, -1f, 0f));
                     Models3D.Play(person, c.State == 0 ? "Run" : "Idle", 1.2f, _time + i);
                     Models3D.Tint(person, Color.white, CivilianColor(c.Idx), 10 + CivilianKind(c.Idx));
@@ -128,7 +131,7 @@ namespace FireGame.Prototypes
                 bool aiming = c.Aim != null && !c.Aim.Dead && c.AimAge > 0f;
                 if (person != null)
                 {
-                    person.transform.localScale = _personScale * SamplePersonScale;
+                    person.transform.localScale = _personScale * CrewScale;
                     float aimX = aiming ? SurvivorSim.SX(c.Aim.Pos) - c.X : c.Face;
                     float aimY = aiming ? -(SurvivorSim.SY(c.Aim.Pos) - c.Y) : 0f;
                     Models3D.Pose(person, SGround(new Vector2(c.X, c.Y)), new Vector3(aimX, aimY, 0f));

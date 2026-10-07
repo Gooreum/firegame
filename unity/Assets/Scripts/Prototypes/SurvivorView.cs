@@ -5304,7 +5304,7 @@ namespace FireGame.Prototypes
             float s = _alertAge < 0.15f ? Mathf.Lerp(_alertScale, 1f, _alertAge / 0.15f) : 1f;
             _alert.rectTransform.localScale = Vector3.one * s;
             float shake = _alertAge < 0.6f ? Mathf.Sin(_alertAge * 60f) * 14f * (1f - (_alertAge / 0.6f)) : 0f;
-            _alert.rectTransform.anchoredPosition = new Vector2(shake, 250f);
+            _alert.rectTransform.anchoredPosition = new Vector2(shake, Free ? 110f : 250f);
 
             // 대화재 막대: 체력 막대가 아니라 "끝까지 남은 시간". 이름 칸엔 랜드마크에 갇힌 사람 수.
             bool finale = _sim.Finale && _sim.Outcome == SOutcome.Playing;
