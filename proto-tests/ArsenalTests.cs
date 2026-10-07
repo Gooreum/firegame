@@ -427,5 +427,208 @@ namespace FireGame.Prototypes.Tests
             Assert.True(ember.Hp < ember.MaxHp, "파도에 맞아야");
             Assert.True(shop.Fire < fire, "파도가 불을 적셔야");
         }
+
+        // ------------------------------------------------------------------
+        // 액체질소 지뢰
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public void Mine_FreezesWhatStepsOnIt_ThenItShatters()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Mine);
+            Run(sim, 0.5f);
+            Assert.Single(sim.Mines);
+            Mine m = sim.Mines[0];
+            sim.Player = new Vec2(sim.Player.X - 6f, sim.Player.Y);
+            Enemy ember = sim.Spawn(EnemyKind.Ember, m.Pos);
+            ember.MaxHp = ember.Hp = 999f;
+            Run(sim, 0.1f);
+            Assert.True(ember.Frozen > 0f, "밟은 몹이 얼어야");
+            Assert.DoesNotContain(m, sim.Mines);
+            Vec2 at = ember.Pos;
+            Run(sim, 1f);
+            Assert.True(ember.Pos.DistanceTo(at) < 0.01f, "언 몹은 못 움직인다");
+            Run(sim, SurvivorSim.FreezeTime, () => ember.Frozen <= 0f);
+            Assert.True(ember.Frozen <= 0f);
+            Assert.True(ember.Hp <= 999f - SurvivorSim.MineShatter + 0.01f, "풀리며 깨져야");
+        }
+
+        [Fact]
+        public void FrozenEmber_DoesNotBurnTheFirefighter()
+        {
+            SurvivorSim sim = Quiet();
+            Enemy ember = Dummy(sim, EnemyKind.Ember, 0.2f, 0f);
+            ember.Frozen = 5f;
+            float hp = sim.Hp;
+            sim.Step(0f, 0f);
+            sim.Step(0f, 0f);
+            Assert.Equal(hp, sim.Hp);
+        }
+
+        [Fact]
+        public void Mine_HoldsAtMostItsLevelPlusOne()
+        {
+            Assert.Equal(new[] { 0, 2, 3, 4, 5, 6 }, SurvivorSim.MineMax);
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Mine);
+            // 걸으며 깐다: 1.5칸 넘게 떨어질 때마다 하나, 최대 2개.
+            for (int i = 0; i < 60 * 6; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Step(i % 240 < 120 ? 1f : -1f, 0f);
+            }
+            Assert.Equal(2, sim.Mines.Count);
+        }
+
+        [Fact]
+        public void IceField_LinksMines_AndFreezesWhatCrossesTheLine()
+        {
+            SurvivorSim sim = Quiet();
+            Evolve(sim, UpgradeId.IceField);
+            sim.Mines.Clear();
+            sim.Mines.Add(new Mine { Pos = new Vec2(sim.Player.X + 2f, sim.Player.Y + 4f) });
+            sim.Mines.Add(new Mine { Pos = new Vec2(sim.Player.X + 6f, sim.Player.Y + 4f) });
+            Enemy ember = Dummy(sim, EnemyKind.Ember, 4f, 4f);
+            Run(sim, 0.1f);
+            Assert.True(ember.Frozen > 0f, "얼음 길 위 몹이 얼어야");
+            // 얼음 길로 얼린 것은 지뢰를 쓰지 않는다(두 지뢰가 그대로 남는다).
+            Assert.Equal(2, sim.Mines.FindAll(m => m.Pos.DistanceTo(sim.Player) > 1f).Count);
+        }
+
+        // ------------------------------------------------------------------
+        // 비눗방울
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public void Bubble_TrapsASmallFire_FloatsIt_AndPopsItDead()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Bubble);
+            Enemy ember = Dummy(sim, EnemyKind.Ember, 4f, 0f, 4f);
+            Run(sim, 1f, () => ember.Captured > 0f);
+            Assert.True(ember.Captured > 0f, "방울에 갇혀야");
+            int kills = sim.Kills;
+            bool popped = false;
+            Run(sim, SurvivorSim.BubbleHold + 0.2f, () => popped |= sim.BubblePops.Count > 0);
+            Assert.True(popped);
+            Assert.True(ember.Dead);
+            Assert.True(sim.Kills > kills);
+        }
+
+        [Fact]
+        public void Bubble_CannotTrapAHeavyFire_OnlyHitsIt()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Bubble);
+            Enemy big = Dummy(sim, EnemyKind.Blaze, 4f, 0f);
+            big.Heavy = true;
+            Run(sim, 1f, () => big.Hp < big.MaxHp);
+            Assert.Equal(0f, big.Captured);
+            Assert.True(big.Hp < big.MaxHp);
+        }
+
+        [Fact]
+        public void Bubble_GoesForTheRaiderFirst()
+        {
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Bubble);
+            Enemy near = Dummy(sim, EnemyKind.Ember, 2f, 0f, 4f);
+            Enemy raider = Dummy(sim, EnemyKind.Ember, -6f, 0f, 4f);
+            raider.Goal = Shop(sim, -10f, 0f);
+            Run(sim, 1f, () => raider.Captured > 0f || near.Captured > 0f);
+            Assert.True(raider.Captured > 0f, "마을을 노리는 몹부터");
+        }
+
+        [Fact]
+        public void BubbleFall_GathersTrappedFires_IntoOneBigPop()
+        {
+            SurvivorSim sim = Quiet();
+            Evolve(sim, UpgradeId.BubbleFall);
+            var trapped = new List<Enemy>();
+            for (int k = 0; k < 3; k++)
+            {
+                Enemy e = Dummy(sim, EnemyKind.Ember, 3f + k, 2f);
+                e.Captured = 0.05f + (0.5f * k);
+                trapped.Add(e);
+            }
+            Enemy bystander = Dummy(sim, EnemyKind.Blaze, 4f, 3.5f);
+            Run(sim, 0.2f);
+            Assert.All(trapped, e => Assert.True(e.Dead, "한꺼번에 터져야"));
+            Assert.True(bystander.Hp < bystander.MaxHp, "큰 방울 물보라가 곁 불도 친다");
+        }
+
+        // ------------------------------------------------------------------
+        // 맨홀 간헐천
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public void Manholes_LieOnOpenGround()
+        {
+            var sim = new SurvivorSim(1, 1) { Guardian = false };
+            Assert.True(sim.Manholes.Count > 20, "맨홀 " + sim.Manholes.Count);
+            foreach (Vec2 m in sim.Manholes) Assert.DoesNotContain(sim.Structures, s => s.Within(m, 0.5f));
+        }
+
+        [Fact]
+        public void Manhole_EruptsUnderTheCrowd_AfterAWarning()
+        {
+            SurvivorSim sim = Quiet();
+            sim.Manholes.Clear();
+            var hole = new Vec2(sim.Player.X + 5f, sim.Player.Y);
+            sim.Manholes.Add(hole);
+            sim.Manholes.Add(new Vec2(sim.Player.X - 5f, sim.Player.Y));
+            Take(sim, UpgradeId.Manhole);
+            Enemy a = Dummy(sim, EnemyKind.Ember, 5.5f, 0f);
+            Enemy b = Dummy(sim, EnemyKind.Ember, 4.5f, 0.5f);
+            Run(sim, 0.1f);
+            Assert.Single(sim.Geysers);
+            Assert.Equal(hole.X, sim.Geysers[0].Pos.X, 2);
+            Assert.Equal(a.MaxHp, a.Hp);
+            bool burst = false;
+            Run(sim, SurvivorSim.GeyserFuse + 0.1f, () => burst |= sim.GeyserBursts.Count > 0);
+            Assert.True(burst);
+            Assert.True(a.Hp < a.MaxHp && b.Hp < b.MaxHp);
+        }
+
+        [Fact]
+        public void Manhole_MoreAtOnceWithLevel()
+        {
+            Assert.Equal(new[] { 0, 1, 1, 2, 3, 4 }, SurvivorSim.GeyserCount);
+            SurvivorSim sim = Quiet();
+            sim.Manholes.Clear();
+            for (int k = 0; k < 6; k++)
+            {
+                var m = new Vec2(sim.Player.X - 7.5f + (3f * k), sim.Player.Y + 3f);
+                sim.Manholes.Add(m);
+                Dummy(sim, EnemyKind.Ember, m.X - sim.Player.X, 3f);
+            }
+            Take(sim, UpgradeId.Manhole, Loadout.MaxLevel);
+            Run(sim, 0.1f);
+            Assert.Equal(4, sim.Geysers.Count);
+        }
+
+        [Fact]
+        public void Waterline_BurstsInARow_LikeDominoes()
+        {
+            SurvivorSim sim = Quiet();
+            sim.Manholes.Clear();
+            sim.Manholes.Add(new Vec2(sim.Player.X + 3f, sim.Player.Y));
+            Evolve(sim, UpgradeId.Waterline);
+            for (int k = 0; k < 4; k++) Dummy(sim, EnemyKind.Ember, 3.5f + (1.6f * k), 0f);
+            Run(sim, 0.1f);
+            Assert.Equal(6, sim.Geysers.Count);
+            int bursts = 0;
+            int ticksWithBurst = 0;
+            Run(sim, 1.5f, () =>
+            {
+                if (sim.GeyserBursts.Count > 0) ticksWithBurst++;
+                bursts += sim.GeyserBursts.Count;
+                return false;
+            });
+            Assert.Equal(6, bursts);
+            Assert.True(ticksWithBurst >= 5, "차례로 터져야: " + ticksWithBurst + "틱");
+        }
     }
 }
