@@ -204,7 +204,7 @@ namespace FireGame.Prototypes.Tests
         {
             // 네 칸이 다 찼고 모두 최대라 진화(물대포·채찍 → 펌프 짝)만 남았다: 진화만 나온다. 전엔 회복 카드가 끼었다.
             var l = new Loadout();
-            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.Whip, UpgradeId.Dog, UpgradeId.Tank })
+            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.Whip, UpgradeId.Sprinkler, UpgradeId.Tank })
                 for (int k = 0; k < Loadout.MaxLevel; k++) l.Add(id);
             var rng = new Rng(3);
             for (int i = 0; i < 50; i++)
@@ -222,7 +222,7 @@ namespace FireGame.Prototypes.Tests
         {
             var l = new Loadout();
             l.Add(UpgradeId.Hose);
-            l.Add(UpgradeId.Ladder);
+            l.Add(UpgradeId.Chain);
             l.Add(UpgradeId.Mine);
             l.Add(UpgradeId.Suit);
             Assert.Equal(4, l.WeaponCount + l.PassiveCount);
@@ -230,9 +230,9 @@ namespace FireGame.Prototypes.Tests
             var rng = new Rng(11);
             var seen = new HashSet<UpgradeId>();
             for (int i = 0; i < 500; i++) foreach (UpgradeId id in SurvivorUpgrades.Roll(l, 2, ref rng)) seen.Add(id);
-            Assert.Equal(new HashSet<UpgradeId> { UpgradeId.Hose, UpgradeId.Ladder, UpgradeId.Mine, UpgradeId.Suit }, seen);
+            Assert.Equal(new HashSet<UpgradeId> { UpgradeId.Hose, UpgradeId.Chain, UpgradeId.Mine, UpgradeId.Suit }, seen);
             // 칸보다 종류가 많다: 네 칸이 차면 다른 무기·보조는 못 얻는다.
-            Assert.False(l.CanTake(UpgradeId.Dog));
+            Assert.False(l.CanTake(UpgradeId.Sprinkler));
             Assert.False(l.CanTake(UpgradeId.Tank));
         }
 
@@ -836,7 +836,7 @@ namespace FireGame.Prototypes.Tests
             var sim = new SurvivorSim(1) { Guardian = false };
             sim.GiveMaxGear();
 
-            Assert.Equal(Loadout.MaxLevel, sim.Build.Level(UpgradeId.Ladder));
+            Assert.Equal(Loadout.MaxLevel, sim.Build.Level(UpgradeId.Chain));
             Assert.Equal(Loadout.MaxLevel, sim.Build.Level(UpgradeId.Tank));
             Assert.Equal(1, sim.Build.Level(UpgradeId.Cannon));
             Assert.Equal(1, sim.Build.Level(UpgradeId.Whirl));
@@ -886,9 +886,9 @@ namespace FireGame.Prototypes.Tests
         {
             var sim = new SurvivorSim(1, 1, Roster.Get("veteran").Start) { Guardian = false };
             Assert.Equal(1, sim.Build.Level(UpgradeId.Hose));
-            Assert.Equal(1, sim.Build.Level(UpgradeId.Ladder));
+            Assert.Equal(1, sim.Build.Level(UpgradeId.Chain));
             Assert.Equal(1, sim.Build.Level(UpgradeId.Suit));
-            Assert.Equal(0, sim.Build.Level(UpgradeId.Dog));
+            Assert.Equal(0, sim.Build.Level(UpgradeId.Sprinkler));
             Assert.Equal(sim.MaxHp, sim.Hp);
             Assert.True(sim.MaxHp > SurvivorSim.BaseMaxHp, "방화복이 최대 체력을 올려야 한다");
 

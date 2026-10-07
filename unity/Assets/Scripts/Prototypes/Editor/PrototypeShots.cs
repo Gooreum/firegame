@@ -382,9 +382,9 @@ namespace FireGame.Prototypes.EditorTools
 
 
             // 새 무기 9종(2026-10-07): Lv5로 쥐고 둘레에 불 몹을 세워 움직임을 찍는다(h1x), 진화(h2x), 진화 카드(h30).
-            failures += SurvivorShot(dir, "h10_dog", view => view.Sim.Time > 3.3f && view.Sim.Time > 2.5f && view.Sim.DogBites.Count > 0, 2, false, Near(6f), 1, view => Armed(view, UpgradeId.Dog));
+            failures += SurvivorShot(dir, "h10_dog", view => view.Sim.Time > 3.3f && view.Sim.Time > 2.5f && view.Sim.DogBites.Count > 0, 2, false, Near(6f), 1, view => Armed(view, UpgradeId.Sprinkler));
             failures += SurvivorShot(dir, "h11_whip", view => view.Sim.Time > 3.3f && view.Sim.Time > 1.5f, 1, false, Near(6f), 1, view => Armed(view, UpgradeId.Whip));
-            failures += SurvivorShot(dir, "h12_ladder", view => view.Sim.Time > 3.3f && view.Sim.LadderStrikes.Count > 0, 4, false, Near(8f), 1, view => Armed(view, UpgradeId.Ladder));
+            failures += SurvivorShot(dir, "h12_ladder", view => view.Sim.Time > 3.3f && view.Sim.LadderStrikes.Count > 0, 4, false, Near(8f), 1, view => Armed(view, UpgradeId.Chain));
             failures += SurvivorShot(dir, "h13_balloon", view => view.Sim.Time > 3.3f && view.Sim.Time > 1f && view.Sim.Balloons.Count >= 2, 1, false, Near(7f), 1, view => Armed(view, UpgradeId.Balloon));
             failures += SurvivorShot(dir, "h14_extinguisher", view => view.Sim.Time > 3.3f && view.Sim.Boomerangs.Exists(b => b.Back), 1, false, Near(8f), 1, view => Armed(view, UpgradeId.Extinguisher));
             failures += SurvivorShot(dir, "h15_foam", view => view.Sim.Time > 3.3f && view.Sim.FoamBalls.Exists(f => f.Age > 0.8f), 1, false, Near(7f), 1, view => Armed(view, UpgradeId.Foam));
@@ -399,9 +399,9 @@ namespace FireGame.Prototypes.EditorTools
                 Crowd(view, 8, 4f, 5f, false);
             });
             failures += SurvivorShot(dir, "h18_manhole", view => view.Sim.Time > 3.3f && view.Sim.GeyserBursts.Count > 0, 3, false, Near(7f), 1, view => Armed(view, UpgradeId.Manhole));
-            failures += SurvivorShot(dir, "h20_dogpack", view => view.Sim.Time > 3.3f && view.Sim.Time > 2f && view.Sim.Dogs.Count == SurvivorSim.DogPackCount, 1, false, Near(7f), 1, view => Evolved(view, UpgradeId.DogPack));
+            failures += SurvivorShot(dir, "h20_dogpack", view => view.Sim.Time > 3.3f && view.Sim.Time > 2f && view.Sim.Dogs.Count == SurvivorSim.DogPackCount, 1, false, Near(7f), 1, view => Evolved(view, UpgradeId.Crown));
             failures += SurvivorShot(dir, "h21_whirl", view => view.Sim.Time > 3.3f && view.Sim.WhirlMarks.Count > 12, 1, false, Near(6f), 1, view => Evolved(view, UpgradeId.Whirl));
-            failures += SurvivorShot(dir, "h22_bridge", view => view.Sim.Time > 3.3f && view.Sim.Ladders.Exists(l => l.Struck && l.Age > 0.6f), 1, false, Near(8f), 1, view => Evolved(view, UpgradeId.LadderBridge));
+            failures += SurvivorShot(dir, "h22_bridge", view => view.Sim.Time > 3.3f && view.Sim.Ladders.Exists(l => l.Struck && l.Age > 0.6f), 1, false, Near(8f), 1, view => Evolved(view, UpgradeId.Surge));
             failures += SurvivorShot(dir, "h23_storm", view => view.Sim.Time > 3.3f && view.Sim.Balloons.FindAll(b => b.Small).Count >= 3, 1, false, Near(7f), 1, view => Evolved(view, UpgradeId.BalloonStorm));
             failures += SurvivorShot(dir, "h24_tornado", view => view.Sim.Time > 3.3f && view.Sim.Tornadoes.Exists(t => t.Life < SurvivorSim.TornadoLife - 1f), 1, false, Near(8f), 1, view => Evolved(view, UpgradeId.Tornado));
             failures += SurvivorShot(dir, "h25_avalanche", view => view.Sim.Time > 3.3f && view.Sim.AvalancheX.HasValue && System.Math.Abs(view.Sim.AvalancheX.Value - view.Sim.Player.X) < 3f, 1, false, Near(10f), 1, view => Evolved(view, UpgradeId.Avalanche));

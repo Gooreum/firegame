@@ -80,7 +80,7 @@ namespace FireGame.Prototypes.Tests
         public void Dog_RunsToAnEmber_AndBitesItDown()
         {
             SurvivorSim sim = Quiet();
-            Take(sim, UpgradeId.Dog);
+            Take(sim, UpgradeId.Sprinkler);
             Enemy ember = Dummy(sim, EnemyKind.Ember, 5f, 0f, 20f);
             bool bit = false;
             Run(sim, 4f, () => (bit |= sim.DogBites.Count > 0) && ember.Dead);
@@ -93,7 +93,7 @@ namespace FireGame.Prototypes.Tests
         public void Dog_PrefersTheRaider_ThatGoesForAHouse()
         {
             SurvivorSim sim = Quiet();
-            Take(sim, UpgradeId.Dog);
+            Take(sim, UpgradeId.Sprinkler);
             Enemy chaser = Dummy(sim, EnemyKind.Ember, 3f, 0f);
             Enemy raider = Dummy(sim, EnemyKind.Ember, -6f, 0f);
             raider.Goal = Shop(sim, -10f, 0f);
@@ -108,7 +108,7 @@ namespace FireGame.Prototypes.Tests
             var seen = new List<int>();
             for (int lv = 1; lv <= Loadout.MaxLevel; lv++)
             {
-                Take(sim, UpgradeId.Dog);
+                Take(sim, UpgradeId.Sprinkler);
                 Run(sim, 0.1f);
                 seen.Add(sim.Dogs.Count);
             }
@@ -119,7 +119,7 @@ namespace FireGame.Prototypes.Tests
         public void Dog_WithNothingToBite_BarksAtABurningShop_AndSoaksIt()
         {
             SurvivorSim sim = Quiet();
-            Take(sim, UpgradeId.Dog);
+            Take(sim, UpgradeId.Sprinkler);
             Structure shop = Shop(sim, 0f, 5f, 0.6f);
             float before = shop.Fire;
             Run(sim, 5f);
@@ -130,7 +130,7 @@ namespace FireGame.Prototypes.Tests
         public void DogPack_FourDogs_PullPeopleOut()
         {
             SurvivorSim sim = Quiet();
-            Evolve(sim, UpgradeId.DogPack);
+            Evolve(sim, UpgradeId.Crown);
             Structure shop = Shop(sim, 0f, 6f, 1f, 2);
             Run(sim, 0.1f);
             Assert.Equal(SurvivorSim.DogPackCount, sim.Dogs.Count);
@@ -202,7 +202,7 @@ namespace FireGame.Prototypes.Tests
         public void Ladder_StrikesAWholeLineOfEmbers()
         {
             SurvivorSim sim = Quiet();
-            Take(sim, UpgradeId.Ladder);
+            Take(sim, UpgradeId.Chain);
             var row = new List<Enemy>();
             for (int k = 0; k < 4; k++) row.Add(Dummy(sim, EnemyKind.Ember, 1.5f + (1.2f * k), 0f));
             Run(sim, 1f, () => sim.LadderStrikes.Count > 0);
@@ -214,7 +214,7 @@ namespace FireGame.Prototypes.Tests
         public void Ladder_SoaksTheShopItLandsOn_AndBringsSomeoneDown()
         {
             SurvivorSim sim = Quiet();
-            Take(sim, UpgradeId.Ladder);
+            Take(sim, UpgradeId.Chain);
             Structure shop = Shop(sim, 5f, 0f, 0.5f, 2);
             float fire = shop.Fire;
             Run(sim, 1f, () => sim.LadderStrikes.Count > 0);
@@ -226,7 +226,7 @@ namespace FireGame.Prototypes.Tests
         public void Ladder_ReachesFurther_AndSplitsWithLevel()
         {
             SurvivorSim sim = Quiet();
-            Take(sim, UpgradeId.Ladder, Loadout.MaxLevel);
+            Take(sim, UpgradeId.Chain, Loadout.MaxLevel);
             Run(sim, 1f, () => sim.LadderStrikes.Count > 0);
             Assert.Equal(3, sim.LadderStrikes.Count);
             Assert.All(sim.LadderStrikes, l => Assert.Equal(10f, l.Len, 2));
@@ -236,7 +236,7 @@ namespace FireGame.Prototypes.Tests
         public void LadderBridge_StaysAndPushesEmbersOffTheLine()
         {
             SurvivorSim sim = Quiet();
-            Evolve(sim, UpgradeId.LadderBridge);
+            Evolve(sim, UpgradeId.Surge);
             Run(sim, 1f, () => sim.LadderStrikes.Count > 0);
             Ladder l = sim.Ladders[0];
             Assert.Equal(SurvivorSim.BridgeLife, l.Life);

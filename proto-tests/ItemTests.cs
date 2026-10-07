@@ -64,7 +64,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Items_AreTenWeaponsThreePassivesTenEvolutions()
         {
-            UpgradeId[] weapons = { UpgradeId.Hose, UpgradeId.Dog, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Mine, UpgradeId.Foam, UpgradeId.Bubble, UpgradeId.Manhole, UpgradeId.Ladder, UpgradeId.Whip };
+            UpgradeId[] weapons = { UpgradeId.Hose, UpgradeId.Sprinkler, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Mine, UpgradeId.Foam, UpgradeId.Bubble, UpgradeId.Manhole, UpgradeId.Chain, UpgradeId.Whip };
             UpgradeId[] passives = { UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit };
             var pairs = new Dictionary<UpgradeId, int>();
             foreach (UpgradeId id in weapons)
@@ -101,7 +101,7 @@ namespace FireGame.Prototypes.Tests
             l.Add(UpgradeId.Hose);
             l.Add(UpgradeId.Whip);
             l.Add(UpgradeId.Tank);
-            Assert.True(l.CanTake(UpgradeId.Dog), "셋일 땐 넷째를 들 수 있어야 한다");
+            Assert.True(l.CanTake(UpgradeId.Sprinkler), "셋일 땐 넷째를 들 수 있어야 한다");
             Assert.True(l.CanTake(UpgradeId.Suit), "넷째는 보조여도 된다");
             l.Add(UpgradeId.Suit);
             Assert.Equal(4, l.WeaponCount + l.PassiveCount);
@@ -139,14 +139,14 @@ namespace FireGame.Prototypes.Tests
 
         [Theory]
         [InlineData(UpgradeId.Cannon)]
-        [InlineData(UpgradeId.DogPack)]
+        [InlineData(UpgradeId.Crown)]
         [InlineData(UpgradeId.BalloonStorm)]
         [InlineData(UpgradeId.Tornado)]
         [InlineData(UpgradeId.IceField)]
         [InlineData(UpgradeId.Avalanche)]
         [InlineData(UpgradeId.BubbleFall)]
         [InlineData(UpgradeId.Waterline)]
-        [InlineData(UpgradeId.LadderBridge)]
+        [InlineData(UpgradeId.Surge)]
         [InlineData(UpgradeId.Whirl)]
         public void MaxWeaponPlusPair_OffersItsEvolution_ThatTakesTheWeaponSlot(UpgradeId evolution)
         {
@@ -238,9 +238,9 @@ namespace FireGame.Prototypes.Tests
                     Assert.NotEqual("응급 처치", SurvivorUpgrades.Name(id));
                 }
             }
-            Assert.Contains("2마리", SurvivorUpgrades.Describe(UpgradeId.Dog, 3));
+            Assert.Contains("3개", SurvivorUpgrades.Describe(UpgradeId.Sprinkler, 3));
             Assert.Contains("두 갈래", SurvivorUpgrades.Describe(UpgradeId.Whip, 3));
-            Assert.Contains("세 방향", SurvivorUpgrades.Describe(UpgradeId.Ladder, 5));
+            Assert.Contains("두 줄기", SurvivorUpgrades.Describe(UpgradeId.Chain, 5));
             Assert.Contains("증기", SurvivorUpgrades.Describe(UpgradeId.Tank, 1));
             Assert.Contains("불 바닥", SurvivorUpgrades.Describe(UpgradeId.Boots, 1));
             Assert.Contains("튕겨", SurvivorUpgrades.Describe(UpgradeId.Suit, 1));

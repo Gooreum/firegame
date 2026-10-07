@@ -11,8 +11,8 @@ namespace FireGame.Prototypes.Logic
     {
         private static readonly UpgradeId[] Priority =
         {
-            UpgradeId.Cannon, UpgradeId.DogPack, UpgradeId.BalloonStorm, UpgradeId.Tornado, UpgradeId.IceField, UpgradeId.Avalanche, UpgradeId.BubbleFall, UpgradeId.Waterline, UpgradeId.LadderBridge, UpgradeId.Whirl,
-            UpgradeId.Hose, UpgradeId.Whip, UpgradeId.Dog, UpgradeId.Ladder, UpgradeId.Manhole, UpgradeId.Foam, UpgradeId.Mine, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Bubble,
+            UpgradeId.Cannon, UpgradeId.Crown, UpgradeId.BalloonStorm, UpgradeId.Tornado, UpgradeId.IceField, UpgradeId.Avalanche, UpgradeId.BubbleFall, UpgradeId.Waterline, UpgradeId.Surge, UpgradeId.Whirl,
+            UpgradeId.Hose, UpgradeId.Whip, UpgradeId.Sprinkler, UpgradeId.Chain, UpgradeId.Manhole, UpgradeId.Foam, UpgradeId.Mine, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Bubble,
             UpgradeId.Tank, UpgradeId.Suit, UpgradeId.Boots,
         };
 

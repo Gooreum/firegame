@@ -270,7 +270,7 @@ namespace FireGame.Prototypes.Tests
         {
             UpgradeId[] items =
             {
-                UpgradeId.Dog, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Mine, UpgradeId.Foam, UpgradeId.Bubble, UpgradeId.Manhole, UpgradeId.Ladder, UpgradeId.Whip,
+                UpgradeId.Sprinkler, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Mine, UpgradeId.Foam, UpgradeId.Bubble, UpgradeId.Manhole, UpgradeId.Chain, UpgradeId.Whip,
                 UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit,
             };
             (int won, float saved, float lost, float minHp, float damage, float fireCut) Both(UpgradeId? fav)

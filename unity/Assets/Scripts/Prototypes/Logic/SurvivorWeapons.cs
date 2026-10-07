@@ -299,7 +299,7 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Foam: _foamClock = 0.05f; break;
                 case UpgradeId.Bubble: _bubbleClock = 0.05f; break;
                 case UpgradeId.Manhole: _geyserClock = 0.05f; break;
-                case UpgradeId.Ladder: _ladderClock = 0.05f; break;
+                case UpgradeId.Chain: _ladderClock = 0.05f; break;
                 case UpgradeId.Mine: _mineClock = 0f; break;
             }
             if (id == UpgradeId.Tornado) _tornadoClock = 0.5f;
@@ -431,8 +431,8 @@ namespace FireGame.Prototypes.Logic
 
         private void TickDogs()
         {
-            int lv = Build.PowerOf(UpgradeId.Dog);
-            bool pack = Build.Level(UpgradeId.DogPack) > 0;
+            int lv = Build.PowerOf(UpgradeId.Sprinkler);
+            bool pack = Build.Level(UpgradeId.Crown) > 0;
             int want = lv == 0 ? 0 : pack ? DogPackCount : DogCount[lv];
             while (Dogs.Count < want) Dogs.Add(new Dog { Pos = new Vec2(Player.X - 0.8f, Player.Y - 0.5f - (0.4f * Dogs.Count)) });
             while (Dogs.Count > want) Dogs.RemoveAt(Dogs.Count - 1);
@@ -1054,8 +1054,8 @@ namespace FireGame.Prototypes.Logic
 
         private void TickLadders()
         {
-            int lv = Build.PowerOf(UpgradeId.Ladder);
-            bool bridge = Build.Level(UpgradeId.LadderBridge) > 0;
+            int lv = Build.PowerOf(UpgradeId.Chain);
+            bool bridge = Build.Level(UpgradeId.Surge) > 0;
             if (lv > 0)
             {
                 _ladderClock -= Dt;

@@ -186,7 +186,7 @@ namespace FireGame.Prototypes
         private void DrawDogs(float dt)
         {
             _barkClock -= dt;
-            bool gold = _sim.Build.Level(UpgradeId.DogPack) > 0;
+            bool gold = _sim.Build.Level(UpgradeId.Crown) > 0;
             for (int i = 0; i < _sim.Dogs.Count; i++)
             {
                 Dog d = _sim.Dogs[i];
@@ -246,7 +246,7 @@ namespace FireGame.Prototypes
 
         private void DrawLadders()
         {
-            bool bridge = _sim.Build.Level(UpgradeId.LadderBridge) > 0;
+            bool bridge = _sim.Build.Level(UpgradeId.Surge) > 0;
             foreach (Ladder l in _sim.Ladders)
             {
                 // 뻗는 동안 길어지고(0.25초), 다 뻗으면 땅에 누워 있다(다리면 남아서 반짝인다).
@@ -433,14 +433,14 @@ namespace FireGame.Prototypes
             Loadout b = _sim.Build;
             switch (h.Source)
             {
-                case HitSource.Dog: Impact(at, DogTint, 0.7f, b.PowerOf(UpgradeId.Dog)); return true;
+                case HitSource.Dog: Impact(at, DogTint, 0.7f, b.PowerOf(UpgradeId.Sprinkler)); return true;
                 case HitSource.Balloon: Impact(at, BalloonTint, 0.8f, b.PowerOf(UpgradeId.Balloon)); return true;
                 case HitSource.Extinguisher: Impact(at, PowderTint, 0.8f, b.PowerOf(UpgradeId.Extinguisher)); return true;
                 case HitSource.Mine: Impact(at, IceTint, 0.9f, b.PowerOf(UpgradeId.Mine)); return true;
                 case HitSource.Foam: Impact(at, FoamTint, 0.8f, b.PowerOf(UpgradeId.Foam)); return true;
                 case HitSource.Bubble: Impact(at, BubbleTint, 0.8f, b.PowerOf(UpgradeId.Bubble)); return true;
                 case HitSource.Geyser: Impact(at, GeyserTint, 1f, b.PowerOf(UpgradeId.Manhole)); return true;
-                case HitSource.Ladder: Impact(at, LadderTint, 0.9f, b.PowerOf(UpgradeId.Ladder)); return true;
+                case HitSource.Ladder: Impact(at, LadderTint, 0.9f, b.PowerOf(UpgradeId.Chain)); return true;
                 case HitSource.Whip:
                 {
                     Vector3 away = Away(h.Pos);

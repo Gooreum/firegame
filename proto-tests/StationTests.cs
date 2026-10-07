@@ -50,7 +50,7 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(0, station.Stars);
             Assert.True(station.IsUnlocked("rescue"));
             Assert.Equal("rescue", station.Selected);
-            Assert.Contains(UpgradeId.Dog, station.Current.Start);
+            Assert.Contains(UpgradeId.Sprinkler, station.Current.Start);
         }
 
         [Fact]
