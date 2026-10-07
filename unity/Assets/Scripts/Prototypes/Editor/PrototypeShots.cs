@@ -384,7 +384,7 @@ namespace FireGame.Prototypes.EditorTools
             // 새 무기 9종(2026-10-07): Lv5로 쥐고 둘레에 불 몹을 세워 움직임을 찍는다(h1x), 진화(h2x), 진화 카드(h30).
             failures += SurvivorShot(dir, "h10_sprinkler", view => view.Sim.Time > 3.3f && view.Sim.SprinklerHits.Count > 0, 2, false, Near(6f), 1, view => Armed(view, UpgradeId.Sprinkler));
             failures += SurvivorShot(dir, "h11_whip", view => view.Sim.Time > 3.3f && view.Sim.Time > 1.5f, 1, false, Near(6f), 1, view => Armed(view, UpgradeId.Whip));
-            failures += SurvivorShot(dir, "h12_ladder", view => view.Sim.Time > 3.3f && view.Sim.LadderStrikes.Count > 0, 4, false, Near(8f), 1, view => Armed(view, UpgradeId.Chain));
+            failures += SurvivorShot(dir, "h12_chain", view => view.Sim.Time > 3.3f && view.Sim.ChainBolts.Exists(b => b.Points.Count >= 3), 4, false, Near(8f), 1, view => Armed(view, UpgradeId.Chain));
             failures += SurvivorShot(dir, "h13_balloon", view => view.Sim.Time > 3.3f && view.Sim.Time > 1f && view.Sim.Balloons.Count >= 2, 1, false, Near(7f), 1, view => Armed(view, UpgradeId.Balloon));
             failures += SurvivorShot(dir, "h14_extinguisher", view => view.Sim.Time > 3.3f && view.Sim.Boomerangs.Exists(b => b.Back), 1, false, Near(8f), 1, view => Armed(view, UpgradeId.Extinguisher));
             failures += SurvivorShot(dir, "h15_foam", view => view.Sim.Time > 3.3f && view.Sim.FoamBalls.Exists(f => f.Age > 0.8f), 1, false, Near(7f), 1, view => Armed(view, UpgradeId.Foam));
@@ -401,7 +401,7 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "h18_manhole", view => view.Sim.Time > 3.3f && view.Sim.GeyserBursts.Count > 0, 3, false, Near(7f), 1, view => Armed(view, UpgradeId.Manhole));
             failures += SurvivorShot(dir, "h20_crown", view => view.Sim.Time > 3.3f && view.Sim.SprinklerHits.Count > 0, 1, false, Near(7f), 1, view => Evolved(view, UpgradeId.Crown));
             failures += SurvivorShot(dir, "h21_whirl", view => view.Sim.Time > 3.3f && view.Sim.WhirlMarks.Count > 12, 1, false, Near(6f), 1, view => Evolved(view, UpgradeId.Whirl));
-            failures += SurvivorShot(dir, "h22_bridge", view => view.Sim.Time > 3.3f && view.Sim.Ladders.Exists(l => l.Struck && l.Age > 0.6f), 1, false, Near(8f), 1, view => Evolved(view, UpgradeId.Surge));
+            failures += SurvivorShot(dir, "h22_surge", view => view.Sim.Time > 3.3f && view.Sim.ChainBolts.Exists(b => b.Points.Count >= 4), 1, false, Near(8f), 1, view => Evolved(view, UpgradeId.Surge));
             failures += SurvivorShot(dir, "h23_storm", view => view.Sim.Time > 3.3f && view.Sim.Balloons.FindAll(b => b.Small).Count >= 3, 1, false, Near(7f), 1, view => Evolved(view, UpgradeId.BalloonStorm));
             failures += SurvivorShot(dir, "h24_tornado", view => view.Sim.Time > 3.3f && view.Sim.Tornadoes.Exists(t => t.Life < SurvivorSim.TornadoLife - 1f), 1, false, Near(8f), 1, view => Evolved(view, UpgradeId.Tornado));
             failures += SurvivorShot(dir, "h25_avalanche", view => view.Sim.Time > 3.3f && view.Sim.AvalancheX.HasValue && System.Math.Abs(view.Sim.AvalancheX.Value - view.Sim.Player.X) < 3f, 1, false, Near(10f), 1, view => Evolved(view, UpgradeId.Avalanche));
@@ -728,6 +728,21 @@ namespace FireGame.Prototypes.EditorTools
 
                 Canvas.ForceUpdateCanvases();
                 Capture(camera, Path.Combine(dir, name + ".png"));
+                // FIREGAME_FRAMES=N: 이어서 N장을 20fps(시뮬 3틱마다)로 찍는다 → tools/frames-to-gif.py가 GIF로 묶는다(사용자 확인용).
+                int frames = 0;
+                int.TryParse(Environment.GetEnvironmentVariable("FIREGAME_FRAMES"), out frames);
+                if (frames > 0)
+                {
+                    string seq = Path.Combine(dir, name);
+                    Directory.CreateDirectory(seq);
+                    for (int f = 0; f < frames && view.Sim.Outcome == SOutcome.Playing; f++)
+                    {
+                        for (int k = 0; k < 3; k++) BotTick(view, bot, keepAlive);
+                        frame?.Invoke(view);
+                        Canvas.ForceUpdateCanvases();
+                        Capture(camera, Path.Combine(seq, "f" + f.ToString("000") + ".png"));
+                    }
+                }
                 Debug.Log("[ProtoShots] " + name + " (" + view.Sim.Outcome + " 별 " + view.Sim.Stars + " 무너짐 " + view.Sim.HousesLost + " 구조 " + view.Sim.Rescued + ", t=" + (int)view.Sim.Time + ", Lv " + view.Sim.Level + ", 적 " + view.Sim.Enemies.Count + ", 카드 " + (view.Sim.PendingChoices != null) + ", " + GearOf(view.Sim) + ")");
                 return 0;
             }

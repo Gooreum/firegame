@@ -222,11 +222,13 @@ namespace FireGame.Prototypes.Tests
                 Assert.True(row.EventsPerMin >= town.EventsPerMin * 0.75f, row.Stage + "스테이지 사건이 적다: " + row.EventsPerMin + " (마을 " + town.EventsPerMin + ")");
                 // 숲은 체력보다 동네를 잃는 쪽으로 무너진다. 끄는 시간 패스(docs §14) 뒤 숲 위기 6/30이라 하한은 1(바닥), 상한은 "늘 쓰러진다"만 막는다.
                 // 2026-10-07: 노란 장비가 빠져 기본 봇은 숲·공단·야시장에서 거의 늘 위기(9.3/10)다 — 상한 9.5(숙련 봇 띠는 CloseReport가 본다).
-                Assert.InRange(row.Crises * 10f / seeds, 1f, 9.5f);
+                // 2026-10-08: 소방견·사다리차가 스프링클러·물 사슬로 바뀐 뒤 숲 위기 28 → 29/30(판 하나 차이) — 상한 9.7(docs §22).
+                Assert.InRange(row.Crises * 10f / seeds, 1f, 9.7f);
             }
             // 몸 압박: 체력이 절반 밑으로 떨어진 위기 판이 10판 중 3~8판(없으면 방화복이 쓸모없고, 늘 그러면 구조보다 생존이 먼저다).
             // 평균 최저 체력은 "몇 판은 쓰러지고 나머지는 멀쩡"한 두 갈래 분포를 못 담아 쓰지 않는다.
-            Assert.InRange(town.Crises * 10f / seeds, 3f, 8f);
+            // 2026-10-08: 회전 스프링클러가 내 둘레를 막아 마을 위기가 8/30(2.7)로 내려왔다 — 하한 2(docs §22).
+            Assert.InRange(town.Crises * 10f / seeds, 2f, 8f);
         }
 
         /// <summary>
@@ -252,7 +254,9 @@ namespace FireGame.Prototypes.Tests
             foreach (var (f, row) in rows)
             {
                 // 숙련 봇 신입 25/30(지형 패스). 모두 4~9.7/10: 못 이기는 소방관도, 늘 이기는 소방관도 없다.
-                Assert.InRange(row.Won * 10f / seeds, 4f, 9.7f);
+                // 2026-10-08: 마을은 기본 봇이 거의 늘 이긴다(신입 26~29/30) — 상한은 판 수 흔들림에 걸려 30/30을 허용하고,
+                // "혼자만 쉽게 이기는 대원"은 아래 신입 대비 +5판이 막는다(docs §22).
+                Assert.InRange(row.Won * 10f / seeds, 4f, 10f);
                 Assert.True(row.Won <= rookie.Won + 5, f.Name + "만 너무 잘 이긴다: " + row.Won + " (신입 " + rookie.Won + ")");
                 // 2026-10-07: 사다리차(지붕 위 사람을 내린다)를 집느냐가 구조 수를 크게 흔든다(사다리차 기사 18.6, 신입 11.2) — 0.5배까지.
                 Assert.True(row.Rescued >= rookie.Rescued * 0.5f, f.Name + "는 사람을 너무 못 구한다: " + row.Rescued + " (신입 " + rookie.Rescued + ")");
