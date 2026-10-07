@@ -451,9 +451,12 @@ namespace FireGame.Prototypes.EditorTools
                 return view.Sim.JustCrewJoined > 0;
             }, 6, false, Near(10f), 2, view =>
             {
-                for (int i = 0; i < 4; i++) view.Sim.CrewList.Add(new Crew { Pos = view.Sim.Player, Age = 5f });
+                for (int i = 0; i < 4; i++) view.Sim.CrewList.Add(new Crew { X = view.Sim.PX, Y = view.Sim.PY, Slot = i, Born = -10f });
             });
             failures += SurvivorShot(dir, "f07_forest_run", view => view.Sim.Time > 150f, 10, false, null, 2, null, true, true);
+
+            // 샘플 벤치(2026-10-08): 승인 샘플과 같은 타임라인(Lv1→Lv6 최고급, 23.6초)·같은 몹 떼로 아이템 하나를 찍는다. tools/side-by-side.py가 샘플과 나란히 붙인다.
+            foreach (KeyValuePair<string, UpgradeId> kv in SampleBenchItems) failures += SampleBenchShot(dir, kv.Key, kv.Value);
 
             // 마을 몹(2026-10-07): 불쥐 줄, 도깨비 예고, 불풍선 퓨즈, 불곰, 50초 습격, 3:00 화마와 쓰러지는 순간.
             failures += SurvivorShot(dir, "h40_rats", view =>
@@ -661,6 +664,152 @@ namespace FireGame.Prototypes.EditorTools
                 for (int i = 0; i < Mathf.Min(toLevel - 1, Loadout.MaxLevel); i++) Pick(view, item);
                 Crowd(view, 14, 4f, 30f, true);
             });
+        }
+
+        private static readonly KeyValuePair<string, UpgradeId>[] SampleBenchItems =
+        {
+            new KeyValuePair<string, UpgradeId>("hose", UpgradeId.Hose),
+            new KeyValuePair<string, UpgradeId>("sprinkler", UpgradeId.Sprinkler),
+            new KeyValuePair<string, UpgradeId>("balloon", UpgradeId.Balloon),
+            new KeyValuePair<string, UpgradeId>("extinguisher", UpgradeId.Extinguisher),
+            new KeyValuePair<string, UpgradeId>("mine", UpgradeId.Mine),
+            new KeyValuePair<string, UpgradeId>("foam", UpgradeId.Foam),
+            new KeyValuePair<string, UpgradeId>("bubble", UpgradeId.Bubble),
+            new KeyValuePair<string, UpgradeId>("manhole", UpgradeId.Manhole),
+            new KeyValuePair<string, UpgradeId>("chain", UpgradeId.Chain),
+            new KeyValuePair<string, UpgradeId>("whip", UpgradeId.Whip),
+            new KeyValuePair<string, UpgradeId>("tank", UpgradeId.Tank),
+            new KeyValuePair<string, UpgradeId>("boots", UpgradeId.Boots),
+            new KeyValuePair<string, UpgradeId>("suit", UpgradeId.Suit),
+        };
+
+        /// <summary>샘플 core.js SEG: 레벨별 길이(초). AT[lv] = 그 레벨이 시작하는 장면 시각.</summary>
+        private static readonly float[] SampleAt = { 0f, 0f, 3.6f, 7.0f, 10.4f, 13.8f, 17.6f };
+        private const float SampleDur = 23.6f;
+
+        /// <summary>
+        /// 샘플 Scene과 같은 조건: 숲, 소방관은 제자리, 화면 왼쪽·위에서 요괴가 들어와 늘 30마리(초당 45마리까지, 7마리마다 큰 놈),
+        /// 처음부터 18마리를 둘레에 깐다. 장면 시각(슬로모션 포함)이 AT[lv]에 닿으면 화면 경로(view.Choose)로 그 레벨 카드를 고른다.
+        /// 프레임은 실제 시간 1/fps마다(샘플 cap.py와 같다) → s_&lt;id&gt;/f###.png.
+        /// </summary>
+        private static int SampleBenchShot(string dir, string id, UpgradeId item, int fps = 10)
+        {
+            string name = "s_" + id;
+            if (!Wanted(name)) return 0;
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var root = new GameObject("Prototype");
+                Camera camera = PrototypeHost.SetUpCamera();
+                camera.aspect = (float)Width / Height;
+                Canvas canvas = UiKit.CreateCanvas(root.transform, camera, "Canvas", 0);
+                var view = new SurvivorView(root.transform, camera, canvas, false, 2);
+                view.CloseStation();
+                view.Restart(ShotSeed);
+                SurvivorSim sim = view.Sim;
+                sim.Reports = false;
+                sim.Build.Drop(UpgradeId.Hose);
+                sim.Enemies.Clear();
+                var bench = new HashSet<Enemy>();
+                int spawned = 0;
+                float spawnClock = 0f;
+                var rng = new System.Random(7);
+                float R(float a, float b) => a + ((float)rng.NextDouble() * (b - a));
+                // 샘플 소방관 (200,160), 화면 가운데 (240,135): 카메라 가운데는 소방관에서 오른쪽 40px·위 25px.
+                Vec2 p0 = sim.Player;
+                Enemy SpawnOne(float dx, float dy)
+                {
+                    bool big = spawned % 7 == 6;
+                    Enemy e = sim.Spawn(big ? EnemyKind.Blaze : EnemyKind.Ember, new Vec2(p0.X + (dx * SurvivorSim.Px), p0.Y - (dy * SurvivorSim.Px)));
+                    spawned++;
+                    bench.Add(e);
+                    return e;
+                }
+                void SpawnEdge()
+                {
+                    // 샘플 sides: 'top' = 왼쪽 가장자리(x=-14, y 70~240), 'topright' = 위 가장자리(y=-14, x 150~340). 소방관 기준 상대 px.
+                    bool left = spawned % 2 == 0;
+                    float sx = left ? -14f : R(150f, 340f), sy = left ? R(70f, 240f) : -14f;
+                    SpawnOne(sx - 200f, sy - 160f);
+                }
+                for (int i = 0; i < 18; i++)
+                {
+                    float a = R(0f, Mathf.PI * 2f), r = R(90f, 170f);
+                    SpawnOne(Mathf.Cos(a) * r, Mathf.Sin(a) * r * 0.7f);
+                }
+                string seq = Path.Combine(dir, name);
+                Directory.CreateDirectory(seq);
+                float dt = 1f / fps, acc = 0f, sceneT = 0f;
+                float walk = 0f;
+                int lv = 0;
+                Vector3 center = new Vector3(p0.X + (40f * SurvivorSim.Px), p0.Y + (25f * SurvivorSim.Px / Mathf.Cos(25f * Mathf.Deg2Rad)), 0f);
+                int frames = Mathf.CeilToInt(SampleDur * fps * 1.6f);
+                for (int f = 0; f < frames && sceneT < SampleDur; f++)
+                {
+                    int want = sceneT >= SampleAt[6] ? 6 : sceneT >= SampleAt[5] ? 5 : sceneT >= SampleAt[4] ? 4 : sceneT >= SampleAt[3] ? 3 : sceneT >= SampleAt[2] ? 2 : 1;
+                    while (lv < want)
+                    {
+                        lv++;
+                        UpgradeId card = lv >= 6 ? Loadout.EvolutionOf(item) ?? item : item;
+                        sim.PendingChoices = new List<UpgradeId> { card };
+                        view.Choose(0);
+                    }
+                    if (sim.SStop > 0f) sim.SStop -= dt;
+                    else
+                    {
+                        acc += dt * (sim.SSlow > 0f ? 0.25f : 1f);
+                        while (acc >= SurvivorSim.Dt)
+                        {
+                            acc -= SurvivorSim.Dt;
+                            sceneT += SurvivorSim.Dt;
+                            // 샘플 지뢰·장화 장면은 소방관이 8자로 걷는다(items-b.js:307-308, items-d.js:175-179). 나머지는 제자리.
+                            float wx = 200f, wy = 160f;
+                            if (id == "mine")
+                            {
+                                walk += SurvivorSim.Dt;
+                                wx = 215f + (Mathf.Cos(walk) * 95f);
+                                wy = 150f + (Mathf.Sin(walk * 2f) * 55f);
+                            }
+                            else if (id == "boots")
+                            {
+                                walk += SurvivorSim.Dt * 0.85f * sim.SampleSpeed;
+                                wx = 245f + (Mathf.Cos(walk) * 130f);
+                                wy = 145f + (Mathf.Sin(walk * 2f) * 70f);
+                            }
+                            sim.Player = new Vec2(p0.X + ((wx - 200f) * SurvivorSim.Px), p0.Y - ((wy - 160f) * SurvivorSim.Px));
+                            sim.Hp = sim.MaxHp;
+                            // 벤치는 아이템 하나의 타임라인만 본다: 경험치 레벨업 카드는 끼우지 않는다.
+                            sim.Xp = 0;
+                            spawnClock -= SurvivorSim.Dt;
+                            while (spawnClock <= 0f)
+                            {
+                                bench.RemoveWhere(e => e.Dead);
+                                if (bench.Count < 30) SpawnEdge();
+                                spawnClock += 1f / 45f;
+                            }
+                            sim.Enemies.RemoveAll(e => !bench.Contains(e) && !e.Dead);
+                            view.Step(new Vec2(0f, 0f));
+                            // 경험치 레벨업·상자 카드는 벤치 타임라인 밖이다: 바로 치운다.
+                            if (sim.PendingChoices != null)
+                            {
+                                sim.PendingChoices = null;
+                                sim.ChoosingChest = false;
+                            }
+                        }
+                    }
+                    view.Refresh(dt);
+                    view.Frame(center, 9f);
+                    Canvas.ForceUpdateCanvases();
+                    Capture(camera, Path.Combine(seq, "f" + f.ToString("000") + ".png"));
+                }
+                Debug.Log("[ProtoShots] " + name + " (장면 " + sceneT.ToString("0.0") + "초, Lv" + lv + ", 적 " + sim.Enemies.Count + ")");
+                return 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[ProtoShots] 실패: " + name + " — " + e);
+                return 1;
+            }
         }
 
         /// <summary>진화까지: 무기 Lv5(+불 몹 둘레) → 짝 보조 → 진화 카드.</summary>

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>레벨업 샘플</title>
+<style>
+  :root { --bg:#10121a; --card:#1b1f2a; --ink:#eef0f5; --sub:#a7adbb; --gold:#ffcf5a; --line:#2c303b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; }
+  header { padding:18px 20px 6px; max-width:1300px; margin:0 auto; }
+  h1 { margin:0 0 6px; font-size:21px; }
+  .sub { color:var(--sub); font-size:13.5px; line-height:1.5; }
+  nav { max-width:1300px; margin:10px auto 0; padding:0 20px; display:flex; flex-wrap:wrap; gap:6px; }
+  nav button { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:999px; padding:7px 13px; font-size:13.5px; cursor:pointer; font-family:inherit; }
+  nav button.on { background:#2b4f8f; border-color:#7fb4ff; }
+  nav button.sup { border-style:dashed; }
+  nav .sep { width:100%; height:0; }
+  main { max-width:1300px; margin:12px auto 30px; padding:0 20px; }
+  canvas#cv { display:block; width:100%; aspect-ratio:16/9; background:#000; border-radius:12px; }
+  .bar { display:flex; gap:10px; align-items:center; margin-top:10px; color:var(--sub); font-size:13px; flex-wrap:wrap; }
+  .bar button { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:6px 12px; cursor:pointer; font-family:inherit; }
+  @media (max-width:520px) { header,nav,main { padding-left:16px; padding-right:16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>레벨업 샘플 — 13종 · Lv1 → Lv5 → Lv6 최고급</h1>
+  <div class="sub">탭을 누르면 그 아이템이 Lv1부터 Lv6(최고급)까지 자동으로 올라가요. 레벨이 오를 때마다 연출이 터지고, 그 레벨 무기가 같은 요괴 떼를 상대해요.<br>오른쪽 위 막대 = 레벨별 초당 처치 수(같은 몹, 같은 속도로 들어와요).</div>
+</header>
+<nav id="tabs"></nav>
+<main>
+  <canvas id="cv"></canvas>
+  <div class="bar"><button id="restart">처음부터</button><button id="next">다음 레벨로 ▶</button><span id="info"></span></div>
+</main>
+<pre id="out" style="display:none"></pre>
+<script src="base.js"></script>
+<script src="core.js"></script>
+<script src="items-a.js"></script>
+<script src="items-b.js" onerror="0"></script>
+<script src="items-c.js" onerror="0"></script>
+<script src="items-d.js" onerror="0"></script>
+<script src="items-e.js" onerror="0"></script>
+<script>
+'use strict';
+BG = makeBg();
+const ORDER = ['hose', 'sprinkler', 'balloon', 'extinguisher', 'mine', 'foam', 'bubble', 'manhole', 'chain', 'whip', 'tank', 'boots', 'suit', 'crew', 'balloon_pick'];
+ITEMS.sort((a, b) => (ORDER.indexOf(a.id) + 99) % 199 - (ORDER.indexOf(b.id) + 99) % 199);
+const q = new URLSearchParams(location.search);
+const cv = document.getElementById('cv');
+let sc = null;
+function pick(id) {
+  const it = ITEMS.find(i => i.id === id) || ITEMS[0];
+  sc = it.custom ? it.custom() : new Scene(it);
+  for (const b of document.querySelectorAll('nav button')) b.classList.toggle('on', b.dataset.id === it.id);
+  try { localStorage.setItem('lvsample', it.id); } catch (e) {}
+}
+const tabs = document.getElementById('tabs');
+let lastGroup = null;
+for (const it of ITEMS) {
+  if (lastGroup && it.group !== lastGroup) { const s = document.createElement('div'); s.className = 'sep'; tabs.appendChild(s); }
+  lastGroup = it.group;
+  const b = document.createElement('button'); b.textContent = it.tab || it.name; b.dataset.id = it.id; if (it.group !== '무기') b.className = 'sup';
+  b.onclick = () => pick(it.id); tabs.appendChild(b);
+}
+document.getElementById('restart').onclick = () => sc.reset();
+document.getElementById('next').onclick = () => { if (!sc.item || !AT) return; const nx = AT[Math.min(6, sc.lv + 1)]; if (sc.lv < 6) { while (sc.t < nx) sc.update(1 / 60); } };
+function fit() { const dpr = Math.min(2, window.devicePixelRatio || 1); const w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr); if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; } return cv.getContext('2d'); }
+
+if (q.get('bench')) {
+  // 처치 속도 측정: 아이템마다 전체 타임라인을 1/60초로 돌려 레벨별 초당 처치를 낸다(3번 평균).
+  const lines = [];
+  for (const it of ITEMS) {
+    if (it.custom) continue;
+    const sum = [0, 0, 0, 0, 0, 0, 0];
+    for (let r = 0; r < 5; r++) { const s = new Scene(it); while (s.t < DUR - .05) s.update(1 / 60); for (let i = 1; i <= 6; i++) sum[i] += s.kills[i] / SEG[i] / 5; }
+    lines.push(it.id + ' ' + sum.slice(1).map(v => v.toFixed(2)).join(' ') + '  Lv5/Lv1=' + (sum[5] / Math.max(.01, sum[1])).toFixed(1) + ' Lv6/Lv5=' + (sum[6] / Math.max(.01, sum[5])).toFixed(2));
+  }
+  document.getElementById('out').textContent = lines.join('\n');
+} else if (q.get('cap')) {
+  // GIF 캡처: 고정 시간 간격으로 그려 JPEG dataURL을 줄마다 낸다.
+  const it = ITEMS.find(i => i.id === q.get('cap'));
+  const fps = +(q.get('fps') || 15), w = +(q.get('w') || 640), h = Math.round(w * 9 / 16);
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+  const s = it.custom ? it.custom() : new Scene(it);
+  // 슬로모션만큼 장면 시간이 밀리므로, 장면 시간이 끝(DUR)에 닿을 때까지 찍는다.
+  const total = +(q.get('sec') || 0), out = [];
+  const sub = 4, endT = s.dur || DUR - .1;
+  for (let f = 0; total ? f < total * fps : (s.t < endT - .05 && f < 60 * fps); f++) {
+    for (let k = 0; k < sub; k++) s.update(1 / fps / sub);
+    g.setTransform(w / W, 0, 0, h / H, 0, 0); s.draw(g);
+    out.push(c.toDataURL('image/jpeg', .9));
+  }
+  document.getElementById('out').textContent = out.join('\n');
+} else {
+  let saved = null; try { saved = localStorage.getItem('lvsample'); } catch (e) {}
+  pick(q.get('only') || saved || 'hose');
+  let last = performance.now();
+  const frame = now => {
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    sc.update(dt); const g = fit(); g.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0); sc.draw(g);
+    document.getElementById('info').textContent = sc.lv ? (sc.lv >= 6 ? '최고급' : 'Lv' + sc.lv) + ' · ' + sc.t.toFixed(1) + '초' : '';
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>
