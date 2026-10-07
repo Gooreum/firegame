@@ -13,7 +13,7 @@ namespace FireGame.Prototypes
     /// </summary>
     public sealed partial class SurvivorView
     {
-        private static readonly Color DogTint = new Color(1f, 0.85f, 0.5f, 1f);
+        private static readonly Color SprayTint = new Color(0.6f, 0.85f, 1f, 1f);
         private static readonly Color BalloonTint = new Color(0.35f, 0.6f, 1f, 1f);
         private static readonly Color PowderTint = new Color(0.95f, 0.97f, 1f, 1f);
         private static readonly Color IceTint = new Color(0.6f, 0.92f, 1f, 1f);
@@ -28,7 +28,6 @@ namespace FireGame.Prototypes
         private Pool _gearGlow;
         private Pool _gearRing;
 
-        private static Sprite _dogSprite;
         private static Sprite _balloonSprite;
         private static Sprite _extinguisherSprite;
         private static Sprite _mineSprite;
@@ -45,7 +44,7 @@ namespace FireGame.Prototypes
         {
             _gearGround = new Pool(_world, "KitGround", MineSprite(), 4, null);
             _pools.Add(_gearGround);
-            _gear = new Pool(_world, "Kit", DogSprite(), 9, null);
+            _gear = new Pool(_world, "Kit", SkillSprite("sprinkler_base"), 9, null);
             _pools.Add(_gear);
             _gearGlow = AddPool("KitGlow", "Effects/glow", 8, true);
             _gearRing = new Pool(_world, "KitRing", RingSprite(), 8, Additive);
@@ -71,11 +70,11 @@ namespace FireGame.Prototypes
 
         private void ReactArsenal()
         {
-            foreach (Vec2 p in _sim.DogBites)
+            foreach (Vec2 p in _sim.SprinklerHits)
             {
                 Vector3 at = W(p);
-                Burst(at + Up(0.3f), 5, DogTint, 4f);
-                if (Random.value < 0.25f) SpawnText(at + Up(1.2f), "왕!", DogTint, 1f);
+                Splash(at, 4, 0.45f);
+                Shockwave(at, SprayTint, 1.2f, 0.2f);
             }
             foreach (Vec2 p in _sim.BalloonSplashes)
             {
@@ -173,7 +172,7 @@ namespace FireGame.Prototypes
         {
             DrawManholes();
             DrawMines();
-            DrawDogs(dt);
+            DrawSprinklers();
             DrawWhip();
             DrawLadders();
             DrawBalloons(dt);
@@ -183,30 +182,47 @@ namespace FireGame.Prototypes
             DrawCaptives();
         }
 
-        private void DrawDogs(float dt)
+        private readonly List<Vec2> _sprinklerHeads = new List<Vec2>();
+
+        /// <summary>
+        /// 회전 스프링클러(샘플 그대로): 금색 머리 + 빙빙 도는 노즐 셋 + 파란 빛, 사방으로 물방울.
+        /// 물 왕관: 둘레에 3겹으로 도는 물 고리 + 8갈래 빛줄기.
+        /// </summary>
+        private void DrawSprinklers()
         {
-            _barkClock -= dt;
-            bool gold = _sim.Build.Level(UpgradeId.Crown) > 0;
-            for (int i = 0; i < _sim.Dogs.Count; i++)
+            int lv = _sim.Build.PowerOf(UpgradeId.Sprinkler);
+            if (lv == 0) return;
+            _sim.SprinklerHeads(_sprinklerHeads);
+            float spin = _time * 840f;
+            for (int i = 0; i < _sprinklerHeads.Count; i++)
             {
-                Dog d = _sim.Dogs[i];
-                Vector3 at = W(d.Pos);
-                float heading = Mathf.Atan2(d.Facing.Y, d.Facing.X) * Mathf.Rad2Deg;
-                // 달리면 몸이 통통 튀고 앞뒤로 출렁인다(다리 대신 몸짓).
-                float run = Mathf.Abs(Mathf.Sin((_time * 16f) + (i * 1.3f)));
-                _shadows.Put(at + new Vector3(0f, -0.15f, 0f), 1.1f, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
-                _gear.Put(at + Up(0.25f + (0.12f * run)), 1.8f * (gold ? 1.1f : 1f), heading, gold ? new Color(1f, 0.93f, 0.75f) : Color.white, DogSprite(), 1f - (0.08f * run));
-                if (gold) _gearGlow.Put(at, 1.6f, 0f, new Color(1f, 0.85f, 0.3f, 0.35f));
-                // 짖기: 타는 건물 문 앞이면 가끔 "멍!"과 물방울.
-                if (d.Barking != null && d.Barking.Burning && d.Pos.DistanceTo(d.Barking.Door) < 0.9f)
+                Vector3 at = W(_sprinklerHeads[i]);
+                _shadows.Put(at + new Vector3(0f, -0.2f, 0f), 0.9f, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
+                _gear.Put(at + Up(0.35f), 2.2f, 0f, Color.white, SkillSprite("sprinkler_base"));
+                _gear.Put(at + Up(0.36f), 1.7f, spin + (i * 40f), Color.white, SkillSprite("sprinkler_arms"));
+                if (Random.value < 0.55f)
                 {
-                    if (Random.value < 0.4f) EmitFalling("Effects/water_drop", at + Up(0.6f), new Vector3(Random.Range(-1f, 1f), 1.5f, 0f), 0.4f, 0.2f, new Color(0.75f, 0.93f, 1f, 1f));
-                    if (_barkClock <= 0f)
-                    {
-                        _barkClock = 0.9f;
-                        SpawnText(at + Up(1.3f), d.Barking.Residents > 0 && gold ? "구조!" : "멍!", DogTint, 1f);
-                    }
+                    float a = (spin * Mathf.Deg2Rad) + (i * 2f) + (Random.Range(0, 3) * 2.094f);
+                    EmitFalling("Effects/water_drop", at + Up(0.5f), new Vector3(Mathf.Cos(a) * 3.5f, Mathf.Sin(a) * 3.5f, 0f), 0.22f, 0.45f, new Color(0.7f, 0.9f, 1f, 1f));
                 }
+            }
+            if (_sim.Build.Level(UpgradeId.Crown) == 0) return;
+
+            Vector3 c = W(_sim.Player) + Up(0.2f);
+            float r = SurvivorSim.SprinklerRadius[lv];
+            float ring = 2f * r * 21f / 19f;
+            _gearGlow.Put(c, ring, _time * 230f, new Color(0.3f, 0.6f, 1f, 0.55f), SkillSprite("arc_band"));
+            _gearGlow.Put(c, ring * 0.97f, -_time * 330f, new Color(0.6f, 0.85f, 1f, 0.45f), SkillSprite("arc_band"));
+            _gearGlow.Put(c, ring * 1.02f, _time * 460f + 120f, new Color(0.85f, 0.95f, 1f, 0.35f), SkillSprite("arc_band"));
+            float len = SurvivorSim.CrownJetLen;
+            for (int k = 0; k < SurvivorSim.CrownJets; k++)
+            {
+                float jet = _sim.CrownJetAngle + (k * Mathf.PI * 2f / SurvivorSim.CrownJets);
+                var dir = new Vector3(Mathf.Cos(jet), Mathf.Sin(jet), 0f);
+                Vector3 mid = c + (dir * (r + (len * 0.5f)));
+                float deg = jet * Mathf.Rad2Deg;
+                _gearGlow.Put(mid, len, deg, new Color(0.3f, 0.6f, 1f, 0.5f), SkillSprite("beam"), 1.1f / len);
+                _gearGlow.Put(mid, len, deg, new Color(0.9f, 0.97f, 1f, 0.85f), SkillSprite("beam"), 0.45f / len);
             }
         }
 
@@ -433,7 +449,7 @@ namespace FireGame.Prototypes
             Loadout b = _sim.Build;
             switch (h.Source)
             {
-                case HitSource.Dog: Impact(at, DogTint, 0.7f, b.PowerOf(UpgradeId.Sprinkler)); return true;
+                case HitSource.Sprinkler: Impact(at, SprayTint, 0.7f, b.PowerOf(UpgradeId.Sprinkler)); return true;
                 case HitSource.Balloon: Impact(at, BalloonTint, 0.8f, b.PowerOf(UpgradeId.Balloon)); return true;
                 case HitSource.Extinguisher: Impact(at, PowderTint, 0.8f, b.PowerOf(UpgradeId.Extinguisher)); return true;
                 case HitSource.Mine: Impact(at, IceTint, 0.9f, b.PowerOf(UpgradeId.Mine)); return true;
@@ -456,36 +472,6 @@ namespace FireGame.Prototypes
         // ------------------------------------------------------------------
         // 그림(절차 스프라이트, 64px)
         // ------------------------------------------------------------------
-
-        /// <summary>달마시안(위에서 본 모습, 머리가 +u): 흰 몸에 검은 점, 검은 귀, 꼬리.</summary>
-        private static Sprite DogSprite()
-        {
-            if (_dogSprite != null) return _dogSprite;
-            _dogSprite = PaintSprite((u, v) =>
-            {
-                var white = new Color32(250, 250, 248, 255);
-                var black = new Color32(25, 25, 28, 255);
-                if (InEllipse(u, v, 0.31f, 0.09f, 0.05f, 0.08f) || InEllipse(u, v, 0.31f, -0.09f, 0.05f, 0.08f)) return black;
-                if (InEllipse(u, v, 0.27f, 0f, 0.12f, 0.1f))
-                {
-                    if (InEllipse(u, v, 0.39f, 0f, 0.025f, 0.03f)) return black;
-                    return white;
-                }
-                if (InEllipse(u, v, 0.4f, 0f, 0.035f, 0.035f)) return black;
-                bool body = InEllipse(u, v, -0.02f, 0f, 0.26f, 0.15f);
-                bool legs = InEllipse(u, v, 0.15f, 0.15f, 0.05f, 0.05f) || InEllipse(u, v, 0.15f, -0.15f, 0.05f, 0.05f) || InEllipse(u, v, -0.18f, 0.15f, 0.05f, 0.05f) || InEllipse(u, v, -0.18f, -0.15f, 0.05f, 0.05f);
-                bool tail = u < -0.26f && u > -0.42f && Mathf.Abs(v - ((u + 0.26f) * 0.4f)) < 0.025f;
-                if (body)
-                {
-                    bool spot = InEllipse(u, v, 0.05f, 0.06f, 0.04f, 0.035f) || InEllipse(u, v, -0.1f, -0.05f, 0.05f, 0.04f) || InEllipse(u, v, -0.15f, 0.08f, 0.03f, 0.03f) || InEllipse(u, v, 0.12f, -0.07f, 0.03f, 0.025f);
-                    return spot ? black : white;
-                }
-                if (legs) return new Color32(235, 235, 232, 255);
-                if (tail) return black;
-                return new Color32(0, 0, 0, 0);
-            });
-            return _dogSprite;
-        }
 
         /// <summary>파란 물풍선: 둥근 몸, 위 하이라이트, 아래 묶은 매듭.</summary>
         private static Sprite BalloonSprite()

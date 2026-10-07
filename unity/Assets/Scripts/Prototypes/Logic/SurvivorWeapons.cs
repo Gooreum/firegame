@@ -3,20 +3,6 @@ using System.Collections.Generic;
 
 namespace FireGame.Prototypes.Logic
 {
-    /// <summary>소방견 한 마리: 노린 몹에게 달려가 물고, 없으면 타는 건물 문 앞에서 짖으며 적신다.</summary>
-    public sealed class Dog
-    {
-        public Vec2 Pos;
-        public Enemy Target;
-        public Structure Barking;
-        public float Think;
-        public float Bite;
-        public float Rescue;
-
-        /// <summary>달리는 방향(그림용).</summary>
-        public Vec2 Facing = new Vec2(1f, 0f);
-    }
-
     /// <summary>벽에 튕기는 물풍선. Small은 폭우가 갈라 낸 작은 풍선(다시 갈라지지 않는다).</summary>
     public sealed class WaterBalloon
     {
@@ -119,7 +105,8 @@ namespace FireGame.Prototypes.Logic
     public sealed partial class SurvivorSim
     {
         // --- 레벨별 표(0번은 없음) ---
-        public static readonly int[] DogCount = { 0, 1, 1, 2, 2, 3 };
+        public static readonly int[] SprinklerCount = { 0, 2, 2, 3, 3, 4 };
+        public static readonly float[] SprinklerRadius = { 0f, 2.2f, 2.4f, 2.7f, 3f, 3.3f };
         public static readonly int[] BalloonCount = { 0, 1, 1, 2, 2, 3 };
         public static readonly int[] BalloonBounces = { 0, 3, 4, 4, 5, 6 };
         public static readonly int[] BoomCount = { 0, 1, 1, 2, 2, 3 };
@@ -130,15 +117,18 @@ namespace FireGame.Prototypes.Logic
         public static readonly int[] LadderDirs = { 0, 1, 1, 2, 2, 3 };
         public static readonly int[] WhipArms = { 0, 1, 1, 2, 2, 3 };
 
-        // --- 소방견 ---
-        public const float DogSpeed = 5f;
-        public const float DogSpeedStep = 0.5f;
-        public const float DogBiteEvery = 0.4f;
-        public const float DogBite = 6f;
-        public const float DogSight = 14f;
-        public const float DogBarkSoak = 0.3f;
-        public const float DogRescueEvery = 2f;
-        public const int DogPackCount = 4;
+        // --- 회전 스프링클러 ---
+        public const float SprinklerSpin = 2.6f;
+        public const float SprinklerReach = 0.6f;
+        public const float SprinklerHit = 7f;
+        public const float SprinklerCool = 0.3f;
+        public const float SprinklerPush = 4f;
+        public const float SprinklerSoak = 0.4f;
+        public const int CrownJets = 8;
+        public const float CrownJetLen = 3.5f;
+        public const float CrownJetTurn = 1.4f;
+        public const float CrownJetHit = 6f;
+        public const float CrownRingDps = 12f;
 
         // --- 물풍선 ---
         public const float BalloonEvery = 4f;
@@ -209,7 +199,6 @@ namespace FireGame.Prototypes.Logic
         public const float WhirlLife = 3f;
         public const float WhirlDps = 10f;
 
-        public readonly List<Dog> Dogs = new List<Dog>();
         public readonly List<WaterBalloon> Balloons = new List<WaterBalloon>();
         public readonly List<Boomerang> Boomerangs = new List<Boomerang>();
         public readonly List<Tornado> Tornadoes = new List<Tornado>();
@@ -221,6 +210,10 @@ namespace FireGame.Prototypes.Logic
         public readonly List<Ladder> Ladders = new List<Ladder>();
         public readonly List<WhirlMark> WhirlMarks = new List<WhirlMark>();
 
+        /// <summary>스프링클러 첫 머리의 지금 각도(라디안)와 물 왕관 분사의 각도.</summary>
+        public float SprinklerAngle;
+        public float CrownJetAngle;
+
         /// <summary>채찍 갈래의 지금 각도(라디안, 첫 갈래).</summary>
         public float WhipAngle;
 
@@ -230,7 +223,7 @@ namespace FireGame.Prototypes.Logic
         public float AvalancheY;
 
         // --- 한 틱 신호(그림용) ---
-        public readonly List<Vec2> DogBites = new List<Vec2>();
+        public readonly List<Vec2> SprinklerHits = new List<Vec2>();
         public readonly List<Vec2> BalloonSplashes = new List<Vec2>();
         public readonly List<Vec2> MineFreezes = new List<Vec2>();
         public readonly List<Vec2> FoamBursts = new List<Vec2>();
@@ -256,7 +249,7 @@ namespace FireGame.Prototypes.Logic
 
         private void ClearWeaponSignals()
         {
-            DogBites.Clear();
+            SprinklerHits.Clear();
             BalloonSplashes.Clear();
             MineFreezes.Clear();
             FoamBursts.Clear();
@@ -308,7 +301,7 @@ namespace FireGame.Prototypes.Logic
 
         private void TickNewWeapons()
         {
-            TickDogs();
+            TickSprinklers();
             TickBalloons();
             TickBoomerangs();
             TickMines();
@@ -426,80 +419,83 @@ namespace FireGame.Prototypes.Logic
         }
 
         // ------------------------------------------------------------------
-        // 소방견
+        // 회전 스프링클러
         // ------------------------------------------------------------------
 
-        private void TickDogs()
+        /// <summary>스프링클러 머리 자리(그림·테스트용). 반경은 레벨표, 개수는 레벨표(물 왕관이면 4개).</summary>
+        public void SprinklerHeads(List<Vec2> into)
+        {
+            into.Clear();
+            int lv = Build.PowerOf(UpgradeId.Sprinkler);
+            if (lv == 0) return;
+            int n = Build.Level(UpgradeId.Crown) > 0 ? SprinklerCount[Loadout.MaxLevel] : SprinklerCount[lv];
+            float r = SprinklerRadius[lv];
+            for (int k = 0; k < n; k++)
+            {
+                double a = SprinklerAngle + (k * Math.PI * 2 / n);
+                into.Add(new Vec2(Player.X + (float)(Math.Cos(a) * r), Player.Y + (float)(Math.Sin(a) * r)));
+            }
+        }
+
+        private readonly List<Vec2> _heads = new List<Vec2>();
+
+        /// <summary>내 둘레를 도는 머리: 닿은 몹을 바깥으로 튕기고, 닿은 타는 건물을 적신다. 물 왕관이면 고리 위 몹이 갈리고 8갈래 분사가 돈다.</summary>
+        private void TickSprinklers()
         {
             int lv = Build.PowerOf(UpgradeId.Sprinkler);
-            bool pack = Build.Level(UpgradeId.Crown) > 0;
-            int want = lv == 0 ? 0 : pack ? DogPackCount : DogCount[lv];
-            while (Dogs.Count < want) Dogs.Add(new Dog { Pos = new Vec2(Player.X - 0.8f, Player.Y - 0.5f - (0.4f * Dogs.Count)) });
-            while (Dogs.Count > want) Dogs.RemoveAt(Dogs.Count - 1);
-            if (want == 0) return;
-            float speed = pack ? DogSpeed + (DogSpeedStep * 4f) + 0.5f : DogSpeed + (DogSpeedStep * (lv - 1));
-            float bite = DogBite * (1f + (0.25f * (lv >= 4 ? 2 : lv >= 2 ? 1 : 0))) * (pack ? 1.25f : 1f);
-            for (int i = 0; i < Dogs.Count; i++)
+            if (lv == 0) return;
+            bool crown = Build.Level(UpgradeId.Crown) > 0;
+            SprinklerAngle += SprinklerSpin * Dt;
+            if (SprinklerAngle > Math.PI * 2) SprinklerAngle -= (float)(Math.PI * 2);
+            SprinklerHeads(_heads);
+            foreach (Vec2 h in _heads)
             {
-                Dog d = Dogs[i];
-                d.Think -= Dt;
-                if (d.Target != null && (d.Target.Dead || d.Target.Pos.DistanceTo(Player) > DogSight + 4f)) d.Target = null;
-                if (d.Think <= 0f)
+                Near(h, SprinklerReach + 0.6f, _near);
+                foreach (Enemy e in _near)
                 {
-                    d.Think = 0.5f;
-                    // 개마다 다른 몹: 이미 다른 개가 문 몹은 피한다.
-                    Dog me = d;
-                    d.Target = PickTarget(d.Pos, DogSight, e => e.Pos.DistanceTo(Player) > DogSight || Dogs.Exists(o => o != me && o.Target == e));
-                    d.Barking = d.Target == null ? HottestNear(Player, 8f) : null;
-                    // 구조견 무리: 갇힌 사람이 있는 타는 건물이 가까우면 그쪽이 먼저.
-                    if (pack && i % 2 == 1)
-                    {
-                        Structure trapped = null;
-                        foreach (Structure st in Structures)
-                        {
-                            if (st.Burning && st.Residents > 0 && st.DistanceTo(Player) <= 12f && (trapped == null || st.DistanceTo(d.Pos) < trapped.DistanceTo(d.Pos))) trapped = st;
-                        }
-                        if (trapped != null)
-                        {
-                            d.Target = null;
-                            d.Barking = trapped;
-                        }
-                    }
+                    if (e.SprayCool > 0f || e.Pos.DistanceTo(h) > SprinklerReach + e.Radius) continue;
+                    e.SprayCool = SprinklerCool;
+                    Damage(e, SprinklerHit, Knockback(Player, e.Pos, SprinklerPush), true, HitSource.Sprinkler, h);
+                    SprinklerHits.Add(e.Pos);
                 }
-                Vec2 goal;
-                if (d.Target != null) goal = d.Target.Pos;
-                else if (d.Barking != null && d.Barking.Burning) goal = d.Barking.Door;
-                else
+                Douse(h, 0.5f);
+                foreach (Structure st in Structures)
                 {
-                    // 곁을 따른다: 소방관 뒤쪽 둘레에 줄지어.
-                    double a = Math.PI + (i * 0.7f);
-                    goal = new Vec2(Player.X + (float)(Math.Cos(a) * 1.4f), Player.Y + (float)(Math.Sin(a) * 1.1f));
+                    if (st.Burning && st.Within(h, 0.5f)) Soak(st, SprinklerSoak * Dt, false);
                 }
-                Vec2 before = d.Pos;
-                d.Pos = ClampToArena(Step(d.Pos, goal, speed * Dt));
-                if (d.Pos.DistanceTo(before) > 0.001f) d.Facing = Toward(before, d.Pos);
-                d.Bite -= Dt;
-                if (d.Target != null && d.Pos.DistanceTo(d.Target.Pos) <= d.Target.Radius + 0.5f && d.Bite <= 0f)
+            }
+            if (!crown) return;
+
+            float r = SprinklerRadius[lv];
+            CrownJetAngle += CrownJetTurn * Dt;
+            Near(Player, r + CrownJetLen + 0.6f, _near);
+            foreach (Enemy e in _near)
+            {
+                float d = e.Pos.DistanceTo(Player);
+                if (Math.Abs(d - r) < 0.5f + e.Radius) Damage(e, CrownRingDps * Dt, default, false, HitSource.Sprinkler, e.Pos);
+                if (e.SprayCool > 0f || d < r) continue;
+                float a = (float)Math.Atan2(e.Pos.Y - Player.Y, e.Pos.X - Player.X);
+                for (int k = 0; k < CrownJets; k++)
                 {
-                    d.Bite = DogBiteEvery;
-                    Damage(d.Target, bite, Knockback(d.Pos, d.Target.Pos, 3f), true, HitSource.Dog, d.Pos);
-                    DogBites.Add(d.Pos);
+                    float jet = CrownJetAngle + (float)(k * Math.PI * 2 / CrownJets);
+                    var from = new Vec2(Player.X + ((float)Math.Cos(jet) * r), Player.Y + ((float)Math.Sin(jet) * r));
+                    var to = new Vec2(Player.X + ((float)Math.Cos(jet) * (r + CrownJetLen)), Player.Y + ((float)Math.Sin(jet) * (r + CrownJetLen)));
+                    if (SegmentDistance(e.Pos, from, to) > 0.45f + e.Radius) continue;
+                    e.SprayCool = SprinklerCool;
+                    Damage(e, CrownJetHit, Knockback(Player, e.Pos, SprinklerPush), true, HitSource.Sprinkler, from);
+                    SprinklerHits.Add(e.Pos);
+                    break;
                 }
-                else if (d.Barking != null && d.Barking.Burning && d.Pos.DistanceTo(d.Barking.Door) < 0.8f)
+            }
+            for (int k = 0; k < CrownJets; k++)
+            {
+                float jet = CrownJetAngle + (float)(k * Math.PI * 2 / CrownJets);
+                var tip = new Vec2(Player.X + ((float)Math.Cos(jet) * (r + CrownJetLen)), Player.Y + ((float)Math.Sin(jet) * (r + CrownJetLen)));
+                Douse(tip, 0.6f);
+                foreach (Structure st in Structures)
                 {
-                    // 구조견: 갇힌 사람이 있으면 물 대신 사람을 문다(도착하고 0.5초 뒤 첫 명, 그 뒤 DogRescueEvery마다).
-                    if (pack && d.Barking.Residents > 0)
-                    {
-                        d.Rescue += Dt;
-                        if (d.Rescue >= DogRescueEvery)
-                        {
-                            d.Rescue = 0f;
-                            RescueOne(d.Barking);
-                        }
-                    }
-                    else Soak(d.Barking, DogBarkSoak * Dt, false);
+                    if (st.Burning && st.Within(tip, 0.6f)) Soak(st, SprinklerSoak * Dt, false);
                 }
-                else d.Rescue = DogRescueEvery - 0.5f;
             }
         }
 

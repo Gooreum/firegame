@@ -85,6 +85,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>채찍에 다시 맞기까지(초).</summary>
         public float WhipCool;
 
+        /// <summary>스프링클러·물 왕관에 맞은 뒤 다시 맞을 때까지(초).</summary>
+        public float SprayCool;
+
         /// <summary>불쥐: 따라가는 앞 쥐(맨 앞이면 null).</summary>
         public Enemy Leader;
 
@@ -220,7 +223,7 @@ namespace FireGame.Prototypes.Logic
     public enum HitSource : byte
     {
         Hose,
-        Dog,
+        Sprinkler,
         Balloon,
         Extinguisher,
         Mine,
@@ -1916,6 +1919,7 @@ namespace FireGame.Prototypes.Logic
                 if (e.BounceCool > 0f) e.BounceCool -= Dt;
                 if (e.Slowed > 0f) e.Slowed -= Dt;
                 if (e.WhipCool > 0f) e.WhipCool -= Dt;
+                if (e.SprayCool > 0f) e.SprayCool -= Dt;
                 // 언 몹은 제자리에 서 있다가 풀리는 순간 깨진다. 갇힌 몹은 방울 속에 떠 있다가 터진다.
                 if (e.Frozen > 0f)
                 {

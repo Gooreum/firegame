@@ -73,70 +73,60 @@ namespace FireGame.Prototypes.Tests
         }
 
         // ------------------------------------------------------------------
-        // 소방견
+        // 회전 스프링클러
         // ------------------------------------------------------------------
 
         [Fact]
-        public void Dog_RunsToAnEmber_AndBitesItDown()
+        public void Sprinkler_HeadsSweepAround_AndKnockAnEmberOutward()
         {
             SurvivorSim sim = Quiet();
             Take(sim, UpgradeId.Sprinkler);
-            Enemy ember = Dummy(sim, EnemyKind.Ember, 5f, 0f, 20f);
-            bool bit = false;
-            Run(sim, 4f, () => (bit |= sim.DogBites.Count > 0) && ember.Dead);
-            Assert.True(bit, "개가 물지 않았다");
-            Assert.True(ember.Dead, "개가 불씨를 잡지 못했다: 체력 " + ember.Hp);
-            Assert.Contains(sim.Hits, h => h.Source == HitSource.Dog);
+            Enemy ember = Dummy(sim, EnemyKind.Ember, SurvivorSim.SprinklerRadius[1], 0f);
+            float before = ember.Pos.DistanceTo(sim.Player);
+            bool hit = false;
+            Run(sim, 3f, () => hit |= sim.SprinklerHits.Count > 0);
+            Assert.True(hit, "스프링클러 머리가 닿지 않았다");
+            Assert.Contains(sim.Hits, h => h.Source == HitSource.Sprinkler);
+            Run(sim, 0.3f);
+            Assert.True(ember.Dead || ember.Pos.DistanceTo(sim.Player) > before + 0.3f, "바깥으로 튕겨야: " + before + " → " + ember.Pos.DistanceTo(sim.Player));
         }
 
         [Fact]
-        public void Dog_PrefersTheRaider_ThatGoesForAHouse()
+        public void Sprinkler_HeadCountGrowsWithLevel_TwoTwoThreeThreeFour()
         {
             SurvivorSim sim = Quiet();
-            Take(sim, UpgradeId.Sprinkler);
-            Enemy chaser = Dummy(sim, EnemyKind.Ember, 3f, 0f);
-            Enemy raider = Dummy(sim, EnemyKind.Ember, -6f, 0f);
-            raider.Goal = Shop(sim, -10f, 0f);
-            Run(sim, 0.6f);
-            Assert.Same(raider, sim.Dogs[0].Target);
-        }
-
-        [Fact]
-        public void Dog_CountGrowsWithLevel_OneOneTwoTwoThree()
-        {
-            SurvivorSim sim = Quiet();
+            var heads = new List<Vec2>();
             var seen = new List<int>();
             for (int lv = 1; lv <= Loadout.MaxLevel; lv++)
             {
                 Take(sim, UpgradeId.Sprinkler);
-                Run(sim, 0.1f);
-                seen.Add(sim.Dogs.Count);
+                sim.SprinklerHeads(heads);
+                seen.Add(heads.Count);
             }
-            Assert.Equal(new List<int> { 1, 1, 2, 2, 3 }, seen);
+            Assert.Equal(new List<int> { 2, 2, 3, 3, 4 }, seen);
+            Assert.True(SurvivorSim.SprinklerRadius[5] > SurvivorSim.SprinklerRadius[1], "레벨이 오르면 더 넓게 돈다");
         }
 
         [Fact]
-        public void Dog_WithNothingToBite_BarksAtABurningShop_AndSoaksIt()
+        public void Sprinkler_SoaksABurningShopItSweepsThrough()
         {
             SurvivorSim sim = Quiet();
             Take(sim, UpgradeId.Sprinkler);
-            Structure shop = Shop(sim, 0f, 5f, 0.6f);
+            Structure shop = Shop(sim, 0f, SurvivorSim.SprinklerRadius[1] + 1f, 0.6f);
             float before = shop.Fire;
             Run(sim, 5f);
-            Assert.True(shop.Fire < before - 0.2f, "개가 짖으며 적셔야: " + before + " → " + shop.Fire);
+            Assert.True(shop.Fire < before - 0.1f, "머리가 지나며 적셔야: " + before + " → " + shop.Fire);
         }
 
         [Fact]
-        public void DogPack_FourDogs_PullPeopleOut()
+        public void Crown_JetsReachPastTheRing()
         {
             SurvivorSim sim = Quiet();
             Evolve(sim, UpgradeId.Crown);
-            Structure shop = Shop(sim, 0f, 6f, 1f, 2);
-            Run(sim, 0.1f);
-            Assert.Equal(SurvivorSim.DogPackCount, sim.Dogs.Count);
-            int rescued = sim.Rescued;
-            Run(sim, 8f);
-            Assert.True(sim.Rescued > rescued, "구조견이 사람을 물고 나와야: 남은 " + shop.Residents + " 불 " + shop.Fire);
+            float r = SurvivorSim.SprinklerRadius[Loadout.MaxLevel];
+            Enemy far = Dummy(sim, EnemyKind.Ember, r + 2f, 0f);
+            Run(sim, 6f, () => far.Hp < far.MaxHp);
+            Assert.True(far.Hp < far.MaxHp, "고리 밖 2칸 몹은 8갈래 분사가 맞혀야");
         }
 
         // ------------------------------------------------------------------
