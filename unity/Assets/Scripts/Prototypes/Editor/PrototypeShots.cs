@@ -381,6 +381,49 @@ namespace FireGame.Prototypes.EditorTools
                 }, true, true);
 
 
+            // 새 무기 9종(2026-10-07): Lv5로 쥐고 둘레에 불 몹을 세워 움직임을 찍는다(h1x), 진화(h2x), 진화 카드(h30).
+            failures += SurvivorShot(dir, "h10_dog", view => view.Sim.Time > 3.3f && view.Sim.Time > 2.5f && view.Sim.DogBites.Count > 0, 2, false, Near(6f), 1, view => Armed(view, UpgradeId.Dog));
+            failures += SurvivorShot(dir, "h11_whip", view => view.Sim.Time > 3.3f && view.Sim.Time > 1.5f, 1, false, Near(6f), 1, view => Armed(view, UpgradeId.Whip));
+            failures += SurvivorShot(dir, "h12_ladder", view => view.Sim.Time > 3.3f && view.Sim.LadderStrikes.Count > 0, 4, false, Near(8f), 1, view => Armed(view, UpgradeId.Ladder));
+            failures += SurvivorShot(dir, "h13_balloon", view => view.Sim.Time > 3.3f && view.Sim.Time > 1f && view.Sim.Balloons.Count >= 2, 1, false, Near(7f), 1, view => Armed(view, UpgradeId.Balloon));
+            failures += SurvivorShot(dir, "h14_extinguisher", view => view.Sim.Time > 3.3f && view.Sim.Boomerangs.Exists(b => b.Back), 1, false, Near(8f), 1, view => Armed(view, UpgradeId.Extinguisher));
+            failures += SurvivorShot(dir, "h15_foam", view => view.Sim.Time > 3.3f && view.Sim.FoamBalls.Exists(f => f.Age > 0.8f), 1, false, Near(7f), 1, view => Armed(view, UpgradeId.Foam));
+            failures += SurvivorShot(dir, "h16_mine", view => view.Sim.Time > 3.3f && view.Sim.Enemies.Exists(e => e.Frozen > 1f), 1, false, Near(6f), 1, view =>
+            {
+                Pick(view, UpgradeId.Mine, UpgradeId.Mine, UpgradeId.Mine, UpgradeId.Mine, UpgradeId.Mine);
+                Crowd(view, 6, 4f, 30f, true);
+            });
+            failures += SurvivorShot(dir, "h17_bubble", view => view.Sim.Time > 3.3f && view.Sim.Enemies.Exists(e => e.Captured > 0f && e.Captured < 0.9f), 1, false, Near(6f), 1, view =>
+            {
+                Pick(view, UpgradeId.Bubble, UpgradeId.Bubble, UpgradeId.Bubble, UpgradeId.Bubble, UpgradeId.Bubble);
+                Crowd(view, 8, 4f, 5f, false);
+            });
+            failures += SurvivorShot(dir, "h18_manhole", view => view.Sim.Time > 3.3f && view.Sim.GeyserBursts.Count > 0, 3, false, Near(7f), 1, view => Armed(view, UpgradeId.Manhole));
+            failures += SurvivorShot(dir, "h20_dogpack", view => view.Sim.Time > 3.3f && view.Sim.Time > 2f && view.Sim.Dogs.Count == SurvivorSim.DogPackCount, 1, false, Near(7f), 1, view => Evolved(view, UpgradeId.DogPack));
+            failures += SurvivorShot(dir, "h21_whirl", view => view.Sim.Time > 3.3f && view.Sim.WhirlMarks.Count > 12, 1, false, Near(6f), 1, view => Evolved(view, UpgradeId.Whirl));
+            failures += SurvivorShot(dir, "h22_bridge", view => view.Sim.Time > 3.3f && view.Sim.Ladders.Exists(l => l.Struck && l.Age > 0.6f), 1, false, Near(8f), 1, view => Evolved(view, UpgradeId.LadderBridge));
+            failures += SurvivorShot(dir, "h23_storm", view => view.Sim.Time > 3.3f && view.Sim.Balloons.FindAll(b => b.Small).Count >= 3, 1, false, Near(7f), 1, view => Evolved(view, UpgradeId.BalloonStorm));
+            failures += SurvivorShot(dir, "h24_tornado", view => view.Sim.Time > 3.3f && view.Sim.Tornadoes.Exists(t => t.Life < SurvivorSim.TornadoLife - 1f), 1, false, Near(8f), 1, view => Evolved(view, UpgradeId.Tornado));
+            failures += SurvivorShot(dir, "h25_avalanche", view => view.Sim.Time > 3.3f && view.Sim.AvalancheX.HasValue && System.Math.Abs(view.Sim.AvalancheX.Value - view.Sim.Player.X) < 3f, 1, false, Near(10f), 1, view => Evolved(view, UpgradeId.Avalanche));
+            failures += SurvivorShot(dir, "h26_icefield", view => view.Sim.Time > 3.3f && view.Sim.Time > 1.5f, 1, false, Near(7f), 1, view =>
+            {
+                Evolved(view, UpgradeId.IceField);
+                Vec2 p = view.Sim.Player;
+                foreach (Vec2 o in new[] { new Vec2(-3f, 2f), new Vec2(1f, 3f), new Vec2(4f, 1f), new Vec2(2f, -2.5f) }) view.Sim.Mines.Add(new Mine { Pos = new Vec2(p.X + o.X, p.Y + o.Y) });
+                Crowd(view, 6, 5f, 30f, true);
+            });
+            failures += SurvivorShot(dir, "h27_bubblefall", view => view.Sim.Time > 3.3f && view.Sim.Enemies.FindAll(e => e.Captured > 0f).Count >= 2, 1, false, Near(6f), 1, view =>
+            {
+                Evolved(view, UpgradeId.BubbleFall);
+                Crowd(view, 10, 4f, 5f, false);
+            });
+            failures += SurvivorShot(dir, "h28_waterline", view => view.Sim.Time > 3.3f && view.Sim.Geysers.Count >= 4 && view.Sim.GeyserBursts.Count > 0, 1, false, Near(9f), 1, view => Evolved(view, UpgradeId.Waterline));
+            failures += SurvivorShot(dir, "h30_evolve_card", view => view.Sim.PendingChoices != null && view.Sim.PendingChoices.Exists(Loadout.IsEvolution), 40, false, null, 1, view =>
+            {
+                Pick(view, UpgradeId.Whip, UpgradeId.Whip, UpgradeId.Whip, UpgradeId.Whip, UpgradeId.Whip, UpgradeId.Tank);
+                view.Sim.DropGem(view.Sim.Player, view.Sim.XpToNext);
+            });
+
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
         }
@@ -473,6 +516,32 @@ namespace FireGame.Prototypes.EditorTools
             {
                 view.Sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { id };
                 view.Sim.Choose(0);
+            }
+        }
+
+        /// <summary>소방관을 가운데 두고 size 크기로 찍는다.</summary>
+        private static Action<SurvivorView> Near(float size)
+        {
+            return view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), size);
+        }
+
+        /// <summary>진화까지: 무기 Lv5(+불 몹 둘레) → 짝 보조 → 진화 카드.</summary>
+        private static void Evolved(SurvivorView view, UpgradeId evolution)
+        {
+            Armed(view, Loadout.BaseOf(evolution));
+            Pick(view, Loadout.PairOf(evolution), evolution);
+        }
+
+        /// <summary>소방관 둘레 r칸에 불씨 n마리(walk면 소방관에게 걸어온다, 아니면 선다).</summary>
+        private static void Crowd(SurvivorView view, int n, float r, float hp, bool walk)
+        {
+            SurvivorSim sim = view.Sim;
+            for (int i = 0; i < n; i++)
+            {
+                float a = i * Mathf.PI * 2f / n;
+                Enemy e = sim.Spawn(EnemyKind.Ember, new Vec2(sim.Player.X + (Mathf.Cos(a) * r), sim.Player.Y + (Mathf.Sin(a) * r)));
+                if (!walk) e.Speed = 0f;
+                e.MaxHp = e.Hp = hp;
             }
         }
 

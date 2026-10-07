@@ -570,6 +570,7 @@ namespace FireGame.Prototypes
             _slowmo = 0f;
             _overAge = 0f;
             _faceTaken = false;
+            ResetArsenal();
             if (_help != null) _help.text = _sim.Guardian ? GuardianHelp() : _helpDefault;
             _guardShown = 0f;
             _alertAge = 99f;
@@ -983,7 +984,7 @@ namespace FireGame.Prototypes
                 _zoomKick = 1f;
                 Flash(gold, 0.3f);
                 GameAudio.Play(Cue.Won);
-                ShowAlert("진화! 고압 방수포", gold);
+                ShowAlert("진화! " + SurvivorUpgrades.Name(_lastPick), gold);
             }
             else if (_sim.JustMaxed.HasValue)
             {
@@ -1018,6 +1019,7 @@ namespace FireGame.Prototypes
         private void React()
         {
             ReactGuardian();
+            ReactArsenal();
             int kills = 0;
             foreach (Hit h in _sim.Hits)
             {
@@ -1647,6 +1649,7 @@ namespace FireGame.Prototypes
             DrawCivilians();
             DrawEnemies();
             DrawShots();
+            DrawArsenal(dt);
             DrawPlayer();
             DrawGear(dt);
             DrawStageAir();
@@ -1749,6 +1752,8 @@ namespace FireGame.Prototypes
             {
                 Enemy e = _sim.Enemies[i];
                 Vector3 at = W(e.Pos);
+                // 비눗방울에 갇힌 몹은 방울째 떠오른다.
+                if (e.Captured > 0f) at += Up(CaptureLift(e));
                 float flicker = 1f + (0.09f * Mathf.Sin((_time * 14f) + (i * 1.7f)));
                 bool hit = e.HitFlash > 0f;
                 float foot = e.Kind == EnemyKind.Blaze ? 1.8f : e.Kind == EnemyKind.Oil ? 1.7f : 1f;
@@ -3112,6 +3117,11 @@ namespace FireGame.Prototypes
             if (slot >= _impacts.Length || _impacts[slot] >= MaxImpactsPerSource) return;
             Vector3 from = W(h.From);
             Loadout b = _sim.Build;
+            if (ArsenalHit(h, at))
+            {
+                _impacts[slot]++;
+                return;
+            }
             switch (h.Source)
             {
                 case HitSource.Hose:
@@ -4748,6 +4758,7 @@ namespace FireGame.Prototypes
             _auras = new Pool(_world, "Aura", RingSprite(), 10, Additive);
             _pools.Add(_auras);
             BuildGuardianPools();
+            BuildArsenalPools();
             _tank = AddPool("Tank", "Effects/glow", 10, true);
             _radar = new Pool(_world, "Radar", BeamSprite(), 10, Additive);
             _pools.Add(_radar);

@@ -233,6 +233,9 @@ namespace FireGame.Prototypes.Logic
         public readonly List<Vec2> GeyserBursts = new List<Vec2>();
         public readonly List<Ladder> LadderStrikes = new List<Ladder>();
 
+        /// <summary>이번 틱 거품 파도(산사태)가 일었다.</summary>
+        public bool JustAvalanche;
+
         private float _dogClock;
         private float _balloonClock = 1f;
         private float _boomClock = 0.5f;
@@ -256,6 +259,7 @@ namespace FireGame.Prototypes.Logic
             BubblePops.Clear();
             GeyserBursts.Clear();
             LadderStrikes.Clear();
+            JustAvalanche = false;
         }
 
         /// <summary>맨홀: 맵의 ManholeGrid 격자 점 중 건물·물 밖인 곳(맵을 깐 뒤 한 번).</summary>
@@ -849,6 +853,7 @@ namespace FireGame.Prototypes.Logic
                 AvalancheDir = crowd.X >= 0f ? 1f : -1f;
                 AvalancheX = Player.X - (AvalancheDir * 14f);
                 AvalancheY = Player.Y;
+                JustAvalanche = true;
                 _avalancheHit.Clear();
                 _avalancheSoaked.Clear();
             }
