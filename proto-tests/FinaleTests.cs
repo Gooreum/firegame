@@ -85,40 +85,51 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void RescuingEveryone_DropsAChest_AndItOpensTwoPicksStartingYellow()
+        public void BigReport_EndingWithNoOneLost_OpensAChest()
         {
             var sim = new SurvivorSim(1) { Guardian = false };
             Structure big = ToBigReport(sim);
-            // 다른 가게의 사람은 이 테스트와 상관없다: 대형 신고 건물만 끈질기게 탄다.
-            WalkTo(sim, big.Door, 60 * 30, () => big.Residents <= 0);
+            // 다른 가게의 사람은 이 테스트와 상관없다: 대형 신고 건물만 끈질기게 탄다. 다 구하거나(문 앞) 꺼지면 끝난다.
+            WalkTo(sim, big.Door, 60 * 30, () => sim.BigReport == null);
             Assert.Null(sim.BigReport);
-            // 마지막 사람을 구한 틱에 문 앞(발밑)에 상자가 떨어지고, 서 있던 소방관이 바로 줍는다.
-            bool opened = sim.JustChest;
-            if (!opened)
+            Assert.Equal(0, sim.CiviliansLost);
+            // 문 앞(발밑)에 떨어진 상자는 서 있던 소방관이 줍는다.
+            for (int i = 0; i < 300 && sim.Chests.Count > 0; i++)
             {
-                Assert.Single(sim.Chests);
-                Assert.True(sim.Chests[0].Pos.DistanceTo(big.Door) < 0.01f);
                 Vec2 chest = sim.Chests[0].Pos;
-                for (int i = 0; i < 300 && !opened; i++)
-                {
-                    sim.Enemies.Clear();
-                    if (sim.PendingChoices != null) sim.Choose(0);
-                    float dx = chest.X - sim.Player.X;
-                    float dy = chest.Y - sim.Player.Y;
-                    float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
-                    sim.Step(d < 0.05f ? 0f : dx / d, d < 0.05f ? 0f : dy / d);
-                    opened = sim.JustChest;
-                }
+                float dx = chest.X - sim.Player.X;
+                float dy = chest.Y - sim.Player.Y;
+                float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
+                Tick(sim, d < 0.05f ? 0f : dx / d, d < 0.05f ? 0f : dy / d);
             }
             Assert.Empty(sim.Chests);
-            Assert.True(opened);
-            Assert.NotNull(sim.PendingChoices);
-            // 상자 첫 장은 노란 보장 — 단 노란은 한 판에 하나라, 걸어오는 동안 이미 하나 집었으면 일반 카드 셋이 된다.
-            Assert.True(sim.Build.SpecialCount >= Loadout.SpecialSlots || sim.PendingChoices.Exists(id => Loadout.IsSpecial(id)), "상자 첫 장에 노란 카드가 없다");
-            sim.Choose(0);
-            Assert.NotNull(sim.PendingChoices);
-            sim.Choose(0);
-            Assert.Null(sim.PendingChoices);
+            Assert.InRange(sim.LastChestPicks, 1, 3);
+        }
+
+        [Fact]
+        public void Chest_OpensOneToThreeLevelUpsInARow_WithNoYellow()
+        {
+            var counts = new int[4];
+            for (int seed = 1; seed <= 40; seed++)
+            {
+                var sim = new SurvivorSim(seed) { Guardian = false };
+                sim.Enemies.Clear();
+                sim.Chests.Add(new Pickup { Pos = sim.Player, Life = SurvivorSim.ChestLife });
+                sim.Step(0f, 0f);
+                Assert.True(sim.JustChest);
+                int picks = sim.LastChestPicks;
+                Assert.InRange(picks, 1, 3);
+                counts[picks]++;
+                for (int k = 0; k < picks; k++)
+                {
+                    Assert.NotNull(sim.PendingChoices);
+                    foreach (UpgradeId id in sim.PendingChoices) Assert.True(Loadout.IsWeapon(id) || Loadout.IsPassive(id), "상자 카드 " + id);
+                    sim.Choose(0);
+                }
+                Assert.Null(sim.PendingChoices);
+            }
+            // 한 번이 가장 흔하고, 세 번은 드물다.
+            Assert.True(counts[1] > counts[2] && counts[2] >= counts[3], "1·2·3번: " + counts[1] + "·" + counts[2] + "·" + counts[3]);
         }
 
         [Fact]

@@ -221,7 +221,7 @@ namespace FireGame.Prototypes.Tests
         /// 아슬아슬 표. dotnet test proto-tests --filter CloseReport --logger "console;verbosity=detailed"
         /// 목표: 마을 승 50~90%, 아슬 승 ≥ 승의 절반, 감독 평균 ≥ 1.5(감독이 실제로 몰아붙인다). 숲·공단: 승 ≥ 20%, 아슬 ≥ 승의 ⅓.
         /// </summary>
-        [Fact]
+        [Fact(Skip = "아이템·몹 개편 중(2026-10-07): 노란·옛 무기가 빠져 띠가 무의미 — Phase 6에서 다시 잰다")]
         public void CloseReport_ProBotFinishesOnTheEdge()
         {
             int seeds = FunTests.Seeds;

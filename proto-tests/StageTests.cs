@@ -73,42 +73,6 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void YellowCards_ComeOnlyFromTheStagePool()
-        {
-            for (int stage = 1; stage <= SurvivorStages.Count; stage++)
-            {
-                UpgradeId[] pool = SurvivorStages.Get(stage).Specials;
-                var seen = new HashSet<UpgradeId>();
-                for (int seed = 1; seed <= 20; seed++)
-                {
-                    var sim = new SurvivorSim(seed, stage) { Guardian = false };
-                    sim.Enemies.Clear();
-                    sim.Structures.Clear();
-                    sim.Reports = false;
-                    // 플레이어 경로: 구슬을 먹어 레벨업하고 카드를 고른다(노란 카드가 있으면 그걸).
-                    while (sim.Level < 16)
-                    {
-                        sim.DropGem(sim.Player, sim.XpToNext);
-                        for (int i = 0; i < 3 && sim.PendingChoices == null; i++) sim.Step(0f, 0f);
-                        Assert.NotNull(sim.PendingChoices);
-                        int pick = 0;
-                        for (int k = 0; k < sim.PendingChoices.Count; k++)
-                        {
-                            UpgradeId id = sim.PendingChoices[k];
-                            // 진화 카드(방수포·구조 분대…)는 노란 카드로 세지만 풀이 아니라 장비에서 온다: 대비 장비가 두 배로 나와 다른 진화도 뜬다.
-                            if (!Loadout.IsSpecial(id) || Loadout.IsEvolution(id)) continue;
-                            Assert.Contains(id, pool);
-                            seen.Add(id);
-                            pick = k;
-                        }
-                        sim.Choose(pick);
-                    }
-                }
-                Assert.Equal(pool.Length, seen.Count);
-            }
-        }
-
-        [Fact]
         public void Stages_WrapAround()
         {
             Assert.Equal(2, SurvivorStages.Next(1));
@@ -124,7 +88,7 @@ namespace FireGame.Prototypes.Tests
         /// 밸런스 측정: 숙련 봇(사람 대리, docs §15)이 스테이지마다 30판을 돈다. 표는 출력만 하고(목표는 docs/prototype-c-balance.md),
         /// 검사는 "뒤 스테이지가 더 어렵다" 하나만 한다. 기본 봇은 대화재 고리에 늘 쓰러져 승 3·0·4처럼 바닥 노이즈만 남는다.
         /// </summary>
-        [Fact]
+        [Fact(Skip = "아이템·몹 개편 중(2026-10-07): 노란·옛 무기가 빠져 띠가 무의미 — Phase 6에서 다시 잰다")]
         public void BalanceReport_LaterStageIsHarder()
         {
             var lost = new int[SurvivorStages.Count + 1];

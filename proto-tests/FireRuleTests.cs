@@ -156,29 +156,6 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void HeliDrop_KnocksABigFireDown_AndSignalsIt()
-        {
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 8f, 0f);
-            sim.Ignite(shop, 1f);
-            sim.PendingChoices = new System.Collections.Generic.List<UpgradeId> { UpgradeId.Heli };
-            sim.Choose(0);
-            FireKnock? knock = null;
-            for (int i = 0; i < 60 * 4 && knock == null; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-                foreach (FireKnock k in sim.Knocked)
-                {
-                    if (k.At == shop) knock = k;
-                }
-            }
-            Assert.NotNull(knock);
-            Assert.True(knock.Value.Amount > SurvivorSim.KnockShown, "헬기 물이 줄인 양 " + knock.Value.Amount);
-        }
-
-        [Fact]
         public void HoseTicks_AreTooSmallToSignal()
         {
             SurvivorSim sim = Quiet();

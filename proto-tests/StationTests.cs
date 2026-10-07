@@ -19,15 +19,11 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void StartFor_WithoutPrep_IsTheFirefightersStart()
+        public void StartFor_IsTheFirefightersStart_OnEveryStage()
         {
+            // 모든 스테이지가 같은 아이템 풀이다: 시작 장비는 고른 소방관의 것뿐(대비 장비 없음).
             var station = new FireStation();
-            Assert.Null(station.Prep);
             for (int n = 1; n <= SurvivorStages.Count; n++) Assert.Equal(station.Current.Start, station.StartFor(SurvivorStages.Get(n)));
-            // 저장 글엔 대비 장비가 없다(스테이지마다 다시 고른다).
-            station.Prep = UpgradeId.Boots;
-            Assert.DoesNotContain("Boots", station.Serialize());
-            Assert.Null(FireStation.Parse(station.Serialize()).Prep);
         }
 
         [Fact]
@@ -118,7 +114,7 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Roster_StartsFitTheSlots_AndHaveNoEvolutionsOrSpecials()
+        public void Roster_StartsFitTheSlots_AndHaveNoEvolutions()
         {
             var ids = new HashSet<string>();
             int lastCost = -1;
@@ -131,7 +127,7 @@ namespace FireGame.Prototypes.Tests
                 var build = new Loadout();
                 foreach (UpgradeId id in f.Start)
                 {
-                    Assert.False(Loadout.IsEvolution(id) || Loadout.IsSpecial(id) || id == UpgradeId.Heal, f.Name + "의 시작 장비 " + id + "는 들 수 없다");
+                    Assert.False(Loadout.IsEvolution(id) || id == UpgradeId.Heal, f.Name + "의 시작 장비 " + id + "는 들 수 없다");
                     Assert.True(build.CanTake(id), f.Name + "의 시작 장비 " + id + "가 칸을 넘친다");
                     build.Add(id);
                 }

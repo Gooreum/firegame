@@ -49,16 +49,6 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void SpecialCard_NeverSignalsMax()
-        {
-            SurvivorSim sim = Quiet();
-            sim.PendingChoices = new List<UpgradeId> { UpgradeId.Heli };
-            sim.Choose(0);
-            Assert.Equal(1, sim.Build.Level(UpgradeId.Heli));
-            Assert.Null(sim.JustMaxed);
-        }
-
-        [Fact]
         public void BelowMax_NoSignal()
         {
             SurvivorSim sim = Quiet();

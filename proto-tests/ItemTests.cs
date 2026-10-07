@@ -76,10 +76,10 @@ namespace FireGame.Prototypes.Tests
             UpgradeId[] evolutions = { UpgradeId.Cannon, UpgradeId.Squad, UpgradeId.AirBomb, UpgradeId.RescueDrone, UpgradeId.WaterWall, UpgradeId.RescuePost };
             foreach (UpgradeId id in weapons)
             {
-                Assert.True(Loadout.IsWeapon(id) && !Loadout.IsSpecial(id), id + "는 무기");
+                Assert.True(Loadout.IsWeapon(id) && !Loadout.IsEvolution(id), id + "는 무기");
                 Assert.NotNull(Loadout.EvolutionOf(id));
             }
-            foreach (UpgradeId id in passives) Assert.True(Loadout.IsPassive(id) && !Loadout.IsSpecial(id), id + "는 보조");
+            foreach (UpgradeId id in passives) Assert.True(Loadout.IsPassive(id) && !Loadout.IsEvolution(id), id + "는 보조");
             // 보조는 셋뿐: enum에서 IsPassive인 것은 이 셋이 전부다.
             for (int i = 0; i <= (int)UpgradeId.Heal; i++)
             {
@@ -95,12 +95,11 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(UpgradeId.Suit, Loadout.PairOf(UpgradeId.RescuePost));
             foreach (UpgradeId id in evolutions)
             {
-                Assert.True(Loadout.IsEvolution(id) && Loadout.IsSpecial(id));
+                Assert.True(Loadout.IsEvolution(id));
                 Assert.Contains(Loadout.BaseOf(id), weapons);
             }
             Assert.Equal(3, Loadout.WeaponSlots);
             Assert.Equal(2, Loadout.PassiveSlots);
-            Assert.Equal(1, Loadout.SpecialSlots);
         }
 
         [Fact]
@@ -467,40 +466,5 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(1, shop.Residents);
         }
 
-        [Fact]
-        public void Ambulance_ClearsTheThickestSmoke()
-        {
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 20f, 0f, 2);
-            sim.Ignite(shop, 1f);
-            shop.Integrity = 100f;
-            Take(sim, UpgradeId.Ambulance);
-            Structure came = null;
-            for (int i = 0; i < 60 * 6 && came == null; i++)
-            {
-                sim.Enemies.Clear();
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-                came = sim.AmbulanceAt;
-            }
-            Assert.Same(shop, came);
-            Assert.True(shop.Smoke < 0.1f);
-        }
-
-        [Fact]
-        public void Truck_DrivesTheRowOfTheWorstFire()
-        {
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 3f, 10f);
-            sim.Ignite(shop, 0.9f);
-            Take(sim, UpgradeId.Truck);
-            for (int i = 0; i < 60 * 3 && !sim.Truck.HasValue; i++)
-            {
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-            }
-            Assert.True(sim.Truck.HasValue);
-            Assert.Equal(shop.Pos.Y, sim.Truck.Value.Y, 2);
-        }
     }
 }

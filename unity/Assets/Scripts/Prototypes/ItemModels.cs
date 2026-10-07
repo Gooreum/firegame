@@ -68,17 +68,6 @@ namespace FireGame.Prototypes
             return Hull(parent, "BoatModel", new Color(0.45f, 0.22f, 0.14f), new Color(0.62f, 0.5f, 0.36f), Dark);
         }
 
-        /// <summary>소방정(항구 노란): 흰 선체 + 빨간 띠 + 물대포 두 문. 불배와 같은 크기.</summary>
-        public static GameObject Fireboat(Transform parent)
-        {
-            GameObject root = Hull(parent, "FireboatModel", Paint, FireRed, Water);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                Part(PrimitiveType.Cylinder, root, new Vector3(side * 0.3f, 0.62f, 0.2f), new Vector3(0.1f, 0.3f, 0.1f), Steel, new Vector3(-60f, 0f, side * 35f));
-            }
-            return root;
-        }
-
         /// <summary>유조선(항구 대화재): 어두운 적갈 선체 6×2.4(앞 +Z) + 녹슨 갑판 + 탱크 돔 셋 + 선미 조타실 + 굴뚝. 불배의 2.5배.</summary>
         public static GameObject Tanker(Transform parent)
         {
@@ -148,65 +137,6 @@ namespace FireGame.Prototypes
             Part(PrimitiveType.Cylinder, root, Vector3.zero, new Vector3(1.03f, 0.06f, 1.03f), Paint);
             Part(PrimitiveType.Cylinder, root, Vector3.zero, new Vector3(1.03f, 0.06f, 1.03f), Paint, new Vector3(90f, 0f, 0f));
             Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.52f, 0f), new Vector3(0.22f, 0.16f, 0.22f), Paint);
-            return root;
-        }
-
-        /// <summary>소방 헬기: 빨간 몸통 + 유리 조종석 + 꼬리 + 스키드 + 주 날개(자식 "Rotor"). 길이 약 3.4칸, 앞 +Z.</summary>
-        public static GameObject Heli(Transform parent)
-        {
-            GameObject root = Root("HeliModel", parent);
-            Part(PrimitiveType.Capsule, root, Vector3.zero, new Vector3(0.9f, 0.8f, 0.8f), FireRed, new Vector3(90f, 0f, 0f));
-            Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.08f, 0.62f), new Vector3(0.72f, 0.6f, 0.7f), Glass);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.12f, 0f), new Vector3(0.92f, 0.1f, 1.2f), Paint);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.12f, -1.3f), new Vector3(0.16f, 0.16f, 1.5f), FireRed);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.38f, -1.95f), new Vector3(0.06f, 0.5f, 0.32f), FireRed);
-            Rotor(root, "TailRotor", new Vector3(0.1f, 0.35f, -1.95f), 0.6f, 0.06f, Dark, true);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                Part(PrimitiveType.Cube, root, new Vector3(side * 0.42f, -0.55f, 0f), new Vector3(0.06f, 0.06f, 1.4f), Dark);
-                Part(PrimitiveType.Cube, root, new Vector3(side * 0.36f, -0.4f, 0.3f), new Vector3(0.05f, 0.3f, 0.05f), Dark, new Vector3(0f, 0f, side * 20f));
-                Part(PrimitiveType.Cube, root, new Vector3(side * 0.36f, -0.4f, -0.3f), new Vector3(0.05f, 0.3f, 0.05f), Dark, new Vector3(0f, 0f, side * 20f));
-            }
-            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.5f, 0f), new Vector3(0.14f, 0.08f, 0.14f), Dark);
-            GameObject rotor = Rotor(root, "Rotor", new Vector3(0f, 0.58f, 0f), 3.6f, 0.16f, Dark);
-            Part(PrimitiveType.Cube, rotor, Vector3.zero, new Vector3(0.16f, 0.03f, 3.6f), Dark);
-            return root;
-        }
-
-        /// <summary>구급차: 흰 상자 차체 + 빨간 띠 + 파란 경광등 + 유리 앞창 + 바퀴 넷. 길이 약 2.2칸, 앞 +Z.</summary>
-        public static GameObject Ambulance(Transform parent)
-        {
-            GameObject root = Root("AmbulanceModel", parent);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.45f, -0.25f), new Vector3(1.1f, 0.9f, 1.6f), Paint);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.3f, 0.85f), new Vector3(1.05f, 0.55f, 0.7f), Paint);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.6f, 0.95f), new Vector3(0.95f, 0.3f, 0.45f), Glass, new Vector3(-20f, 0f, 0f));
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.3f, -0.25f), new Vector3(1.14f, 0.16f, 1.62f), FireRed);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.75f, -0.25f), new Vector3(0.14f, 0.5f, 0.14f), FireRed);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.75f, -0.25f), new Vector3(0.5f, 0.14f, 0.14f), FireRed);
-            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.96f, 0.1f), new Vector3(0.22f, 0.08f, 0.22f), Water);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                for (int k = -1; k <= 1; k += 2)
-                {
-                    Part(PrimitiveType.Cylinder, root, new Vector3(side * 0.56f, 0.1f, 0.45f + (k * 0.65f)), new Vector3(0.3f, 0.08f, 0.3f), Dark, new Vector3(0f, 0f, 90f));
-                }
-            }
-            return root;
-        }
-
-        /// <summary>방염제 비행기: 흰 동체 + 빨간 날개·꼬리. 길이 약 3칸, 앞 +Z.</summary>
-        public static GameObject Plane(Transform parent)
-        {
-            GameObject root = Root("PlaneModel", parent);
-            Part(PrimitiveType.Capsule, root, Vector3.zero, new Vector3(0.5f, 1.5f, 0.5f), Paint, new Vector3(90f, 0f, 0f));
-            Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.14f, 0.9f), new Vector3(0.34f, 0.26f, 0.5f), Glass);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.05f, 0.1f), new Vector3(3.4f, 0.07f, 0.62f), FireRed);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.05f, -1.25f), new Vector3(1.2f, 0.05f, 0.35f), FireRed);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.35f, -1.3f), new Vector3(0.06f, 0.55f, 0.4f), FireRed);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                Part(PrimitiveType.Cylinder, root, new Vector3(side * 0.8f, -0.05f, 0.35f), new Vector3(0.22f, 0.25f, 0.22f), Steel, new Vector3(90f, 0f, 0f));
-            }
             return root;
         }
 

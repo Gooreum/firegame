@@ -82,17 +82,8 @@ namespace FireGame.Prototypes.Logic
         /// <summary>야시장: 등줄. 맵을 깐 뒤 (구조물 인덱스 a, b) 쌍을 돌려준다. null이면 등줄 없음.</summary>
         public Func<List<Structure>, List<int[]>> Links;
 
-        /// <summary>이 스테이지 레벨업에서 나오는 노란 특수 카드들.</summary>
-        public UpgradeId[] Specials;
-
         /// <summary>소방서 브리핑에 보이는 이 스테이지의 위협 한 줄.</summary>
         public string Threat;
-
-        /// <summary>그 위협을 막는 일반 장비 둘: 소방서에서 하나를 골라 Lv1로 들고 간다. 레벨업 카드에도 두 배로 나온다.</summary>
-        public UpgradeId[] Counters;
-
-        /// <summary>이 스테이지에선 카드로 안 나오는 일반 장비(위협과 상관없는 것). 노란 카드는 Specials가 정한다.</summary>
-        public UpgradeId[] Excluded = new UpgradeId[0];
 
         /// <summary>소방서와 판 시작에 보여 주는 할 일 한 줄("부두 끝에 서서 바다 위 배를 쏘아 끈다").</summary>
         public string Goal;
@@ -152,10 +143,7 @@ namespace FireGame.Prototypes.Logic
             ReportTimes = SurvivorSim.ReportTimes,
             // 불 규칙 강화(측정 5): 불이 오래 버티는 만큼 몰려오는 불 몹을 늘려 몸 압박(위기 판)을 되살린다.
             SpawnRate = 1.3f,
-            Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Truck, UpgradeId.Sprinkler },
-            // 배우는 판: 모든 장비가 나온다. 대비는 구조와 발(큰 불에 갇힌 주민, 멀리 떨어진 신고).
             Threat = "큰 불에 주민이 갇힌다 · 신고가 멀리서 온다",
-            Counters = new[] { UpgradeId.Partner, UpgradeId.Boots },
             Goal = "큰 불부터, 갇힌 사람 먼저",
             // 수호자 샘플: 대형 신고를 약 1분 리듬으로(50·115초 + 3:00 랜드마크) — 진격하고, 도착해 버티고, 풀고, 다음으로.
             Guardian = true,
@@ -189,11 +177,8 @@ namespace FireGame.Prototypes.Logic
             BuildingWater = 0.5f,
             // 나무 수십 그루가 보통(×2) 간격으로 뱉으면 불씨 떼가 동네를 덮는다.
             TreeSpit = 4f,
-            Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Rain, UpgradeId.Retardant },
             // 산불은 옮겨다닌다: 몸 둘레의 장막(박쥐·불씨)과 멀리 날아가는 드론이 답이고, 선 자리만 지키는 포탑은 못 따라간다.
             Threat = "바람이 불을 캠프로 민다 · 재 박쥐 떼",
-            Counters = new[] { UpgradeId.Curtain, UpgradeId.Drone },
-            Excluded = new[] { UpgradeId.Turret },
             Goal = "바람 위쪽 나무부터 끈다",
             // 숲의 대화재: 북쪽 숲에서 불의 띠가 캠프로 내려온다(맵 특색 패스).
             Finale = FinaleKind.FireFront,
@@ -214,11 +199,8 @@ namespace FireGame.Prototypes.Logic
             DartShare = 0.1f,
             OilShare = 0.12f,
             DrumSpill = 4,
-            Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Sprinkler, UpgradeId.Foam },
             // 기름 불은 바닥에 깔린다: 밟아 끄는 장화와 골목을 지키는 포탑이 답이고, 건물에만 떨어뜨리는 드론은 무력하다.
             Threat = "드럼이 줄줄이 터져 기름 불이 깔린다",
-            Counters = new[] { UpgradeId.Boots, UpgradeId.Turret },
-            Excluded = new[] { UpgradeId.Drone },
             Goal = "드럼 곁에서 기름 방울을 터뜨리지 마라",
             // 공단의 대화재: 드럼이 하나씩 점화되어 카운트다운 뒤 터진다. 끄면 막는다(맵 특색 패스).
             Finale = FinaleKind.ChainBlast,
@@ -249,11 +231,8 @@ namespace FireGame.Prototypes.Logic
             Sea = true,
             // 부둣가 줄은 서로 가까워 번진다(바다는 못 건넌다: CrossesWater).
             SpreadEvery = 8f,
-            Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Fireboat, UpgradeId.Wave },
             // 불배는 물 위에 있다: 멀리 던지는 물폭탄과 부두 끝에 세우는 포탑이 답이고, 몸 둘레 장막은 배에 못 닿는다.
             Threat = "불붙은 배가 떠내려와 부두에 닿는다 · 바다에서 불 갈매기",
-            Counters = new[] { UpgradeId.WaterBomb, UpgradeId.Turret },
-            Excluded = new[] { UpgradeId.Curtain },
             Goal = "부두 끝에 서서 바다 위 배를 쏘아 끈다",
             // 항구의 대화재: 큰 유조선이 부두 가운데 닿아 바다 위로 불기름을 흘린다(맵 특색 패스).
             Finale = FinaleKind.Tanker,
@@ -278,11 +257,8 @@ namespace FireGame.Prototypes.Logic
             // 점포끼리는 등줄로만 옮긴다(둘 다 켜면 다닥다닥 붙은 점포가 한 번에 탄다).
             SpreadEvery = 0f,
             TreeSpit = 0f,
-            Specials = new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Shells, UpgradeId.Mist },
             // 등줄을 적시며 골목을 걷는 장막과 사람 많은 점포를 구하는 대원이 답이고, 선 자리만 지키는 포탑은 줄 따라 달리는 불을 못 쫓는다.
             Threat = "등줄을 타고 불이 점포를 건넌다 · 불꽃 가판대가 하늘로 불을 쏜다",
-            Counters = new[] { UpgradeId.Curtain, UpgradeId.Partner },
-            Excluded = new[] { UpgradeId.Turret },
             Goal = "등줄을 적셔 끊고 가판대부터 끈다",
             // 야시장의 대화재: 가판대가 전부 쏘고 무대도 쏘며 등줄이 무대에서부터 차례로 탄다(맵 특색 패스).
             Finale = FinaleKind.RocketStorm,

@@ -7,7 +7,7 @@ namespace FireGame.Prototypes.Logic
     /// <summary>
     /// 레벨업 카드. 게임의 목표(건물과 사람 지키기)에 맞춰, 모든 아이템이 불 끄기·사람 구하기·현장에 빨리 가기 중 하나 이상을 돕는다.
     /// 무기 6 중 4칸, 보조 6 중 4칸만 들 수 있어 판마다 고른다. 무기마다 짝 보조가 있어 무기 Lv5 + 짝 보조면 진화한다.
-    /// 노란 특수 카드는 스테이지 풀(4장)에서만 나온다. 뽑을 게 없으면 회복.
+    /// 모든 스테이지가 같은 풀이고, 노란 특수 카드는 없다(2026-10-07).
     /// </summary>
     public enum UpgradeId
     {
@@ -40,38 +40,6 @@ namespace FireGame.Prototypes.Logic
         WaterWall,
         RescuePost,
 
-        // --- 노란 특수(스테이지 풀) ---
-        Heli,
-
-        /// <summary>공통: 연기가 가장 짙은 건물로 구급차가 와 갇힌 사람의 연기를 걷어 낸다.</summary>
-        Ambulance,
-
-        /// <summary>1스테이지 전용: 소방차가 가장 센 불난 건물의 줄을 가로지르며 양옆으로 물을 뿜는다.</summary>
-        Truck,
-
-        /// <summary>1·3스테이지: 모든 건물 지붕 스프링클러가 타는 건물을 적신다.</summary>
-        Sprinkler,
-
-        /// <summary>2스테이지 전용: 불이 몰린 곳에 먹구름이 비를 뿌린다.</summary>
-        Rain,
-
-        /// <summary>2스테이지 전용: 비행기가 붉은 방염제 띠를 뿌려 그 안은 한동안 불이 안 붙는다.</summary>
-        Retardant,
-
-        /// <summary>3스테이지 전용: 바닥 불이 몰린 곳에 소화 폼을 깔아 기름 불을 덮고 한동안 막는다.</summary>
-        Foam,
-
-        /// <summary>4스테이지 전용: 소방정이 바다를 가로지르며 부두 쪽으로 물을 뿜어 배와 부둣가 건물을 적신다.</summary>
-        Fireboat,
-
-        /// <summary>4스테이지 전용: 큰 파도가 바다를 쓸어 불배를 끄고 북쪽으로 밀어내며 부둣가를 적신다.</summary>
-        Wave,
-
-        /// <summary>5스테이지 전용: 무대에서 물 불꽃 여섯 발이 올라가 가장 큰 불 위에서 터진다.</summary>
-        Shells,
-
-        /// <summary>5스테이지 전용: 불이 몰린 곳에 물안개를 피운다. 안개 안은 불이 안 붙고 등줄 불이 꺼진다.</summary>
-        Mist,
         Heal,
     }
 
@@ -83,8 +51,6 @@ namespace FireGame.Prototypes.Logic
         public const int WeaponSlots = 3;
         public const int PassiveSlots = 2;
 
-        /// <summary>노란 특수 장비는 한 판에 하나.</summary>
-        public const int SpecialSlots = 1;
 
         /// <summary>진화 표: (진화, 원래 무기, 짝 보조).</summary>
         private static readonly UpgradeId[,] Evolutions =
@@ -106,7 +72,7 @@ namespace FireGame.Prototypes.Logic
 
         public static int MaxLevelOf(UpgradeId id)
         {
-            return IsSpecial(id) ? 1 : id == UpgradeId.Heal ? 0 : MaxLevel;
+            return IsEvolution(id) ? 1 : id == UpgradeId.Heal ? 0 : MaxLevel;
         }
 
         /// <summary>진화 카드인가.</summary>
@@ -145,12 +111,6 @@ namespace FireGame.Prototypes.Logic
             return null;
         }
 
-        /// <summary>노란 카드: 진화와 특수 장비. 레벨 1짜리이고, 특수 장비는 무기·보조 칸을 쓰지 않는다(진화는 원래 무기 칸을 이어 쓴다).</summary>
-        public static bool IsSpecial(UpgradeId id)
-        {
-            return id >= UpgradeId.Cannon && id < UpgradeId.Heal;
-        }
-
         public static bool IsWeapon(UpgradeId id)
         {
             return id <= UpgradeId.Turret || IsEvolution(id);
@@ -169,21 +129,6 @@ namespace FireGame.Prototypes.Logic
         public int PassiveCount
         {
             get { return Count(false); }
-        }
-
-        /// <summary>쥔 노란 특수 장비 수(진화는 세지 않는다).</summary>
-        public int SpecialCount
-        {
-            get
-            {
-                int n = 0;
-                for (int i = 0; i < _levels.Length; i++)
-                {
-                    var id = (UpgradeId)i;
-                    if (_levels[i] > 0 && IsSpecial(id) && !IsEvolution(id)) n++;
-                }
-                return n;
-            }
         }
 
         /// <summary>물대포 최대 + 탱크 보유 + 아직 진화 전(방수포 하나만 볼 때).</summary>
@@ -248,11 +193,10 @@ namespace FireGame.Prototypes.Logic
         }
 
         /// <summary>모든 무기·보조를 최대로 올리고 물대포는 방수포로 진화시킨다. 특수 장비는 주어진 풀 전부(시험용 풀장비).</summary>
-        public void MaxAll(IEnumerable<UpgradeId> specials)
+        public void MaxAll()
         {
             for (int i = 0; i <= (int)UpgradeId.Suit; i++) _levels[i] = MaxLevelOf((UpgradeId)i);
             Add(UpgradeId.Cannon);
-            foreach (UpgradeId id in specials) Add(id);
         }
 
         /// <summary>시험용: 여섯 무기를 모두 진화시킨다(짝 보조도 채운다).</summary>
@@ -304,7 +248,6 @@ namespace FireGame.Prototypes.Logic
             if (id == UpgradeId.Heal) return false;
             if (IsEvolution(id)) return Ready(id);
             int level = Level(id);
-            if (IsSpecial(id)) return level == 0 && SpecialCount < SpecialSlots;
             if (level >= MaxLevelOf(id)) return false;
             if (level > 0) return true;
             UpgradeId? evo = EvolutionOf(id);
@@ -328,51 +271,30 @@ namespace FireGame.Prototypes.Logic
     {
         public const float HealAmount = 30f;
 
-        /// <summary>이 확률(%)로 보장 레벨이 아니어도 노란 특수 장비가 한 장 섞인다.</summary>
-        public const int SpecialChance = 15;
-
         /// <summary>
-        /// 카드 3장을 뽑는다. 진화할 수 있으면 그 진화 하나를 반드시 넣는다.
-        /// 아니면 <paramref name="level"/>(새 레벨)이 5의 배수일 때 노란 특수 장비를 반드시 한 장 넣는다.
-        /// 뽑을 게 모자라면 그만큼만 준다(0장일 수도). <paramref name="specialPool"/>가 있으면 노란 카드는 그 안에서만 나온다.
-        /// <paramref name="forceSpecial"/>이면(보물상자 첫 장) 노란 카드를 반드시 넣는다.
-        /// <paramref name="stage"/>가 있으면 그 스테이지의 Excluded 일반 장비는 안 나오고 Counters는 두 배로 나온다(한 뽑기에 같은 카드는 없다).
+        /// 카드 3장을 뽑는다. 진화할 수 있으면 그 진화 하나를 반드시 넣고, 나머지는 쥔 것의 레벨업·빈 칸의 새 아이템에서 겹치지 않게 채운다.
+        /// 모든 스테이지가 같은 풀이다. 뽑을 게 모자라면 그만큼만 준다(0장일 수도). 회복으로 채우지 않는다(회복은 바닥 구급상자로).
         /// </summary>
-        public static List<UpgradeId> Roll(Loadout loadout, int level, ref Rng rng, IList<UpgradeId> specialPool = null, bool forceSpecial = false, StageRules stage = null)
+        public static List<UpgradeId> Roll(Loadout loadout, int level, ref Rng rng)
         {
             var pool = new List<UpgradeId>();
-            var specials = new List<UpgradeId>();
             for (int i = 0; i < (int)UpgradeId.Heal; i++)
             {
                 var id = (UpgradeId)i;
                 if (Loadout.IsEvolution(id) || !loadout.CanTake(id)) continue;
-                if (Loadout.IsSpecial(id) && specialPool != null && !specialPool.Contains(id)) continue;
-                if (!Loadout.IsSpecial(id) && stage != null && Array.IndexOf(stage.Excluded, id) >= 0) continue;
-                (Loadout.IsSpecial(id) ? specials : pool).Add(id);
-                if (!Loadout.IsSpecial(id) && stage != null && stage.Counters != null && Array.IndexOf(stage.Counters, id) >= 0) pool.Add(id);
+                pool.Add(id);
             }
 
             var picks = new List<UpgradeId>(3);
             List<UpgradeId> ready = loadout.ReadyEvolutions();
             if (ready.Count > 0) picks.Add(ready[rng.Next(ready.Count)]);
-            // 진화 카드가 떠도 노란 카드는 막지 않는다(상자 첫 장·5의 배수 레벨은 약속이다).
-            if (specials.Count > 0 && (forceSpecial || SpecialDue(level) || rng.Next(100) < SpecialChance)) picks.Add(specials[rng.Next(specials.Count)]);
             while (picks.Count < 3 && pool.Count > 0)
             {
                 int k = rng.Next(pool.Count);
-                UpgradeId pick = pool[k];
-                picks.Add(pick);
-                // 대비 장비는 두 번 들어 있다: 뽑히면 둘 다 지운다.
-                pool.RemoveAll(x => x == pick);
+                picks.Add(pool[k]);
+                pool.RemoveAt(k);
             }
-            // 뽑을 게 모자라면 그만큼만. 회복으로 채우지 않는다(회복은 바닥 구급상자로).
             return picks;
-        }
-
-        /// <summary>이 레벨로 오를 때는 노란 카드가 반드시 나온다(5, 10, 15…).</summary>
-        public static bool SpecialDue(int level)
-        {
-            return level > 0 && level % 5 == 0;
         }
 
         public static string Name(UpgradeId id)
@@ -394,17 +316,6 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.RescueDrone: return "구조 드론";
                 case UpgradeId.WaterWall: return "물의 방벽";
                 case UpgradeId.RescuePost: return "현장 구조소";
-                case UpgradeId.Heli: return "소방 헬기";
-                case UpgradeId.Ambulance: return "구급차";
-                case UpgradeId.Truck: return "소방차 출동";
-                case UpgradeId.Sprinkler: return "스프링클러";
-                case UpgradeId.Rain: return "비구름";
-                case UpgradeId.Retardant: return "방염제 살포";
-                case UpgradeId.Foam: return "폼 살포";
-                case UpgradeId.Fireboat: return "소방정";
-                case UpgradeId.Wave: return "큰 파도";
-                case UpgradeId.Shells: return "물 불꽃놀이";
-                case UpgradeId.Mist: return "물안개";
                 default: return "응급 처치";
             }
         }
@@ -430,17 +341,6 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.RescueDrone: return "진화! 드론이 갇힌 사람을 끌어올려 구한다";
                 case UpgradeId.WaterWall: return "진화! 커다란 물 고리가 건물 불을 크게 줄인다";
                 case UpgradeId.RescuePost: return "진화! 포탑 곁 건물에선 연기로 사람을 잃지 않는다";
-                case UpgradeId.Heli: return "9초마다 헬기가 가장 큰 불에 물을 쏟는다";
-                case UpgradeId.Ambulance: return "20초마다 구급차가 연기 가장 짙은 건물의 연기를 걷어 낸다. 구할 때 체력 +10";
-                case UpgradeId.Truck: return "12초마다 소방차가 가장 센 불난 건물 줄을 달리며 양옆 불을 쓸어낸다";
-                case UpgradeId.Sprinkler: return "6초마다 모든 건물 지붕에서 물이 터져 불을 줄인다";
-                case UpgradeId.Rain: return "12초마다 불이 몰린 곳에 먹구름이 3초 동안 비를 뿌린다";
-                case UpgradeId.Retardant: return "15초마다 비행기가 방염제 띠를 뿌린다. 띠 안은 20초 동안 불이 안 붙는다";
-                case UpgradeId.Foam: return "10초마다 바닥 불이 몰린 곳에 소화 폼을 깐다. 기름 불을 덮고 8초 동안 막는다";
-                case UpgradeId.Fireboat: return "14초마다 소방정이 바다를 가로지르며 부두 쪽으로 물을 뿜어 배와 부둣가 건물을 적신다";
-                case UpgradeId.Wave: return "20초마다 큰 파도가 바다를 쓸어 불배를 끄고 북쪽으로 밀어내며 부둣가를 적신다";
-                case UpgradeId.Shells: return "14초마다 무대에서 물 불꽃 6발이 올라가 가장 큰 불 위에서 터진다";
-                case UpgradeId.Mist: return "18초마다 불이 몰린 곳에 물안개를 6초 피운다. 안개 안은 불이 안 붙고 등줄 불이 꺼진다";
                 default: return "체력 30 회복";
             }
         }

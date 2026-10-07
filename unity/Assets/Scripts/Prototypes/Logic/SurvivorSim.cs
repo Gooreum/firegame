@@ -44,12 +44,6 @@ namespace FireGame.Prototypes.Logic
         Drop,
         Bomb,
         Jet,
-
-        /// <summary>소방 헬기가 쏟는 물. 폭탄처럼 날아가 떨어지지만 훨씬 크다.</summary>
-        Heli,
-
-        /// <summary>야시장 물 불꽃: 무대에서 솟아 타는 것 위에서 터지는 물 포탄(폭탄 꼴, 저항 없음).</summary>
-        Shell,
     }
 
     public sealed class Enemy
@@ -167,15 +161,6 @@ namespace FireGame.Prototypes.Logic
     {
         public Vec2 Pos;
         public float Life;
-    }
-
-    /// <summary>땅에 뿌려진 띠(방염제). A에서 B까지 폭만큼.</summary>
-    public sealed class Band
-    {
-        public Vec2 A;
-        public Vec2 B;
-        public float Life;
-        public float MaxLife;
     }
 
     /// <summary>야시장 등줄: 점포 A–B를 잇는다. 한쪽이 크게 타면 불이 줄을 타고 건너간다(Burn 0→1, From에서 출발). 젖으면 꺼지고 한동안 안 탄다.</summary>
@@ -432,8 +417,16 @@ namespace FireGame.Prototypes.Logic
         public const int BigReportPeople = 3;
         public const float ChestLife = 30f;
 
-        /// <summary>보물상자 하나로 고르는 카드 수(첫 장은 노란 카드).</summary>
-        public const int ChestPicks = 2;
+        /// <summary>보물상자: 탕탕처럼 1~3번 연속 레벨업(1번 60%, 2번 30%, 3번 10%). 진화할 수 있으면 첫 장에 진화가 뜬다(Roll).</summary>
+        public int RollChestPicks()
+        {
+            float r = Rand();
+            return r < 0.6f ? 1 : r < 0.9f ? 2 : 3;
+        }
+
+        /// <summary>방금 연 상자가 준 연속 레벨업 수(그림용).</summary>
+        public int LastChestPicks;
+
         public const int MaxEnemies = 350;
         public const int MaxGems = 400;
         public const float PlayerRadius = 0.4f;
@@ -462,9 +455,6 @@ namespace FireGame.Prototypes.Logic
         public Vec2 DroneCenter = new Vec2(ArenaSize / 2f, ArenaSize / 2f);
         public Structure DroneTarget;
         public readonly List<Turret> Turrets = new List<Turret>();
-
-        /// <summary>구급차가 연기를 걷어 낸 건물(이번 틱 신호).</summary>
-        public Structure AmbulanceAt;
 
         /// <summary>이 판의 스테이지 규칙(맵·신고·배율·보스·특수 카드 풀).</summary>
         public readonly StageRules Stage;
@@ -826,9 +816,6 @@ namespace FireGame.Prototypes.Logic
         /// <summary>이번 틱에 물로 완전히 꺼진 구조물.</summary>
         public readonly List<Structure> Doused = new List<Structure>();
 
-        /// <summary>이번 틱에 헬기 물이 떨어진 자리.</summary>
-        public readonly List<Vec2> HeliDrops = new List<Vec2>();
-
         /// <summary>이번 틱에 물의 장막이 터졌다(소방관 자리에서).</summary>
         public bool JustCurtain;
 
@@ -843,10 +830,6 @@ namespace FireGame.Prototypes.Logic
         {
             get { return Build.Has(UpgradeId.Curtain) ? _curtainClock : float.MaxValue; }
         }
-
-        /// <summary>달리고 있는 소방차 자리(없으면 null)와 달리는 방향(±x).</summary>
-        public Vec2? Truck;
-        public float TruckDir = 1f;
 
         /// <summary>항구: 이번 틱에 바다에 나타난 불배(없으면 null).</summary>
         public Structure JustBoat;
@@ -951,14 +934,6 @@ namespace FireGame.Prototypes.Logic
             }
         }
 
-        /// <summary>항구 노란: 바다를 가로지르는 소방정 자리(없으면 null)와 방향(±x).</summary>
-        public Vec2? Fireboat;
-        public float FireboatDir = 1f;
-
-        /// <summary>항구 노란: 남쪽으로 쓸고 있는 큰 파도의 앞머리 y(없으면 null). 이번 틱에 일었으면 JustSurge.</summary>
-        public float? WaveY;
-        public bool JustSurge;
-
         /// <summary>야시장: 등줄(생성 때 Stage.Links로 깐다).</summary>
         public readonly List<Lantern> Lanterns = new List<Lantern>();
 
@@ -990,46 +965,6 @@ namespace FireGame.Prototypes.Logic
         public const float PopperHop = 0.35f;
         public const int PopperEmbers = 2;
 
-        /// <summary>야시장 노란: 물안개 자리(없으면 null)와 남은 시간. 이번 틱에 피었으면 JustMist.</summary>
-        public Vec2? MistAt;
-        public float MistLeft;
-        public bool JustMist;
-        public const float MistInterval = 18f;
-        public const float MistTime = 6f;
-        public const float MistRadius = 8f;
-        public const float MistSoak = 0.12f;
-
-        /// <summary>야시장 노란: 이번 틱에 물 불꽃을 쏘아 올렸다 / 물 불꽃이 터진 자리.</summary>
-        public bool JustShells;
-        public readonly List<Vec2> ShellBursts = new List<Vec2>();
-        public const float ShellInterval = 14f;
-        public const int ShellCount = 6;
-        public const float ShellFlight = 1f;
-        public const float ShellRadius = 3f;
-        public const float ShellDamage = 12f;
-
-        /// <summary>이번 틱에 스프링클러가 터진 건물.</summary>
-        public readonly List<Structure> Sprinkled = new List<Structure>();
-
-        /// <summary>비가 오는 자리(없으면 null)와 남은 시간.</summary>
-        public Vec2? RainAt;
-        public float RainLeft;
-
-        /// <summary>이번 틱에 먹구름이 새로 왔다.</summary>
-        public bool JustRain;
-
-        /// <summary>뿌려진 방염제 띠(A→B, 폭 RetardantWidth). 수명이 다하면 사라진다.</summary>
-        public readonly List<Band> Retardants = new List<Band>();
-
-        /// <summary>이번 틱에 방염제 띠가 새로 뿌려졌다.</summary>
-        public bool JustRetardant;
-
-        /// <summary>폼 깔개 자리(없으면 null)와 남은 시간. 그 안에 생기는 기름 불은 바로 꺼진다.</summary>
-        public Vec2? FoamAt;
-        public float FoamLeft;
-
-        /// <summary>이번 틱에 폼이 새로 깔렸다.</summary>
-        public bool JustFoam;
         public bool JustLeveled;
         public bool JustEvolved;
 
@@ -1064,10 +999,8 @@ namespace FireGame.Prototypes.Logic
         private float _bombClock;
         private float _turretClock = 1f;
         private float _airClock;
-        private float _ambulanceClock = 5f;
         private float[] _partnerClocks = new float[4];
         private float _jetClock;
-        private float _heliClock;
         private float _curtainClock;
         private int _jetQueue;
         private float _jetAngle;
@@ -1127,7 +1060,7 @@ namespace FireGame.Prototypes.Logic
         /// <summary>풀장비로 시작한다: 모든 아이템 최대 + 체력 가득.</summary>
         public void GiveMaxGear()
         {
-            Build.MaxAll(Stage.Specials);
+            Build.MaxAll();
             Hp = MaxHp;
         }
 
@@ -1234,7 +1167,7 @@ namespace FireGame.Prototypes.Logic
                 Level++;
                 Stats.LevelTimes.Add(Time);
                 // 고를 게 없으면 카드 화면을 열지 않는다(레벨업 밀치기·연출은 그대로).
-                List<UpgradeId> cards = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials, false, Stage);
+                List<UpgradeId> cards = SurvivorUpgrades.Roll(Build, Level, ref _rng);
                 PendingChoices = cards.Count > 0 ? cards : null;
                 ChoosingChest = false;
                 JustLeveled = true;
@@ -1252,15 +1185,14 @@ namespace FireGame.Prototypes.Logic
             if (_bonusPicks > 0) OpenBonusPick();
         }
 
-        /// <summary>보물상자 카드 한 번. 상자의 첫 장은 노란 카드를 보장한다.</summary>
+        /// <summary>보물상자 카드 한 번(남은 _bonusPicks만큼 이어서 연다).</summary>
         private void OpenBonusPick()
         {
             // 뽑을 게 없으면 남은 상자 카드를 버린다.
             while (_bonusPicks > 0)
             {
-                bool special = _bonusPicks == ChestPicks;
                 _bonusPicks--;
-                List<UpgradeId> cards = SurvivorUpgrades.Roll(Build, Level, ref _rng, Stage.Specials, special, Stage);
+                List<UpgradeId> cards = SurvivorUpgrades.Roll(Build, Level, ref _rng);
                 if (cards.Count == 0) continue;
                 ChoosingChest = true;
                 PendingChoices = cards;
@@ -1281,10 +1213,9 @@ namespace FireGame.Prototypes.Logic
             int had = Build.Level(id);
             Build.Add(id);
             Hp += MaxHp - before;
-            if (!Loadout.IsSpecial(id) && had < Loadout.MaxLevel && Build.Level(id) == Loadout.MaxLevel) JustMaxed = id;
+            if (!Loadout.IsEvolution(id) && had < Loadout.MaxLevel && Build.Level(id) == Loadout.MaxLevel) JustMaxed = id;
             if (Loadout.IsEvolution(id)) JustEvolved = true;
             if (id == UpgradeId.Cannon) _jetClock = 0f;
-            if (id == UpgradeId.Heli) _heliClock = 1f;
             if (id == UpgradeId.Curtain || id == UpgradeId.WaterWall) _curtainClock = 0.5f;
             if (id == UpgradeId.Turret) _turretClock = 0.3f;
         }
@@ -1356,14 +1287,9 @@ namespace FireGame.Prototypes.Logic
             JustLandmarkSaved = false;
             Fell.Clear();
             Doused.Clear();
-            HeliDrops.Clear();
             JustCurtain = false;
             TurretsPlaced.Clear();
             AirBlasts.Clear();
-            Sprinkled.Clear();
-            JustRain = false;
-            JustRetardant = false;
-            JustFoam = false;
             GasBlasts.Clear();
             RescuedFrom.Clear();
             PeopleLost.Clear();
@@ -1377,7 +1303,6 @@ namespace FireGame.Prototypes.Logic
             JustFinale = false;
             JustBurst = false;
             JustChest = false;
-            AmbulanceAt = null;
             JustRescued = false;
             JustWave = false;
             JustComboTier = false;
@@ -1388,7 +1313,6 @@ namespace FireGame.Prototypes.Logic
             JustBoat = null;
             BoatsDocked.Clear();
             BoatsAway.Clear();
-            JustSurge = false;
             LanternCaught.Clear();
             GullDrops.Clear();
             LanternLands.Clear();
@@ -1399,9 +1323,6 @@ namespace FireGame.Prototypes.Logic
             LanternDoused.Clear();
             RocketBursts.Clear();
             JustLaunching = null;
-            JustShells = false;
-            ShellBursts.Clear();
-            JustMist = false;
             GemsCollected = 0;
             // 틱마다 한 번 센다(테스트가 판 도중 구조물을 넣는다).
             HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
@@ -2191,20 +2112,6 @@ namespace FireGame.Prototypes.Logic
             TickDrones();
             TickAirBombs();
             TickTurrets();
-            if (Build.Level(UpgradeId.Ambulance) > 0) TickAmbulance();
-
-            if (Build.Level(UpgradeId.Heli) > 0)
-            {
-                _heliClock -= Dt;
-                if (_heliClock <= 0f)
-                {
-                    _heliClock = HeliInterval;
-                    Vec2 target = HeliTarget();
-                    // 헬기는 소방관 뒤쪽 화면 밖에서 날아온다(From은 그림용).
-                    var from = new Vec2(target.X - 14f, target.Y + 10f);
-                    Shots.Add(new Shot { Kind = ShotKind.Heli, From = from, Pos = from, Target = target, Life = HeliFlight, Damage = 30f, Radius = HeliRadius });
-                }
-            }
 
             if (Build.Has(UpgradeId.Curtain))
             {
@@ -2227,21 +2134,7 @@ namespace FireGame.Prototypes.Logic
                 }
             }
 
-            if (Build.Level(UpgradeId.Truck) > 0) TickTruck();
-            if (Build.Level(UpgradeId.Sprinkler) > 0) TickSprinkler();
-            if (Build.Level(UpgradeId.Rain) > 0) TickRain();
-            if (Build.Level(UpgradeId.Retardant) > 0) TickRetardant();
-            if (Build.Level(UpgradeId.Foam) > 0) TickFoam();
-            if (Build.Level(UpgradeId.Fireboat) > 0) TickFireboat();
-            if (Build.Level(UpgradeId.Wave) > 0) TickWave();
-            if (Build.Level(UpgradeId.Shells) > 0) TickShells();
-            if (Build.Level(UpgradeId.Mist) > 0) TickMist();
         }
-
-        private float _truckClock = 2f;
-        private float _truckLeft;
-        private readonly List<Enemy> _truckHit = new List<Enemy>();
-        private readonly List<Structure> _truckSoaked = new List<Structure>();
 
         /// <summary>소방차: 12초마다 소방관이 선 가로줄을 3초 동안 가로지른다. 곁 1.5칸 불은 20 피해와 밀림, 3칸 안 구조물은 적신다.</summary>
         /// <summary>물폭탄 k번째가 노릴 불난 건물: 10칸 안에서 불이 센 순서로 k번째. 없으면 null.</summary>
@@ -2413,404 +2306,20 @@ namespace FireGame.Prototypes.Logic
             return false;
         }
 
-        /// <summary>구급차: 20초마다 갇힌 사람 연기가 가장 짙은 건물의 연기를 걷어 낸다.</summary>
-        private void TickAmbulance()
-        {
-            _ambulanceClock -= Dt;
-            if (_ambulanceClock > 0f) return;
-            Structure worst = null;
-            foreach (Structure st in Structures)
-            {
-                if (!st.Burning || st.Residents <= 0) continue;
-                if (worst == null || st.Smoke > worst.Smoke) worst = st;
-            }
-            if (worst == null) return;
-            _ambulanceClock = AmbulanceEvery;
-            worst.Smoke = 0f;
-            AmbulanceAt = worst;
-        }
-
-        private void TickTruck()
-        {
-            if (!Truck.HasValue)
-            {
-                _truckClock -= Dt;
-                if (_truckClock > 0f) return;
-                _truckClock = TruckInterval;
-                TruckDir = Rand() < 0.5f ? -1f : 1f;
-                // 가장 센 불난 건물의 줄을 달린다(없으면 소방관 줄).
-                Structure hot = null;
-                foreach (Structure st in Structures)
-                {
-                    if (st.IsBuilding && st.Burning && (hot == null || st.Fire > hot.Fire)) hot = st;
-                }
-                Vec2 row = hot != null ? hot.Pos : Player;
-                Truck = new Vec2(row.X - (TruckDir * TruckReach), row.Y);
-                _truckLeft = TruckTime;
-                _truckHit.Clear();
-                _truckSoaked.Clear();
-            }
-
-            Vec2 at = Truck.Value;
-            at.X += TruckDir * (TruckReach * 2f / TruckTime) * Dt;
-            Truck = at;
-            Near(at, TruckHitRange + 1f, _near);
-            foreach (Enemy e in _near)
-            {
-                if (_truckHit.Contains(e) || Math.Abs(e.Pos.X - at.X) > 1.2f) continue;
-                _truckHit.Add(e);
-                // 차 옆으로 튕겨 낸다.
-                Damage(e, 20f, new Vec2(TruckDir * 3f, e.Pos.Y >= at.Y ? 8f : -8f), true, HitSource.Special, at);
-            }
-            foreach (Structure st in Structures)
-            {
-                if (_truckSoaked.Contains(st) || !st.Within(at, TruckSoakRange)) continue;
-                _truckSoaked.Add(st);
-                Soak(st, 0.4f, false);
-            }
-            Douse(at, TruckHitRange);
-            _truckLeft -= Dt;
-            if (_truckLeft <= 0f) Truck = null;
-        }
-
-        private float _sprinklerClock = 1f;
-
-        /// <summary>스프링클러: 6초마다 모든 타는 건물 불을 0.25 줄이고, 둘레 2.5칸 불에 8 피해를 준다.</summary>
-        private void TickSprinkler()
-        {
-            _sprinklerClock -= Dt;
-            if (_sprinklerClock > 0f) return;
-            _sprinklerClock = SprinklerInterval;
-            foreach (Structure st in Structures)
-            {
-                if (!st.IsBuilding || !st.Burning) continue;
-                Sprinkled.Add(st);
-                Soak(st, SprinklerDouse, false);
-                Douse(st.Pos, Math.Max(st.Half.X, st.Half.Y) + 2.5f);
-                foreach (Enemy e in Enemies)
-                {
-                    if (!e.Dead && st.Within(e.Pos, 2.5f)) Damage(e, 8f, Knockback(st.Pos, e.Pos, 3f), true, HitSource.Special, st.Pos);
-                }
-            }
-        }
-
-        private float _fireboatClock = 3f;
-        private float _fireboatLeft;
-        private readonly List<Structure> _fireboatSoaked = new List<Structure>();
-        private readonly List<Enemy> _fireboatHit = new List<Enemy>();
-
-        /// <summary>부둣가 불: 불배가 떠 있거나 부두 가까운(QuayRow 위) 탈 것이 탄다. 소방정·큰 파도는 이게 있을 때만 나선다.</summary>
-        private bool HarborFire()
-        {
-            foreach (Structure s in Structures)
-            {
-                if (!s.Burning) continue;
-                if (s.Kind == StructureKind.Boat || s.Pos.Y > SurvivorHarbor.QuayRow - 4f) return true;
-            }
-            return false;
-        }
-
-        /// <summary>소방정: 14초마다(부둣가 불이 있을 때만) 바다 줄(FireboatLane)을 4초에 가로지르며 부두 쪽(y ≥ QuayRow − 2)으로 물을 뿜는다.
-        /// 지나는 x 좌우 FireboatReach 안 배·건물을 한 번씩 0.6 적시고(저항 없음), 부두 가까운 적에게 20 피해.</summary>
-        private void TickFireboat()
-        {
-            if (!Fireboat.HasValue)
-            {
-                _fireboatClock -= Dt;
-                if (_fireboatClock > 0f || !HarborFire()) return;
-                _fireboatClock = FireboatInterval;
-                FireboatDir = Rand() < 0.5f ? -1f : 1f;
-                Fireboat = new Vec2(FireboatDir > 0f ? -4f : ArenaSize + 4f, FireboatLane);
-                _fireboatLeft = FireboatTime;
-                _fireboatSoaked.Clear();
-                _fireboatHit.Clear();
-            }
-
-            Vec2 at = Fireboat.Value;
-            at.X += FireboatDir * ((ArenaSize + 8f) / FireboatTime) * Dt;
-            Fireboat = at;
-            foreach (Structure st in Structures)
-            {
-                if (st.Collapsed || st.Kind == StructureKind.Water || _fireboatSoaked.Contains(st)) continue;
-                if (Math.Abs(st.Pos.X - at.X) > FireboatReach || st.Pos.Y < SurvivorHarbor.QuayRow - 2f) continue;
-                _fireboatSoaked.Add(st);
-                // 배는 소방정의 본업: 한 방이 더 세다(갓 뜬 불배는 꺼진다).
-                Soak(st, st.Kind == StructureKind.Boat ? FireboatBoatSoak : FireboatSoak, false);
-            }
-            Near(new Vec2(at.X, SurvivorHarbor.SeaFrom), 12f, _near);
-            foreach (Enemy e in _near)
-            {
-                if (_fireboatHit.Contains(e) || Math.Abs(e.Pos.X - at.X) > 1.5f || e.Pos.Y < SurvivorHarbor.QuayRow + 2f) continue;
-                _fireboatHit.Add(e);
-                Damage(e, 20f, new Vec2(FireboatDir * 3f, -6f), true, HitSource.Special, at);
-            }
-            _fireboatLeft -= Dt;
-            if (_fireboatLeft <= 0f) Fireboat = null;
-        }
-
         /// <summary>소방정(3초)과 같은 틱에 뜨지 않게 2초 늦게 시작한다(배너가 겹친다).</summary>
         private float _waveClock = 6f;
         private readonly List<Structure> _waveSoaked = new List<Structure>();
         private readonly List<Enemy> _waveHit = new List<Enemy>();
 
-        /// <summary>큰 파도: 20초마다(부둣가 불이 있을 때만) 바다 북쪽 끝에서 남쪽으로 WaveSpeed로 쓸어 WaveEnd에서 잦아든다.
-        /// 띠(±WaveBand) 안 배는 1.5 끄고 북쪽으로 8칸 밀려 다시 떠가고(Docked 해제), 그 밖 탈 것은 0.8 끄고 6초 젖는다. 띠 안 적은 12 피해에 남쪽으로 밀린다.</summary>
-        private void TickWave()
-        {
-            if (!WaveY.HasValue)
-            {
-                _waveClock -= Dt;
-                if (_waveClock > 0f || !HarborFire()) return;
-                _waveClock = WaveInterval;
-                WaveY = ArenaSize;
-                JustSurge = true;
-                _waveSoaked.Clear();
-                _waveHit.Clear();
-            }
-
-            float y = WaveY.Value - (WaveSpeed * Dt);
-            WaveY = y;
-            foreach (Structure st in Structures)
-            {
-                if (st.Collapsed || st.Kind == StructureKind.Water || _waveSoaked.Contains(st)) continue;
-                if (Math.Abs(st.Pos.Y - y) > WaveBand + st.Half.Y) continue;
-                _waveSoaked.Add(st);
-                if (st.Kind == StructureKind.Boat)
-                {
-                    Soak(st, WaveBoatSoak, false);
-                    // 좌초한 유조선은 파도가 못 민다(적시기만 한다).
-                    if (!st.Tanker)
-                    {
-                        st.Docked = false;
-                        st.Pos = new Vec2(st.Pos.X, Math.Min(ArenaSize - 4f, st.Pos.Y + WavePush));
-                        st.Drift = new Vec2(0f, BoatSpeed);
-                    }
-                }
-                else
-                {
-                    Soak(st, WaveSoak, false);
-                    st.Wet = Math.Max(st.Wet, WaveWet);
-                }
-            }
-            Douse(new Vec2(ArenaSize / 2f, y), ArenaSize / 2f);
-            Near(new Vec2(ArenaSize / 2f, y), ArenaSize / 2f, _near);
-            foreach (Enemy e in _near)
-            {
-                if (_waveHit.Contains(e) || Math.Abs(e.Pos.Y - y) > WaveBand) continue;
-                _waveHit.Add(e);
-                Damage(e, 12f, new Vec2(0f, -7f), true, HitSource.Special, new Vec2(e.Pos.X, y + 2f));
-            }
-            if (y <= WaveEnd) WaveY = null;
-        }
-
         private float _shellClock = 3f;
-
-        /// <summary>물 불꽃놀이: 14초마다(탈 불이 있을 때만) 무대(대화재 창고 → 창고 → 소방관)에서 물 불꽃을 쏘아 올린다.
-        /// 가장 센 불부터 최대 ShellCount 발, 모자라면 바닥 불이 몰린 곳에 한 발. 폭탄처럼 날아가 반경 ShellRadius에 저항 없이 물을 쏟고 적 ShellDamage.</summary>
-        private void TickShells()
-        {
-            _shellClock -= Dt;
-            if (_shellClock > 0f) return;
-            var targets = new List<Structure>();
-            foreach (Structure st in Structures)
-            {
-                if (st.Burning && st.Kind != StructureKind.Water) targets.Add(st);
-            }
-            targets.Sort((a, b) => b.Fire.CompareTo(a.Fire));
-            var aims = new List<Vec2>();
-            for (int i = 0; i < targets.Count && aims.Count < ShellCount; i++) aims.Add(targets[i].Pos);
-            if (aims.Count < ShellCount)
-            {
-                Vec2? ground = GroundFireCenter(ArenaSize);
-                if (ground.HasValue) aims.Add(ground.Value);
-            }
-            if (aims.Count == 0) return;
-            _shellClock = ShellInterval;
-            JustShells = true;
-            Structure depot = Structures.Find(s => s.Kind == StructureKind.Depot && !s.Collapsed);
-            Vec2 from = Landmark != null && !Landmark.Collapsed ? Landmark.Pos : depot != null ? depot.Pos : Player;
-            for (int k = 0; k < aims.Count; k++)
-            {
-                Shots.Add(new Shot { Kind = ShotKind.Shell, From = from, Pos = from, Target = aims[k], Life = ShellFlight + (0.12f * k), Damage = ShellDamage, Radius = ShellRadius });
-            }
-        }
 
         private float _mistClock = 2f;
 
-        /// <summary>물안개: 18초마다(14칸 안 불이 있을 때만) 불이 몰린 곳에 6초 동안 반경 8 안개. 안은 늘 젖어 불이 안 붙고, 타는 것은 천천히 꺼지고,
-        /// 등줄은 젖고, 적은 느려진다. 로켓이 안개 안에 떨어지면 꺼진다(TickRockets).</summary>
-        private void TickMist()
-        {
-            if (!MistAt.HasValue)
-            {
-                _mistClock -= Dt;
-                if (_mistClock > 0f) return;
-                // 14칸 안 가장 센 불(없으면 기다린다: 빈 땅에 안개를 피우면 아무 일도 없다).
-                Vec2? centre = BurningCenter(14f);
-                if (!centre.HasValue) return;
-                _mistClock = MistInterval;
-                MistAt = centre;
-                MistLeft = MistTime;
-                JustMist = true;
-            }
-            // 피는 틱부터 바로 적신다.
-            Vec2 at = MistAt.Value;
-            Douse(at, MistRadius);
-            if (Lanterns.Count > 0) WetLanterns(at, MistRadius);
-            foreach (Structure st in Structures)
-            {
-                if (st.Collapsed || st.Kind == StructureKind.Water || !st.Within(at, MistRadius)) continue;
-                if (st.Burning) Soak(st, MistSoak * Dt);
-                // Soak은 꺼질 때 WetTime을 주지만 타는 동안엔 안 준다: 안개 안은 늘 젖어 있다.
-                st.Wet = Math.Max(st.Wet, 1f);
-            }
-            Near(at, MistRadius, _near);
-            foreach (Enemy e in _near) e.Slowed = Math.Max(e.Slowed, 0.5f);
-            MistLeft -= Dt;
-            if (MistLeft <= 0f) MistAt = null;
-        }
-
         private float _rainClock = 2f;
-
-        /// <summary>비구름: 12초마다 14칸 안에서 불이 가장 몰린 곳에 3초 동안 비. 바닥 불을 끄고, 구조물을 적시고, 적에게 초당 6 피해.</summary>
-        private void TickRain()
-        {
-            if (RainAt.HasValue)
-            {
-                Vec2 at = RainAt.Value;
-                Douse(at, RainRadius);
-                if (Lanterns.Count > 0) WetLanterns(at, RainRadius);
-                foreach (Structure st in Structures)
-                {
-                    if (st.Within(at, RainRadius)) Soak(st, 0.3f * Dt);
-                }
-                Near(at, RainRadius, _near);
-                foreach (Enemy e in _near) Damage(e, 6f * Dt, default, false, HitSource.Special);
-                RainLeft -= Dt;
-                if (RainLeft <= 0f) RainAt = null;
-                return;
-            }
-            _rainClock -= Dt;
-            if (_rainClock > 0f) return;
-            _rainClock = RainInterval;
-            RainAt = FireCenter(14f);
-            RainLeft = RainTime;
-            JustRain = true;
-        }
 
         private float _foamClock = 2f;
 
-        /// <summary>폼 살포: 10초마다 14칸 안에서 바닥 불이 가장 몰린 곳(없으면 가장 큰 불, 둘 다 없으면 생길 때까지 기다린다)에 반경 4.5 폼. 바닥 불을 끄고, 탈 것에 한 번에 물을 붓고, 적은 8 피해. 8초 동안 그 안 새 기름 불을 막는다.</summary>
-        private void TickFoam()
-        {
-            if (FoamAt.HasValue)
-            {
-                FoamLeft -= Dt;
-                if (FoamLeft <= 0f) FoamAt = null;
-            }
-            _foamClock -= Dt;
-            if (_foamClock > 0f) return;
-            // 덮을 불이 없으면 쏘지 않고 기다린다(빈 땅에 쏘면 아무 일도 없다).
-            Vec2? target = GroundFireCenter(14f) ?? BurningCenter(14f);
-            if (!target.HasValue) return;
-            _foamClock = FoamInterval;
-            Vec2 at = target.Value;
-            FoamAt = at;
-            FoamLeft = FoamTime;
-            JustFoam = true;
-            Douse(at, FoamRadius);
-            foreach (Structure st in Structures)
-            {
-                if (st.Burning && st.Within(at, FoamRadius)) Soak(st, FoamDouse, false);
-            }
-            Near(at, FoamRadius, _near);
-            foreach (Enemy e in _near) Damage(e, 8f, Knockback(at, e.Pos, 3f), true, HitSource.Special, at);
-        }
-
-        /// <summary>range 안에서 가장 센 불난 탈 것(가스통 빼고). 없으면 null.</summary>
-        private Vec2? BurningCenter(float range)
-        {
-            Structure best = null;
-            foreach (Structure st in Structures)
-            {
-                if (!st.Burning || st.Kind == StructureKind.Gas || st.DistanceTo(Player) > range) continue;
-                if (best == null || st.Fire > best.Fire) best = st;
-            }
-            return best?.Pos;
-        }
-
-        /// <summary>range 안 바닥 불 중 FoamRadius 안에 가장 많은 바닥 불을 거느린 자리. 없으면 null.</summary>
-        private Vec2? GroundFireCenter(float range)
-        {
-            Vec2? best = null;
-            int bestN = 0;
-            foreach (Puddle p in BurningGround)
-            {
-                if (p.Out || p.Life <= 0f || p.Pos.DistanceTo(Player) > range) continue;
-                int n = 0;
-                foreach (Puddle q in BurningGround)
-                {
-                    if (!q.Out && q.Life > 0f && q.Pos.DistanceTo(p.Pos) <= FoamRadius) n++;
-                }
-                if (n > bestN)
-                {
-                    bestN = n;
-                    best = p.Pos;
-                }
-            }
-            return best;
-        }
-
         private float _retardantClock = 3f;
-
-        /// <summary>방염제: 15초마다 가장 큰 불을 가로지르는 폭 3·길이 14 띠. 띠 안 구조물은 20초 동안 안 타고, 바닥 불은 꺼지고, 적은 15 피해.</summary>
-        private void TickRetardant()
-        {
-            foreach (Band b in Retardants) b.Life -= Dt;
-            Retardants.RemoveAll(b => b.Life <= 0f);
-            _retardantClock -= Dt;
-            if (_retardantClock > 0f) return;
-            _retardantClock = RetardantInterval;
-
-            Vec2 mid = FireCenter(14f);
-            double a = Rand() * Math.PI;
-            var half = new Vec2((float)(Math.Cos(a) * RetardantLength * 0.5), (float)(Math.Sin(a) * RetardantLength * 0.5));
-            var band = new Band { A = new Vec2(mid.X - half.X, mid.Y - half.Y), B = new Vec2(mid.X + half.X, mid.Y + half.Y), Life = RetardantWet, MaxLife = RetardantWet };
-            Retardants.Add(band);
-            JustRetardant = true;
-            float r = RetardantWidth * 0.5f;
-            foreach (Structure st in Structures)
-            {
-                if (st.Collapsed || SegmentDistance(st.Pos, band.A, band.B) > r + Math.Max(st.Half.X, st.Half.Y)) continue;
-                // 방염제는 띠 안 불을 완전히 누르고 한동안 안 타게 한다.
-                Soak(st, 1f, false);
-                st.Wet = Math.Max(st.Wet, RetardantWet);
-            }
-            foreach (Puddle p in BurningGround)
-            {
-                if (p.Out || p.Life <= 0f || SegmentDistance(p.Pos, band.A, band.B) > r + p.Radius) continue;
-                p.Out = true;
-                p.Life = 0f;
-                Extinguished.Add(p.Pos);
-            }
-            foreach (Enemy e in Enemies)
-            {
-                if (!e.Dead && SegmentDistance(e.Pos, band.A, band.B) <= r + e.Radius) Damage(e, 15f, default, true, HitSource.Special);
-            }
-        }
-
-        /// <summary>range 안에서 가장 크게 타는 구조물 → 불이 몰린 곳 → 소방관 앞.</summary>
-        private Vec2 FireCenter(float range)
-        {
-            Structure best = null;
-            foreach (Structure st in Structures)
-            {
-                if (!st.Burning || st.Kind == StructureKind.Gas || st.DistanceTo(Player) > range) continue;
-                if (best == null || st.Fire > best.Fire) best = st;
-            }
-            if (best != null) return best.Pos;
-            return RandomEnemyNear(range) ?? new Vec2(Player.X + (Facing.X * 6f), Player.Y + (Facing.Y * 6f));
-        }
 
         private static float SegmentDistance(Vec2 p, Vec2 a, Vec2 b)
         {
@@ -2833,42 +2342,7 @@ namespace FireGame.Prototypes.Logic
             return 0.3f + (0.12f * (level - 1));
         }
 
-        public const float FireboatInterval = 14f;
-        public const float FireboatTime = 4f;
-        public const float FireboatLane = 50f;
-        public const float FireboatReach = 2.5f;
-        public const float FireboatSoak = 0.6f;
-        public const float FireboatBoatSoak = 1f;
-        public const float WaveInterval = 20f;
-        public const float WaveSpeed = 14f;
-        public const float WaveEnd = 38f;
-        public const float WaveBand = 1.5f;
-        public const float WaveBoatSoak = 1.5f;
-        public const float WaveSoak = 0.8f;
-        public const float WaveWet = 6f;
-        public const float WavePush = 8f;
-        public const float TruckInterval = 12f;
-        public const float TruckTime = 3f;
-        public const float TruckReach = 16f;
-        public const float TruckHitRange = 1.5f;
-        public const float TruckSoakRange = 3f;
-        public const float SprinklerInterval = 6f;
-        public const float SprinklerDouse = 0.25f;
-        public const float FoamInterval = 10f;
-        public const float FoamTime = 8f;
-        public const float FoamRadius = 4.5f;
-        public const float FoamDouse = 0.3f;
-        public const float RainInterval = 12f;
-        public const float RainTime = 3f;
-        public const float RainRadius = 6f;
-        public const float RetardantInterval = 15f;
-        public const float RetardantLength = 14f;
-        public const float RetardantWidth = 3f;
-        public const float RetardantWet = 20f;
 
-        public const float HeliInterval = 9f;
-        public const float HeliFlight = 1.2f;
-        public const float HeliRadius = 4.5f;
         public const float CurtainInterval = 4f;
         public const float CurtainRadius = 4.5f;
 
@@ -2894,8 +2368,6 @@ namespace FireGame.Prototypes.Logic
         public const float TurretHit = 5f;
         public const float TurretWater = 0.05f;
         public const float PostRange = 6f;
-        public const float AmbulanceEvery = 20f;
-        public const float AmbulanceHeal = 10f;
 
         /// <summary>한 명 구할 때 차는 체력(예전 20: 구조만 하면 체력이 늘 차서 방화복이 쓸모없었다).</summary>
         public const float RescueHeal = 5f;
@@ -2904,19 +2376,6 @@ namespace FireGame.Prototypes.Logic
         public const float HeatRange = 4f;
         public const float HeatDps = 7f;
         public const float TreeHeatRange = 1.5f;
-
-        /// <summary>12칸 안에서 가장 크게 타는 건물 → 불이 몰린 곳 → 소방관 앞.</summary>
-        private Vec2 HeliTarget()
-        {
-            Structure best = null;
-            foreach (Structure st in Structures)
-            {
-                if (!st.Burning || st.Kind == StructureKind.Gas || st.DistanceTo(Player) > 12f) continue;
-                if (best == null || st.Fire > best.Fire) best = st;
-            }
-            if (best != null) return best.Pos;
-            return RandomEnemyNear(12f) ?? new Vec2(Player.X + (Facing.X * 6f), Player.Y + (Facing.Y * 6f));
-        }
 
         /// <summary>
         /// 자동 분사가 노릴 곳(숙련 봇의 순서): 코앞 1.5칸 큰 불·기름 → 4칸 안 타는 구조물 → 3칸 안 아무 불 → 사거리 안 타는 구조물 → 사거리 안 아무 불.
@@ -2997,14 +2456,14 @@ namespace FireGame.Prototypes.Logic
                 if (s.Dead) continue;
                 s.Age += Dt;
 
-                if (s.Kind == ShotKind.Bomb || s.Kind == ShotKind.Heli || s.Kind == ShotKind.Shell)
+                if (s.Kind == ShotKind.Bomb)
                 {
                     float t = Math.Min(1f, s.Age / s.Life);
                     s.Pos = new Vec2(s.From.X + ((s.Target.X - s.From.X) * t), s.From.Y + ((s.Target.Y - s.From.Y) * t));
                     if (t >= 1f)
                     {
                         s.Dead = true;
-                        (s.Kind == ShotKind.Heli ? HeliDrops : s.Kind == ShotKind.Shell ? ShellBursts : s.Air ? AirBlasts : s.Drone ? DroneDrops : Explosions).Add(s.Target);
+                        (s.Air ? AirBlasts : s.Drone ? DroneDrops : Explosions).Add(s.Target);
                         Douse(s.Target, s.Radius);
                         if (Lanterns.Count > 0) WetLanterns(s.Target, s.Radius);
                         foreach (Structure st in Structures)
@@ -3012,8 +2471,7 @@ namespace FireGame.Prototypes.Logic
                             if (st.Within(s.Target, s.Radius)) Soak(st, s.Drone ? DroneDropWater : s.Damage * WaterPerDamage, false);
                         }
                         Near(s.Target, s.Radius, _near);
-                        HitSource source = s.Kind == ShotKind.Heli || s.Kind == ShotKind.Shell ? HitSource.Special : HitSource.Bomb;
-                        foreach (Enemy e in _near) Damage(e, s.Damage, Knockback(s.Target, e.Pos, 7f), true, source, s.Target);
+                        foreach (Enemy e in _near) Damage(e, s.Damage, Knockback(s.Target, e.Pos, 7f), true, HitSource.Bomb, s.Target);
                     }
                     continue;
                 }
@@ -3088,12 +2546,6 @@ namespace FireGame.Prototypes.Logic
         public void AddOil(Vec2 at)
         {
             if (BurningGround.Count >= MaxBurningGround) return;
-            // 폼이 깔린 곳에는 기름 불이 서지 못한다.
-            if (FoamAt.HasValue && FoamAt.Value.DistanceTo(at) <= FoamRadius)
-            {
-                Extinguished.Add(at);
-                return;
-            }
             BurningGround.Add(new Puddle { Pos = ClampToArena(at), Radius = OilRadius, Life = OilLife, MaxLife = OilLife, Oil = true });
         }
 
@@ -3423,11 +2875,6 @@ namespace FireGame.Prototypes.Logic
                 if (r.Age < r.Life) continue;
                 r.Dead = true;
                 RocketBursts.Add(r.Target);
-                if (MistAt.HasValue && r.Target.DistanceTo(MistAt.Value) <= MistRadius)
-                {
-                    Extinguished.Add(r.Target);
-                    continue;
-                }
                 Structure hit = null;
                 foreach (Structure st in Structures)
                 {
@@ -3547,7 +2994,7 @@ namespace FireGame.Prototypes.Logic
                             int step = _leakCount / 2;
                             _leakCount++;
                             var at = ClampToArena(new Vec2(b.Pos.X + (side * step * TankerLeakStep), SurvivorHarbor.SeaFrom - 1.2f));
-                            if (BurningGround.Count < MaxBurningGround && !(FoamAt.HasValue && FoamAt.Value.DistanceTo(at) <= FoamRadius))
+                            if (BurningGround.Count < MaxBurningGround)
                             {
                                 BurningGround.Add(new Puddle { Pos = at, Radius = TankerOilRadius, Life = OilLife, MaxLife = OilLife, Oil = true });
                             }
@@ -4013,7 +3460,8 @@ namespace FireGame.Prototypes.Logic
                     Chests.RemoveAt(i);
                     JustChest = true;
                     Stats.Events++;
-                    _bonusPicks = ChestPicks;
+                    _bonusPicks = RollChestPicks();
+                    LastChestPicks = _bonusPicks;
                     // 레벨업 카드를 고르는 중이면 그걸 고른 뒤에 이어서 연다(Choose).
                     if (PendingChoices == null) OpenBonusPick();
                     continue;
@@ -4293,7 +3741,7 @@ namespace FireGame.Prototypes.Logic
                 JustLandmarkSaved = true;
                 Stats.Events++;
             }
-            float heal = RescueHeal + (Build.Level(UpgradeId.Ambulance) > 0 ? AmbulanceHeal : 0f);
+            float heal = RescueHeal;
             Stats.HealRescue += Math.Min(MaxHp, Hp + heal) - Hp;
             Hp = Math.Min(MaxHp, Hp + heal);
             JustRescued = true;

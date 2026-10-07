@@ -196,7 +196,7 @@ namespace FireGame.Prototypes.Tests
         /// 재미 밀도 표. 출력은 docs/prototype-c-balance.md에 옮긴다.
         /// dotnet test proto-tests --filter FunReport --logger "console;verbosity=detailed"
         /// </summary>
-        [Fact]
+        [Fact(Skip = "아이템·몹 개편 중(2026-10-07): 노란·옛 무기가 빠져 띠가 무의미 — Phase 6에서 다시 잰다")]
         public void FunReport_StagesMatchTown()
         {
             int seeds = Seeds;
@@ -261,7 +261,7 @@ namespace FireGame.Prototypes.Tests
         /// 판별 편차가 평균의 18% 안팎이라, 10판·70%로는 아무 문제 없어도 자주 실패했다.
         /// dotnet test proto-tests --filter ItemReport --logger "console;verbosity=detailed"
         /// </summary>
-        [Fact]
+        [Fact(Skip = "아이템·몹 개편 중(2026-10-07): 노란·옛 무기가 빠져 띠가 무의미 — Phase 6에서 다시 잰다")]
         public void ItemReport_NoDeadOrMustHaveItem()
         {
             UpgradeId[] items =

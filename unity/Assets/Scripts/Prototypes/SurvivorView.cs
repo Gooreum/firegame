@@ -202,34 +202,9 @@ namespace FireGame.Prototypes
         private Text _windLabel;
         private Pool _gems;
         private Pool _siren;
-        private Pool _cloud;
-        private Pool _rainShade;
         private Pool _band;
-        private bool _truckShown;
-        private bool _fireboatShown;
         private Light _sun;
 
-        /// <summary>큰 파도가 이번에 부두선에 닿는 충격파를 이미 냈다.</summary>
-        private bool _waveHitQuay;
-        /// <summary>비구름 번개까지 남은 시간, 거품 매트의 다음 거품 터짐까지 남은 시간.</summary>
-        private float _lightningClock;
-        private float _foamPopClock;
-        private float _planeAge = 99f;
-        private Vector3 _planeFrom;
-
-        /// <summary>구급차: 화면 밖에서 문 앞까지 1.2초 달려와 2초 서 있다가 떠난다. 99면 없음.</summary>
-        private float _ambulanceAge = 99f;
-
-        /// <summary>캡처용: 구급차가 달려가는 곳(없으면 null).</summary>
-        public Vector3? AmbulanceSpot
-        {
-            get { return _ambulanceAge < 4.4f ? _ambulanceTo : (Vector3?)null; }
-        }
-        private Vector3 _ambulanceFrom;
-        private Vector3 _ambulanceTo;
-        private Vector3 _ambulanceRoof;
-        private bool _ambulanceArrived;
-        private Vector3 _planeTo;
         private Pool _toolbox;
         private Pool _toolboxGlow;
         private int _toolboxesShown;
@@ -279,7 +254,6 @@ namespace FireGame.Prototypes
         private Pool _radar;
 
         // 노란 특수 장비: 헬기(그림자·몸통·로터), 동료.
-        private Pool _heliShadow;
         private TextMesh _partnerTag;
         private Pool _sprayLines;
         private Pool _airBombs;
@@ -319,9 +293,6 @@ namespace FireGame.Prototypes
         private float _heatTextClock;
         private readonly Vector3[] _partnerLast = new Vector3[4];
         private readonly float[] _partnerDeg = new float[4];
-        private Vector3 _heliExitFrom;
-        private Vector3 _heliExitDir;
-        private float _heliExitAge = 99f;
         private float _frameDt;
         private static Sprite _heliSprite;
         private AudioSource _splash;
@@ -398,13 +369,8 @@ namespace FireGame.Prototypes
         private ModelPool _droneModels;
         private ModelPool _turretModels;
         private ModelPool _bombModels;
-        private ModelPool _heliModels;
-        private ModelPool _planeModels;
-        private ModelPool _truckModels;
-        private ModelPool _ambulanceModels;
         private ModelPool _boatModels;
         private ModelPool _tankerModels;
-        private ModelPool _fireboatModels;
         private readonly List<ModelPool> _modelPools = new List<ModelPool>();
         private static readonly string[] CivilianModels = { "People/Casual_Female", "People/OldClassy_Male", "People/Casual_Male" };
         private SpriteRenderer _playerGlow;
@@ -623,7 +589,6 @@ namespace FireGame.Prototypes
             _alertAge = 99f;
             _bossBannerAge = 99f;
             _shownXp = 0f;
-            _heliExitAge = 99f;
             _hitStop = 0f;
             _enemyWet.Clear();
             _zoomKick = 0f;
@@ -643,11 +608,6 @@ namespace FireGame.Prototypes
             }
             _tags.Clear();
             _tagsUsed = 0;
-            _planeAge = 99f;
-            _ambulanceAge = 99f;
-            _truckShown = false;
-            _fireboatShown = false;
-            _waveHitQuay = false;
             _lastPlayer = new Vector3(_sim.Player.X, _sim.Player.Y, 0f);
             _stepClock = 0f;
             _regenClock = 0f;
@@ -736,7 +696,7 @@ namespace FireGame.Prototypes
             Text stars = UiKit.OutlinedLabel(_stationLayer, "Stars", "모은 별 ★ " + _station.Stars, 36, Color.white, TextAnchor.MiddleCenter);
             UiKit.Place(stars.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 318f), new Vector2(1500f, 50f));
 
-            // 스테이지 선택: 다섯 다 열려 있다. 고른 것은 노란 버튼, 각 버튼에 이름과 최고 별. 탭하면 그 스테이지의 브리핑·대비 장비로 다시 연다.
+            // 스테이지 선택: 다섯 다 열려 있다. 고른 것은 노란 버튼, 각 버튼에 이름과 최고 별. 탭하면 그 스테이지의 브리핑으로 다시 연다.
             // 280폭 × 5, 간격 290, 가운데 정렬: 4:3(폭 1440)에도 들어간다.
             StageRules rules = SurvivorStages.Get(_stage);
             const float stageStep = 290f;
@@ -751,21 +711,12 @@ namespace FireGame.Prototypes
                 StageThumb(pick.GetComponent<RectTransform>(), stage);
             }
 
-            // 브리핑: 다음 스테이지의 위협 한 줄과, 그 위협을 막는 대비 장비 둘(하나를 골라 Lv1로 들고 간다).
-            // 위협·할 일 두 줄 + 대비 버튼이 스테이지 버튼(268)과 소방관 카드(위 150) 사이 약 110px에 들어간다.
+            // 브리핑: 다음 스테이지의 위협 한 줄과 할 일 한 줄(아이템은 모든 스테이지가 같다).
             Text threat = UiKit.OutlinedLabel(_stationLayer, "Threat", "위협: " + rules.Threat, 28, new Color(1f, 0.75f, 0.55f), TextAnchor.MiddleCenter);
             UiKit.Place(threat.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 222f), new Vector2(1400f, 36f));
             // 할 일 한 줄: 이 스테이지에서 플레이어가 새로 배우는 결정("부두 끝에 서서 바다 위 배를 쏘아 끈다"). 판 시작에도 같은 줄이 알림으로 뜬다.
             Text goal = UiKit.OutlinedLabel(_stationLayer, "Goal", "할 일: " + rules.Goal, 28, GoalGreen, TextAnchor.MiddleCenter);
             UiKit.Place(goal.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 190f), new Vector2(1400f, 36f));
-            UpgradeId[] counters = rules.Counters ?? new UpgradeId[0];
-            for (int k = 0; k < counters.Length; k++)
-            {
-                UpgradeId c = counters[k];
-                bool on = _station.Prep == c;
-                Button prep = UiKit.Button(_stationLayer, "Prep" + k, Art.Get(on ? "UI/button_yellow" : "UI/button_blue"), (on ? "대비 ✓ " : "대비: ") + SurvivorUpgrades.Name(c), 30, () => TapPrep(c));
-                UiKit.Place(prep.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2((k - ((counters.Length - 1) / 2f)) * 420f, 140f), new Vector2(400f, 50f));
-            }
 
             Firefighter[] roster = Roster.All;
             for (int i = 0; i < roster.Length; i++)
@@ -779,7 +730,7 @@ namespace FireGame.Prototypes
                 Button card = UiKit.Button(_stationLayer, "Firefighter" + i, Art.Get(sprite), "", 0, () => TapFirefighter(id));
                 RectTransform rect = card.GetComponent<RectTransform>();
                 float x = (i - ((roster.Length - 1) / 2f)) * 330f;
-                // 카드는 위 110까지(위협·할 일·대비 버튼 세 줄 자리를 비운다).
+                // 카드는 위 110까지(위협·할 일 두 줄 자리를 비운다).
                 UiKit.Place(rect, new Vector2(0.5f, 0.5f), new Vector2(x, -90f), new Vector2(310f, 400f));
 
                 Text name = UiKit.OutlinedLabel(rect, "Name", f.Name, 42, Color.white, TextAnchor.MiddleCenter);
@@ -800,26 +751,17 @@ namespace FireGame.Prototypes
 
             Button go = UiKit.Button(_stationLayer, "Go", Art.Get("UI/button_red"), "출동!", 56, CloseStation);
             UiKit.Place(go.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(0f, -375f), new Vector2(460f, 110f));
-            Text hint = UiKit.OutlinedLabel(_stationLayer, "Hint", "스테이지 · 대비 장비 · 소방관을 골라 탭  ·  출동은 버튼 또는 Enter", 26, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
+            Text hint = UiKit.OutlinedLabel(_stationLayer, "Hint", "스테이지 · 소방관을 골라 탭  ·  출동은 버튼 또는 Enter", 26, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             UiKit.Place(hint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -455f), new Vector2(1000f, 40f));
         }
 
-        /// <summary>스테이지 칸을 눌렀다: 그 스테이지로 바꾸고(대비 장비는 내려놓는다) 소방서를 다시 연다. 전부 열려 있다.</summary>
+        /// <summary>스테이지 칸을 눌렀다: 그 스테이지로 바꾸고 소방서를 다시 연다. 전부 열려 있다.</summary>
         public void TapStage(int stage)
         {
             if (stage == _stage) return;
             _stage = stage;
-            _station.Prep = null;
             PlayerPrefs.SetInt(StageKey, stage);
             PlayerPrefs.Save();
-            Restart(_seed);
-            OpenStation();
-        }
-
-        /// <summary>대비 장비 칸을 눌렀다: 같은 걸 누르면 내려놓고, 다른 걸 누르면 바꿔 든다. 판을 그 장비로 다시 연다.</summary>
-        public void TapPrep(UpgradeId id)
-        {
-            _station.Prep = _station.Prep == id ? (UpgradeId?)null : id;
             Restart(_seed);
             OpenStation();
         }
@@ -862,8 +804,6 @@ namespace FireGame.Prototypes
         private void GoToStage(int stage)
         {
             _stage = stage;
-            // 대비 장비는 스테이지마다 다시 고른다(위협이 다르다).
-            if (_station != null) _station.Prep = null;
             PlayerPrefs.SetInt(StageKey, stage);
             PlayerPrefs.Save();
             Restart(_seed + 1);
@@ -1068,16 +1008,16 @@ namespace FireGame.Prototypes
                 GameAudio.Play(Cue.PickUp);
             }
             bool joined = _lastPick == UpgradeId.Partner && _sim.Build.Level(UpgradeId.Partner) is 1 or 3 or 5;
-            if ((Loadout.IsSpecial(_lastPick) && !Loadout.IsEvolution(_lastPick)) || joined)
+            if (joined)
             {
-                // 특수 장비: 금빛 기둥과 알림. 구조대원은 한 명 늘 때마다 곁에서 번쩍이며 나타난다.
+                // 구조대원은 한 명 늘 때마다 곁에서 번쩍이며 나타난다.
                 var gold = new Color(1f, 0.85f, 0.3f);
                 Vector3 at = W(_sim.Player);
                 Pillar(at, gold);
                 Shockwave(at, gold, 6f, 0.4f);
                 Flash(gold, 0.12f);
                 _zoomKick = Mathf.Max(_zoomKick, 0.5f);
-                ShowAlert(joined ? "구조대원 합류!" : SurvivorUpgrades.Name(_lastPick) + " 출동!", gold);
+                ShowAlert("구조대원 합류!", gold);
             }
         }
 
@@ -1157,33 +1097,6 @@ namespace FireGame.Prototypes
                 }
             }
 
-            // 헬기 출동: 막 뜬 헬기(나이 한 틱)마다 금색 배너.
-            if (_sim.Shots.Exists(s => s.Kind == ShotKind.Heli && s.Age < SurvivorSim.Dt * 1.5f)) SpecialBanner("소방 헬기 급수 투하!", new Color(0.5f, 0.85f, 1f));
-
-            foreach (Vec2 e in _sim.HeliDrops)
-            {
-                Vector3 at = W(e);
-                // 임팩트: 큰 물기둥·플레어·충격파 두 겹·흔들림·멈칫, 물보라 고리, 바닥에 오래 남는 큰 젖은 자국.
-                WaterBlast(at, SurvivorSim.HeliRadius * 1.3f, Loadout.MaxLevel);
-                Flare(at, SurvivorSim.HeliRadius * 3.1f, new Color(0.75f, 0.95f, 1f), 5);
-                Shockwave(at, new Color(0.9f, 0.97f, 1f, 0.9f), SurvivorSim.HeliRadius * 4f, 0.6f, 0.08f);
-                Shockwave(at, new Color(0.7f, 0.9f, 1f, 0.8f), SurvivorSim.HeliRadius * 2.7f, 0.5f, 0.23f);
-                for (int i = 0; i < 24; i++)
-                {
-                    float a = i * Mathf.PI * 2f / 24f;
-                    float sp = Random.Range(6f, 9f);
-                    EmitFalling("Effects/water_drop", at + new Vector3(0f, 0.4f, 0f), new Vector3(Mathf.Cos(a) * sp, (Mathf.Sin(a) * sp * 0.6f) + 4f, 0f), 0.7f, 0.45f, new Color(0.8f, 0.95f, 1f, 1f));
-                }
-                AddWet(at, SurvivorSim.HeliRadius * 2f, 6f, true);
-                _trauma = Mathf.Min(1f, _trauma + 0.5f);
-                HitStop(0.06f);
-                PlaySplash();
-                // 헬기는 쏟고 나서 같은 방향으로 계속 날아가 화면 밖으로 빠진다.
-                _heliExitFrom = at + HeliLift;
-                _heliExitDir = (new Vector3(1.4f, -1f, 0f)).normalized;
-                _heliExitAge = 0f;
-            }
-
             // 증기 폭발: 물줄기를 버틴 보상. 지붕에서 김이 확 솟고 둘레로 충격파, 잠깐 멈칫, 치이익.
             foreach (Structure st in _sim.SteamBursts)
             {
@@ -1226,85 +1139,6 @@ namespace FireGame.Prototypes
                 Emit("Effects/glow", at, Vector3.zero, 0f, 0.06f, 0.6f, 1f, new Color(1f, 1f, 1f, 0.7f), new Color(1f, 0.8f, 0.4f, 0f), 0f, true);
             }
 
-            if (_sim.Sprinkled.Count > 0) SpecialBanner("스프링클러 작동!", new Color(0.5f, 0.85f, 1f), quiet: true);
-            foreach (Structure st in _sim.Sprinkled)
-            {
-                // 스프링클러: 지붕 가운데에서 8방향으로 물 돔이 솟고, 지붕 폭만큼 충격파가 퍼지고, 바닥이 파랗게 물들며 김이 오른다.
-                Vector3 at = W(st.Pos);
-                float width = Mathf.Max(st.Half.X, st.Half.Y) * 2f;
-                Vector3 roof = at + new Vector3(0f, 0.6f, 0f);
-                SteamPillar(roof, 1.4f);
-                Steam(at, 6, 1.4f);
-                Shockwave(roof, new Color(0.6f, 0.9f, 1f, 0.9f), width * 1.2f, 0.5f);
-                _groundGlow.Put(at, width * 1.4f, 0f, new Color(0.5f, 0.8f, 1f, 0.3f));
-                for (int c = 0; c < 8; c++)
-                {
-                    float a = c * Mathf.PI * 2f / 8f;
-                    Vector3 d = new Vector3(Mathf.Cos(a), Mathf.Sin(a) * 0.6f, 0f);
-                    for (int i = 0; i < 3; i++)
-                    {
-                        var v = (d * Random.Range(4f, 6.5f)) + new Vector3(0f, 5f + Random.Range(0f, 2f), 0f);
-                        EmitSprite(BeamSprite(), roof, v, 0f, 0.6f, 0.16f, 0.08f, new Color(0.75f, 0.95f, 1f, 0.95f), new Color(0.7f, 0.9f, 1f, 0f), 0f, true,
-                            12f, 6f, (Mathf.Atan2(v.y, v.x) * Mathf.Rad2Deg) - 90f);
-                    }
-                    for (int i = 0; i < 3; i++)
-                    {
-                        EmitFalling("Effects/water_drop", roof, (d * Random.Range(1.5f, 4f)) + new Vector3(0f, Random.Range(2f, 5f), 0f), 0.7f, 0.3f, new Color(0.75f, 0.95f, 1f, 1f));
-                    }
-                }
-            }
-            if (_sim.Sprinkled.Count > 0) GameAudio.Play(Cue.SprayFoam);
-            if (_sim.JustRain)
-            {
-                // 먹구름이 오면 금색 배너와 함께 번개가 번쩍한다. 그 뒤로는 0.7초마다 친다(DrawSpecials).
-                SpecialBanner("비구름 소환!", new Color(0.4f, 0.6f, 1f));
-                Flash(new Color(0.9f, 0.95f, 1f), 0.3f);
-                _trauma = Mathf.Min(1f, _trauma + 0.2f);
-                _lightningClock = 0.35f;
-                GameAudio.Play(Cue.Backfire);
-            }
-            if (_sim.JustRetardant && _sim.Retardants.Count > 0)
-            {
-                // 비행기가 띠를 따라 한 번 지나가며 뿌린다(띠보다 조금 더 길게 날아온다).
-                Band b = _sim.Retardants[_sim.Retardants.Count - 1];
-                Vector3 a = W(b.A);
-                Vector3 c = W(b.B);
-                Vector3 dir = (c - a).normalized;
-                _planeFrom = a - (dir * 10f);
-                _planeTo = c + (dir * 10f);
-                _planeAge = 0f;
-                SpecialBanner("방염제 살포!", new Color(1f, 0.4f, 0.5f));
-                _trauma = Mathf.Min(1f, _trauma + 0.2f);
-                GameAudio.Play(Cue.SprayFoam);
-            }
-            if (_sim.JustFoam && _sim.FoamAt.HasValue)
-            {
-                // 폼 포탄이 떨어져 터진다: 흰 번쩍 + 흰 거품이 사방으로 튄다.
-                Vector3 at = W(_sim.FoamAt.Value);
-                float r = SurvivorSim.FoamRadius;
-                SpecialBanner("소화 거품 살포!", new Color(0.9f, 1f, 1f));
-                Flare(at, r * 2.2f, new Color(0.95f, 1f, 1f), 4);
-                Shockwave(at, new Color(1f, 1f, 1f, 0.9f), r * 3.1f, 0.5f);
-                Shockwave(at, new Color(0.9f, 0.97f, 1f, 0.8f), r * 2f, 0.45f, 0.15f);
-                for (int k = 0; k < 20; k++)
-                {
-                    float a = k * Mathf.PI / 10f;
-                    EmitFalling("Effects/smoke_01", at, new Vector3(Mathf.Cos(a) * 4.5f, 3.5f + Mathf.Sin(a), 0f), 0.9f, 0.6f, new Color(1f, 1f, 1f, 0.95f));
-                }
-                // 큰 거품 원반 48개가 깔개 위에 천천히 부풀며 폼이 걷힐 때까지 남는다.
-                for (int k = 0; k < 48; k++)
-                {
-                    float a = Random.value * Mathf.PI * 2f;
-                    float d = r * 0.9f * Mathf.Sqrt(Random.value);
-                    Vector3 o = new Vector3(Mathf.Cos(a) * d, Mathf.Sin(a) * d, 0f);
-                    float size = Random.Range(0.7f, 1.3f);
-                    EmitSprite(BubbleSprite(), at + o, Vector3.zero, 0f, SurvivorSim.FoamTime, size * 0.8f, size * 1.5f,
-                        new Color(1f, 1f, 1f, 0.92f), new Color(0.9f, 0.97f, 1f, 0f), Random.Range(-10f, 10f), false);
-                }
-                _foamPopClock = 0.2f;
-                _trauma = Mathf.Min(1f, _trauma + 0.3f);
-                GameAudio.Play(Cue.SprayFoam);
-            }
             if (_sim.JustCurtain) CurtainBurst();
 
             foreach (Vec2 e in _sim.Explosions)
@@ -1459,7 +1293,7 @@ namespace FireGame.Prototypes
                 Sparkle(at, 30, gold);
                 Burst(at, 40, gold, 9f);
                 Flash(gold, 0.2f);
-                SpawnText(at + new Vector3(0f, 1.6f, 0f), "보물상자! 카드 " + SurvivorSim.ChestPicks + "장", gold, 1.6f);
+                SpawnText(at + new Vector3(0f, 1.6f, 0f), "보물상자! 레벨업 ×" + _sim.LastChestPicks, gold, 1.6f);
                 _slowmo = Mathf.Max(_slowmo, 0.4f);
                 // 상자 카드도 레벨업 카드처럼 잠깐 뒤 튀어 오른다(안 띄우면 카드 대기로 판이 멈춘다).
                 if (_sim.PendingChoices != null)
@@ -1472,18 +1306,6 @@ namespace FireGame.Prototypes
 
             ReactTown();
 
-            if (_sim.AmbulanceAt != null)
-            {
-                // 구급차가 화면 밖에서 문 앞까지 달려온다. 연기 걷힘 연출은 도착 순간(DrawAmbulance)에.
-                Vector3 door = W(_sim.AmbulanceAt.Door);
-                _ambulanceTo = door + new Vector3(-1.6f, -1.3f, 0f);
-                _ambulanceFrom = _ambulanceTo + new Vector3(-16f, -7f, 0f);
-                _ambulanceRoof = W(_sim.AmbulanceAt.Pos);
-                _ambulanceAge = 0f;
-                _ambulanceArrived = false;
-                SpecialBanner("구급차 출동!", new Color(1f, 0.3f, 0.3f));
-                GameAudio.Play(Cue.Critical);
-            }
             _heatTextClock -= SurvivorSim.Dt;
             if (_sim.HeatHurt > 0f && _heatTextClock <= 0f)
             {
@@ -1538,46 +1360,6 @@ namespace FireGame.Prototypes
                 Flash(c, 0.08f);
                 Scorch(at, 1.4f);
                 _trauma = Mathf.Min(1f, _trauma + 0.12f);
-            }
-            // 물 불꽃놀이: 쏘아 올리는 순간 배너, 터지는 자리마다 청백 플레어·물방울 방사·젖은 자국.
-            if (_sim.JustShells)
-            {
-                SpecialBanner("물 불꽃놀이!", new Color(0.55f, 0.9f, 1f));
-                Structure stage = _sim.Landmark ?? _sim.Structures.Find(s => s.Kind == StructureKind.Depot && !s.Collapsed);
-                if (stage != null) Flare(W(stage.Pos) + Up(2f), 6f, new Color(0.8f, 0.95f, 1f), 3);
-                GameAudio.Play(Cue.Critical);
-            }
-            foreach (Vec2 p in _sim.ShellBursts)
-            {
-                Vector3 at = W(p);
-                Flare(at + Up(1.5f), 8f, new Color(0.75f, 0.95f, 1f), 5);
-                for (int i = 0; i < 24; i++)
-                {
-                    float a = i * Mathf.PI * 2f / 24f;
-                    float sp = Random.Range(4f, 7f);
-                    EmitFalling("Effects/water_drop", at + Up(1.5f), new Vector3(Mathf.Cos(a) * sp, (Mathf.Sin(a) * sp * 0.6f) + 3f, 0f), 0.7f, 0.4f, new Color(0.8f, 0.95f, 1f, 1f));
-                }
-                WaterBlast(at, SurvivorSim.ShellRadius, 3);
-                Shockwave(at, new Color(0.8f, 0.95f, 1f, 0.9f), SurvivorSim.ShellRadius * 2.3f, 0.45f);
-                Sparkle(at + Up(1.5f), 12, new Color(0.85f, 0.97f, 1f));
-                AddWet(at, SurvivorSim.ShellRadius, 5f, true);
-                _trauma = Mathf.Min(1f, _trauma + 0.2f);
-                PlaySplash();
-            }
-            // 물안개: 피는 순간 흰 배너, 안개가 걷힐 때까지 DrawMist가 그린다.
-            if (_sim.JustMist)
-            {
-                SpecialBanner("물안개 분무!", Color.white);
-                Shockwave(W(_sim.MistAt.Value), new Color(1f, 1f, 1f, 0.8f), SurvivorSim.MistRadius * 2.2f, 0.5f);
-                GameAudio.Play(Cue.SprayFoam);
-            }
-            // 큰 파도: 금색 배너 + 큰 흔들림 + 멈칫(바다가 통째로 밀려온다).
-            if (_sim.JustSurge)
-            {
-                SpecialBanner("큰 파도!", new Color(0.5f, 0.85f, 1f));
-                _trauma = Mathf.Min(1f, _trauma + 0.4f);
-                HitStop(0.04f);
-                GameAudio.Play(Cue.Backfire);
             }
             // 항구: 불배가 뜨면 알림, 닿으면 충격파·글자, 물 위에서 끄면 김·글자.
             if (_sim.JustBoat != null && !_sim.JustBoat.Tanker)
@@ -1946,7 +1728,7 @@ namespace FireGame.Prototypes
             DrawShots();
             DrawPlayer();
             DrawGear(dt);
-            DrawSpecials(dt);
+            DrawStageAir();
             DrawEdgeArrows();
             DrawGuides(dt);
             DrawWeather();
@@ -2233,58 +2015,8 @@ namespace FireGame.Prototypes
             return names[((k % 8) + 8) % 8];
         }
 
-        /// <summary>특수 장비 모습: 달리는 소방차, 먹구름과 빗줄기, 붉은 방염제 띠와 지나가는 비행기.</summary>
-        /// <summary>구급차: 1.2초 달려와 문 앞에 서서 경광등을 돌리고(도착 순간 연기가 걷힌다), 2초 뒤 떠난다.</summary>
-        private void DrawAmbulance(float dt)
-        {
-            if (_ambulanceAge >= 4.4f) return;
-            _ambulanceAge += dt;
-            Vector3 dir = (_ambulanceTo - _ambulanceFrom).normalized;
-            Vector3 at;
-            if (_ambulanceAge < 1.2f)
-            {
-                float f = 1f - Mathf.Pow(1f - Mathf.Clamp01(_ambulanceAge / 1.2f), 2f);
-                at = Vector3.Lerp(_ambulanceFrom, _ambulanceTo, f);
-            }
-            else if (_ambulanceAge < 3.2f) at = _ambulanceTo;
-            else
-            {
-                float f = Mathf.Clamp01((_ambulanceAge - 3.2f) / 1.2f);
-                at = _ambulanceTo + (dir * (f * f * 22f));
-            }
-            if (!_ambulanceArrived && _ambulanceAge >= 1.2f)
-            {
-                // 도착: 흰 김이 지붕에서 걷혀 올라가고 "구급차! 연기 걷힘".
-                _ambulanceArrived = true;
-                // 도착: 큰 흰 김이 지붕에서 걷혀 올라가고, 녹색 십자 플레어, 충격파, "연기 걷힘!".
-                SteamPillar(_ambulanceRoof, 2f);
-                Steam(_ambulanceRoof, 16, 1.5f);
-                Flare(_ambulanceRoof, 6f, new Color(0.4f, 1f, 0.5f), 3, 0.3f);
-                Shockwave(_ambulanceTo, new Color(1f, 1f, 1f, 0.9f), 9f, 0.5f);
-                SpawnText(_ambulanceTo + new Vector3(0f, 2f, 0f), "연기 걷힘!", new Color(0.6f, 1f, 0.7f), 2.2f);
-                _trauma = Mathf.Min(1f, _trauma + 0.2f);
-                GameAudio.Play(Cue.PickUp);
-            }
-            _shadows.Put(at + new Vector3(0f, -0.3f, 0f), 2.6f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.5f);
-            GameObject model = _ambulanceModels.Get();
-            if (model != null) ItemModels.Place(model, at, 0f, dir, 1f);
-            // 사이렌 둘이 번갈아 번쩍이고 그 빛이 바닥을 빨강·파랑으로 물들인다.
-            bool flip = Mathf.Repeat(_time * 6f, 1f) < 0.5f;
-            Color sirenA = flip ? new Color(0.2f, 0.4f, 1f, 0.95f) : new Color(1f, 0.15f, 0.1f, 0.95f);
-            Color sirenB = flip ? new Color(1f, 0.15f, 0.1f, 0.9f) : new Color(0.2f, 0.4f, 1f, 0.9f);
-            _siren.Put(at + new Vector3(-0.35f, 0.95f, 0f), 2.4f, 0f, sirenA);
-            _siren.Put(at + new Vector3(0.35f, 0.95f, 0f), 2f, 0f, sirenB);
-            _groundGlow.Put(at, 7f, 0f, new Color(sirenA.r, sirenA.g, sirenA.b, 0.3f));
-            if (_ambulanceAge < 1.2f || _ambulanceAge > 3.2f)
-            {
-                // 달릴 때 뒤로 먼지와 타이어 자국.
-                Emit(Smokes[Random.Range(0, Smokes.Length)], at - (dir * 1.1f), -dir * 1.5f, 1.5f, 0.4f, 0.3f, 0.9f, new Color(0.8f, 0.78f, 0.7f, 0.4f), new Color(0.8f, 0.78f, 0.7f, 0f), 0f);
-                Emit(Smokes[Random.Range(0, Smokes.Length)], at - (dir * 0.8f) + new Vector3(0f, -0.4f, 0f), -dir * 2.5f, 1.5f, 0.5f, 0.4f, 1.2f, new Color(0.75f, 0.72f, 0.65f, 0.35f), new Color(0.75f, 0.72f, 0.65f, 0f), 0f);
-                if (Random.value < 0.6f) AddWet(at + new Vector3(0f, -0.5f, 0f), 0.8f, 4f, false);
-            }
-        }
-
-        private void DrawSpecials(float dt)
+        /// <summary>스테이지 공기: 산불 숲의 재·불티, 야시장 로켓, 숲 불의 전선.</summary>
+        private void DrawStageAir()
         {
             if ((_sim.Wind.X != 0f || _sim.Wind.Y != 0f) && _sim.Outcome == SOutcome.Playing && Random.value < 0.6f)
             {
@@ -2297,176 +2029,8 @@ namespace FireGame.Prototypes
                 Emit(spark ? Sparks[Random.Range(0, Sparks.Length)] : "Effects/smoke_01", at, wind + new Vector3(0f, 0.3f, 0f), 0f, Random.Range(1f, 1.6f), spark ? 0.2f : 0.35f, 0.05f,
                     spark ? new Color(1f, 0.6f, 0.2f, 0.8f) : new Color(0.3f, 0.28f, 0.27f, 0.45f), new Color(0.3f, 0.28f, 0.27f, 0f), Random.Range(-200f, 200f), spark);
             }
-
-            if (_sim.Truck.HasValue)
-            {
-                Vector3 at = W(_sim.Truck.Value);
-                float dir = _sim.TruckDir;
-                if (!_truckShown)
-                {
-                    SpecialBanner("소방차 출동!", new Color(1f, 0.3f, 0.3f));
-                    GameAudio.Play(Cue.Critical);
-                }
-                // 차선 예고: 달릴 줄 앞쪽에 붉은 띠가 깔려 있다(지나간 쪽은 사라진다).
-                float ahead = 14f;
-                _band.Put(at + new Vector3(dir * ahead * 0.5f, 0f, 0f), 3.5f, -90f, new Color(1f, 0.3f, 0.25f, 0.18f + (0.06f * Mathf.Sin(_time * 10f))), null, ahead / 3.5f);
-                _shadows.Put(at + new Vector3(0f, -0.45f, 0f), 5f, 0f, new Color(0f, 0f, 0f, 0.4f), null, 0.4f);
-                GameObject truckModel = _truckModels.Get();
-                if (truckModel != null)
-                {
-                    truckModel.transform.localPosition = new Vector3(at.x, at.y, 0f);
-                    truckModel.transform.localRotation = Models3D.Stand * Quaternion.Euler(0f, dir > 0f ? -90f : 90f, 0f);
-                }
-                // 사이렌: 지붕 앞뒤가 빨강·파랑으로 번갈아 번쩍이고 그 빛이 바닥을 물들인다.
-                bool flip = Mathf.Repeat(_time * 6f, 1f) < 0.5f;
-                Color sirenA = flip ? new Color(1f, 0.15f, 0.1f, 0.95f) : new Color(0.2f, 0.4f, 1f, 0.95f);
-                _siren.Put(at + new Vector3(dir * 0.7f, 0.15f, 0f), 3f, 0f, sirenA);
-                _siren.Put(at + new Vector3(-dir * 0.1f, 0.15f, 0f), 2.4f, 0f, flip ? new Color(0.2f, 0.4f, 1f, 0.85f) : new Color(1f, 0.15f, 0.1f, 0.85f));
-                _groundGlow.Put(at, 8f, 0f, new Color(sirenA.r, sirenA.g, sirenA.b, 0.28f));
-                // 양옆 물대포: 위아래로 굵은 물줄기 리본이 뻗고 끝에서 물이 튄다. 지나간 자리는 젖는다.
-                for (int side = -1; side <= 1; side += 2)
-                {
-                    Vector3 hand = at + new Vector3(0f, side * 0.5f, 0f);
-                    Vector3 tip = hand + new Vector3(-dir * 1.2f, side * SurvivorSim.TruckSoakRange * 1.4f, 0f);
-                    SmallRibbon(hand, tip, 0.55f, new Color(0.75f, 0.95f, 1f, 0.95f), 0.3f);
-                    Splash(tip, 2, 0.5f);
-                    for (int k = 0; k < 2; k++)
-                    {
-                        var v = new Vector3((-dir * Random.Range(0.5f, 2f)) + Random.Range(-1f, 1f), side * Random.Range(7f, 10f), 0f);
-                        Emit("Effects/water_drop", hand, v, 3f, 0.3f, 0.4f, 0.12f, new Color(0.75f, 0.95f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
-                    }
-                }
-                if (Random.value < 0.5f) AddWet(at, 2.5f, 5f, false);
-                if (Random.value < 0.4f) Splash(at - new Vector3(dir * 1.4f, 0f, 0f), 1, 0.4f);
-                _trauma = Mathf.Max(_trauma, 0.08f);
-            }
-            _truckShown = _sim.Truck.HasValue;
-
-            DrawAmbulance(dt);
-            DrawHarborSpecials();
             if (_sim.Rockets.Count > 0) DrawRockets();
-            DrawMist();
             if (_sim.FrontY.HasValue) DrawFront();
-
-            if (_sim.RainAt.HasValue)
-            {
-                Vector3 at = W(_sim.RainAt.Value);
-                float r = SurvivorSim.RainRadius;
-                float fade = Mathf.Clamp01(_sim.RainLeft / 0.4f) * Mathf.Clamp01((SurvivorSim.RainTime - _sim.RainLeft) / 0.3f);
-                _rainShade.Put(at, r * 3.2f, 0f, new Color(0.05f, 0.1f, 0.2f, 0.5f * fade));
-                // 먹구름: 크고 어두운 원반 셋이 겹치고 가장자리만 밝다. 연기 덩어리처럼 회색으로 번지지 않는다.
-                for (int k = 0; k < 3; k++)
-                {
-                    float a = (k * 2.1f) + (_time * 0.25f);
-                    Vector3 o = new Vector3(Mathf.Cos(a) * r * 0.4f, (Mathf.Sin(a) * r * 0.15f) + 3.4f, 0f);
-                    float size = r * (1.8f - (0.2f * k));
-                    _shadows.Put(at + o, size, 0f, new Color(0.08f, 0.1f, 0.16f, 0.92f * fade), DiscSprite(), 0.6f);
-                    _cloud.Put(at + o + new Vector3(0f, 0.4f, 0f), size * 0.92f, 0f, new Color(0.6f, 0.65f, 0.75f, 0.5f * fade), DiscSprite(), 0.6f);
-                }
-                // 번개: 0.7초마다 구름에서 바닥으로 흰 줄기가 꽂히고 화면이 번쩍, 바닥 충격파.
-                _lightningClock -= dt;
-                if (_lightningClock <= 0f && fade > 0.5f)
-                {
-                    _lightningClock = 0.7f;
-                    Vector3 g = at + new Vector3(Random.Range(-r, r) * 0.7f, Random.Range(-r, r) * 0.4f, 0f);
-                    Vector3 top = g + new Vector3(Random.Range(-1f, 1f), 3.4f + (r * 0.3f), 0f);
-                    Vector3 mid = Vector3.Lerp(top, g, 0.5f) + new Vector3(Random.Range(-1.2f, 1.2f), 0f, 0f);
-                    Vector3[] pts = { top, mid, g };
-                    for (int k = 0; k < 2; k++)
-                    {
-                        Vector3 seg = pts[k + 1] - pts[k];
-                        float ang = (Mathf.Atan2(seg.y, seg.x) * Mathf.Rad2Deg) - 90f;
-                        EmitSprite(BeamSprite(), (pts[k] + pts[k + 1]) * 0.5f, Vector3.zero, 0f, 0.14f, 0.3f, 0.12f, new Color(1f, 1f, 1f, 1f), new Color(0.8f, 0.9f, 1f, 0f), 0f, true, 0f, seg.magnitude / 0.3f, ang);
-                        EmitSprite(BeamSprite(), (pts[k] + pts[k + 1]) * 0.5f, Vector3.zero, 0f, 0.2f, 0.9f, 0.3f, new Color(0.7f, 0.85f, 1f, 0.6f), new Color(0.7f, 0.85f, 1f, 0f), 0f, true, 0f, seg.magnitude / 0.9f, ang);
-                    }
-                    Flash(new Color(0.9f, 0.95f, 1f), 0.15f);
-                    Shockwave(g, new Color(0.9f, 0.97f, 1f, 0.9f), 4f, 0.25f);
-                    _trauma = Mathf.Min(1f, _trauma + 0.08f);
-                }
-                // 빗줄기: 구름 밑에서 곧게 떨어지는 가는 선, 땅에 닿으면 물결.
-                for (int k = 0; k < 30; k++)
-                {
-                    var p = at + new Vector3(Random.Range(-r, r) * 0.95f, Random.Range(-r * 0.5f, r * 0.5f) + 2.8f, 0f);
-                    EmitSprite(BeamSprite(), p, new Vector3(-1f, -18f, 0f), 0f, 0.18f, 0.07f, 0.07f, new Color(0.8f, 0.9f, 1f, 0.8f * fade), new Color(0.8f, 0.9f, 1f, 0f), 0f, true, 0f, 9f, 3f);
-                }
-                for (int k = 0; k < 8; k++)
-                {
-                    var g = at + new Vector3(Random.Range(-r, r) * 0.9f, Random.Range(-r, r) * 0.6f, 0f);
-                    EmitSprite(RingSprite(), g, Vector3.zero, 0f, 0.35f, 0.2f, 1.1f, new Color(0.8f, 0.95f, 1f, 0.6f * fade), new Color(0.8f, 0.95f, 1f, 0f), 0f, true);
-                }
-            }
-
-            if (_sim.FoamAt.HasValue)
-            {
-                // 폼 깔개: 흰 거품 덩어리가 원을 덮고, 걷히기 1초 전부터 옅어진다.
-                Vector3 at = W(_sim.FoamAt.Value);
-                float r = SurvivorSim.FoamRadius;
-                float fade = Mathf.Clamp01(_sim.FoamLeft / 1f) * Mathf.Clamp01((SurvivorSim.FoamTime - _sim.FoamLeft) / 0.25f);
-                // 깔개 바탕은 옅은 흰 원 하나. 거품 자체는 폼이 깔릴 때 뿌린 BubbleSprite 입자가 맡는다.
-                _groundGlow.Put(at, r * 2.2f, 0f, new Color(0.85f, 0.95f, 1f, 0.4f * fade));
-                // 매트 가장자리 흰 테가 폼이 걷힐 때까지 남고, 0.2초마다 작은 거품이 떠올라 터진다.
-                _auras.Put(at, r * 2f, 0f, new Color(1f, 1f, 1f, 0.6f * fade));
-                if (Random.value < 0.3f * fade) Steam(at + new Vector3(Random.Range(-r, r) * 0.6f, Random.Range(-r, r) * 0.5f, 0f), 1, 0.4f);
-                _foamPopClock -= dt;
-                if (_foamPopClock <= 0f)
-                {
-                    _foamPopClock = 0.2f;
-                    for (int k = 0; k < 3; k++)
-                    {
-                        Vector3 o = new Vector3(Random.Range(-r, r) * 0.8f, Random.Range(-r, r) * 0.6f, 0f);
-                        EmitSprite(BubbleSprite(), at + o, new Vector3(0f, 1.2f, 0f), 0f, 0.6f, 0.3f, 0.7f, new Color(1f, 1f, 1f, 0.9f * fade), new Color(1f, 1f, 1f, 0f), Random.Range(-5f, 5f), false);
-                    }
-                }
-            }
-
-            foreach (Band b in _sim.Retardants)
-            {
-                Vector3 a = W(b.A);
-                Vector3 c = W(b.B);
-                float len = Vector3.Distance(a, c);
-                float deg = Mathf.Atan2(c.y - a.y, c.x - a.x) * Mathf.Rad2Deg;
-                float t = Mathf.Clamp01(b.Life / b.MaxLife);
-                // 비행기가 지나간 만큼만 띠가 칠해진다.
-                float laid = _planeAge < 1.2f && b == _sim.Retardants[_sim.Retardants.Count - 1] ? Mathf.Clamp01(((_planeAge / 1.2f) * (len + 20f) - 10f) / len) : 1f;
-                if (laid <= 0f) continue;
-                Vector3 start = a;
-                Vector3 end = Vector3.Lerp(a, c, laid);
-                // 띠 3겹: 넓은 바탕, 중간, 밝은 핵. 걷히기 3초 전부터 깜빡인다.
-                float life = 0.3f + (0.7f * t);
-                if (b.Life < 3f) life *= 0.5f + (0.5f * Mathf.Sin(_time * 8f));
-                Vector3 mid = (start + end) * 0.5f;
-                float w0 = SurvivorSim.RetardantWidth * 1.15f, w1 = SurvivorSim.RetardantWidth * 0.8f, w2 = SurvivorSim.RetardantWidth * 0.33f;
-                _band.Put(mid, w0, deg - 90f, new Color(0.9f, 0.25f, 0.3f, 0.45f * life), null, len * laid / w0);
-                _band.Put(mid, w1, deg - 90f, new Color(1f, 0.4f, 0.45f, 0.6f * life), null, len * laid / w1);
-                _band.Put(mid, w2, deg - 90f, new Color(1f, 0.8f, 0.85f, 0.9f * life), null, len * laid / w2);
-            }
-            if (_planeAge < 1.2f)
-            {
-                _planeAge += dt;
-                float f = Mathf.Clamp01(_planeAge / 1.2f);
-                Vector3 at = Vector3.Lerp(_planeFrom, _planeTo, f);
-                Vector3 dir = (_planeTo - _planeFrom).normalized;
-                Vector3 wing = new Vector3(-dir.y, dir.x, 0f);
-                float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
-                _shadows.Put(at + new Vector3(1f, -1.5f, 0f), 4.2f, deg, new Color(0f, 0f, 0f, 0.3f), null, 0.6f);
-                GameObject planeModel = _planeModels.Get();
-                if (planeModel != null) ItemModels.Place(planeModel, at, 5f, dir, 1.5f);
-                // 양 날개 끝에서 분홍 분사 두 줄기가 쏟아지고, 지나간 자리에 분홍 연기가 깔린다.
-                for (int side = -1; side <= 1; side += 2)
-                {
-                    Vector3 tip = at + (wing * side * 1.6f) + new Vector3(0f, 2f, 0f);
-                    for (int k = 0; k < 3; k++)
-                    {
-                        Emit("Effects/glow", tip, new Vector3(Random.Range(-0.6f, 0.6f), -Random.Range(3.5f, 5f), 0f), 1.5f, 0.5f, 0.7f, 1.5f,
-                            new Color(1f, 0.4f, 0.5f, 0.8f), new Color(1f, 0.4f, 0.5f, 0f), 0f);
-                    }
-                }
-                for (int k = 0; k < 2; k++)
-                {
-                    Emit("Effects/smoke_02", at + new Vector3(Random.Range(-1f, 1f), Random.Range(-0.5f, 0.5f), 0f), -dir * 1.5f, 1.5f, 1.2f, 0.9f, 2.2f,
-                        new Color(1f, 0.55f, 0.65f, 0.35f), new Color(1f, 0.55f, 0.65f, 0f), Random.Range(-1f, 1f));
-                }
-            }
         }
 
         /// <summary>공구상자: 주황빛 위에서 통통 튀고, 사라지기 5초 전부터 깜빡인다.</summary>
@@ -2662,12 +2226,6 @@ namespace FireGame.Prototypes
                         DrawStream(_streamPts, s);
                         break;
                     }
-                    case ShotKind.Heli:
-                        DrawHeli(s);
-                        break;
-                    case ShotKind.Shell:
-                        DrawShell(s);
-                        break;
                     case ShotKind.Bomb when s.Drone:
                     {
                         // 드론 물폭탄: 드론 밑에서 곧장 떨어진다. 청록 꼬리.
@@ -2727,7 +2285,6 @@ namespace FireGame.Prototypes
                 }
             }
 
-            DrawHeliExit();
             DrawPartner();
 
             int droneLevel = _sim.Build.PowerOf(UpgradeId.Drone);
@@ -3575,64 +3132,6 @@ namespace FireGame.Prototypes
             if (Random.value < 0.35f) Steam(at, 1, 0.55f);
         }
 
-        /// <summary>헬기는 땅(그림자)보다 이만큼 위에 떠 있다.</summary>
-        private static readonly Vector3 HeliLift = new Vector3(0f, 2.6f, 0f);
-
-        /// <summary>소방 헬기: 화면 밖에서 목표로 날아오며 땅에 그림자를 끌고, 다 오면 물을 쏟아붓는다.</summary>
-        private void DrawHeli(Shot s)
-        {
-            float t = Mathf.Clamp01(s.Age / s.Life);
-            Vector3 from = W(s.From);
-            Vector3 to = W(s.Target);
-            // 빨리 날아와 목표 위에서 멈칫한다.
-            Vector3 ground = Vector3.Lerp(from, to, 1f - ((1f - t) * (1f - t)));
-            Vector3 dir = (to - from).normalized;
-            DrawHeliAt(ground, dir, 1f);
-            // 목표 표시: 금색 큰 고리가 조여 들고, 그 안에서 두 번째 고리가 반대로 돈다. 헬기 밑으론 탐조등이 바닥을 비춘다.
-            float ring = Mathf.Lerp(SurvivorSim.HeliRadius * 4.4f, SurvivorSim.HeliRadius * 2.2f, t);
-            _reticle.Put(to, ring, _time * 90f, new Color(1f, 0.85f, 0.35f, 0.45f + (0.45f * t)));
-            _reticle.Put(to, ring * 0.72f, -_time * 140f, new Color(0.6f, 0.9f, 1f, 0.3f + (0.5f * t)));
-            _groundGlow.Put(ground, 7f, 0f, new Color(1f, 0.98f, 0.9f, 0.3f));
-            // 하강풍: 헬기 밑 바닥에서 연기가 바깥으로 밀린다.
-            for (int i = 0; i < 6; i++)
-            {
-                float a = Random.Range(0f, Mathf.PI * 2f);
-                Vector3 o = new Vector3(Mathf.Cos(a), Mathf.Sin(a) * 0.5f, 0f);
-                Emit("Effects/smoke_02", ground + (o * 1.2f), o * Random.Range(4f, 7f), 3f, 0.45f, 0.5f, 1.1f, new Color(0.9f, 0.9f, 0.9f, 0.25f), new Color(0.9f, 0.9f, 0.9f, 0f), Random.Range(-2f, 2f));
-            }
-            if (t > 0.6f)
-            {
-                // 쏟기 직전: 헬기 배에서 물이 쏟아진다.
-                for (int i = 0; i < 10; i++)
-                {
-                    Vector3 belly = ground + HeliLift + new Vector3(Random.Range(-0.9f, 0.9f), -0.3f, 0f);
-                    Emit("Effects/water_drop", belly, new Vector3(Random.Range(-1.5f, 1.5f), -Random.Range(7f, 11f), 0f), 0f, 0.3f,
-                        0.6f, 0.3f, new Color(0.75f, 0.93f, 1f, 0.95f), new Color(0.6f, 0.9f, 1f, 0.2f), 0f);
-                }
-            }
-        }
-
-        private void DrawHeliExit()
-        {
-            if (_heliExitAge > 1.4f) return;
-            _heliExitAge += _frameDt;
-            Vector3 ground = _heliExitFrom - HeliLift + (_heliExitDir * (_heliExitAge * _heliExitAge * 14f));
-            DrawHeliAt(ground, _heliExitDir, 1f - Mathf.Clamp01((_heliExitAge - 1f) / 0.4f));
-        }
-
-        private void DrawHeliAt(Vector3 ground, Vector3 dir, float alpha)
-        {
-            float deg = (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f;
-            _heliShadow.Put(ground + new Vector3(0.3f, -0.2f, 0f), 3.2f, deg, new Color(0f, 0f, 0f, 0.35f * alpha));
-            // 헬기 모델: 2.2칸 떠서 나는 쪽을 보고 주·꼬리 날개가 돈다. 빠져나갈 땐 작아지며 사라진다.
-            if (alpha < 0.05f) return;
-            GameObject heli = _heliModels.Get();
-            if (heli == null) return;
-            ItemModels.Place(heli, ground, 2.2f, dir, 1.05f * Mathf.Lerp(0.6f, 1f, alpha));
-            ItemModels.Spin(heli, "Rotor", 1400f, _time);
-            ItemModels.Spin(heli, "TailRotor", 2400f, _time);
-        }
-
         /// <summary>구조대원들: 노란 헬멧 소방관이 움직이는 쪽을 보고 달린다. 첫 대원 머리 위에 "구조대" 이름표.</summary>
         private void DrawPartner()
         {
@@ -3927,44 +3426,6 @@ namespace FireGame.Prototypes
                 return none;
             });
             return _squirrelSprite;
-        }
-
-        private static Sprite HeliSprite()
-        {
-            if (_heliSprite != null) return _heliSprite;
-            const int n = 96;
-            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            var pixels = new Color32[n * n];
-            var red = new Color32(214, 48, 40, 255);
-            var dark = new Color32(120, 22, 20, 255);
-            var glass = new Color32(120, 200, 245, 255);
-            var white = new Color32(245, 245, 245, 255);
-            for (int y = 0; y < n; y++)
-            {
-                for (int x = 0; x < n; x++)
-                {
-                    float u = ((x + 0.5f) / n) - 0.5f;
-                    float v = ((y + 0.5f) / n) - 0.5f;
-                    Color32 c = new Color32(0, 0, 0, 0);
-                    // 동체: 위쪽(앞)이 둥근 타원.
-                    float body = ((u * u) / (0.16f * 0.16f)) + (((v - 0.12f) * (v - 0.12f)) / (0.28f * 0.28f));
-                    // 꼬리 막대와 꼬리 날개.
-                    bool boom = Mathf.Abs(u) < 0.035f && v < -0.05f && v > -0.46f;
-                    bool fin = Mathf.Abs(u) < 0.13f && v < -0.38f && v > -0.45f;
-                    if (boom || fin) c = dark;
-                    if (body <= 1f)
-                    {
-                        c = body > 0.8f ? dark : red;
-                        if (v > 0.22f && body < 0.8f) c = glass;
-                        if (Mathf.Abs(v - 0.02f) < 0.03f && body < 0.9f) c = white;
-                    }
-                    pixels[(y * n) + x] = c;
-                }
-            }
-            texture.SetPixels32(pixels);
-            texture.Apply();
-            _heliSprite = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f));
-            return _heliSprite;
         }
 
         /// <summary>포탑이 하늘에서 떨어져 서는 데 걸리는 초.</summary>
@@ -5267,50 +4728,6 @@ namespace FireGame.Prototypes
             }
         }
 
-        /// <summary>물 불꽃(야시장 노란): 무대에서 높이 솟아 표적 위로 떨어지는 청백 포탄. 흰 줄기 꼬리와 반짝임, 표적엔 하늘색 고리가 조여 든다.</summary>
-        private void DrawShell(Shot s)
-        {
-            float t = Mathf.Clamp01(s.Age / s.Life);
-            Vector3 from = W(s.From);
-            Vector3 to = W(s.Target);
-            Vector3 ground = Vector3.Lerp(from, to, t);
-            float lift = 9f * Mathf.Sin(t * Mathf.PI);
-            Vector3 at = ground + Up(lift);
-            _shadows.Put(ground, 0.6f + (0.5f * t), 0f, new Color(0f, 0f, 0f, 0.2f + (0.2f * t)));
-            _enemyCore.Put(at, 0.7f, 0f, new Color(0.85f, 0.97f, 1f, 1f));
-            _enemyGlow.Put(at, 2.2f, 0f, new Color(0.5f, 0.85f, 1f, 0.4f));
-            Vector3 vel = (to - from) / Mathf.Max(0.01f, s.Life);
-            float ang = (Mathf.Atan2(vel.y, vel.x) * Mathf.Rad2Deg) - 90f;
-            EmitSprite(BeamSprite(), at - new Vector3(0f, 0.6f, 0f), Vector3.zero, 0f, 0.2f, 0.25f, 0.1f, new Color(1f, 1f, 1f, 0.9f), new Color(0.7f, 0.9f, 1f, 0f), 0f, true, 0f, 1.3f / 0.25f, ang);
-            if (Random.value < 0.6f) Sparkle(at, 1, new Color(0.8f, 0.95f, 1f));
-            float ring = Mathf.Lerp(SurvivorSim.ShellRadius * 3f, SurvivorSim.ShellRadius * 1.6f, t);
-            _reticle.Put(to + Up(0.05f), ring, _time * 120f, new Color(0.6f, 0.9f, 1f, 0.3f + (0.5f * t)));
-        }
-
-        /// <summary>물안개(야시장 노란): 낮게 깔린 흰 구름 여덟 장이 천천히 돌며 숨 쉬고, 바닥은 희게, 가장자리 흰 고리, 물방울이 듣는다.</summary>
-        private void DrawMist()
-        {
-            if (!_sim.MistAt.HasValue) return;
-            Vector3 at = W(_sim.MistAt.Value);
-            float r = SurvivorSim.MistRadius;
-            float fade = Mathf.Clamp01(_sim.MistLeft / 0.6f) * Mathf.Clamp01((SurvivorSim.MistTime - _sim.MistLeft) / 0.4f);
-            _groundGlow.Put(at, r * 2.1f, 0f, new Color(0.9f, 0.95f, 1f, 0.25f * fade));
-            _auras.Put(at, r * 2f, 0f, new Color(1f, 1f, 1f, 0.5f * fade));
-            for (int k = 0; k < 8; k++)
-            {
-                float a = (k * 0.8f) + (_time * (0.15f + (0.03f * k)));
-                float breathe = 1f + (0.08f * Mathf.Sin((_time * 1.3f) + k));
-                Vector3 o = new Vector3(Mathf.Cos(a) * r * 0.55f, Mathf.Sin(a) * r * 0.4f, 0f);
-                _cloud.Put(at + o + Up(0.8f), r * 0.9f * breathe, k * 45f + (_time * 8f), new Color(1f, 1f, 1f, 0.35f * fade), DiscSprite(), 0.8f);
-            }
-            for (int k = 0; k < 10; k++)
-            {
-                var p = at + new Vector3(Random.Range(-r, r) * 0.9f, Random.Range(-r, r) * 0.7f, 0f) + Up(1.5f);
-                EmitFalling("Effects/water_drop", p, new Vector3(0f, -0.5f, 0f), 0.5f, 0.2f, new Color(0.8f, 0.92f, 1f, 0.7f * fade));
-            }
-            if (Random.value < 0.4f * fade) Steam(at + new Vector3(Random.Range(-r, r) * 0.6f, Random.Range(-r, r) * 0.5f, 0f), 1, 0.5f);
-        }
-
         /// <summary>불꽃 가판대 로켓: 포물선으로 솟아 떨어지며 금색 꼬리를 끈다.</summary>
         private void DrawRockets()
         {
@@ -5424,101 +4841,6 @@ namespace FireGame.Prototypes
                     Emit(Smokes[Random.Range(0, Smokes.Length)], at + new Vector3(0f, 0.8f, 0f), new Vector3(Random.Range(-0.3f, 0.3f), 1.4f, 0f), 0.5f, 1.4f,
                         0.7f, 2f, new Color(0.22f, 0.18f, 0.16f, 0.5f), new Color(0.2f, 0.2f, 0.2f, 0f), Random.Range(-60f, 60f));
                 }
-            }
-        }
-
-        private void DrawHarborSpecials()
-        {
-            // 떠 있는 불배마다: 가장 가까운 부두 끝에 청록 고리 "요격 지점", 배 위에 "N초 뒤 접안"(5초 밑이면 빨갛게).
-            foreach (Structure b in _sim.Structures)
-            {
-                if (b.Kind != StructureKind.Boat || b.Collapsed || b.Docked || !b.Burning || b.Tanker) continue;
-                Vec2 tip = PierTipFor(b.Pos);
-                Vector3 tipAt = W(tip);
-                float pulse = 1f + (0.1f * Mathf.Sin(_time * 5f));
-                _reticle.Put(tipAt + Up(0.05f), 2.8f * pulse, -_time * 50f, new Color(0.4f, 0.95f, 1f, 0.6f));
-                _groundGlow.Put(tipAt, 3.2f, 0f, new Color(0.4f, 0.9f, 1f, 0.2f));
-                Tag(tipAt + Up(0.4f) + new Vector3(0f, -1.6f, 0f), "요격 지점", new Color(0.75f, 1f, 1f), 0.045f);
-                float eta = _sim.BoatEta(b);
-                bool soon = eta < 5f;
-                Tag(W(b.Pos) + Up(1.6f) + new Vector3(0f, 0.9f, 0f), Mathf.CeilToInt(eta) + "초 뒤 접안", soon && Mathf.Sin(_time * 10f) > 0f ? Color.white : soon ? new Color(1f, 0.45f, 0.35f) : new Color(1f, 0.85f, 0.6f), 0.045f);
-            }
-            if (_sim.Fireboat.HasValue)
-            {
-                Vector3 at = W(_sim.Fireboat.Value);
-                float dir = _sim.FireboatDir;
-                var sea = new Color(0.35f, 0.75f, 1f);
-                if (!_fireboatShown)
-                {
-                    SpecialBanner("소방정 출동!", sea);
-                    GameAudio.Play(Cue.Critical);
-                }
-                float ahead = 16f;
-                _band.Put(at + new Vector3(dir * ahead * 0.5f, 0f, 0f), 3f, -90f, new Color(0.4f, 0.75f, 1f, 0.16f + (0.05f * Mathf.Sin(_time * 10f))), null, ahead / 3f);
-                var heading = new Vector3(dir, 0f, 0f);
-                _shadows.Put(at + new Vector3(0.15f, -0.3f, 0f), 2.6f, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
-                GameObject boat = _fireboatModels.Get();
-                if (boat != null) ItemModels.Place(boat, at, 0.06f * Mathf.Sin(_time * 3f), heading, 1.15f);
-                bool flip = Mathf.Repeat(_time * 6f, 1f) < 0.5f;
-                _siren.Put(at + Up(1.2f), 2.6f, 0f, flip ? new Color(0.3f, 0.5f, 1f, 0.95f) : new Color(1f, 0.2f, 0.15f, 0.95f));
-                _groundGlow.Put(at, 7f, 0f, flip ? new Color(0.3f, 0.5f, 1f, 0.22f) : new Color(1f, 0.2f, 0.15f, 0.22f));
-                // 물대포 둘: 부두 쪽(남쪽)으로 길게 뿜는다.
-                for (int side = -1; side <= 1; side += 2)
-                {
-                    Vector3 hand = at + new Vector3(side * 0.45f, -0.3f, 0f) + Up(0.9f);
-                    Vector3 tip = at + new Vector3((side * 2f) - (dir * 2.5f), -SurvivorHarbor.FireboatSpray, 0f);
-                    SmallRibbon(hand, tip, 0.6f, new Color(0.75f, 0.95f, 1f, 0.95f), 0.5f);
-                    Splash(tip, 2, 0.6f);
-                    for (int k = 0; k < 2; k++)
-                    {
-                        var v = new Vector3((side * Random.Range(1f, 3f)) - (dir * Random.Range(1f, 3f)), -Random.Range(9f, 13f), 0f);
-                        Emit("Effects/water_drop", hand, v, 3f, 0.4f, 0.4f, 0.12f, new Color(0.75f, 0.95f, 1f, 1f), new Color(0.6f, 0.9f, 1f, 0f), 0f);
-                    }
-                }
-                // 뒤 물결: 흰 거품이 바다에 남는다.
-                if (Random.value < 0.7f) AddWet(at - (heading * 1.4f) + new Vector3(Random.Range(-0.3f, 0.3f), Random.Range(-0.5f, 0.5f), 0f), 1.6f, 2f, false);
-                if (Random.value < 0.5f) Emit("Effects/smoke_01", at - (heading * 1.6f), -heading * 1f, 1.5f, 0.7f, 0.5f, 1.2f, new Color(1f, 1f, 1f, 0.55f), new Color(1f, 1f, 1f, 0f), 0f);
-                _trauma = Mathf.Max(_trauma, 0.06f);
-            }
-            _fireboatShown = _sim.Fireboat.HasValue;
-
-            if (_sim.WaveY.HasValue)
-            {
-                float y = _sim.WaveY.Value;
-                float mid = SurvivorSim.ArenaSize / 2f;
-                float width = SurvivorSim.ArenaSize + 4f;
-                var crest = new Vector3(mid, y, 0f);
-                // 두 겹 띠: 앞머리 흰 거품, 뒤로 넓은 파란 물마루(띠는 -90°로 눕혀 x로 늘인다: 소방차 차선과 같은 규칙).
-                _band.Put(crest + new Vector3(0f, 1.6f, 0f), 3.5f, -90f, new Color(0.35f, 0.62f, 0.95f, 0.5f), null, width / 3.5f);
-                _band.Put(crest, 1.2f, -90f, new Color(1f, 1f, 1f, 0.9f), null, width / 1.2f);
-                _band.Put(crest + new Vector3(0f, 0.9f, 0f), 0.5f, -90f, new Color(0.8f, 0.95f, 1f, 0.8f), null, width / 0.5f);
-                _groundGlow.Put(crest + new Vector3(0f, 1f, 0f), 6f, -90f, new Color(0.6f, 0.85f, 1f, 0.25f), null, width / 6f);
-                for (int k = 0; k < 20; k++)
-                {
-                    float x = Random.Range(0f, SurvivorSim.ArenaSize);
-                    Emit("Effects/smoke_01", new Vector3(x, y + Random.Range(-0.3f, 0.5f), 0f) + Up(0.4f), new Vector3(Random.Range(-0.5f, 0.5f), -Random.Range(2f, 5f), 0f), 2f, 0.45f, 0.5f, 1.3f,
-                        new Color(1f, 1f, 1f, 0.75f), new Color(1f, 1f, 1f, 0f), Random.Range(-90f, 90f));
-                }
-                for (int k = 0; k < 6; k++) Splash(new Vector3(Random.Range(0f, SurvivorSim.ArenaSize), y, 0f), 1, 0.8f);
-                for (int k = 0; k < 4; k++) AddWet(new Vector3(Random.Range(0f, SurvivorSim.ArenaSize), y + Random.Range(1.5f, 4f), 0f), Random.Range(1.5f, 3f), 4f, false);
-                if (!_waveHitQuay && y <= SurvivorHarbor.SeaFrom + 0.5f)
-                {
-                    // 부두선에 부딪히는 순간: 폭 전체 충격파와 큰 물보라.
-                    _waveHitQuay = true;
-                    Shockwave(new Vector3(mid, SurvivorHarbor.SeaFrom, 0f), new Color(0.9f, 0.97f, 1f, 0.9f), SurvivorSim.ArenaSize, 0.6f);
-                    for (int k = 0; k < 40; k++)
-                    {
-                        float x = Random.Range(0f, SurvivorSim.ArenaSize);
-                        EmitFalling("Effects/water_drop", new Vector3(x, SurvivorHarbor.SeaFrom, 0f) + Up(0.3f), new Vector3(Random.Range(-2f, 2f), Random.Range(0f, 3f), 0f), 0.7f, 0.45f, new Color(0.8f, 0.95f, 1f, 1f));
-                    }
-                    _trauma = Mathf.Min(1f, _trauma + 0.3f);
-                    PlaySplash();
-                }
-                _trauma = Mathf.Max(_trauma, 0.12f);
-            }
-            else
-            {
-                _waveHitQuay = false;
             }
         }
 
@@ -5857,9 +5179,7 @@ namespace FireGame.Prototypes
             // 방염제 띠는 땅바닥(구슬 아래), 비구름 그림자도 땅, 소방차·먹구름·비행기는 건물 위.
             _band = new Pool(_world, "Retardant", Art.White, 3, null);
             _pools.Add(_band);
-            _rainShade = AddPool("RainShade", "Effects/glow", 3);
             _siren = AddPool("Siren", "Effects/glow", 21, true);
-            _cloud = AddPool("Cloud", "Effects/smoke_03", 25);
             _toolbox = new Pool(_world, "Toolbox", ToolboxSprite(), 8, Cutout());
             _chest = new Pool(_world, "Chest", ChestSprite(), 8, Cutout());
             _pools.Add(_chest);
@@ -5882,13 +5202,11 @@ namespace FireGame.Prototypes
             // 픽셀 3D: 원래 서 있는 그림(불 몹·박쥐·지붕 불꽃·시민·상자)은 카메라를 보고 세운다.
             foreach (Pool standing in new[] { _embers, _blazes, _darts, _bats, _enemyCore, _roofFire, _chest, _toolbox, _kit }) standing.Upright = true;
             _bombShadows = AddPool("BombShadow", "Effects/glow", 11);
-            _heliShadow = new Pool(_world, "HeliShadow", HeliSprite(), 11, null);
             _sprayLines = new Pool(_world, "SprayLine", Art.White, 14, null);
             _pools.Add(_sprayLines);
             _wet = AddPool("Wet", "Effects/glow", 2);
             _airBombs = new Pool(_world, "AirBomb", AirBombSprite(), 23, null);
             _pools.Add(_airBombs);
-            _pools.Add(_heliShadow);
             _droneGlow = AddPool("DroneGlow", "Effects/glow", 11, true);
             _hoseTubeEdge = new Pool(_world, "HoseTubeEdge", Art.White, 9, null);
             _hoseTube = new Pool(_world, "HoseTube", Art.White, 10, null);
@@ -5933,13 +5251,8 @@ namespace FireGame.Prototypes
             _droneModels = ModelPoolOf(ItemModels.Drone);
             _turretModels = ModelPoolOf(ItemModels.Turret);
             _bombModels = ModelPoolOf(ItemModels.Bomb);
-            _heliModels = ModelPoolOf(ItemModels.Heli);
-            _planeModels = ModelPoolOf(ItemModels.Plane);
-            _truckModels = ModelPoolOf(p => Models3D.Place("Cars/firetruck", p, Vector3.zero, 1.5f, 3.2f, 0f, out _));
-            _ambulanceModels = ModelPoolOf(ItemModels.Ambulance);
             _boatModels = ModelPoolOf(ItemModels.Boat);
             _tankerModels = ModelPoolOf(ItemModels.Tanker);
-            _fireboatModels = ModelPoolOf(ItemModels.Fireboat);
         }
 
         private ModelPool ModelPoolOf(System.Func<Transform, GameObject> make)
@@ -6326,15 +5639,6 @@ namespace FireGame.Prototypes
 
         private const float XpBarHeight = 40f;
 
-        private bool HasSpecialLeft()
-        {
-            foreach (UpgradeId id in _sim.Stage.Specials)
-            {
-                if (_sim.Build.CanTake(id)) return true;
-            }
-            return false;
-        }
-
         private void RefreshHud(float dt)
         {
             bool windy = _sim.Wind.X != 0f || _sim.Wind.Y != 0f;
@@ -6381,9 +5685,7 @@ namespace FireGame.Prototypes
             float almost = xp >= 0.9f ? 0.35f * (0.5f + (0.5f * Mathf.Sin(_time * 12f))) : 0f;
             _xpFill.color = Color.Lerp(new Color(0.3f, 0.65f, 1f), new Color(0.75f, 0.95f, 1f), Mathf.Max(_xpPunch, almost));
             _xpText.text = "경험치 " + _sim.Xp + " / " + _sim.XpToNext;
-            bool yellowNext = SurvivorUpgrades.SpecialDue(_sim.Level + 1) && HasSpecialLeft();
-            _xpTease.text = yellowNext ? "다음 레벨: 특수 장비!" : "";
-            if (yellowNext) _xpTease.color = Color.Lerp(new Color(1f, 0.85f, 0.25f), Color.white, 0.3f * (0.5f + (0.5f * Mathf.Sin(_time * 6f))));
+            _xpTease.text = "";
 
             // 체력 비율은 가장자리 붉은 비네트가 쓴다(바는 머리 위).
             float hp = Mathf.Clamp01(_sim.Hp / _sim.MaxHp);
@@ -6392,9 +5694,9 @@ namespace FireGame.Prototypes
             foreach (UpgradeId id in _sim.Build.Owned())
             {
                 int lv = _sim.Build.Level(id);
-                if (Loadout.IsSpecial(id))
+                if (Loadout.IsEvolution(id))
                 {
-                    build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append(Loadout.IsEvolution(id) ? "  진화" : "  특수").Append("</color>\n");
+                    build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append("  진화").Append("</color>\n");
                     continue;
                 }
                 if (lv >= Loadout.MaxLevel) build.Append("<color=#FFD84A>").Append(SurvivorUpgrades.Name(id)).Append("  ★MAX</color>\n");
@@ -6756,14 +6058,14 @@ namespace FireGame.Prototypes
                 _rays.Add(ray.rectTransform);
             }
 
-            bool yellow = choices.Exists(Loadout.IsSpecial);
+            bool yellow = choices.Exists(Loadout.IsEvolution);
             if (yellow)
             {
                 Flash(new Color(1f, 0.85f, 0.3f), 0.12f);
                 GameAudio.Play(Cue.Rescued);
             }
             string head = _sim.ChoosingChest ? "보물상자!" : "레벨 업!";
-            Text title = UiKit.OutlinedLabel(_cardLayer, "Title", yellow ? head + "  특수 장비 등장!" : head, yellow ? 70 : 80, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
+            Text title = UiKit.OutlinedLabel(_cardLayer, "Title", yellow ? head + "  진화 등장!" : head, yellow ? 70 : 80, new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter);
             UiKit.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 360f), new Vector2(900f, 110f));
             _cards.Add(title.rectTransform);
 
@@ -6772,15 +6074,15 @@ namespace FireGame.Prototypes
                 int index = i;
                 UpgradeId id = choices[i];
                 int next = _sim.Build.Level(id) + 1;
-                bool toMax = !Loadout.IsSpecial(id) && id != UpgradeId.Heal && next == Loadout.MaxLevel;
-                if (Loadout.IsSpecial(id) || toMax)
+                bool toMax = !Loadout.IsEvolution(id) && id != UpgradeId.Heal && next == Loadout.MaxLevel;
+                if (Loadout.IsEvolution(id) || toMax)
                 {
                     Image glow = UiKit.Image(_cardLayer, "YellowGlow" + i, Art.Get("Effects/glow"), new Color(1f, 0.8f, 0.2f, 0.3f));
                     glow.raycastTarget = false;
                     UiKit.Place(glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2((i - ((choices.Count - 1) / 2f)) * 470f, -20f), new Vector2(520f, 600f));
                     _yellowGlows.Add(glow);
                 }
-                string sprite = Loadout.IsSpecial(id) ? "UI/button_yellow" : id == UpgradeId.Heal ? "UI/button_green" : Loadout.IsWeapon(id) ? "UI/button_red" : "UI/button_blue";
+                string sprite = Loadout.IsEvolution(id) ? "UI/button_yellow" : id == UpgradeId.Heal ? "UI/button_green" : Loadout.IsWeapon(id) ? "UI/button_red" : "UI/button_blue";
                 Button card = UiKit.Button(_cardLayer, "Card" + i, Art.Get(sprite), "", 0, () =>
                 {
                     if (_cardAge > 0.35f) Choose(index);
@@ -6789,10 +6091,10 @@ namespace FireGame.Prototypes
                 float x = (i - ((choices.Count - 1) / 2f)) * 470f;
                 UiKit.Place(rect, new Vector2(0.5f, 0.5f), new Vector2(x, -20f), new Vector2(430f, 520f));
 
-                string kind = Loadout.IsEvolution(id) ? "진화" : Loadout.IsSpecial(id) ? "특수" : id == UpgradeId.Heal ? "회복" : Loadout.IsWeapon(id) ? "무기" : "보조";
+                string kind = Loadout.IsEvolution(id) ? "진화" : id == UpgradeId.Heal ? "회복" : Loadout.IsWeapon(id) ? "무기" : "보조";
                 // 진화 카드는 어떤 조합으로 나왔는지 보여 준다("물폭탄 MAX + 무전기").
                 string tag = Loadout.IsEvolution(id) ? SurvivorUpgrades.Name(Loadout.BaseOf(id)) + " MAX + " + SurvivorUpgrades.Name(Loadout.PairOf(id))
-                    : id == UpgradeId.Heal ? "" : Loadout.IsSpecial(id) ? "★ 특수 장비 ★" : next <= 1 ? "새로 얻음!" : toMax ? "Lv 5 · MAX!" : "Lv " + next;
+                    : id == UpgradeId.Heal ? "" : next <= 1 ? "새로 얻음!" : toMax ? "Lv 5 · MAX!" : "Lv " + next;
 
                 Text key = UiKit.OutlinedLabel(rect, "Key", (i + 1).ToString(), 44, Color.white, TextAnchor.UpperLeft);
                 UiKit.Place(key.rectTransform, new Vector2(0f, 1f), new Vector2(26f, -18f), new Vector2(80f, 60f));

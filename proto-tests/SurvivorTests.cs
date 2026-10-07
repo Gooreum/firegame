@@ -153,32 +153,13 @@ namespace FireGame.Prototypes.Tests
             }
         }
 
-        [Fact]
-        public void Roll_OffersSpecialBesideEvolution()
-        {
-            var l = new Loadout();
-            for (int i = 0; i < Loadout.MaxLevel; i++) l.Add(UpgradeId.Hose);
-            for (int i = 0; i < Loadout.EvolvePair; i++) l.Add(UpgradeId.Tank);
-            var rng = new Rng(7);
-            var pool = new List<UpgradeId> { UpgradeId.Heli, UpgradeId.Ambulance };
-            // 상자 첫 장(forceSpecial)과 5의 배수 레벨: 진화와 노란 카드가 함께 나온다.
-            List<UpgradeId> chest = SurvivorUpgrades.Roll(l, 2, ref rng, pool, true);
-            Assert.Contains(UpgradeId.Cannon, chest);
-            Assert.Contains(chest, Loadout.IsSpecial);
-            Assert.Equal(3, chest.Count);
-            List<UpgradeId> due = SurvivorUpgrades.Roll(l, 5, ref rng, pool);
-            Assert.Contains(UpgradeId.Cannon, due);
-            Assert.Contains(due, id => Loadout.IsSpecial(id) && !Loadout.IsEvolution(id));
-        }
-
         // --- TC-6 ---
         [Fact]
         public void NothingLeft_SkipsTheCardScreen()
         {
             SurvivorSim sim = Quiet();
-            // 여섯 무기를 모두 진화시키고(보조도 최대) 노란 특수도 전부 쥔다.
+            // 여섯 무기를 모두 진화시킨다(보조도 최대): 더 뽑을 게 없다.
             sim.Build.EvolveAll();
-            foreach (UpgradeId id in new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Truck, UpgradeId.Sprinkler, UpgradeId.Rain, UpgradeId.Retardant }) sim.Build.Add(id);
 
             var rng = new Rng(5);
             Assert.Empty(SurvivorUpgrades.Roll(sim.Build, 2, ref rng));
@@ -199,13 +180,32 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void Roll_HasNoYellowCards_EvenOnFifthLevels()
+        {
+            // 노란 특수 장비는 없앴다(2026-10-07): 5·10·15레벨에도 일반 카드(또는 진화)만 나온다.
+            var l = new Loadout();
+            l.Add(UpgradeId.Hose);
+            var rng = new Rng(11);
+            foreach (int level in new[] { 5, 10, 15 })
+            {
+                for (int i = 0; i < 30; i++)
+                {
+                    foreach (UpgradeId id in SurvivorUpgrades.Roll(l, level, ref rng))
+                    {
+                        Assert.True(Loadout.IsWeapon(id) || Loadout.IsPassive(id), level + "레벨에 " + id);
+                        Assert.False(Loadout.IsEvolution(id), "진화 조건이 안 됐는데 " + id);
+                    }
+                }
+            }
+        }
+
+        [Fact]
         public void Roll_NeverPadsWithHeal()
         {
-            // 무기 4칸·보조 3칸이 다 찼고 노란 특수도 전부 쥐어 진화만 남았다: 진화 한 장만 나온다. 전엔 회복 카드가 끼어 두 장이었다.
+            // 무기·보조 칸이 다 찼고 모두 최대라 진화만 남았다: 진화 한 장만 나온다. 전엔 회복 카드가 끼어 두 장이었다.
             var l = new Loadout();
             foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.WaterBomb, UpgradeId.Drone, UpgradeId.Partner, UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit })
                 for (int k = 0; k < Loadout.MaxLevel; k++) l.Add(id);
-            foreach (UpgradeId id in new[] { UpgradeId.Heli, UpgradeId.Ambulance, UpgradeId.Truck, UpgradeId.Sprinkler, UpgradeId.Rain, UpgradeId.Retardant, UpgradeId.Foam }) l.Add(id);
             var rng = new Rng(3);
             for (int i = 0; i < 50; i++)
             {
@@ -934,46 +934,6 @@ namespace FireGame.Prototypes.Tests
         private static List<Shot> FreshDrops(SurvivorSim sim)
         {
             return sim.Shots.FindAll(s => s.Kind == ShotKind.Drop && s.Age <= SurvivorSim.Dt);
-        }
-
-        [Fact]
-        public void ReachingLevel5_AlwaysOffersAYellowCard()
-        {
-            for (int seed = 1; seed <= 10; seed++)
-            {
-                SurvivorSim sim = Quiet(seed);
-                while (sim.Level < 5)
-                {
-                    sim.DropGem(sim.Player, sim.XpToNext);
-                    for (int i = 0; i < 3 && sim.PendingChoices == null; i++) sim.Step(0f, 0f);
-                    Assert.NotNull(sim.PendingChoices);
-                    if (sim.Level == 5) Assert.Contains(sim.PendingChoices, Loadout.IsSpecial);
-                    // 노란은 한 판에 하나다: 5 전에 섞여 나온 노란을 집으면 5에서 안 나오는 게 맞다. 여기선 일반 카드만 고른다.
-                    int pick = sim.PendingChoices.FindIndex(id => !Loadout.IsSpecial(id));
-                    sim.Choose(pick < 0 ? 0 : pick);
-                }
-            }
-        }
-
-        [Fact]
-        public void Heli_DousesAFullyBurningShop()
-        {
-            SurvivorSim sim = Quiet();
-            Structure shop = Shop(sim, 8f, 0f, 0);
-            sim.Ignite(shop, 1f);
-            Take(sim, UpgradeId.Heli);
-            bool doused = false;
-            bool dropped = false;
-            for (int i = 0; i < 60 * 10 && !doused; i++)
-            {
-                sim.Hp = sim.MaxHp;
-                sim.Step(0f, 0f);
-                if (sim.HeliDrops.Count > 0) dropped = true;
-                if (sim.Doused.Contains(shop)) doused = true;
-            }
-            Assert.True(dropped, "10초 동안 헬기가 물을 안 쏟았다");
-            Assert.True(doused, "헬기 물이 다 탄 가게를 못 껐다");
-            Assert.True(shop.Wet > 0f);
         }
 
         [Fact]

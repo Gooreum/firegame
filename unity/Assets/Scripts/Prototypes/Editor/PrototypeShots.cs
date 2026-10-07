@@ -61,8 +61,6 @@ namespace FireGame.Prototypes.EditorTools
             // 동네: 불난 가게에 사람이 갇혀 있고 소방관이 가까이 있는 장면, 그리고 판이 끝난 결과창.
             failures += SurvivorShot(dir, "c8_house_fire", view => view.Sim.Structures.Exists(s => s.IsBuilding && s.Burning && s.Residents > 0 && s.DistanceTo(view.Sim.Player) < 6f), 30);
             failures += SurvivorShot(dir, "c9_result", view => view.Sim.Outcome != SOutcome.Playing, 90);
-            // 특수 장비 셋(풀장비): 헬기가 목표 위에서 물을 쏟기 직전, 동료, 물의 장막.
-            failures += SurvivorShot(dir, "c10_specials", view => view.Sim.Time >= 20f && view.Sim.PendingChoices == null && view.Sim.Shots.Exists(s => s.Kind == ShotKind.Heli && s.Age > s.Life * 0.7f), 3, true);
             // 호스를 쥔 손과 물줄기를 확대: 노즐이 옆구리에 있고 물이 끝까지 한 줄로 이어지는지 본다.
             failures += SurvivorShot(dir, "c11_hose_closeup", view => view.Sim.Time >= 12f && view.Sim.Spraying && view.Sim.PendingChoices == null && view.Sim.Shots.FindAll(s => s.Hose).Count >= 6, 2, false, view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), 4.5f));
 
@@ -85,20 +83,6 @@ namespace FireGame.Prototypes.EditorTools
                 if (view.Sim.Toolboxes.Count > 0 && view.Sim.PendingChoices == null) view.Sim.Player = view.Sim.Toolboxes[0].Pos;
                 return view.Sim.Repaired.Count > 0 || view.Sim.JustPickedToolbox;
             }, 12);
-            // 마을 전용 노란 카드(풀장비): 소방차가 줄을 가로지르고 스프링클러가 터진다.
-            failures += SurvivorShot(dir, "c16_town_specials", view => view.Sim.Truck.HasValue && System.Math.Abs(view.Sim.Truck.Value.X - view.Sim.Player.X) < 5f, 3, true);
-            // 노란 장비 임팩트(README 「노란 카드」 절의 세 박자): 헬기가 물을 쏟는 순간(충격파 두 겹·물보라 고리·젖은 자국), 스프링클러 물 돔.
-            failures += SurvivorShot(dir, "c56_heli_impact", view => view.Sim.Time >= 20f && view.Sim.HeliDrops.Count > 0, 2, true,
-                view => view.Frame(view.Sim.HeliDrops.Count > 0 ? new Vector3(view.Sim.HeliDrops[0].X, view.Sim.HeliDrops[0].Y, 0f) : new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), 9f));
-            // 스테이지 제목 띠(첫 3초)가 걷힌 뒤의 두 번째 작동을 찍는다.
-            failures += SurvivorShot(dir, "c57_sprinkler", view => view.Sim.Time >= 5f && view.Sim.Sprinkled.Count > 0, 4, false,
-                view => view.Frame(new Vector3(view.Sim.Player.X, view.Sim.Player.Y + 3f, 0f), 9f), 1, view =>
-            {
-                Structure near = NearestHouse(view);
-                view.Sim.Ignite(near, 0.8f);
-                Pick(view, UpgradeId.Sprinkler);
-                view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 4f);
-            });
             // 2스테이지 산불 숲: 흙길·소나무, 불다람쥐, 막 날아온 재 박쥐 떼, 바람 화살표.
             failures += SurvivorShot(dir, "c17_forest", view => view.Sim.Time >= 40.5f && view.Sim.Enemies.Exists(e => (e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Squirrel) && e.Pos.DistanceTo(view.Sim.Player) < 6f), 10, false, null, 2);
             // 대형 신고(1:20): 갇힌 사람 얼굴 줄, "대형 화재!" 띠, 화면 밖이면 붉은 화살표.
@@ -300,17 +284,6 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.Ignite(near, 1f);
                 view.Sim.Player = near.Door;
             }, false);
-            // 구급차: 연기 짙은 건물 문 앞에 도착한 순간(1.2초 뒤).
-            failures += SurvivorShot(dir, "c44_ambulance", view => view.Sim.AmbulanceAt != null, 76, false,
-                view => view.Frame(view.AmbulanceSpot ?? new Vector3(view.Sim.Player.X, view.Sim.Player.Y, 0f), 8f), 1, view =>
-            {
-                Structure near = NearestHouse(view);
-                near.Residents = 2;
-                near.Smoke = 10f;
-                view.Sim.Ignite(near, 1f);
-                Pick(view, UpgradeId.Ambulance);
-                view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 4f);
-            });
             // 보조 재설계: 드론 투하, 도끼 문 부수기, 산소통 투척, 장화 발자국.
             failures += SurvivorShot(dir, "c40_drone_drop", view => view.Sim.DroneDrops.Count > 0, 6, false,
                 view => view.Frame(new Vector3(view.Sim.DroneCenter.X, view.Sim.DroneCenter.Y, 0f), 7f), 1, view =>
@@ -394,10 +367,8 @@ namespace FireGame.Prototypes.EditorTools
                 view.Sim.Ignite(near, 1f);
                 view.Sim.Player = new Vec2(near.Door.X, near.Door.Y - 5f);
             });
-            // 한 번에 쏟는 물(풀장비 물폭탄·헬기)이 큰 불을 줄인 순간: 블룸 번쩍임 + 지붕 위 "−N%".
+            // 한 번에 쏟는 물(풀장비 물폭탄)이 큰 불을 줄인 순간: 블룸 번쩍임 + 지붕 위 "−N%".
             failures += SurvivorShot(dir, "c27_fire_knock", view => view.Sim.Knocked.Count > 0 && view.Sim.PendingChoices == null, 6, true);
-            // 산불 숲 전용 노란 카드(풀장비): 먹구름 비와 방염제 띠·비행기.
-            failures += SurvivorShot(dir, "c19_forest_specials", view => view.Sim.RainAt.HasValue && view.Sim.Retardants.Count > 0, 45, true, null, 2);
             // 3스테이지 공단: 북서 공장 둘과 그 앞 드럼 줄, 골목의 컨테이너, 콘크리트 바닥과 노란 차선.
             failures += SurvivorShot(dir, "c28_factory", view => view.Sim.Time >= 45f && view.Sim.Enemies.Exists(e => e.Kind == EnemyKind.Oil), 10, false,
                 view => view.Frame(new Vector3(14f, 32f, 0f), 13f), 3);
@@ -415,9 +386,6 @@ namespace FireGame.Prototypes.EditorTools
                     }
                     for (int k = 0; k < 4; k++) view.Sim.BurningGround.Add(new Puddle { Pos = new Vec2(p.X + 2f + (k * 0.9f), p.Y + 4f + ((k % 2) * 0.5f)), Radius = SurvivorSim.OilRadius, Life = 30f, MaxLife = 30f, Oil = true });
                 });
-            // 공단 전용 노란 카드(풀장비): 폼 살포가 바닥 불을 덮은 흰 거품 깔개.
-            failures += SurvivorShot(dir, "c29_foam", view => view.Sim.Time >= 20f && view.Sim.FoamAt.HasValue && view.Sim.FoamLeft < SurvivorSim.FoamTime - 0.5f && view.Sim.PendingChoices == null, 12, true,
-                view => view.Frame(new Vector3(view.Sim.FoamAt.Value.X, view.Sim.FoamAt.Value.Y, 0f), 9f), 3);
 
             // 4스테이지 항구: 바다·부두 전경(불배가 떠가며 노린 건물까지 빨간 점선), 그리고 불배가 부두에 닿는 순간.
             failures += SurvivorShot(dir, "c58a_harbor_map", view => view.Sim.Time >= 30f, 4, false,
@@ -430,11 +398,6 @@ namespace FireGame.Prototypes.EditorTools
                     view.Frame(new Vector3(x, (boat != null ? boat.Pos.Y : 40f) - 2f, 0f), 10f);
                 }, 4, null, true, true);
 
-            // 항구 전용 노란 카드(풀장비): 바다 줄을 달리며 부두 쪽으로 물을 뿜는 소방정, 바다를 쓸어 내려오는 큰 파도.
-            failures += SurvivorShot(dir, "c58c_fireboat", view => view.Sim.Fireboat.HasValue && Mathf.Abs(view.Sim.Fireboat.Value.X - (SurvivorSim.ArenaSize / 2f)) < 10f, 2, true,
-                view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, 44f, 0f), 14f), 4, null, true, true);
-            failures += SurvivorShot(dir, "c58b_harbor_wave", view => view.Sim.WaveY.HasValue && view.Sim.WaveY.Value < 50f, 2, true,
-                view => view.Frame(new Vector3(SurvivorSim.ArenaSize / 2f, 44f, 0f), 16f), 4, null, true, true);
 
             // 5스테이지 야시장(밤): 등줄을 타고 가는 불(또는 막 건너간 순간)과, 불꽃 가판대가 쏜 로켓이 떨어지는 순간.
             failures += SurvivorShot(dir, "c59_market_lantern", view => view.Sim.LanternCaught.Count > 0 || view.Sim.Lanterns.Exists(l => l.Burn > 0.3f), 2, false,
@@ -452,11 +415,6 @@ namespace FireGame.Prototypes.EditorTools
                     view.Sim.Player = new Vec2(24f, 30f);
                 }, true, true);
 
-            // 야시장 전용 노란 카드(풀장비): 무대에서 올라간 물 불꽃이 터지는 순간, 불 위에 깔린 물안개.
-            failures += SurvivorShot(dir, "c59c_shells", view => view.Sim.ShellBursts.Count > 0, 3, true,
-                view => view.Frame(new Vector3(view.Sim.ShellBursts.Count > 0 ? view.Sim.ShellBursts[0].X : view.Sim.Player.X, (view.Sim.ShellBursts.Count > 0 ? view.Sim.ShellBursts[0].Y : view.Sim.Player.Y) + 1f, 0f), 9f), 5, null, true, true);
-            failures += SurvivorShot(dir, "c59d_mist", view => view.Sim.MistAt.HasValue && view.Sim.MistLeft < SurvivorSim.MistTime - 1f, 4, true,
-                view => view.Frame(new Vector3(view.Sim.MistAt.Value.X, view.Sim.MistAt.Value.Y + 1f, 0f), 10f), 5, null, true, true);
 
             Debug.Log("[ProtoShots] 완료, 실패 " + failures);
             EditorApplication.Exit(failures == 0 ? 0 : 1);
