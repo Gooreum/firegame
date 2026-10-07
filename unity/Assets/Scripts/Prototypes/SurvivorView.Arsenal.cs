@@ -192,11 +192,8 @@ namespace FireGame.Prototypes
             {
                 Vector3 at = W(_sprinklerHeads[i]);
                 _shadows.Put(at + new Vector3(0f, -0.2f, 0f), 0.9f, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
-                int tier = TierLv(UpgradeId.Sprinkler);
-                float ts = TierSize(tier);
-                TierHalo(at + Up(0.35f), 0.9f * ts, tier);
-                _gear.Put(at + Up(0.35f), 2.2f * ts, 0f, TierTint(Color.white, tier), SkillSprite("sprinkler_base"));
-                _gear.Put(at + Up(0.36f), 1.7f * ts, spin + (i * 40f), TierTint(Color.white, tier), SkillSprite("sprinkler_arms"));
+                _gear.Put(at + Up(0.35f), 2.2f, 0f, Color.white, SkillSprite("sprinkler_base"));
+                _gear.Put(at + Up(0.36f), 1.7f, spin + (i * 40f), Color.white, SkillSprite("sprinkler_arms"));
                 if (Random.value < 0.55f)
                 {
                     float a = (spin * Mathf.Deg2Rad) + (i * 2f) + (Random.Range(0, 3) * 2.094f);
@@ -252,7 +249,6 @@ namespace FireGame.Prototypes
                         prev = p;
                     }
                     _gear.Put(tip, 0.45f, 0f, new Color(0.85f, 0.85f, 0.9f, 1f), SkillSprite("soft_shadow"));
-                    TierHalo(tip, 0.45f, TierLv(UpgradeId.Whip));
                     if (Random.value < 0.5f) Emit("Effects/water_drop", tip, new Vector3(-Mathf.Sin(arm), Mathf.Cos(arm), 0f) * 4f, 4f, 0.3f, 0.22f, 0.05f, HoseTint, new Color(HoseTint.r, HoseTint.g, HoseTint.b, 0f), 0f);
                     if (whirl) _gearRing.Put(tip, 1f, _time * 400f, new Color(0.6f, 0.9f, 1f, 0.6f));
                 }
@@ -299,13 +295,9 @@ namespace FireGame.Prototypes
                     {
                         Vector3 next = Vector3.Lerp(p0, p1, j / (float)Segs);
                         if (j < Segs) next += side * Random.Range(-0.35f, 0.35f);
-                        // 등급(숲): 굵어지고, Lv5 금빛 겉줄기, Lv6 무지개 겉줄기.
-                        int tier = TierLv(UpgradeId.Chain);
-                        float ts = TierSize(tier);
-                        Color outer = Free && tier >= 6 ? Rainbow(j / 6f) : Free && tier >= 5 ? new Color(1f, 0.8f, 0.35f) : new Color(0.25f, 0.55f, 1f);
-                        BoltPiece(prev, next, 0.75f * ts, new Color(outer.r, outer.g, outer.b, 0.45f * a));
-                        BoltPiece(prev, next, 0.38f * ts, new Color(0.55f, 0.82f, 1f, 0.8f * a));
-                        BoltPiece(prev, next, 0.14f * ts, new Color(1f, 1f, 1f, a));
+                        BoltPiece(prev, next, 0.75f, new Color(0.25f, 0.55f, 1f, 0.45f * a));
+                        BoltPiece(prev, next, 0.38f, new Color(0.55f, 0.82f, 1f, 0.8f * a));
+                        BoltPiece(prev, next, 0.14f, new Color(1f, 1f, 1f, a));
                         prev = next;
                     }
                 }
@@ -347,9 +339,6 @@ namespace FireGame.Prototypes
                 float size = (b.Small ? 0.85f : 1.35f) * (1f + (0.45f * squash));
                 float bob = 0.6f + (0.15f * Mathf.Sin((_time * 9f) + b.Pos.X));
                 _shadows.Put(at, size * 0.6f, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
-                int tier = TierLv(UpgradeId.Balloon);
-                size *= TierSize(tier);
-                TierHalo(at + Up(bob), size * 0.5f, tier);
                 _gear.Put(at + Up(bob), size, Mathf.Atan2(b.Vel.Y, b.Vel.X) * Mathf.Rad2Deg * 0.15f, Color.white, SkillSprite("balloon"), 1f / (1f + (0.9f * squash)));
                 if (Random.value < 0.3f) Emit("Effects/water_drop", at + Up(bob), new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(-0.5f, 0.5f), 0f), 3f, 0.25f, 0.16f, 0.05f, BalloonTint, new Color(BalloonTint.r, BalloonTint.g, BalloonTint.b, 0f), 0f);
             }
@@ -362,9 +351,7 @@ namespace FireGame.Prototypes
             {
                 Vector3 at = W(b.Pos) + Up(0.7f);
                 _shadows.Put(W(b.Pos), 0.7f, 0f, new Color(0f, 0f, 0f, 0.3f), null, 0.5f);
-                int tier = TierLv(UpgradeId.Extinguisher);
-                TierHalo(at, 0.7f * TierSize(tier), tier);
-                _gear.Put(at, 1.6f * TierSize(tier), b.Spin * Mathf.Rad2Deg, TierTint(Color.white, tier), SkillSprite("extinguisher"));
+                _gear.Put(at, 1.6f, b.Spin * Mathf.Rad2Deg, Color.white, SkillSprite("extinguisher"));
                 // 하얀 분말 꼬리.
                 Emit(Smokes[Random.Range(0, Smokes.Length)], at, new Vector3(Random.Range(-0.6f, 0.6f), Random.Range(-0.6f, 0.6f), 0f), 2f, 0.6f, 0.4f, 1.2f, new Color(1f, 1f, 1f, 0.7f), new Color(1f, 1f, 1f, 0f), Random.Range(-60f, 60f));
             }
@@ -402,9 +389,7 @@ namespace FireGame.Prototypes
                 Mine m = _sim.Mines[i];
                 Vector3 at = W(m.Pos);
                 bool on = m.Arm <= 0f && Mathf.Sin(_time * 10f) > 0f;
-                int tier = TierLv(UpgradeId.Mine);
-                TierHalo(at, 0.55f * TierSize(tier), tier);
-                _gearGround.Put(at, 1.15f * TierSize(tier), 0f, TierTint(Color.white, tier), SkillSprite(on ? "mine_on" : "mine_off"));
+                _gearGround.Put(at, 1.15f, 0f, Color.white, SkillSprite(on ? "mine_on" : "mine_off"));
                 if (m.Arm <= 0f) _gearGlow.Put(at, 1.1f, 0f, new Color(IceTint.r, IceTint.g, IceTint.b, 0.3f * blink), SkillSprite("soft_glow"));
                 if (!field) continue;
                 for (int j = i + 1; j < _sim.Mines.Count; j++)
@@ -435,7 +420,6 @@ namespace FireGame.Prototypes
                 // 굴러가는 거품 구름: 반경만큼 거품 방울이 뭉쳐 돈다.
                 Vector3 at = W(f.Pos);
                 _shadows.Put(at, f.R * 2f, 0f, new Color(0f, 0f, 0f, 0.25f), null, 0.5f);
-                TierHalo(at + Up(f.R * 0.6f), f.R, TierLv(UpgradeId.Foam));
                 int n = 5 + Mathf.RoundToInt(f.R * 4f);
                 for (int k = 0; k < n; k++)
                 {
@@ -465,9 +449,7 @@ namespace FireGame.Prototypes
             foreach (BubbleShot b in _sim.BubbleShots)
             {
                 Vector3 at = W(b.Pos) + Up(0.8f);
-                int tier = TierLv(UpgradeId.Bubble);
-                TierHalo(at, 0.35f * TierSize(tier), tier);
-                _gear.Put(at, 0.7f * TierSize(tier), _time * 90f, TierTint(Color.white, tier), SkillSprite("bubble"));
+                _gear.Put(at, 0.7f, _time * 90f, Color.white, SkillSprite("bubble"));
             }
         }
 
@@ -512,7 +494,6 @@ namespace FireGame.Prototypes
                 // 솟기 전: 뚜껑이 들썩이고, 둘레에 물빛 고리가 조여 든다.
                 float t = 1f - Mathf.Clamp01(g.Fuse / SurvivorSim.GeyserFuse);
                 Vector3 at = W(g.Pos);
-                TierHalo(at + Up(0.03f), g.Radius, TierLv(UpgradeId.Manhole));
                 _gearGlow.Put(at + Up(0.03f), g.Radius * 2f * (1.35f - (0.55f * t)) * 21f / 20f, _time * 60f, new Color(GeyserTint.r, GeyserTint.g, GeyserTint.b, 0.2f + (0.5f * t)), SkillSprite("ring_dashed"));
                 if (Random.value < 0.4f) Emit("Effects/water_drop", at + Up(0.2f), new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(-0.5f, 0.5f), 0f), 2f, 0.3f, 0.2f, 0.05f, GeyserTint, new Color(GeyserTint.r, GeyserTint.g, GeyserTint.b, 0f), 0f);
             }
@@ -528,20 +509,20 @@ namespace FireGame.Prototypes
             Loadout b = _sim.Build;
             switch (h.Source)
             {
-                case HitSource.Sprinkler: Impact(at, SprayTint, 0.7f, TierLv(UpgradeId.Sprinkler)); return true;
-                case HitSource.Balloon: Impact(at, BalloonTint, 0.8f, TierLv(UpgradeId.Balloon)); return true;
-                case HitSource.Extinguisher: Impact(at, PowderTint, 0.8f, TierLv(UpgradeId.Extinguisher)); return true;
-                case HitSource.Mine: Impact(at, IceTint, 0.9f, TierLv(UpgradeId.Mine)); return true;
-                case HitSource.Foam: Impact(at, FoamTint, 0.8f, TierLv(UpgradeId.Foam)); return true;
-                case HitSource.Bubble: Impact(at, BubbleTint, 0.8f, TierLv(UpgradeId.Bubble)); return true;
-                case HitSource.Geyser: Impact(at, GeyserTint, 1f, TierLv(UpgradeId.Manhole)); return true;
-                case HitSource.Chain: Impact(at, ChainTint, 0.7f, TierLv(UpgradeId.Chain)); return true;
+                case HitSource.Sprinkler: Impact(at, SprayTint, 0.7f, b.PowerOf(UpgradeId.Sprinkler)); return true;
+                case HitSource.Balloon: Impact(at, BalloonTint, 0.8f, b.PowerOf(UpgradeId.Balloon)); return true;
+                case HitSource.Extinguisher: Impact(at, PowderTint, 0.8f, b.PowerOf(UpgradeId.Extinguisher)); return true;
+                case HitSource.Mine: Impact(at, IceTint, 0.9f, b.PowerOf(UpgradeId.Mine)); return true;
+                case HitSource.Foam: Impact(at, FoamTint, 0.8f, b.PowerOf(UpgradeId.Foam)); return true;
+                case HitSource.Bubble: Impact(at, BubbleTint, 0.8f, b.PowerOf(UpgradeId.Bubble)); return true;
+                case HitSource.Geyser: Impact(at, GeyserTint, 1f, b.PowerOf(UpgradeId.Manhole)); return true;
+                case HitSource.Chain: Impact(at, ChainTint, 0.7f, b.PowerOf(UpgradeId.Chain)); return true;
                 case HitSource.Whip:
                 {
                     Vector3 away = Away(h.Pos);
                     float deg = (Mathf.Atan2(away.y, away.x) * Mathf.Rad2Deg) - 90f;
                     EmitSprite(BeamSprite(), at - (away * 0.3f), away * 3f, 4f, 0.2f, 0.4f, 0.16f, HoseTint, new Color(HoseTint.r, HoseTint.g, HoseTint.b, 0f), 0f, true, 0f, 3f, deg);
-                    Impact(at, HoseTint, 0.7f, TierLv(UpgradeId.Whip));
+                    Impact(at, HoseTint, 0.7f, b.PowerOf(UpgradeId.Whip));
                     return true;
                 }
             }

@@ -535,7 +535,7 @@ namespace FireGame.Prototypes
 
             BuildPools();
             BuildHud();
-            BuildLevelUpFx();
+            BuildSampleLayers();
             // 조이스틱은 HUD 맨 위에(카드·결과창은 따로 켜고 끈다).
             foreach (Image stick in new[] { _leftRing, _leftKnob, _rightRing, _rightKnob }) stick.transform.SetAsLastSibling();
             _stationLayer = UiKit.Node(canvas.transform, "Station");
@@ -565,8 +565,13 @@ namespace FireGame.Prototypes
                 _groundStage = _sim.Stage.Number;
             }
             _accumulator = 0f;
-            _lvAge = -1f;
-            HideLevelUpUi();
+            // 숲: 샘플 화면 비율에서 소방관이 화면 높이 12%(샘플과 같은 몸 크기)로 보이게 키운다.
+            if (_player != null) _player.transform.localScale = _personScale * (Free ? SamplePersonScale : 1f);
+            float hudDrop = Free ? -184f : 0f;
+            _level.rectTransform.anchoredPosition = new Vector2(30f, -48f + hudDrop);
+            _comboText.rectTransform.anchoredPosition = new Vector2(30f, -110f + hudDrop);
+            _windLabel.rectTransform.anchoredPosition = new Vector2(30f, -128f + hudDrop);
+            _windArrow.rectTransform.anchoredPosition = new Vector2(160f, -153f + hudDrop);
             _trauma = 0f;
             _flash = 0f;
             _hurt = 0f;
@@ -875,6 +880,11 @@ namespace FireGame.Prototypes
                     else if (input.Key3) Choose(2);
                 }
             }
+            else if (Free && _sim.SStop > 0f)
+            {
+                // 숲 샘플 멈춤(s.stop): 시뮬은 멈추고 화면은 흐른다.
+                _sim.SStop -= dt;
+            }
             else if (_hitStop > 0f)
             {
                 // 히트스톱: 아주 잠깐 멈춰 "쾅"을 느끼게 한다(화면 효과는 계속 움직인다).
@@ -882,7 +892,9 @@ namespace FireGame.Prototypes
             }
             else
             {
-                _accumulator += dt * (_slowmo > 0f ? 0.3f : 1f);
+                // 숲 샘플 슬로모션(s.slow): 1/4 속도.
+                bool sampleSlow = Free && _sim.SSlow > 0f;
+                _accumulator += dt * (sampleSlow ? 0.25f : _slowmo > 0f ? 0.3f : 1f);
                 var move = new Vec2(input.Move.x, input.Move.y);
                 if (_touch)
                 {
@@ -967,10 +979,9 @@ namespace FireGame.Prototypes
                 _cardsIn = 0.25f;
                 _cardAge = -1f;
             }
-            if (_sim.Build.Free && _sim.JustLeveledItem.HasValue)
+            if (_sim.Build.Free)
             {
-                // 숲: 승인 샘플 그대로의 레벨업 연출(SurvivorView.LevelUp.cs).
-                PlayLevelUp(_sim.JustLeveledItem.Value, _sim.JustLeveledTo);
+                // 숲: 레벨업 연출은 샘플 그대로(규칙 SampleLevelUp → 화면 SurvivorView.Sample).
             }
             else if (_sim.JustEvolved)
             {
@@ -1042,6 +1053,8 @@ namespace FireGame.Prototypes
             foreach (Hit h in _sim.Hits)
             {
                 Vector3 at = W(h.Pos);
+                // 숲: 샘플 무기의 맞힌 자리·처치는 규칙이 샘플 hitFx·poof로 낸다(SurvivorView.Sample이 그린다).
+                if (Free && (h.Source == HitSource.Sample || h.Killed)) continue;
                 WeaponHit(h, at);
                 // 맨홀 물기둥에 쓰러진 요괴는 하늘로 날아갔다 떨어지며 터진다(샘플).
                 if (h.Killed && h.Source == HitSource.Geyser && IsYokai(h.Kind)) Fling(at, h.Kind, h.From);
@@ -1662,7 +1675,7 @@ namespace FireGame.Prototypes
             DrawCivilians();
             DrawEnemies();
             DrawShots();
-            DrawArsenal(dt);
+            if (!Free) DrawArsenal(dt);
             DrawMobsAfter(dt);
             DrawPlayer();
             DrawGear(dt);
@@ -1670,7 +1683,7 @@ namespace FireGame.Prototypes
             DrawEdgeArrows();
             DrawGuides(dt);
             DrawWeather();
-            TickLevelUp(dt);
+            DrawSample(dt);
             foreach (Pool p in _pools) p.End();
             EndTags();
             _people.End();
@@ -1682,6 +1695,7 @@ namespace FireGame.Prototypes
             AdvanceNumbers(dt);
             RefreshHud(dt);
             FollowCamera(dt);
+            FlushSample();
 
             float loud = _sim.Outcome == SOutcome.Playing ? 1f - Mathf.Exp(-_sim.Enemies.Count / 60f) : 0f;
             GameAudio.SetFireLevel(loud, Mathf.Max(dt, 0.001f));
@@ -1769,6 +1783,9 @@ namespace FireGame.Prototypes
                 Vector3 at = W(e.Pos);
                 // 비눗방울에 갇힌 몹은 방울째 떠오른다.
                 if (e.Captured > 0f) at += Up(CaptureLift(e));
+                // 숲 샘플: 하늘로 날아간 요괴(맨홀·회오리), 거품에 삼켜진 요괴는 샘플 그림이 맡는다.
+                if (e.SHide) continue;
+                if (e.AirZ > 0f) at += Up(e.AirZ * SurvivorSim.Px / TiltCos);
                 float flicker = 1f + (0.09f * Mathf.Sin((_time * 14f) + (i * 1.7f)));
                 bool hit = e.HitFlash > 0f;
                 float foot = e.Kind == EnemyKind.Blaze ? 1.8f : e.Kind == EnemyKind.Oil ? 1.7f : 1f;
@@ -2142,7 +2159,6 @@ namespace FireGame.Prototypes
                 _aimAge = 99f;
             }
             DrawHoseStream();
-            if (Free) DrawFreeStreams();
 
             foreach (Shot s in _sim.Shots)
             {
@@ -2257,24 +2273,10 @@ namespace FireGame.Prototypes
             if (_ribbon.Count < 2) return;
 
             float lift = last.Hose ? HandHeight : 0f;
-            if (Free && last.Hose)
-            {
-                // 숲 등급 물줄기(샘플 tierStream): 바깥 빛 · 흰 심 · Lv5 금테 · Lv6 무지개.
-                int tier = Mathf.Max(TierLv(UpgradeId.Hose), TierLv(UpgradeId.Tank));
-                Color core = TierCore[Mathf.Clamp(tier, 1, 6)];
-                Color sheath = tier >= 6 ? Rainbow() : tier >= 5 ? new Color(1f, 0.8f, 0.35f) : core;
-                _waterSheath.Put(_ribbon, 1.35f + (0.15f * tier), 0f, new Color(sheath.r, sheath.g, sheath.b, 0.3f + (TierGlowA[tier] * 0.4f)), 5f, lift);
-                _waterBody.Put(_ribbon, 1f, 0f, new Color(core.r * 0.85f, core.g * 0.9f, core.b, jet ? 0.8f : 0.92f), 8f, lift);
-                _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f, lift);
-                if (TierWhite[tier] > 0f) _waterShine.Put(_ribbon, 0.2f, 0f, new Color(1f, 1f, 1f, TierWhite[tier] * 0.8f), 20f, lift);
-            }
-            else
-            {
-                _waterSheath.Put(_ribbon, 1.35f, 0f, new Color(0.5f, 0.78f, 1f, 0.35f), 5f, lift);
-                _waterBody.Put(_ribbon, 1f, 0f, new Color(0.55f, 0.8f, 1f, jet ? 0.8f : 0.92f), 8f, lift);
-                // 빛은 왼쪽 위에서 온다: 하이라이트를 진행 방향 왼쪽으로 치우친다.
-                _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f, lift);
-            }
+            _waterSheath.Put(_ribbon, 1.35f, 0f, new Color(0.5f, 0.78f, 1f, 0.35f), 5f, lift);
+            _waterBody.Put(_ribbon, 1f, 0f, new Color(0.55f, 0.8f, 1f, jet ? 0.8f : 0.92f), 8f, lift);
+            // 빛은 왼쪽 위에서 온다: 하이라이트를 진행 방향 왼쪽으로 치우친다.
+            _waterShine.Put(_ribbon, 0.3f, 0.35f, new Color(0.9f, 0.97f, 1f, 0.55f), 14f, lift);
             if (!jet && _sim.Build.Level(UpgradeId.Hose) >= Loadout.MaxLevel)
             {
                 // 물대포 MAX: 줄기 한가운데 금빛-흰 심지가 흐르고 끝에서 금빛 반짝이가 튄다.
@@ -3195,19 +3197,6 @@ namespace FireGame.Prototypes
             Emit("Effects/glow", at, Vector3.zero, 0f, 0.07f, 0.7f * s, 1.1f * s, new Color(1f, 1f, 1f, 0.7f), clear, 0f, true);
             Shockwave(at, c, 1.8f * s, 0.2f);
             if (level >= Loadout.MaxLevel) Shockwave(at, new Color(1f, 0.85f, 0.35f, 0.95f), 2.5f * s, 0.25f, 0.04f);
-            if (Free && level >= 5)
-            {
-                // 샘플 hitFx: Lv5 금 별 6개 + 약한 흔들림, Lv6 무지개 고리.
-                Sprite star = Art.Get("LevelUp/spark_star");
-                for (int i = 0; i < 6; i++)
-                {
-                    float a = Random.value * Mathf.PI * 2f;
-                    Color sc = level >= 6 ? Rainbow(Random.value) : LvGold;
-                    EmitSprite(star, at, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Random.Range(4f, 8.5f), 3f, 0.35f, 0.45f, 0.05f, sc, new Color(sc.r, sc.g, sc.b, 0f), 300f, true);
-                }
-                _trauma = Mathf.Min(0.6f, _trauma + 0.015f);
-                if (level >= 6) Shockwave(at, Rainbow(), 3f * s, 0.35f);
-            }
             int n = 4 + level;
             for (int i = 0; i < n; i++)
             {
@@ -3617,18 +3606,42 @@ namespace FireGame.Prototypes
             float amp = _trauma * _trauma * 0.6f;
             float t = Time.realtimeSinceStartup * 25f;
             Vector3 shake = new Vector3((Mathf.PerlinNoise(t, 0f) * 2f) - 1f, (Mathf.PerlinNoise(0f, t) * 2f) - 1f, 0f) * amp;
+            if (Free)
+            {
+                // 숲: 샘플 화면 비율(직교, 높이 270px)과 샘플 흔들림(s.shake px, 0.3 넘으면 매 프레임 무작위로 민다).
+                size = SampleHalf;
+                float sh = _sim.SShake > 0.3f ? _sim.SShake * SurvivorSim.Px : 0f;
+                shake = new Vector3(Random.Range(-1f, 1f) * sh, Random.Range(-1f, 1f) * sh / TiltCos, 0f);
+            }
             PlaceWorldCamera(_cameraAt + shake, size);
         }
 
         /// <summary>캡처용: 땅 위 center를 가운데 반높이 halfHeight로 보이게 월드 카메라를 옮긴다.</summary>
         public void Frame(Vector3 center, float halfHeight)
         {
-            PlaceWorldCamera(center, halfHeight);
+            PlaceWorldCamera(center, Free ? SampleHalf : halfHeight);
+            FlushSample();
         }
 
         /// <summary>땅(z=0) 위 center를 Tilt도 기운 눈으로, 가운데 세로 반폭이 halfHeight가 되는 거리에서 본다.</summary>
         private void PlaceWorldCamera(Vector3 center, float halfHeight)
         {
+            if (Free)
+            {
+                // 숲: 직교 카메라. 샘플 px가 화면에 같은 크기로 놓인다(SurvivorView.Sample).
+                _worldCam.orthographic = true;
+                _worldCam.orthographicSize = halfHeight;
+                Vector3 fwd = Billboard * Vector3.forward;
+                center.z = 0f;
+                _worldCam.transform.SetPositionAndRotation(center - (fwd * 60f), Billboard);
+                Vector3 m0 = GroundAt(new Vector3(0.5f, 0.5f, 0f));
+                Vector3 b0 = GroundAt(new Vector3(0.5f, 0f, 0f));
+                Vector3 c0 = GroundAt(new Vector3(0f, 0f, 0f));
+                _viewHalfH = Mathf.Max(1f, m0.y - b0.y);
+                _viewHalfW = Mathf.Max(1f, b0.x - c0.x);
+                return;
+            }
+            _worldCam.orthographic = false;
             float dist = halfHeight / Mathf.Tan(WorldFov * 0.5f * Mathf.Deg2Rad);
             Vector3 forward = Billboard * Vector3.forward;
             center.z = 0f;
@@ -4816,6 +4829,7 @@ namespace FireGame.Prototypes
             _playerGlow = NewSprite(_root, "Magnet", Art.Get("Effects/glow"), 5);
             _playerGlow.color = new Color(0.4f, 0.7f, 1f, 0.08f);
             _player = Models3D.Person("People/Worker_Male", _root, PersonTall);
+            _personScale = _player.transform.localScale;
             _people = new PersonPool(_world, PersonTall);
             _boatModels = ModelPoolOf(ItemModels.Boat);
             _tankerModels = ModelPoolOf(ItemModels.Tanker);

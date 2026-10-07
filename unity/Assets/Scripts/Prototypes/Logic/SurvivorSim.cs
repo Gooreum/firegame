@@ -118,6 +118,21 @@ namespace FireGame.Prototypes.Logic
         /// <summary>지그재그·출렁임 위상(다람쥐·박쥐).</summary>
         public float Phase;
         public bool Dead;
+
+        // --- 숲 샘플 상태(SampleCore): 공중(px 높이·속도), 잡힘(삼킨 거품·갇힌 방울), 샘플 얼음(녹으면 깨져 처치) ---
+        public float AirZ, AirVz, AirVx, AirVy, AirSpin;
+        public bool Launched;
+        public bool Held;
+        public float SFrozen;
+
+        /// <summary>샘플 그림이 직접 그리는 요괴(삼켜짐·방울 속): 평소 요괴 그림을 숨긴다.</summary>
+        public bool SHide;
+
+        /// <summary>샘플 m.cd: 아이템별 다시 맞기까지(초). 없으면 null(처음 쓸 때 만든다).</summary>
+        public Dictionary<string, float> SCd;
+
+        /// <summary>샘플 m.flash(피격 번쩍)·m.seed(흔들림 위상).</summary>
+        public float SSeed = -1f;
     }
 
     public sealed class Gem
@@ -238,6 +253,9 @@ namespace FireGame.Prototypes.Logic
 
         /// <summary>구조대원 물줄기(숲).</summary>
         Crew,
+
+        /// <summary>숲 샘플 무기(SampleItems): 맞힌 자리 그림은 규칙이 샘플 hitFx로 낸다.</summary>
+        Sample,
     }
 
     /// <summary>화면용: 한 번에 크게 줄인 건물 불(물폭탄·헬기·장막 등). 지붕 위에 "−N%"를 띄운다.</summary>
@@ -1225,7 +1243,7 @@ namespace FireGame.Prototypes.Logic
             }
             if (id == UpgradeId.Cannon) _jetClock = 0f;
             PrimeWeapon(id);
-            if (Build.Free) LevelBurst(id);
+            if (Build.Free) SampleLevelUp(id, SampleLevel(Loadout.BaseOf(id)));
         }
 
         /// <summary>작은 불 몹(불씨·다트·다람쥐·박쥐)이 닿아 있을 때 초당 피해. 큰 불·기름 방울은 10.</summary>
@@ -1928,6 +1946,7 @@ namespace FireGame.Prototypes.Logic
                 if (e.Slowed > 0f) e.Slowed -= Dt;
                 if (e.WhipCool > 0f) e.WhipCool -= Dt;
                 if (e.SprayCool > 0f) e.SprayCool -= Dt;
+                if (Build.Free && SampleMobStep(e)) continue;
                 // 언 몹은 제자리에 서 있다가 풀리는 순간 깨진다. 갇힌 몹은 방울 속에 떠 있다가 터진다.
                 if (e.Frozen > 0f)
                 {
@@ -2084,8 +2103,9 @@ namespace FireGame.Prototypes.Logic
         {
             // 물대포: 겨눈 쪽으로, 쥐고 있을 때만. 예전 자동 조준(0.32초)과 초당 피해를 맞췄다.
             // 수호자: 쥐지 않아도 가까운 불을 AutoPower배로 쏜다(증기는 안 쌓는다). 쥐면 겨눈 쪽으로, 증기까지(집중 분사).
-            int hose = Build.Level(UpgradeId.Hose);
-            bool cannon = Build.Level(UpgradeId.Cannon) > 0;
+            // 숲: 겨누는 물대포는 건물 끄기용 한 줄기로 남기고, 레벨별 물줄기·방수포는 샘플 아이템(SampleItems)이 그린다.
+            int hose = Build.Free ? Build.PowerOf(UpgradeId.Hose) : Build.Level(UpgradeId.Hose);
+            bool cannon = !Build.Free && Build.Level(UpgradeId.Cannon) > 0;
             _hoseClock -= Dt;
             bool auto = false;
             if (Guardian && !Spraying && (hose > 0 || cannon))
@@ -2118,7 +2138,7 @@ namespace FireGame.Prototypes.Logic
                 }
             }
 
-            if (Build.Level(UpgradeId.Cannon) > 0)
+            if (!Build.Free && Build.Level(UpgradeId.Cannon) > 0)
             {
                 _jetClock -= Dt;
                 if (_jetClock <= 0f && _jetQueue == 0)
@@ -2135,8 +2155,8 @@ namespace FireGame.Prototypes.Logic
                 }
             }
 
-            TickNewWeapons();
-            TickFree();
+            if (Build.Free) TickFree();
+            else TickNewWeapons();
         }
 
         private static float SegmentDistance(Vec2 p, Vec2 a, Vec2 b)
@@ -3416,6 +3436,7 @@ namespace FireGame.Prototypes.Logic
 
             bool killed = e.Hp <= 0f;
             if (killed) Kill(e);
+            if (killed && Build.Free) SampleKilled(e);
             if (show || killed) Hits.Add(new Hit { Pos = e.Pos, Damage = amount, Crit = crit, Killed = killed, Kind = e.Kind, Source = source, From = from });
         }
 
