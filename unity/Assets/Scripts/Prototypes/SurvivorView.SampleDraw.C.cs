@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FireGame.Prototypes
 {
     /// <summary>
-    /// 숲 샘플 아이템 C 그림(tools/levelup-art/items-c.js의 그리기를 줄 단위로 옮김): 거품 눈덩이·비눗방울·맨홀 간헐천·물 사슬.
+    /// 숲 샘플 아이템 C 그림(tools/levelup-art/items-c.js의 그리기를 줄 단위로 옮김): 비눗방울·맨홀 간헐천·물 사슬.
     /// 상태는 SampleItems.C.cs(규칙)가 들고, 여기서는 샘플 그리기 그대로 그리기만 한다.
     /// </summary>
     public sealed partial class SurvivorView
@@ -19,10 +19,6 @@ namespace FireGame.Prototypes
         {
             switch (it)
             {
-                case SampleFoamItem f:
-                    EntsFoam(g, f, lv);
-                    DrawAirFoam(g, f, lv);
-                    break;
                 case SampleBubbleItem b:
                     DrawAirBubble(g, b, lv);
                     break;
@@ -35,8 +31,7 @@ namespace FireGame.Prototypes
             }
         }
 
-        // ---------------------------------------------------------------- 3. 거품 눈덩이 (items-c.js:13-110)
-        // items-c.js:14-18 foamPuff
+        // items-c.js:14-18 foamPuff(맨홀 물기둥 거품)
         private static void FoamPuff(SampleCanvas g, float x, float y, float r, int lv)
         {
             SampleCanvas.Paint gr = Radial(x - (r * 0.35f), y - (r * 0.4f), r * 0.05f, x, y, r);
@@ -47,123 +42,6 @@ namespace FireGame.Prototypes
             g.BeginPath();
             g.Arc(x, y, r, 0f, Tau);
             g.Fill();
-        }
-
-        // items-c.js:51-69 drawFoamBall
-        private void DrawFoamBall(SampleCanvas g, SampleFoamItem.Ball f, int lv, float t, float sg)
-        {
-            float r = f.R * sg;
-            ShadowAt(g, f.X, f.Y + (r * 0.5f), r * 1.05f, 0.3f);
-            float y = f.Y - (r * 0.55f);
-            TierGlow(g, f.X, y, r, lv);
-            // 안쪽 몹(뒤쪽)
-            foreach (SampleFoamItem.Swallowed o in f.In)
-            {
-                float a = o.A + f.Roll;
-                if (Mathf.Sin(a) <= 0.2f)
-                {
-                    float x = f.X + (Mathf.Cos(a) * r * o.D), yy = y + (Mathf.Sin(a) * r * o.D * 0.8f);
-                    SampleCanvas.Paint gr = Radial(x - 1f, yy - 1f, 0.5f, x, yy, 5f);
-                    gr.AddColorStop(0f, Hex("#b56cf0"));
-                    gr.AddColorStop(1f, Hex("#4c1a85"));
-                    g.FillStyle = gr;
-                    g.BeginPath();
-                    g.Arc(x, yy, o.Big ? 6f : 4.5f, 0f, Tau);
-                    g.Fill();
-                }
-            }
-            for (int i = 0; i < 9; i++)
-            {
-                float a = (i / 9f * Tau) + (f.Roll * 0.5f), rr = r * (i > 0 ? 0.55f : 0f);
-                g.GlobalAlpha = 0.94f;
-                FoamPuff(g, f.X + (Mathf.Cos(a) * rr), y + (Mathf.Sin(a) * rr * 0.8f), r * (i > 0 ? 0.55f : 0.72f), lv);
-                g.GlobalAlpha = 1f;
-            }
-            // 앞쪽 몹: 거품 밖으로 삐져나온 보라 머리
-            foreach (SampleFoamItem.Swallowed o in f.In)
-            {
-                float a = o.A + f.Roll;
-                if (Mathf.Sin(a) > 0.2f)
-                {
-                    float x = f.X + (Mathf.Cos(a) * r * 0.92f), yy = y + (Mathf.Sin(a) * r * 0.78f);
-                    SampleCanvas.Paint gr = Radial(x - 1.5f, yy - 1.5f, 0.5f, x, yy, 5f);
-                    gr.AddColorStop(0f, Hex("#c58af5"));
-                    gr.AddColorStop(1f, Hex("#5a1f9a"));
-                    g.FillStyle = gr;
-                    g.StrokeStyle = Hex("#1b0830");
-                    g.LineWidth = 1.1f;
-                    g.BeginPath();
-                    g.Arc(x, yy, o.Big ? 5.5f : 4f, 0f, Tau);
-                    g.Fill();
-                    g.Stroke();
-                    g.FillStyle = Color.white;
-                    g.BeginPath();
-                    g.Arc(x - 1.3f, yy - 0.6f, 1.1f, 0f, Tau);
-                    g.MoveTo(x + 1.3f + 1.1f, yy - 0.6f);
-                    g.Arc(x + 1.3f, yy - 0.6f, 1.1f, 0f, Tau);
-                    g.Fill();
-                }
-            }
-            // 광택
-            g.FillStyle = new Color(1f, 1f, 1f, 0.85f);
-            g.BeginPath();
-            g.Ellipse(f.X - (r * 0.35f), y - (r * 0.5f), r * 0.22f, r * 0.1f, -0.5f, 0f, Tau);
-            g.Fill();
-            if (lv >= 5)
-            {
-                g.Save();
-                g.Lighter = true;
-                g.StrokeStyle = lv >= 6 ? Hsla(SHue(), 100f, 72f, 0.7f) : C(255, 214, 110, 0.7f);
-                g.LineWidth = 2f;
-                g.BeginPath();
-                g.Arc(f.X, y, r * 1.02f, t * 3f, (t * 3f) + 2.4f);
-                g.Stroke();
-                g.Restore();
-            }
-        }
-
-        private readonly List<SampleFoamItem.Ball> _foamSorted = new List<SampleFoamItem.Ball>();
-
-        // items-c.js:103 ents: 거품 공(y 순)
-        private void EntsFoam(SampleCanvas g, SampleFoamItem it, int lv)
-        {
-            float sg = (1.25f + ((lv - 1) * 0.05f)) * (1f + (it.Surge * 0.5f));
-            _foamSorted.Clear();
-            _foamSorted.AddRange(it.F);
-            _foamSorted.Sort((a, b) => a.Y.CompareTo(b.Y));
-            foreach (SampleFoamItem.Ball f in _foamSorted) DrawFoamBall(g, f, lv, _sim.ST, sg);
-        }
-
-        // items-c.js:104-108 drawAir: 거품 산사태 파도(샘플 화면 위 0 ~ 아래 H → 지금 카메라가 비추는 위아래)
-        private void DrawAirFoam(SampleCanvas g, SampleFoamItem it, int lv)
-        {
-            if (it.Waves.Count == 0) return;
-            float t = _sim.ST;
-            Vector2 cam = SCamCenter();
-            float H = SampleH / TiltCos, top = cam.y - (H / 2f);
-            foreach (SampleFoamItem.Wave w in it.Waves)
-            {
-                g.Save();
-                SampleCanvas.Paint gr = Linear(w.X - 140f, 0f, w.X + 24f, 0f);
-                gr.AddColorStop(0f, new Color(1f, 1f, 1f, 0f));
-                gr.AddColorStop(0.6f, C(235, 248, 255, 0.8f));
-                gr.AddColorStop(1f, new Color(1f, 1f, 1f, 0.98f));
-                g.FillStyle = gr;
-                g.FillRect(w.X - 140f, top, 164f, H);
-                // 무지개 물광
-                g.Lighter = true;
-                SampleCanvas.Paint rg = Linear(0f, top, 0f, top + H);
-                for (int i = 0; i <= 6; i++) rg.AddColorStop(i / 6f, Hsla(SHue(i * 60f), 100f, 70f, 0.28f));
-                g.FillStyle = rg;
-                g.FillRect(w.X - 30f, top, 26f, H);
-                g.Lighter = false;
-                for (float y = -10f; y < H + 20f; y += 15f)
-                {
-                    float r = 14f + (Mathf.Sin((y * 0.3f) + (t * 8f)) * 4f);
-                    FoamPuff(g, w.X + 16f + (Mathf.Sin(y + (t * 6f)) * 6f), top + y, r, 5);
-                }
-                g.Restore();
-            }
         }
 
         // ---------------------------------------------------------------- 4. 비눗방울 (items-c.js:112-209)
@@ -318,7 +196,7 @@ namespace FireGame.Prototypes
 
             // drawManholes: 지금 카메라가 비추는 맨홀(규칙과 같은 월드 격자).
             Vector2 cam = SCamCenter();
-            float hw = (SampleW / 2f) + 30f, hh = (SampleH / 2f / TiltCos) + 30f;
+            float hw = (ViewW / 2f) + 30f, hh = (ViewH / 2f / TiltCos) + 30f;
             SampleManholeItem.HolesIn(cam.x - hw, cam.y - hh, cam.x + hw, cam.y + hh, _mhView);
             foreach (SampleManholeItem.Hole h in _mhView)
             {
@@ -382,7 +260,7 @@ namespace FireGame.Prototypes
             {
                 if (G.K >= 0f) continue;
                 float k = 1f + (G.K / G.Warn);
-                float r = SurvivorSim.Lerp(56f, 16f, SurvivorSim.Ease(k)) * G.P;
+                float r = SurvivorSim.Lerp(56f, 16f, SurvivorSim.Ease(k)) * G.P * G.Wd;
                 g.StrokeStyle = G.Lv >= 5 ? C(255, 214, 110, 0.4f + (0.5f * k)) : C(120, 210, 255, 0.4f + (0.5f * k));
                 g.LineWidth = 2.5f;
                 g.SetLineDash(new[] { 6f, 5f });
@@ -402,7 +280,7 @@ namespace FireGame.Prototypes
                 if (G.K < 0f) continue;
                 float k = G.K;
                 float h = 140f * G.P * (k < 0.12f ? SurvivorSim.Ease(k / 0.12f) : Mathf.Max(0f, 1f - ((k - 0.35f) / 0.45f)));
-                float w = 12f * G.P * (1f + (it.Surge * 0.4f));
+                float w = 12f * G.P * G.Wd * (1f + (it.Surge * 0.4f));
                 if (h < 2f) continue;
                 Tier T = SurvivorSim.TierOf(G.Lv);
                 g.Save();

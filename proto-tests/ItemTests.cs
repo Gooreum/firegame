@@ -66,6 +66,8 @@ namespace FireGame.Prototypes.Tests
         {
             UpgradeId[] weapons = { UpgradeId.Hose, UpgradeId.Sprinkler, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Mine, UpgradeId.Foam, UpgradeId.Bubble, UpgradeId.Manhole, UpgradeId.Chain, UpgradeId.Whip };
             UpgradeId[] passives = { UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit };
+            // 숲 전용 보조(2026-10-08: 고압 노즐·급수 펌프·광각 노즐)도 보조다. 다른 스테이지 카드엔 안 나온다.
+            UpgradeId[] freePassives = { UpgradeId.Nozzle, UpgradeId.Feed, UpgradeId.Wide };
             var pairs = new Dictionary<UpgradeId, int>();
             foreach (UpgradeId id in weapons)
             {
@@ -86,7 +88,7 @@ namespace FireGame.Prototypes.Tests
             for (int i = 0; i < (int)UpgradeId.Heal; i++)
             {
                 var id = (UpgradeId)i;
-                Assert.Equal(System.Array.IndexOf(passives, id) >= 0, Loadout.IsPassive(id));
+                Assert.Equal(System.Array.IndexOf(passives, id) >= 0 || System.Array.IndexOf(freePassives, id) >= 0, Loadout.IsPassive(id));
                 // 보조 Lv6(숲 개편 2026-10-08: 초고압 펌프·제트 장화·불사조 방화복)은 보조의 진화다.
                 bool passiveTop = Loadout.IsEvolution(id) && Loadout.IsPassive(Loadout.BaseOf(id));
                 Assert.True(Loadout.IsWeapon(id) || Loadout.IsPassive(id) || passiveTop, id + "는 무기도 보조도 아니다");

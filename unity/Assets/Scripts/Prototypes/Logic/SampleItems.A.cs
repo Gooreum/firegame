@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace FireGame.Prototypes.Logic
 {
     /// <summary>
-    /// 숲 개편(2026-10-08, 승인 샘플 그대로): tools/levelup-art/items-a.js의 물대포·회전 스프링클러를 줄 단위로 옮겼다.
+    /// 숲 개편(2026-10-08, 승인 샘플 그대로): tools/levelup-art/items-a.js의 회전 스프링클러를 줄 단위로 옮겼다(물대포는 2026-10-08 겨누는 한 줄기 + 방수포 대폭발만).
     /// 수치·순서·파티클 호출은 샘플과 같다. 좌표는 샘플 px(SampleCore), 샘플 m.cd[key] > s.t 는 Cd(e,key) > 0.
     /// 그림은 SurvivorView.SampleDraw.A.cs.
     /// </summary>
@@ -17,110 +17,66 @@ namespace FireGame.Prototypes.Logic
         }
     }
 
-    // ---------------------------------------------------------------- 1. 물대포 → 고압 방수포 (items-a.js:15-69)
+    /// <summary>샘플 {x, y, k} 한 점(대폭발 고리).</summary>
+    public sealed class SamplePtD
+    {
+        public float X, Y, K;
+
+        public SamplePtD(float x, float y)
+        {
+            X = x;
+            Y = y;
+        }
+    }
+
+    // ---------------------------------------------------------------- 1. 물대포 → 고압 방수포
+    /// <summary>
+    /// 숲 물대포(2026-10-08 아이템 정리): 물줄기는 겨누는 한 줄기(SurvivorSim.FireWeapons, 고압 방수포면 모두 꿰뚫는 Jet)다.
+    /// 이 샘플 아이템은 고압 방수포를 들었을 때만 생기고, 펌프에서 옮겨 온 대폭발(2.2초마다 내 둘레, items-d.js:120-133)만 맡는다.
+    /// </summary>
     public sealed class HoseItem : SampleItem
     {
-        private static readonly float[] CdTab = { 0f, 0.2f, 0.18f, 0.16f, 0.13f, 0.11f };
-        private static readonly float[] DmgTab = { 0f, 1.6f, 1.6f, 1.8f, 2f, 2.4f };
+        public const float BoomEvery = 2.2f;
+        public const float BoomR = 140f;
 
-        /// <summary>샘플 s.st.tg: 이번 틱 물줄기가 노리는 몹(가까운 순, 최대 min(lv,5)).</summary>
-        public readonly List<Enemy> Tg = new List<Enemy>();
+        public float Boom;
+        public readonly List<SamplePtD> Booms = new List<SamplePtD>();
 
-        /// <summary>샘플 s.st.cd(물줄기와 방수포가 함께 쓴다 — 샘플 그대로).</summary>
-        public float CdT;
+        /// <summary>대폭발 횟수(시험용).</summary>
+        public int Novas;
 
-        /// <summary>샘플 s.st.a: 방수포 각도(라디안, 샘플 y 아래가 +). 아직 없으면 HasA=false(그림은 −1).</summary>
-        public float A;
-        public bool HasA;
-
-        private readonly HashSet<Enemy> _used = new HashSet<Enemy>();
-
-        // items-a.js:19
         public override void Setup(SurvivorSim s)
         {
-            Tg.Clear();
-            CdT = 0f;
+            Boom = 1.2f;
+            Booms.Clear();
         }
 
-        // items-a.js:20-49
         public override void Update(SurvivorSim s, float dt, int lv)
         {
-            float px = s.PX, py = s.PY;
+            if (lv < 6) return;
+            Boom -= dt;
+            if (Boom <= 0f)
             {
-                int n = Math.Min(lv, 5), L5 = Math.Min(lv, 5);
-                _used.Clear();
-                Tg.Clear();
-                for (int i = 0; i < n; i++)
+                Boom = BoomEvery;
+                float x = s.PX, y = s.PY - 4f, w = s.SWide;
+                Booms.Add(new SamplePtD(x, y));
+                Novas++;
+                s.SHitArea(x, y, BoomR, 12f, 380f);
+                s.SplashFx(x, y, 90f * w, 40);
+                s.Prism(x, y, 0.6f, 150f * w);
+                s.Glow(x, y, 0.4f, 150f * w, new Rgb(200, 235, 255));
+                for (int i = 0; i < 30; i++)
                 {
-                    Enemy m = s.SNearest(px, py, 210f + (L5 * 12f), _used);
-                    if (m != null)
-                    {
-                        _used.Add(m);
-                        Tg.Add(m);
-                    }
+                    float a = s.Rnd(0f, SurvivorSim.Tau), v = s.Rnd(150f, 320f);
+                    s.Star(x, y, (float)Math.Cos(a) * v, (float)Math.Sin(a) * v * 0.7f, 0.6f, s.Rnd(3f, 6f), Rgb.None);
                 }
-                CdT -= dt;
-                if (CdT <= 0f)
-                {
-                    CdT = CdTab[L5];
-                    float dmg = DmgTab[L5], reach = L5 >= 3 ? 60f + (L5 * 14f) : 0f, w = 3f + (L5 * 1.3f);
-                    foreach (Enemy m in Tg)
-                    {
-                        float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
-                        float dx = mx - px, dy = my - py, L = SurvivorSim.Hypot(dx, dy);
-                        if (L == 0f) L = 1f;
-                        float ex = mx + (dx / L * reach), ey = my + (dy / L * reach);
-                        foreach (Enemy o in s.SAlive().ToArray())
-                        {
-                            if (o == m || (reach > 0f && SurvivorSim.SegDist(SurvivorSim.SX(o.Pos), SurvivorSim.SY(o.Pos), px, py, ex, ey) < SurvivorSim.SR(o) + (w * 0.5f)))
-                                s.SHit(o, dmg, dx / L * (30f + (lv * 14f)), dy / L * (30f + (lv * 14f)));
-                        }
-                        s.HitFx(mx, my - 4f, lv, 0.6f);
-                        if (L5 >= 5 && !(SurvivorSim.Cd(m, "hs") > 0f))
-                        {
-                            SurvivorSim.SetCd(m, "hs", 0.3f);
-                            s.SplashFx(ex, ey, 26f, 6);
-                            s.SHitArea(ex, ey, 26f, 1.5f, 120f);
-                        }
-                    }
-                }
-                if (lv < 6) return;
+                s.SShake = Math.Max(s.SShake, 10f);
+                s.SStop = Math.Max(s.SStop, 0.07f);
+                s.SFlash = Math.Max(s.SFlash, 0.25f);
+                s.SFlashColor = new Rgb(220, 240, 255);
             }
-            // 고압 방수포: 굵은 물기둥이 부채꼴로 쓸고, 양옆 물줄기 4개가 같이 쏜다.
-            // 몹이 없을 때 샘플 { x: P.x + 100, y: 60 }(소방관 y 170 기준) → 소방관 기준 (+100, −110).
-            if (!s.SCrowd(out float cx, out float cy))
-            {
-                cx = px + 100f;
-                cy = py - 110f;
-            }
-            float bas = (float)Math.Atan2(cy - py, cx - px);
-            A = bas + ((float)Math.Sin(s.ST * 3.2f) * 1.1f);
-            HasA = true;
-            float a = A, len = 330f;
-            float x1 = px + ((float)Math.Cos(a) * len), y1 = py + ((float)Math.Sin(a) * len);
-            CdT -= dt;
-            if (CdT <= 0f)
-            {
-                CdT = 0.07f;
-                foreach (Enemy m in s.SAlive().ToArray())
-                {
-                    float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
-                    if (SurvivorSim.SegDist(mx, my, px, py, x1, y1) < 36f + SurvivorSim.SR(m))
-                    {
-                        s.SHit(m, 6f, (float)Math.Cos(a) * 110f, (float)Math.Sin(a) * 110f);
-                        if (s.Rnd(0f, 1f) < 0.5f) s.HitFx(mx, my - 4f, 6, 0.5f);
-                    }
-                }
-            }
-            for (int i = 0; i < 4; i++)
-            {
-                float u = s.Rnd(0.15f, 1f);
-                float x = px + ((float)Math.Cos(a) * len * u) + s.Rnd(-10f, 10f);
-                float y = py + ((float)Math.Sin(a) * len * u) + s.Rnd(-10f, 10f);
-                float vz = s.Rnd(40f, 120f), vx = s.Rnd(-60f, 60f), vy = s.Rnd(-60f, 60f);
-                s.Drop(x, y, vx, vy, vz, 500f, 0.6f, s.Rnd(2.4f, 4f));
-            }
-            s.SShake = Math.Max(s.SShake, 2.2f);
+            foreach (SamplePtD b in Booms) b.K += dt;
+            Booms.RemoveAll(b => b.K >= 0.8f);
         }
     }
 
@@ -160,7 +116,7 @@ namespace FireGame.Prototypes.Logic
         {
             // 새로 는 스프링클러가 빛나며 나타난다.
             int n = N[lv];
-            float R = RTab[lv];
+            float R = RTab[lv] * s.SWide;
             for (int i = 0; i < n; i++)
             {
                 float a = Ang + (i * SurvivorSim.Tau / n);
@@ -174,8 +130,9 @@ namespace FireGame.Prototypes.Logic
         public override void Update(SurvivorSim s, float dt, int lv)
         {
             float px = s.PX, py = s.PY;
+            // 광각 노즐(SWide): 도는 반경·맞힘 반경·물줄기 길이가 함께 커진다(그림도 같은 배율).
             int n = N[lv];
-            float R = RTab[lv];
+            float w = s.SWide, R = RTab[lv] * w;
             Ang += dt * Spin[lv];
             Heads.Clear();
             float dmg = Dmg[lv], push = 160f + (lv * 40f);
@@ -193,7 +150,7 @@ namespace FireGame.Prototypes.Logic
                 foreach (Enemy m in s.SAlive().ToArray())
                 {
                     float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
-                    if (SurvivorSim.Hypot(mx - x, my - y) < SurvivorSim.SR(m) + 15f + (lv * 1.5f) && !(SurvivorSim.Cd(m, "sp") > 0f))
+                    if (SurvivorSim.Hypot(mx - x, my - y) < SurvivorSim.SR(m) + ((15f + (lv * 1.5f)) * w) && !(SurvivorSim.Cd(m, "sp") > 0f))
                     {
                         SurvivorSim.SetCd(m, "sp", SpCd[lv]);
                         float L = SurvivorSim.Hypot(mx - px, my - py);
@@ -202,7 +159,7 @@ namespace FireGame.Prototypes.Logic
                         s.HitFx(mx, my - 4f, lv, 0.8f);
                         if (lv >= 5)
                         {
-                            s.SplashFx(mx, my, 30f, 6);
+                            s.SplashFx(mx, my, 30f * w, 6);
                             s.SHitArea(mx, my, 30f, 2f, 140f);
                         }
                     }
@@ -210,7 +167,7 @@ namespace FireGame.Prototypes.Logic
                 // Lv3~: 머리에서 바깥으로 짧은 물줄기
                 if (lv >= 3 && lv < 6)
                 {
-                    float ja = a + (s.ST * 5f), x1 = x + ((float)Math.Cos(ja) * (30f + (lv * 6f))), y1 = y + ((float)Math.Sin(ja) * (30f + (lv * 6f)) * 0.72f);
+                    float ja = a + (s.ST * 5f), x1 = x + ((float)Math.Cos(ja) * (30f + (lv * 6f)) * w), y1 = y + ((float)Math.Sin(ja) * (30f + (lv * 6f)) * w * 0.72f);
                     foreach (Enemy m in s.SAlive().ToArray())
                     {
                         float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
@@ -230,7 +187,7 @@ namespace FireGame.Prototypes.Logic
                 Jet += dt * 1.6f;
                 for (int j = 0; j < 8; j++)
                 {
-                    float a = Jet + (j * SurvivorSim.Tau / 8f), x0 = px + ((float)Math.Cos(a) * R), y0 = py + ((float)Math.Sin(a) * R * 0.72f), x1 = px + ((float)Math.Cos(a) * (R + 150f)), y1 = py + ((float)Math.Sin(a) * (R + 150f) * 0.72f);
+                    float a = Jet + (j * SurvivorSim.Tau / 8f), x0 = px + ((float)Math.Cos(a) * R), y0 = py + ((float)Math.Sin(a) * R * 0.72f), x1 = px + ((float)Math.Cos(a) * (R + (150f * w))), y1 = py + ((float)Math.Sin(a) * (R + (150f * w)) * 0.72f);
                     foreach (Enemy m in s.SAlive().ToArray())
                     {
                         float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
@@ -246,7 +203,7 @@ namespace FireGame.Prototypes.Logic
                 {
                     float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
                     float d = SurvivorSim.Hypot(mx - px, (my - py) / 0.72f);
-                    if (Math.Abs(d - R) < 12f && !(SurvivorSim.Cd(m, "rg") > 0f))
+                    if (Math.Abs(d - R) < 12f * w && !(SurvivorSim.Cd(m, "rg") > 0f))
                     {
                         SurvivorSim.SetCd(m, "rg", 0.2f);
                         s.SHit(m, 3f, (mx - px) * 4f, (my - py) * 4f);

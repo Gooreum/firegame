@@ -4,8 +4,8 @@ using System.Collections.Generic;
 namespace FireGame.Prototypes.Logic
 {
     /// <summary>
-    /// 숲 샘플 아이템 C(승인 샘플 tools/levelup-art/items-c.js를 줄 단위로 옮김): 거품 눈덩이·비눗방울·맨홀 간헐천·물 사슬.
-    /// 수치·순서·파티클 호출은 샘플 그대로. 샘플 화면(480×270, 고정 카메라) 경계는 소방관 둘레 ±240×±135px로 옮긴다.
+    /// 숲 샘플 아이템 C(승인 샘플 tools/levelup-art/items-c.js를 줄 단위로 옮김): 비눗방울·맨홀 간헐천·물 사슬(거품 눈덩이는 2026-10-08 숲에서 뺐다).
+    /// 수치·순서·파티클 호출은 샘플 그대로. 샘플 화면(480×270, 고정 카메라) 경계는 소방관 둘레 숲 화면(SurvivorSim.SViewHalfW/H)으로 옮긴다.
     /// 그림은 SurvivorView.SampleDraw.C.cs가 이 상태를 읽어 그린다.
     /// </summary>
     public static partial class SampleItemsRegistry
@@ -14,7 +14,6 @@ namespace FireGame.Prototypes.Logic
         {
             switch (id)
             {
-                case UpgradeId.Foam: made = new SampleFoamItem(); break;
                 case UpgradeId.Bubble: made = new SampleBubbleItem(); break;
                 case UpgradeId.Manhole: made = new SampleManholeItem(); break;
                 case UpgradeId.Chain: made = new SampleChainItem(); break;
@@ -25,8 +24,8 @@ namespace FireGame.Prototypes.Logic
     /// <summary>items-c.js 공용 도우미(L5·glint) + 샘플 화면 경계.</summary>
     public static class SampleC
     {
-        /// <summary>샘플 화면 반폭·반높이(W/2, H/2): 소방관이 화면 가운데라고 본다.</summary>
-        public const float HalfW = 240f, HalfH = 135f;
+        /// <summary>숲 화면 반폭·반높이(SurvivorSim.SViewHalfW/H): 소방관이 화면 가운데라고 본다.</summary>
+        public const float HalfW = SurvivorSim.SViewHalfW, HalfH = SurvivorSim.SViewHalfH;
 
         // items-c.js:6
         public static int L5(int lv)
@@ -60,163 +59,6 @@ namespace FireGame.Prototypes.Logic
             m.Held = false;
             m.SHide = false;
             s.SHit(m, 99f);
-        }
-    }
-
-    // ---------------------------------------------------------------- 3. 거품 눈덩이 → 거품 산사태 (items-c.js:13-110)
-    public sealed class SampleFoamItem : SampleItem
-    {
-        /// <summary>f.in 한 칸: 거품 안 자리(각·깊이)와 삼킨 몹.</summary>
-        public sealed class Swallowed
-        {
-            public float A, D;
-            public bool Big;
-            public Enemy E;
-        }
-
-        public sealed class Ball
-        {
-            public float X, Y, Vx, Vy, R, Max, K, Roll;
-            public readonly List<Swallowed> In = new List<Swallowed>();
-        }
-
-        public sealed class Wave
-        {
-            public float X, K;
-        }
-
-        public readonly List<Ball> F = new List<Ball>();
-        public readonly List<Wave> Waves = new List<Wave>();
-        public float Cd, Wcd;
-
-        public static readonly int[] Count = { 0, 1, 1, 2, 2, 3, 3 };
-        public static readonly float[] MaxR = { 0f, 22f, 26f, 30f, 34f, 40f, 40f };
-        public static readonly float[] Cool = { 0f, 1.8f, 1.4f, 1.5f, 1.2f, 1.1f, 1.1f };
-        public static readonly float[] Dmg = { 0f, 4f, 5f, 6f, 8f, 10f, 12f };
-
-        // items-c.js:79
-        public override void Setup(SurvivorSim s)
-        {
-            F.Clear();
-            Cd = 0.3f;
-            Waves.Clear();
-            Wcd = 0.9f;
-        }
-
-        // items-c.js:80-102
-        public override void Update(SurvivorSim s, float dt, int lv)
-        {
-            int n = Count[lv];
-            Cd -= dt;
-            if (Cd <= 0f)
-            {
-                for (int i = 0; i < n; i++) F.Add(new Ball { X = s.PX + ((i - ((n - 1) / 2f)) * 22f), Y = s.PY - 10f, Vx = s.Rnd(-20f, 20f), Vy = -60f, R = 10f + (lv * 1.5f), Max = MaxR[lv] });
-                Cd = Cool[lv];
-            }
-            F.RemoveAll(f => !FoamBallStep(s, f, dt, lv));
-            if (lv < 6) return;
-            // 거품 산사태: 왼쪽에서 오른쪽으로 화면을 덮치는 파도
-            Wcd -= dt;
-            if (Wcd <= 0f)
-            {
-                Waves.Add(new Wave { X = s.PX - SampleC.HalfW - 70f });
-                Wcd = 1.7f;
-            }
-            float top = s.PY - SampleC.HalfH;
-            foreach (Wave w in Waves)
-            {
-                w.K += dt;
-                w.X += 300f * dt;
-                foreach (Enemy m in s.SAlive().ToArray())
-                {
-                    float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
-                    if (mx < w.X + 22f && mx > w.X - 90f)
-                    {
-                        s.SHit(m, 99f);
-                        if (SampleC.Chance(s) < 0.4f) s.HitFx(mx, my, 6, 0.5f);
-                    }
-                }
-                for (int i = 0; i < 5; i++)
-                {
-                    SPart p = s.Part(SPartKind.Foam, w.X + s.Rnd(-10f, 24f), top + s.Rnd(0f, 2f * SampleC.HalfH));
-                    p.Vx = s.Rnd(80f, 200f);
-                    p.Vy = s.Rnd(-30f, 30f);
-                    p.Life = 0.6f;
-                    p.Size = s.Rnd(4f, 10f);
-                }
-                if (SampleC.Chance(s) < 0.5f) SampleC.Glint(s, w.X + 10f, top + s.Rnd(10f, (2f * SampleC.HalfH) - 10f), 6, 1);
-                s.SShake = Math.Max(s.SShake, 2.5f);
-            }
-            float right = s.PX + SampleC.HalfW + 120f;
-            Waves.RemoveAll(w => w.X >= right);
-        }
-
-        // items-c.js:23-50 foamBallStep
-        private static bool FoamBallStep(SurvivorSim s, Ball f, float dt, int lv)
-        {
-            f.K += dt;
-            Enemy c = s.SNearest(f.X, f.Y, 320f);
-            if (c != null)
-            {
-                float dx = SurvivorSim.SX(c.Pos) - f.X, dy = SurvivorSim.SY(c.Pos) - f.Y, L = SurvivorSim.Hypot(dx, dy), sp = 110f + (lv * 18f);
-                if (L == 0f) L = 1f;
-                f.Vx += ((dx / L * sp) - f.Vx) * dt * 2.2f;
-                f.Vy += ((dy / L * sp) - f.Vy) * dt * 2.2f;
-            }
-            f.X += f.Vx * dt;
-            f.Y += f.Vy * dt;
-            f.Roll += SurvivorSim.Hypot(f.Vx, f.Vy) * dt / f.R;
-            f.X = SampleC.Clamp(f.X, s.PX - SampleC.HalfW + 20f, s.PX + SampleC.HalfW - 20f);
-            f.Y = SampleC.Clamp(f.Y, s.PY - SampleC.HalfH + 30f, s.PY + SampleC.HalfH - 10f);
-            foreach (Enemy m in s.SAlive().ToArray())
-            {
-                float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
-                if (SurvivorSim.Hypot(mx - f.X, my - f.Y) < f.R + SurvivorSim.SR(m))
-                {
-                    // 삼킨 몹은 거품 안에 박힌 채 굴러간다(샘플은 그 자리에서 처치로 친다 → 게임은 잡아 두었다가 터질 때 처치).
-                    bool big = SurvivorSim.SBig(m);
-                    m.Held = true;
-                    m.SHide = true;
-                    m.AirZ = 0f;
-                    m.AirVz = 0f;
-                    f.In.Add(new Swallowed { A = s.Rnd(0f, SurvivorSim.Tau), D = s.Rnd(0.3f, 0.8f), Big = big, E = m });
-                    f.R = Math.Min(f.Max, f.R + (big ? 4f : 2f));
-                    s.HitFx(mx, my, lv, 0.4f);
-                }
-            }
-            foreach (Swallowed o in f.In)
-            {
-                if (!o.E.Dead) SurvivorSim.SetS(o.E, f.X, f.Y);
-            }
-            if (SampleC.Chance(s) < dt * (20f + (lv * 6f)))
-            {
-                SPart p = s.Part(SPartKind.Foam, f.X + (s.Rnd(-f.R, f.R) * 0.7f), f.Y + (f.R * 0.4f));
-                p.Life = 0.8f;
-                p.Size = s.Rnd(3f, 5f + lv);
-            }
-            SampleC.Glint(s, f.X, f.Y - f.R, lv, SampleC.Chance(s) < dt * 12f ? 1 : 0);
-            if (f.K > 1.7f || f.R >= f.Max)
-            {
-                float R = f.R * (1.8f + (lv * 0.1f));
-                for (int i = 0; i < 26 + (lv * 8); i++)
-                {
-                    float a = s.Rnd(0f, SurvivorSim.Tau), v = s.Rnd(40f, 160f + (lv * 30f));
-                    SPart p = s.Part(SPartKind.Foam, f.X, f.Y - (f.R * 0.5f));
-                    p.Vx = (float)Math.Cos(a) * v;
-                    p.Vy = (float)Math.Sin(a) * v * 0.6f;
-                    p.Life = s.Rnd(0.6f, 1.1f);
-                    p.Size = s.Rnd(4f, 8f + lv);
-                }
-                s.Ring(f.X, f.Y, 0.4f, R, lv >= 5 ? new Rgb(255, 220, 130) : new Rgb(255, 255, 255), 4f + lv);
-                s.Glow(f.X, f.Y, 0.35f, R * 1.1f, SurvivorSim.TierOf(lv).Glow);
-                foreach (Swallowed o in f.In) SampleC.KillHeld(s, o.E);
-                s.SHitArea(f.X, f.Y, R, Dmg[lv], 180f);
-                s.HitFx(f.X, f.Y, lv, 1.4f);
-                s.SShake = Math.Max(s.SShake, 3f + lv);
-                if (lv >= 4) s.SFlash = Math.Max(s.SFlash, 0.1f);
-                return false;
-            }
-            return true;
         }
     }
 
@@ -401,7 +243,7 @@ namespace FireGame.Prototypes.Logic
                     SampleC.KillHeld(s, m);
                     if (l >= 3)
                     {
-                        s.SplashFx(c.X, c.Y, 18f + (l * 3f), 8);
+                        s.SplashFx(c.X, c.Y, (18f + (l * 3f)) * s.SWide, 8);
                         s.SHitArea(c.X, c.Y, 18f + (l * 3f), l >= 5 ? 3f : 2f, 100f);
                         s.HitFx(c.X, c.Y, lv, 0.7f);
                     }
@@ -428,7 +270,7 @@ namespace FireGame.Prototypes.Logic
                         d.Vz = s.Rnd(-40f, 40f);
                         d.Size = s.Rnd(2.5f, 4.5f);
                     }
-                    s.SplashFx(fx, fy, 80f, 26);
+                    s.SplashFx(fx, fy, 80f * s.SWide, 26);
                     foreach (Enemy e in B.Inside)
                     {
                         if (e.Dead) continue;
@@ -451,7 +293,7 @@ namespace FireGame.Prototypes.Logic
                     s.SShake = 10f;
                     s.SFlash = Math.Max(s.SFlash, 0.3f);
                     if (B.N > 0) s.TextPop(B.X, B.Y - 30f, "×" + B.N, new Rgb(191, 232, 255), 22f);
-                    F = new Fall { X = fx, Y = B.Y, K = 0f, W = B.R * 1.6f };
+                    F = new Fall { X = fx, Y = B.Y, K = 0f, W = B.R * 1.6f * s.SWide };
                     // 샘플 x: rand(180, 320) − 소방관 150
                     float ox = s.Rnd(180f, 320f) - 150f;
                     Big = new BigBubble { Ox = ox, Oy = BigOy, X = px + ox, Y = py + BigOy };
@@ -477,6 +319,9 @@ namespace FireGame.Prototypes.Logic
         {
             public float X, Y, P, K, Warn;
             public int Lv;
+
+            /// <summary>광각 노즐 배율(솟을 때의 SWide): 맞힘 반경·물기둥 굵기에 곱한다(그림도).</summary>
+            public float Wd = 1f;
         }
 
         public struct Pt
@@ -527,7 +372,7 @@ namespace FireGame.Prototypes.Logic
 
         private readonly List<Hole> _mh = new List<Hole>();
 
-        /// <summary>샘플 MH: 지금 샘플 화면(소방관 둘레 480×270) 안 맨홀.</summary>
+        /// <summary>샘플 MH: 지금 숲 화면(소방관 둘레 SViewHalfW×SViewHalfH) 안 맨홀.</summary>
         public List<Hole> ScreenHoles(SurvivorSim s)
         {
             HolesIn(s.PX - SampleC.HalfW, s.PY - SampleC.HalfH, s.PX + SampleC.HalfW, s.PY + SampleC.HalfH, _mh);
@@ -535,9 +380,9 @@ namespace FireGame.Prototypes.Logic
         }
 
         // items-c.js:213
-        private void MhGeyser(float x, float y, float p, float warn, int lv)
+        private void MhGeyser(SurvivorSim s, float x, float y, float p, float warn, int lv)
         {
-            G.Add(new Geyser { X = x, Y = y, P = p, K = -warn, Warn = warn, Lv = lv });
+            G.Add(new Geyser { X = x, Y = y, P = p, K = -warn, Warn = warn, Lv = lv, Wd = s.SWide });
         }
 
         // items-c.js:214-226
@@ -549,7 +394,7 @@ namespace FireGame.Prototypes.Logic
                 g.K += dt;
                 if (before < 0f && g.K >= 0f)
                 {
-                    float R = 34f * g.P;
+                    float R = 34f * g.P * g.Wd;
                     foreach (Enemy m in s.SAlive().ToArray())
                     {
                         float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
@@ -560,7 +405,7 @@ namespace FireGame.Prototypes.Logic
                             s.SLaunch(m, s.Rnd(330f, 440f) * (float)Math.Sqrt(g.P), (mx - g.X) / dl * 90f, (my - g.Y) / dl * 55f);
                         }
                     }
-                    s.SplashFx(g.X, g.Y, 30f * g.P, 10 + (g.Lv * 2));
+                    s.SplashFx(g.X, g.Y, 30f * g.P * g.Wd, 10 + (g.Lv * 2));
                     s.HitFx(g.X, g.Y, g.Lv, 1f);
                     s.SShake = Math.Max(s.SShake, 3f + (g.P * 2.5f));
                     if (g.Lv >= 4) s.SFlash = Math.Max(s.SFlash, 0.08f);
@@ -601,7 +446,7 @@ namespace FireGame.Prototypes.Logic
                     int k = 0;
                     foreach (Enemy m in alive)
                     {
-                        if (SurvivorSim.Hypot(SurvivorSim.SX(m.Pos) - h.X, SurvivorSim.SY(m.Pos) - h.Y) < 70f) k++;
+                        if (SurvivorSim.Hypot(SurvivorSim.SX(m.Pos) - h.X, SurvivorSim.SY(m.Pos) - h.Y) < 70f * s.SWide) k++;
                     }
                     return k;
                 }
@@ -629,7 +474,7 @@ namespace FireGame.Prototypes.Logic
                 for (int i = 0; i < Math.Min(n, order.Count); i++)
                 {
                     Hole h = sorted[order[i]];
-                    if (scores[order[i]] > 0) MhGeyser(h.X, h.Y, p, 0.4f, lv);
+                    if (scores[order[i]] > 0) MhGeyser(s, h.X, h.Y, p, 0.4f, lv);
                 }
                 Cd = Cool[l];
             }
@@ -664,7 +509,7 @@ namespace FireGame.Prototypes.Logic
                             float x = h.X + ((float)Math.Cos(a) * 30f * i), y = h.Y + ((float)Math.Sin(a) * 30f * i);
                             if (x < left + 10f || x > left + (2f * SampleC.HalfW) - 10f || y < top + 10f || y > top + (2f * SampleC.HalfH) - 10f) break;
                             crack.Pts.Add(new Pt { X = x, Y = y });
-                            MhGeyser(x, y, 1.15f, 0.22f + (i * 0.08f), 6);
+                            MhGeyser(s, x, y, 1.15f, 0.22f + (i * 0.08f), 6);
                         }
                         Cracks.Add(crack);
                     }
@@ -764,13 +609,13 @@ namespace FireGame.Prototypes.Logic
                         s.HitFx(p.X, p.Y, lv, 0.6f);
                         if (lv == 6)
                         {
-                            s.SplashFx(p.X, p.Y, 34f, 10);
+                            s.SplashFx(p.X, p.Y, 34f * s.SWide, 10);
                             s.SHitArea(p.X, p.Y, 34f, 4f, 160f);
-                            s.Prism(p.X, p.Y, 0.35f, 34f);
+                            s.Prism(p.X, p.Y, 0.35f, 34f * s.SWide);
                         }
                         else if (lv == 5 && i == pts.Count - 2)
                         {
-                            s.SplashFx(p.X, p.Y, 30f, 10);
+                            s.SplashFx(p.X, p.Y, 30f * s.SWide, 10);
                             s.SHitArea(p.X, p.Y, 30f, 3f, 140f);
                         }
                     }

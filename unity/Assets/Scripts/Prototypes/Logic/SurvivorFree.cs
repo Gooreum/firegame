@@ -48,9 +48,6 @@ namespace FireGame.Prototypes.Logic
         public UpgradeId? JustLeveledItem;
         public int JustLeveledTo;
 
-        /// <summary>불사조 방화복(샘플 suit Lv6)이 쓰러짐을 막을 때 부른다. true면 이번 틱은 쓰러지지 않는다.</summary>
-        public Func<bool> SampleRevive;
-
         // --- 구조대원(샘플 items-e.js CrewScene) ---
         public const int MaxCrew = 8;
 
@@ -96,13 +93,6 @@ namespace FireGame.Prototypes.Logic
         {
             TickSample();
             TickCrew();
-        }
-
-        /// <summary>체력 0: 샘플 불사조 방화복이 막을 수 있다.</summary>
-        private void TryPhoenix()
-        {
-            if (Hp > 0f || !Build.Free || SampleRevive == null) return;
-            SampleRevive();
         }
 
         /// <summary>대원 물줄기 대상: 가장 가까운 살아 있는 몹.</summary>

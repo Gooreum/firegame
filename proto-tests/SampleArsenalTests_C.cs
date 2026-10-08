@@ -7,7 +7,7 @@ using Xunit;
 namespace FireGame.Prototypes.Tests
 {
     /// <summary>
-    /// 숲 샘플 아이템 C(items-c.js 그대로): 거품 눈덩이·비눗방울·맨홀 간헐천·물 사슬의 샘플 수치.
+    /// 숲 샘플 아이템 C(items-c.js 그대로): 비눗방울·맨홀 간헐천·물 사슬의 샘플 수치(거품은 숲에서 뺐다).
     /// 아이템을 직접 돌려(Update) 다른 아이템·감독 스폰과 섞이지 않게 잰다.
     /// </summary>
     public class SampleArsenalTests_C
@@ -51,7 +51,7 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Registry_MakesItemC()
         {
-            Assert.IsType<SampleFoamItem>(SampleItemsRegistry.Make(UpgradeId.Foam));
+            Assert.Null(SampleItemsRegistry.Make(UpgradeId.Foam));
             Assert.IsType<SampleBubbleItem>(SampleItemsRegistry.Make(UpgradeId.Bubble));
             Assert.IsType<SampleManholeItem>(SampleItemsRegistry.Make(UpgradeId.Manhole));
             Assert.IsType<SampleChainItem>(SampleItemsRegistry.Make(UpgradeId.Chain));
@@ -59,101 +59,6 @@ namespace FireGame.Prototypes.Tests
             sim.PendingChoices = new List<UpgradeId> { UpgradeId.Chain };
             sim.Choose(0);
             Assert.IsType<SampleChainItem>(sim.SampleItemOf(UpgradeId.Chain));
-        }
-
-        // ------------------------------------------------------------ 거품 눈덩이
-        [Theory]
-        [InlineData(1, 1, 1.8f)]
-        [InlineData(2, 1, 1.4f)]
-        [InlineData(3, 2, 1.5f)]
-        [InlineData(4, 2, 1.2f)]
-        [InlineData(5, 3, 1.1f)]
-        [InlineData(6, 3, 1.1f)]
-        public void Foam_CountAndCooldown_PerLevel(int lv, int n, float cd)
-        {
-            var sim = Quiet();
-            var it = Make<SampleFoamItem>(sim, UpgradeId.Foam);
-            Tick(sim, it, lv, 0.32f);
-            Assert.Equal(n, it.F.Count);
-            Assert.InRange(it.Cd, cd - 0.04f, cd);
-            Assert.All(it.F, f => Assert.Equal(10f + (lv * 1.5f), f.R, 3));
-            Assert.All(it.F, f => Assert.Equal(SampleFoamItem.MaxR[lv], f.Max));
-        }
-
-        [Fact]
-        public void Foam_HomesOnMob_SwallowsIt_Held()
-        {
-            var sim = Quiet();
-            var it = Make<SampleFoamItem>(sim, UpgradeId.Foam);
-            Enemy e = Mob(sim, 120f, -10f);
-            Tick(sim, it, 1, 0.31f);
-            SampleFoamItem.Ball f = Assert.Single(it.F);
-            float x0 = f.X;
-            Tick(sim, it, 1, 0.3f);
-            Assert.True(f.X > x0 + 5f, "거품이 몹 쪽(오른쪽)으로 굴러가야");
-            for (int i = 0; i < 200 && f.In.Count == 0 && it.F.Contains(f); i++) it.Update(sim, Dt, 1);
-            Assert.Single(f.In);
-            Assert.True(e.Held && e.SHide && !e.Dead, "삼킨 몹은 잡혀 숨고 아직 살아 있다");
-            Assert.Equal(10f + 1.5f + 2f, f.R, 3);
-            Assert.DoesNotContain(e, sim.SAlive());
-        }
-
-        [Fact]
-        public void Foam_BurstsAt1_7s_KillsSwallowed()
-        {
-            var sim = Quiet();
-            var it = Make<SampleFoamItem>(sim, UpgradeId.Foam);
-            Enemy e = Mob(sim, 40f, -30f);
-            Tick(sim, it, 1, 0.31f);
-            SampleFoamItem.Ball f = Assert.Single(it.F);
-            float age = 0f;
-            while (it.F.Contains(f) && age < 3f)
-            {
-                it.Update(sim, Dt, 1);
-                age += Dt;
-            }
-            Assert.InRange(age, 1.65f, 1.75f);
-            Assert.True(e.Dead, "삼킨 몹은 터질 때 처치");
-            Assert.False(e.Held);
-        }
-
-        [Fact]
-        public void Foam_BurstsEarly_AtMaxRadius()
-        {
-            var sim = Quiet();
-            var it = Make<SampleFoamItem>(sim, UpgradeId.Foam);
-            // Lv1: r 11.5 → 최대 22. 작은 몹 6마리면 +12 → 22에서 바로 터진다.
-            for (int i = 0; i < 6; i++) Mob(sim, -2f + (i * 1f), -14f + (i % 2));
-            Tick(sim, it, 1, 0.31f);
-            for (int i = 0; i < 40 && it.F.Count > 0; i++) it.Update(sim, Dt, 1);
-            Assert.Empty(it.F);
-            Assert.True(sim.Enemies.All(e => e.Dead));
-        }
-
-        [Fact]
-        public void Foam_Lv6_WaveCrossesScreen_KillsEverything()
-        {
-            var sim = Quiet();
-            var it = Make<SampleFoamItem>(sim, UpgradeId.Foam);
-            var mobs = new List<Enemy> { Mob(sim, -200f, 120f, EnemyKind.Blaze), Mob(sim, 0f, -125f), Mob(sim, 200f, 100f, EnemyKind.Blaze) };
-            for (int i = 0; i < 70 && it.Waves.Count == 0; i++)
-            {
-                it.F.Clear();
-                it.Update(sim, Dt, 6);
-            }
-            SampleFoamItem.Wave w = Assert.Single(it.Waves);
-            Assert.InRange(w.X, sim.PX - 310f, sim.PX - 300f);
-            Assert.InRange(it.Wcd, 1.68f, 1.71f);
-            // 거품 공이 삼키지 않게 공은 치우고 파도만 본다.
-            for (int i = 0; i < 110; i++)
-            {
-                it.F.Clear();
-                it.Update(sim, Dt, 6);
-            }
-            Assert.All(mobs, m => Assert.True(m.Dead, "파도가 지나간 몹은 쓰러진다: " + m.Kind + " held=" + m.Held + " hp=" + m.Hp));
-            // 화면 오른쪽 + 120에 닿으면 사라지고, 1.7초마다 새 파도.
-            Tick(sim, it, 6, 0.5f);
-            Assert.True(it.Waves.All(x => x.X < sim.PX + 360f));
         }
 
         // ------------------------------------------------------------ 비눗방울

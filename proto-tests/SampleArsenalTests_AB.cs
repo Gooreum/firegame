@@ -8,7 +8,7 @@ using Xunit;
 namespace FireGame.Prototypes.Tests
 {
     /// <summary>
-    /// 숲 샘플 아이템 A·B(items-a.js·items-b.js 그대로): 물대포 · 회전 스프링클러 · 물풍선 · 소화기 부메랑 · 액체질소 지뢰의 레벨별 수치.
+    /// 숲 샘플 아이템 A·B(items-a.js·items-b.js 그대로, 물대포는 ForestLevelUpTests): 회전 스프링클러 · 물풍선 · 소화기 부메랑 · 액체질소 지뢰의 레벨별 수치.
     /// 무기 없이 시작해(호스 없음) 아이템 하나만 든 채, 카드 경로(Choose)로 올려 시험한다.
     /// </summary>
     public class SampleArsenalTests_AB
@@ -78,63 +78,6 @@ namespace FireGame.Prototypes.Tests
         private static float DistS(SurvivorSim sim, Enemy e)
         {
             return SurvivorSim.Hypot(SurvivorSim.SX(e.Pos) - sim.PX, SurvivorSim.SY(e.Pos) - sim.PY);
-        }
-
-        // ---------------------------------------------------------------- 물대포
-        [Theory]
-        [InlineData(1, 1)]
-        [InlineData(2, 2)]
-        [InlineData(3, 3)]
-        [InlineData(4, 4)]
-        [InlineData(5, 5)]
-        [InlineData(6, 5)]
-        public void Hose_StreamCountIsLevel_TargetsNearest(int lv, int streams)
-        {
-            var sim = Bare();
-            To(sim, UpgradeId.Hose, lv);
-            var h = Item<HoseItem>(sim, UpgradeId.Hose);
-            var keep = new HashSet<Enemy>();
-            var mobs = new List<Enemy>();
-            for (int i = 0; i < 7; i++) mobs.Add(Mob(sim, (i % 2 == 0 ? 1f : -1f) * (40f + (i * 22f)), 10f, keep));
-            Run(sim, SurvivorSim.Dt, keep);
-            Assert.Equal(streams, h.Tg.Count);
-            List<Enemy> nearest = mobs.OrderBy(e => DistS(sim, e)).Take(streams).ToList();
-            Assert.Equal(nearest.ToHashSet(), h.Tg.ToHashSet());
-        }
-
-        [Fact]
-        public void Hose_Lv3_PiercesMobBehindTarget()
-        {
-            var sim = Bare();
-            To(sim, UpgradeId.Hose, 3);
-            var keep = new HashSet<Enemy>();
-            Mob(sim, 60f, 0f, keep);
-            Enemy behind = Mob(sim, 140f, 0f, keep);
-            Run(sim, SurvivorSim.Dt, keep);
-            Assert.True(behind.Hp < behind.MaxHp, "Lv3 꼬리(60+3×14=102px)가 뒤 몹을 꿰뚫어야");
-        }
-
-        [Fact]
-        public void Hose_Lv6_BeamSweepsPlusMinus1_1RadAroundCrowd()
-        {
-            var sim = Bare();
-            To(sim, UpgradeId.Hose, 6);
-            var h = Item<HoseItem>(sim, UpgradeId.Hose);
-            var keep = new HashSet<Enemy>();
-            Enemy e = Mob(sim, 150f, -30f, keep);
-            float lo = 9f, hi = -9f;
-            Run(sim, 2.2f, keep, () =>
-            {
-                float bas = (float)Math.Atan2(SurvivorSim.SY(e.Pos) - sim.PY, SurvivorSim.SX(e.Pos) - sim.PX);
-                float d = h.A - bas;
-                lo = Math.Min(lo, d);
-                hi = Math.Max(hi, d);
-                SurvivorSim.SetS(e, sim.PX + 150f, sim.PY - 30f);
-                return false;
-            });
-            Assert.True(h.HasA);
-            Assert.InRange(hi, 1.05f, 1.1f + 1e-3f);
-            Assert.InRange(lo, -1.1f - 1e-3f, -1.05f);
         }
 
         // ---------------------------------------------------------------- 회전 스프링클러

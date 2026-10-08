@@ -9,6 +9,7 @@ namespace FireGame.Prototypes.Logic
     /// 무기는 하나가 맡는 공간 하나(앞·둘레·하늘·바닥·마을)이고, 모두 불 몹과 건물 불을 둘 다 맞힌다.
     /// 레벨업은 개수·크기·갈래로 눈에 보이게 오른다. 무기 Lv5 + 짝 보조면 진화한다.
     /// 모든 스테이지가 같은 풀이고 노란 특수 카드는 없다. enum 순서가 IsWeapon/IsPassive/IsEvolution의 범위다.
+    /// 숲(Loadout.Free, 2026-10-08)만 따로: 무기 8 + 수치형 보조 5(고압 노즐·급수 펌프·광각 노즐은 숲 전용), 칸 없음, 짝은 FreePairs.
     /// </summary>
     public enum UpgradeId
     {
@@ -72,6 +73,16 @@ namespace FireGame.Prototypes.Logic
         /// <summary>불사조 방화복: 쓰러지면 한 번 물 날개로 부활하며 폭발.</summary>
         PhoenixSuit,
 
+        // --- 숲 보조(2026-10-08 아이템 정리: 수치만 올리고 무기의 진화 짝이 된다. 숲에서만 나온다) ---
+        /// <summary>고압 노즐: 모든 물 피해 +10%/Lv. 짝: 물대포.</summary>
+        Nozzle,
+
+        /// <summary>급수 펌프: 무기 시계 +8%/Lv(재사용이 빨라진다). 짝: 물 사슬.</summary>
+        Feed,
+
+        /// <summary>광각 노즐: 무기 범위·반경 +10%/Lv. 짝: 물풍선·소화기.</summary>
+        Wide,
+
         Heal,
     }
 
@@ -101,8 +112,49 @@ namespace FireGame.Prototypes.Logic
             { UpgradeId.PhoenixSuit, UpgradeId.Suit, UpgradeId.Suit },
         };
 
+        /// <summary>숲 진화 짝(2026-10-08 탕탕식): (무기, 짝 보조). 무기 Lv5 + 짝 보조 Lv1이면 Lv6(진화)이 나온다.</summary>
+        private static readonly UpgradeId[,] FreePairs =
+        {
+            { UpgradeId.Hose, UpgradeId.Nozzle },
+            { UpgradeId.Sprinkler, UpgradeId.Boots },
+            { UpgradeId.Balloon, UpgradeId.Wide },
+            { UpgradeId.Extinguisher, UpgradeId.Wide },
+            { UpgradeId.Mine, UpgradeId.Suit },
+            { UpgradeId.Bubble, UpgradeId.Suit },
+            { UpgradeId.Manhole, UpgradeId.Boots },
+            { UpgradeId.Chain, UpgradeId.Feed },
+        };
+
+        /// <summary>숲에서 빠진 것(2026-10-08): 채찍·거품·펌프와 그 진화, 보조 진화. 숲 카드에 안 나온다.</summary>
+        private static readonly UpgradeId[] FreeCut =
+        {
+            UpgradeId.Tank, UpgradeId.OverPump, UpgradeId.Whip, UpgradeId.Whirl, UpgradeId.Foam, UpgradeId.Avalanche, UpgradeId.JetBoots, UpgradeId.PhoenixSuit,
+        };
+
+        /// <summary>숲 무기의 진화 짝 보조(숲 무기가 아니면 null).</summary>
+        public static UpgradeId? FreePairOf(UpgradeId weapon)
+        {
+            for (int i = 0; i < FreePairs.GetLength(0); i++)
+            {
+                if (FreePairs[i, 0] == weapon) return FreePairs[i, 1];
+            }
+            return null;
+        }
+
+        /// <summary>숲 전용 보조(고압 노즐·급수 펌프·광각 노즐): 다른 스테이지 카드에 안 나온다.</summary>
+        public static bool IsFreeOnly(UpgradeId id)
+        {
+            return id >= UpgradeId.Nozzle && id <= UpgradeId.Wide;
+        }
+
+        /// <summary>숲에서 빠진 아이템인가.</summary>
+        public static bool IsFreeCut(UpgradeId id)
+        {
+            return Array.IndexOf(FreeCut, id) >= 0;
+        }
+
         /// <summary>
-        /// 숲 개편(2026-10-08): 칸 제한 없음 · 13종 모두 Lv5 다음 Lv6 최고급(짝 조건 없음) · 보조도 Lv6.
+        /// 숲 개편(2026-10-08): 칸 제한 없음 · 무기 8 + 수치형 보조 5 · 무기 Lv5 + 짝 보조(FreePairs)면 Lv6 최고급.
         /// 숲에서만 켠다(사용자: "일단 숲 스테이지만"). 꺼져 있으면 4칸·짝 진화 그대로.
         /// </summary>
         public bool Free;
@@ -162,7 +214,7 @@ namespace FireGame.Prototypes.Logic
 
         public static bool IsPassive(UpgradeId id)
         {
-            return id >= UpgradeId.Tank && id <= UpgradeId.Suit;
+            return (id >= UpgradeId.Tank && id <= UpgradeId.Suit) || IsFreeOnly(id);
         }
 
         public int WeaponCount
@@ -188,7 +240,7 @@ namespace FireGame.Prototypes.Logic
         public bool Ready(UpgradeId evolution)
         {
             if (!IsEvolution(evolution) || Level(evolution) != 0 || Level(BaseOf(evolution)) < MaxLevel) return false;
-            if (Free) return true;
+            if (Free) return FreePairOf(BaseOf(evolution)) is UpgradeId p && Level(p) >= EvolvePair;   // 탕탕식: 짝 보조를 들어야 진화
             return !IsPassive(BaseOf(evolution)) && Level(PairOf(evolution)) >= EvolvePair;
         }
 
@@ -209,7 +261,8 @@ namespace FireGame.Prototypes.Logic
             var list = new List<UpgradeId>();
             for (int i = 0; i < Evolutions.GetLength(0); i++)
             {
-                if (Evolutions[i, 2] == passive && Evolutions[i, 1] != passive && Level(Evolutions[i, 0]) == 0) list.Add(Evolutions[i, 0]);
+                UpgradeId pair = Free ? (FreePairOf(Evolutions[i, 1]) ?? Evolutions[i, 1]) : Evolutions[i, 2];
+                if (pair == passive && Evolutions[i, 1] != passive && Level(Evolutions[i, 0]) == 0) list.Add(Evolutions[i, 0]);
             }
             return list;
         }
@@ -272,11 +325,20 @@ namespace FireGame.Prototypes.Logic
         }
 
         // --- 수치 ---
-        /// <summary>고압 펌프: 물대포 사거리. 재장전보다 눈에 띄게 멀리 나간다.</summary>
-        public float HoseRange { get { return 1f + (0.15f * PowerOf(UpgradeId.Tank)); } }
+        /// <summary>고압 펌프: 물대포 사거리. 재장전보다 눈에 띄게 멀리 나간다. 숲은 펌프가 물대포에 합쳐져 물대포 레벨이 맡는다.</summary>
+        public float HoseRange { get { return 1f + (0.15f * PowerOf(Free ? UpgradeId.Hose : UpgradeId.Tank)); } }
 
-        /// <summary>고압 펌프: 물대포 위력.</summary>
-        public float HosePower { get { return 1f + (0.15f * PowerOf(UpgradeId.Tank)); } }
+        /// <summary>고압 펌프: 물대포 위력(숲은 물대포 레벨).</summary>
+        public float HosePower { get { return 1f + (0.15f * PowerOf(Free ? UpgradeId.Hose : UpgradeId.Tank)); } }
+
+        /// <summary>숲 고압 노즐: 모든 물 피해 배율(+10%/Lv).</summary>
+        public float NozzleScale { get { return 1f + (0.10f * PowerOf(UpgradeId.Nozzle)); } }
+
+        /// <summary>숲 급수 펌프: 무기 시계 배율(+8%/Lv) — 쿨다운이 그만큼 빨리 돈다.</summary>
+        public float FeedScale { get { return 1f + (0.08f * PowerOf(UpgradeId.Feed)); } }
+
+        /// <summary>숲 광각 노즐: 무기 범위·반경 배율(+10%/Lv).</summary>
+        public float WideScale { get { return 1f + (0.10f * PowerOf(UpgradeId.Wide)); } }
 
         /// <summary>고압 펌프: 증기 충전 속도 배율(레벨마다 +25%)과 증기 폭발 반경 보너스(레벨마다 +0.5칸).</summary>
         public float SteamScale { get { return 1f + (0.25f * PowerOf(UpgradeId.Tank)); } }
@@ -288,8 +350,8 @@ namespace FireGame.Prototypes.Logic
         /// <summary>방화복: 불에 받는 피해 배율(열기·바닥 불·불 몹 접촉, 레벨마다 −10%). 보조가 셋뿐이라 모든 판에 들어오므로 −15%면 체력 압력이 사라졌다(봇 위기 판 6 → 1).</summary>
         public float HeatScale { get { return 1f - (0.10f * PowerOf(UpgradeId.Suit)); } }
 
-        /// <summary>장화: 이동 +12%/레벨.</summary>
-        public float SpeedScale { get { return 1f + (0.12f * PowerOf(UpgradeId.Boots)); } }
+        /// <summary>장화: 이동 +12%/레벨(숲은 +10%/레벨).</summary>
+        public float SpeedScale { get { return 1f + ((Free ? 0.10f : 0.12f) * PowerOf(UpgradeId.Boots)); } }
 
         /// <summary>방화복: 닿은 불 몹을 튕겨 내는 힘. 없으면 0.</summary>
         public float SuitPush { get { int l = PowerOf(UpgradeId.Suit); return l > 0 ? 3f + l : 0f; } }
@@ -301,6 +363,7 @@ namespace FireGame.Prototypes.Logic
         public bool CanTake(UpgradeId id)
         {
             if (id == UpgradeId.Heal) return false;
+            if (Free ? IsFreeCut(id) : IsFreeOnly(id)) return false;
             if (IsEvolution(id)) return Ready(id);
             int level = Level(id);
             if (level >= MaxLevelOf(id)) return false;
@@ -382,6 +445,9 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.OverPump: return "초고압 펌프";
                 case UpgradeId.JetBoots: return "제트 장화";
                 case UpgradeId.PhoenixSuit: return "불사조 방화복";
+                case UpgradeId.Nozzle: return "고압 노즐";
+                case UpgradeId.Feed: return "급수 펌프";
+                case UpgradeId.Wide: return "광각 노즐";
                 default: return "응급 처치";
             }
         }
@@ -419,33 +485,40 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.OverPump: return "진화! 몇 초마다 내 둘레 물 대폭발";
                 case UpgradeId.JetBoots: return "진화! 달린 자리에 요괴를 녹이는 물길";
                 case UpgradeId.PhoenixSuit: return "진화! 쓰러지면 물 날개로 부활하며 폭발";
+                case UpgradeId.Nozzle: return "모든 물이 세진다";
+                case UpgradeId.Feed: return "무기가 더 자주 나간다";
+                case UpgradeId.Wide: return "무기가 더 넓게 닿는다";
                 default: return "체력 30 회복";
             }
         }
 
-        /// <summary>숲 카드 설명: 승인 샘플의 레벨별 문구 그대로. nextLevel 6 = 최고급(Lv6 카드는 진화 id로 온다).</summary>
+        /// <summary>숲 카드 설명: 승인 샘플의 레벨별 문구. nextLevel 6 = 최고급(Lv6 카드는 진화 id로 온다). 보조는 수치만, 무기 Lv5는 진화 짝 한 줄.</summary>
         public static string DescribeFree(UpgradeId id, int nextLevel)
         {
             int n = Math.Max(1, Math.Min(5, nextLevel));
             string[] t;
             switch (Loadout.BaseOf(id))
             {
-                case UpgradeId.Hose: t = new[] { "가장 가까운 요괴에 물줄기 1개", "물줄기 2개 · 더 굵게", "물줄기 3개 · 뒤까지 꿰뚫는다", "물줄기 4개 · 더 빠르게", "물줄기 5개 · 끝에서 물보라 폭발", "고압 방수포: 화면을 쓸어 내는 거대한 물기둥" }; break;
+                case UpgradeId.Hose: t = new[] { "겨눈 쪽으로 물줄기 · 펌프가 붙어 레벨마다 굵고 멀리", "더 굵게 · 더 멀리 · 3마리 꿰뚫는다", "더 굵게 · 더 멀리 · 4마리 꿰뚫는다", "더 굵게 · 더 멀리 · 5마리 꿰뚫는다", "가장 굵고 멀리 · 6마리 꿰뚫는다", "고압 방수포: 모두 꿰뚫는 굵은 물기둥 · 몇 초마다 내 둘레 물 대폭발" }; break;
                 case UpgradeId.Sprinkler: t = new[] { "스프링클러 2개가 내 둘레를 돈다", "더 넓게 · 더 세게 튕긴다", "스프링클러 3개 · 물줄기를 뿜는다", "4갈래 노즐 · 더 빨리 돈다", "스프링클러 4개 · 금빛 · 물보라 폭발", "물 왕관: 물 고리 + 8갈래 무지개 분사" }; break;
                 case UpgradeId.Balloon: t = new[] { "물풍선 1개 · 4번 튕긴다", "물풍선 2개 · 5번", "더 큰 풍선 · 6번 튕긴다", "물풍선 3개 · 7번", "금빛 풍선 · 튕길 때마다 물보라 폭발", "물풍선 폭우: 튕길 때마다 둘로 갈라진다" }; break;
                 case UpgradeId.Extinguisher: t = new[] { "소화기 1개가 나갔다 돌아온다", "더 멀리 · 더 세게", "소화기 2개", "더 멀리 · 분말 꼬리가 길게", "금빛 소화기 3개 · 9칸까지", "분말 회오리: 떠도는 하얀 회오리가 요괴를 빨아올린다" }; break;
                 case UpgradeId.Mine: t = new[] { "지나간 자리에 지뢰 2개", "지뢰 3개 · 더 넓게 언다", "지뢰 4개 · 얼음이 터지며 둘레도 언다", "지뢰 5개 · 더 넓게", "금빛 지뢰 6개 · 거대한 냉기 폭발", "빙결 지대: 지뢰끼리 얼음 길 · 건너는 요괴는 그대로 언다" }; break;
-                case UpgradeId.Foam: t = new[] { "굴러가며 요괴를 삼키고 펑 터지는 거품", "더 크게 부푼다 · 더 세게 터진다", "거품 2개 · 푸른 빛", "더 빨리 굴러간다 · 더 크게", "거품 3개 · 금빛 · 큰 폭발", "거품 산사태: 화면을 덮치는 거품 파도" }; break;
                 case UpgradeId.Bubble: t = new[] { "요괴를 방울에 가둬 띄웠다가 펑", "방울 2발 · 더 빠르게", "방울 3발 · 큰 요괴도 가둔다", "방울 3발 · 연사", "방울 4발 · 금빛 · 큰 물보라", "방울 폭포: 거대 방울로 모아 물폭포로 터뜨린다" }; break;
                 case UpgradeId.Manhole: t = new[] { "요괴가 몰린 맨홀에서 물기둥이 솟는다", "맨홀 2곳 · 더 자주", "물기둥이 굵어진다 · 푸른 빛", "맨홀 3곳 · 하늘 높이 날린다", "맨홀 4곳 · 금빛 물기둥", "수도관 폭발: 물기둥이 도미노로 터진다" }; break;
                 case UpgradeId.Chain: t = new[] { "물줄기가 요괴 3마리를 번개처럼 튄다", "4마리 · 더 굵게", "두 줄기 · 하얀 심", "5마리 · 더 빠르게", "6마리 · 금빛 번개 · 끝에서 물 폭발", "해일 사슬: 맞은 요괴마다 물이 터진다" }; break;
-                case UpgradeId.Whip: t = new[] { "호스를 휘둘러 둘레 요괴를 튕긴다", "더 넓게 · 더 세게", "두 갈래로 휘두른다", "더 빨리 · 물 리본이 길게", "세 갈래 · 금빛 · 맞으면 물보라", "물 회오리: 휘두른 자리에 물 고리가 남아 돈다" }; break;
-                case UpgradeId.Tank: t = new[] { "물대포가 굵어지고 멀리 간다", "압력 ↑ · 더 굵게 · 더 밀어낸다", "흰 심 물줄기 · 더 세게", "물줄기 하나 더 · 끝에서 물보라", "금빛 고압 · 큰 물보라 폭발", "초고압 펌프: 몇 초마다 내 둘레 물 대폭발" }; break;
-                case UpgradeId.Boots: t = new[] { "빨라진다 · 몸으로 요괴를 밀친다", "더 빨리 · 물 발자국", "발자국마다 물이 튄다", "잔상이 남는다 · 더 세게 밀친다", "금빛 질주 · 부딪히면 물보라 폭발", "제트 장화: 달린 자리에 요괴를 녹이는 물길" }; break;
-                case UpgradeId.Suit: t = new[] { "불에 덜 다치고 닿은 요괴를 튕긴다", "보호막 두껍게 · 더 세게 튕긴다", "보호막이 물결을 밀어낸다", "보호막이 넓어진다 · 물결이 잦다", "금빛 보호막 · 거의 안 다친다", "불사조 방화복: 쓰러지면 물 날개로 부활하며 폭발" }; break;
+                case UpgradeId.Boots: return "이동 속도 +" + (10 * n) + "%";
+                case UpgradeId.Suit: return "받는 피해 −" + (10 * n) + "% · 최대 체력 +" + (10 * n);
+                case UpgradeId.Nozzle: return "모든 물 피해 +" + (10 * n) + "%";
+                case UpgradeId.Feed: return "무기 재사용 −" + (8 * n) + "% · 물대포 연사";
+                case UpgradeId.Wide: return "무기 범위·반경 +" + (10 * n) + "%";
                 default: return Describe(id, nextLevel);
             }
-            return Loadout.IsEvolution(id) ? t[5] : t[n - 1];
+            if (Loadout.IsEvolution(id)) return t[5];
+            // 무기 Lv5 카드: 무엇을 들어야 Lv6이 나오는지 한 줄.
+            UpgradeId? pair = Loadout.FreePairOf(id);
+            if (n == Loadout.MaxLevel && pair.HasValue) return t[n - 1] + "\n진화 짝: " + Name(pair.Value);
+            return t[n - 1];
         }
 
         /// <summary>카드·연출 아이콘 이름(Art/LevelUp/icon_*): 최고급은 원래 아이템 아이콘의 Lv6 판.</summary>
@@ -466,6 +539,10 @@ namespace FireGame.Prototypes.Logic
                 case UpgradeId.Tank: return "tank";
                 case UpgradeId.Boots: return "boots";
                 case UpgradeId.Suit: return "suit";
+                // 숲 새 보조(2026-10-08): 그림을 굽기 전까지 비슷한 아이콘을 빌려 쓴다.
+                case UpgradeId.Nozzle: return "hose";
+                case UpgradeId.Feed: return "tank";
+                case UpgradeId.Wide: return "sprinkler";
                 default: return null;
             }
         }

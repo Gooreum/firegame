@@ -13,7 +13,7 @@ namespace FireGame.Prototypes.Logic
         {
             UpgradeId.Cannon, UpgradeId.Crown, UpgradeId.BalloonStorm, UpgradeId.Tornado, UpgradeId.IceField, UpgradeId.Avalanche, UpgradeId.BubbleFall, UpgradeId.Waterline, UpgradeId.Surge, UpgradeId.Whirl,
             UpgradeId.Hose, UpgradeId.Whip, UpgradeId.Sprinkler, UpgradeId.Chain, UpgradeId.Manhole, UpgradeId.Foam, UpgradeId.Mine, UpgradeId.Balloon, UpgradeId.Extinguisher, UpgradeId.Bubble,
-            UpgradeId.Tank, UpgradeId.Suit, UpgradeId.Boots,
+            UpgradeId.Tank, UpgradeId.Suit, UpgradeId.Boots, UpgradeId.Nozzle, UpgradeId.Wide, UpgradeId.Feed,
         };
 
         private readonly SurvivorSim _sim;

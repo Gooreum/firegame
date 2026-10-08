@@ -251,19 +251,20 @@ namespace FireGame.Prototypes
         // items-b.js:148-151
         private void BalloonDrawGround(SampleCanvas g, BalloonItem b, int lv)
         {
+            float w = _sim.SWide;
             foreach (BalloonItem.RainDrop r in b.Rain)
             {
                 float k = r.K / 0.45f;
                 g.Save();
                 g.FillStyle = C(20, 40, 90, 0.12f + (0.3f * k));
                 g.BeginPath();
-                g.Ellipse(r.X, r.Y, 6f + (12f * k), (6f + (12f * k)) * 0.45f, 0f, 0f, Tau);
+                g.Ellipse(r.X, r.Y, (6f + (12f * k)) * w, (6f + (12f * k)) * w * 0.45f, 0f, 0f, Tau);
                 g.Fill();
                 g.Lighter = true;
                 g.StrokeStyle = Hsla(SHue(r.X), 100f, 70f, 0.5f * k);
                 g.LineWidth = 1.5f;
                 g.BeginPath();
-                g.Ellipse(r.X, r.Y, 20f - (10f * k), (20f - (10f * k)) * 0.45f, 0f, 0f, Tau);
+                g.Ellipse(r.X, r.Y, (20f - (10f * k)) * w, (20f - (10f * k)) * w * 0.45f, 0f, 0f, Tau);
                 g.Stroke();
                 g.Restore();
             }
@@ -278,7 +279,7 @@ namespace FireGame.Prototypes
             foreach (BalloonItem.RainDrop r in b.Rain)
             {
                 float z = 260f * (1f - SurvivorSim.Ease(r.K / 0.45f));
-                DrawBal(g, r.X, r.Y - z, 0f, 400f, 14f, 0f, r.Sl + (t * 5f), 6, null, null, b.Surge);
+                DrawBal(g, r.X, r.Y - z, 0f, 400f, 14f * _sim.SWide, 0f, r.Sl + (t * 5f), 6, null, null, b.Surge);
             }
         }
 
@@ -352,16 +353,17 @@ namespace FireGame.Prototypes
                 }
                 g.Restore();
                 ShadowAt(g, b.X, b.Y + 14f, 7f, 0.25f);
-                DrawExtLv(g, b.X, b.Y, b.Spin, lv, (1f + ((Mathf.Min(lv, 5) - 1) * 0.12f)) * (1f + (e.Surge * 0.6f)));
+                DrawExtLv(g, b.X, b.Y, b.Spin, lv, (1f + ((Mathf.Min(lv, 5) - 1) * 0.12f)) * (1f + (e.Surge * 0.6f)) * _sim.SWide);
             }
             if (lv < 6 || e.Tw == null) return;
             ExtinguisherItem.Twister T = e.Tw;
-            ShadowAt(g, T.X, T.Y + 6f, 56f, 0.32f);
+            float tw = _sim.SWide;
+            ShadowAt(g, T.X, T.Y + 6f, 56f * tw, 0.32f);
             g.Save();
             g.RoundCap = true;
             for (int i = 0; i < 12; i++)
             {
-                float h = i * 13f, r = 14f + (i * 6.5f), a = (t * 10f) + (i * 0.8f), wob = Mathf.Sin((t * 3f) + (i * 0.6f)) * 8f;
+                float h = i * 13f * tw, r = (14f + (i * 6.5f)) * tw, a = (t * 10f) + (i * 0.8f), wob = Mathf.Sin((t * 3f) + (i * 0.6f)) * 8f;
                 float a0 = a % Tau, a3 = (a + 3f) % Tau;
                 g.Lighter = true;
                 g.StrokeStyle = Hsla(SHue(i * 30f), 100f, 75f, 0.35f);
@@ -382,12 +384,12 @@ namespace FireGame.Prototypes
                 g.Stroke();
             }
             g.Lighter = true;
-            SampleCanvas.Paint gl = Radial(T.X, T.Y - 70f, 0f, T.X, T.Y - 70f, 110f);
+            SampleCanvas.Paint gl = Radial(T.X, T.Y - (70f * tw), 0f, T.X, T.Y - (70f * tw), 110f * tw);
             gl.AddColorStop(0f, C(255, 250, 230, 0.35f));
             gl.AddColorStop(1f, C(255, 250, 230, 0f));
             g.FillStyle = gl;
             g.BeginPath();
-            g.Arc(T.X, T.Y - 70f, 110f, 0f, Tau);
+            g.Arc(T.X, T.Y - (70f * tw), 110f * tw, 0f, Tau);
             g.Fill();
             g.Restore();
         }
@@ -451,6 +453,7 @@ namespace FireGame.Prototypes
         {
             float t = _sim.ST;
             List<MineItem.Mine> M = it.Mines;
+            float w = _sim.SWide;
             if (lv >= 6)
             {
                 for (int i = 0; i + 1 < M.Count; i++)
@@ -461,13 +464,13 @@ namespace FireGame.Prototypes
                     g.RoundCap = true;
                     g.Lighter = true;
                     g.StrokeStyle = Hsla(SHue(i * 40f), 100f, 72f, 0.3f);
-                    g.LineWidth = 22f;
+                    g.LineWidth = 22f * w;
                     g.BeginPath();
                     g.MoveTo(A.X, A.Y);
                     g.LineTo(B.X, B.Y);
                     g.Stroke();
                     g.StrokeStyle = C(120, 210, 255, 0.5f);
-                    g.LineWidth = 12f;
+                    g.LineWidth = 12f * w;
                     g.Stroke();
                     g.StrokeStyle = C(235, 252, 255, 0.95f);
                     g.LineWidth = 3.5f;
@@ -495,7 +498,7 @@ namespace FireGame.Prototypes
                 }
             }
             // 냉기 범위 미리 보기(Lv3~)
-            float R = MineItem.MineR[lv];
+            float R = MineItem.MineR[lv] * w;
             foreach (MineItem.Mine mi in M)
             {
                 bool on = mi.Arm <= 0f;

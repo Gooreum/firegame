@@ -1158,7 +1158,6 @@ namespace FireGame.Prototypes.Logic
             Measure();
             Sweep();
 
-            TryPhoenix();
             if (Hp <= 0f)
             {
                 Hp = 0f;
@@ -1376,8 +1375,8 @@ namespace FireGame.Prototypes.Logic
                 my /= len;
             }
             if (len > 0.01f) Facing = new Vec2(mx / Math.Max(len, 1f), my / Math.Max(len, 1f));
-            // 숲: 장화 속도는 샘플 표(SampleSpeed, 장화 아이템이 정한다).
-            float speed = BaseSpeed * (Build.Free ? SampleSpeed : Build.SpeedScale);
+            // 숲도 장화는 수치형(+10%/Lv, Build.SpeedScale).
+            float speed = BaseSpeed * Build.SpeedScale;
             Player.X = Clamp(Player.X + (mx * speed * Dt), 0.5f, ArenaSize - 0.5f);
             Player.Y = Clamp(Player.Y + (my * speed * Dt), 0.5f, ArenaSize - 0.5f);
             // 장화: 걷는 동안 젖은 발자국을 남긴다(연출용, 한 칸마다).
@@ -2104,9 +2103,11 @@ namespace FireGame.Prototypes.Logic
         {
             // 물대포: 겨눈 쪽으로, 쥐고 있을 때만. 예전 자동 조준(0.32초)과 초당 피해를 맞췄다.
             // 수호자: 쥐지 않아도 가까운 불을 AutoPower배로 쏜다(증기는 안 쌓는다). 쥐면 겨눈 쪽으로, 증기까지(집중 분사).
-            // 숲: 겨누는 물대포는 건물 끄기용 한 줄기로 남기고, 레벨별 물줄기·방수포는 샘플 아이템(SampleItems)이 그린다.
+            // 숲(2026-10-08): 물대포는 겨누는 한 줄기뿐이다(펌프가 합쳐져 레벨마다 굵고 멀리, 고압 노즐·급수 펌프가 곱해진다). 방수포 대폭발만 샘플 아이템(HoseItem)이다.
             int hose = Build.Free ? Build.PowerOf(UpgradeId.Hose) : Build.Level(UpgradeId.Hose);
-            bool cannon = !Build.Free && Build.Level(UpgradeId.Cannon) > 0;
+            // 숲 Lv6(고압 방수포)도 모두 꿰뚫는 굵은 한 줄기다(18갈래 회전은 숲에서 끈다).
+            bool cannon = Build.Level(UpgradeId.Cannon) > 0;
+            float nozzle = Build.Free ? Build.NozzleScale : 1f;
             _hoseClock -= Dt;
             bool auto = false;
             if (Guardian && !Spraying && (hose > 0 || cannon))
@@ -2121,7 +2122,8 @@ namespace FireGame.Prototypes.Logic
             AutoFiring = auto;
             if ((Spraying || auto) && (hose > 0 || cannon) && _hoseClock <= 0f && (Aim.X != 0f || Aim.Y != 0f))
             {
-                _hoseClock = HoseInterval;
+                // 숲 급수 펌프: 물대포도 더 자주 나간다.
+                _hoseClock = HoseInterval / (Build.Free ? Build.FeedScale : 1f);
                 float baseAngle = (float)Math.Atan2(Aim.Y, Aim.X);
                 float power = auto ? AutoPower : 1f;
                 if (auto) Stats.AutoShots++;
@@ -2129,12 +2131,12 @@ namespace FireGame.Prototypes.Logic
                 if (cannon)
                 {
                     // 진화 후: 한 줄기로 모든 불을 꿰뚫는 고압 제트.
-                    FireDrop(baseAngle, 13.2f * (HoseInterval / 0.4f) * Build.HosePower * power, 18f, 0.55f, 999, 0.6f * Build.HoseRange, ShotKind.Jet, true, !auto);
+                    FireDrop(baseAngle, 13.2f * (HoseInterval / 0.4f) * Build.HosePower * power * nozzle, 18f, 0.55f, 999, 0.6f * Build.HoseRange, ShotKind.Jet, true, !auto);
                 }
                 else
                 {
                     // 늘 한 줄기. 레벨이 오를수록 굵고(반경) 세고(피해) 멀리(수명) 나가며 더 많이 꿰뚫는다.
-                    float damage = 3f * (HoseInterval / 0.32f) * HosePower(hose) * Build.HosePower * power;
+                    float damage = 3f * (HoseInterval / 0.32f) * HosePower(hose) * Build.HosePower * power * nozzle;
                     FireDrop(baseAngle, damage, 16f, HoseRadius(hose), 1 + hose, 0.6f * (1f + (0.1f * (hose - 1))) * Build.HoseRange, ShotKind.Drop, true, !auto);
                 }
             }
@@ -3121,7 +3123,7 @@ namespace FireGame.Prototypes.Logic
         private void Burn(float raw, HurtKind kind)
         {
             Stats.FireDamageRaw += raw;
-            Hurt(raw * Build.HeatScale * (Build.Free ? SampleHurt : 1f), kind);
+            Hurt(raw * Build.HeatScale, kind);
         }
 
         private void Hurt(float amount, HurtKind kind)

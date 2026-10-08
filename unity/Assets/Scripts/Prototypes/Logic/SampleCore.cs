@@ -108,11 +108,26 @@ namespace FireGame.Prototypes.Logic
         /// <summary>샘플 시각(s.t): 숲 그림의 무지개·회전이 이 시계를 쓴다.</summary>
         public float ST;
 
-        /// <summary>숲 이동 속도 배율(샘플 장화 표 1/1.25/1.5/1.8/2.1/2.6). 장화가 없으면 1.</summary>
-        public float SampleSpeed = 1f;
+        /// <summary>
+        /// 숲 화면 반폭·반높이(샘플 px, 소방관이 가운데). 숲 카메라가 세로 380px를 보고 폰 화면비(19.5:9)라 반높이 190 · 반폭 190×19.5/9.
+        /// 물풍선 벽 튕김·회오리·거품 파도·맨홀 찾기 같은 "화면 끝"이 이 상자다(예전 샘플 480×270 고정 화면 대신).
+        /// </summary>
+        public const float SViewHalfH = 190f, SViewHalfW = 190f * 19.5f / 9f;
 
-        /// <summary>숲 받는 피해 배율(샘플 방화복). 방화복 아이템이 정한다.</summary>
-        public float SampleHurt = 1f;
+        /// <summary>
+        /// 숲 레벨 피해 배율(2026-10-08): 아이템 Update가 도는 동안 그 아이템 레벨(SCurLv)로 SHit 피해를 곱한다.
+        /// 샘플 표는 레벨마다 갈래·크기만 늘어 피해가 거의 같았다 — 레벨이 오르면 한 방이 확실히 세진다. 대원 물(SCurLv 0)은 1배.
+        /// </summary>
+        public static readonly float[] SLvMul = { 1f, 1f, 1.4f, 1.9f, 2.4f, 3f, 3.6f };
+
+        /// <summary>지금 Update 중인 샘플 아이템 레벨(1~6). 아이템 밖이면 0.</summary>
+        public int SCurLv;
+
+        /// <summary>광각 노즐: 숲 무기 범위·반경 배율. 규칙과 그림이 같은 값을 곱한다.</summary>
+        public float SWide
+        {
+            get { return Build.WideScale; }
+        }
 
         /// <summary>샘플 s.player.moving: 이번 틱 소방관이 움직였나.</summary>
         public bool PlayerMoving;
@@ -405,7 +420,7 @@ namespace FireGame.Prototypes.Logic
         // --- 샘플 몹 도우미(core.js Scene.alive/nearest/crowd/hitArea, base.js Mob.hit/launch) ---
         private readonly List<Enemy> _sAlive = new List<Enemy>(256);
 
-        /// <summary>샘플 alive(): 살아 있고, 땅에 있고, 잡혀 있지 않고, 화면 안(소방관 둘레 ±300×±160px).</summary>
+        /// <summary>샘플 alive(): 살아 있고, 땅에 있고, 잡혀 있지 않고, 화면 안(소방관 둘레 숲 화면 + 여백 60×25px — 샘플 480×270 화면의 ±300×±160과 같은 여백).</summary>
         public List<Enemy> SAlive()
         {
             _sAlive.Clear();
@@ -414,16 +429,17 @@ namespace FireGame.Prototypes.Logic
             {
                 if (e.Dead || e.AirZ > 0f || e.Held) continue;
                 float x = SX(e.Pos), y = SY(e.Pos);
-                if (Math.Abs(x - px) > 300f || Math.Abs(y - py) > 160f) continue;
+                if (Math.Abs(x - px) > SViewHalfW + 60f || Math.Abs(y - py) > SViewHalfH + 25f) continue;
                 _sAlive.Add(e);
             }
             return _sAlive;
         }
 
+        /// <summary>가장 가까운 몹. 찾는 거리 max에 광각 노즐(SWide)이 곱해진다.</summary>
         public Enemy SNearest(float x, float y, float max = 200f, HashSet<Enemy> skip = null)
         {
             Enemy best = null;
-            float bd = max;
+            float bd = max * SWide;
             foreach (Enemy e in SAlive())
             {
                 if (skip != null && skip.Contains(e)) continue;
@@ -469,9 +485,11 @@ namespace FireGame.Prototypes.Logic
             return e.Radius >= 0.5f;
         }
 
+        /// <summary>둘레 맞힘: 반경 r에 광각 노즐(SWide)이 곱해진다(넘기는 쪽은 곱하지 않은 값을 준다).</summary>
         public int SHitArea(float x, float y, float r, float dmg, float push = 0f)
         {
             int n = 0;
+            r *= SWide;
             foreach (Enemy e in SAlive().ToArray())
             {
                 float mx = SX(e.Pos), my = SY(e.Pos);
@@ -492,13 +510,13 @@ namespace FireGame.Prototypes.Logic
             get { return 2f * Stage.EnemyHp * (1f + ((Time / 120f) * (Time / 120f))) / 4f; }
         }
 
-        /// <summary>샘플 m.hit(s, dmg, kx, ky): kx·ky는 px/초 밀치기. 공중이거나 죽었으면 false.</summary>
+        /// <summary>샘플 m.hit(s, dmg, kx, ky): kx·ky는 px/초 밀치기. 공중이거나 죽었으면 false. 피해에 레벨 배율(SLvMul)·고압 노즐이 곱해진다.</summary>
         public bool SHit(Enemy e, float dmg, float kx = 0f, float ky = 0f, HitSource source = HitSource.Sample)
         {
             if (e.Dead || e.AirZ > 0f) return false;
             // 샘플 밀치기(px/초, 초당 0.02배로 줄어듦)를 게임 Knock(칸/초, e^-8t)으로: 같은 거리를 밀린다.
             var knock = new Vec2(kx * Px * 2.05f, -ky * Px * 2.05f);
-            Damage(e, dmg * SDamageScale, knock, false, source, Player);
+            Damage(e, dmg * SDamageScale * SLvMul[SCurLv] * Build.NozzleScale, knock, false, source, Player);
             return true;
         }
 
@@ -705,7 +723,13 @@ namespace FireGame.Prototypes.Logic
             {
                 it.Surge = Math.Max(0f, it.Surge - (Dt * 1.6f));
                 int lv = SampleLevel(it.Base);
-                if (lv > 0) it.Update(this, Dt, lv);
+                if (lv > 0)
+                {
+                    // 급수 펌프: 아이템 시계가 빨리 돈다(쿨다운이 그만큼 줄어든다).
+                    SCurLv = lv;
+                    it.Update(this, Dt * Build.FeedScale, lv);
+                    SCurLv = 0;
+                }
             }
             StepParts(Dt);
             SFlash = Math.Max(0f, SFlash - (real * 1.4f));
@@ -722,6 +746,8 @@ namespace FireGame.Prototypes.Logic
             {
                 if (it.Base == b) return it;
             }
+            // 숲 물대포는 겨누는 한 줄기(FireWeapons)다. 샘플 아이템은 고압 방수포의 대폭발만 맡는다.
+            if (b == UpgradeId.Hose && Build.Level(UpgradeId.Cannon) == 0) return null;
             SampleItem made = SampleItem.Create(b);
             if (made == null) return null;
             SampleItems.Add(made);

@@ -6,7 +6,7 @@ namespace FireGame.Prototypes.Logic
 {
     /// <summary>
     /// 숲 개편(2026-10-08, 승인 샘플 그대로): tools/levelup-art/items-b.js의 물풍선(그림 A안)·소화기 부메랑·액체질소 지뢰를 줄 단위로 옮겼다.
-    /// 샘플 화면 끝(W=480, H=270, 고정 카메라)은 소방관을 화면 가운데로 둔 끝(PX±240, PY±135)으로 바꿨다.
+    /// 샘플 화면 끝(W=480, H=270, 고정 카메라)은 소방관을 화면 가운데로 둔 숲 화면 끝(SurvivorSim.SViewHalfW/H)으로 바꿨다.
     /// 그림은 SurvivorView.SampleDraw.B.cs.
     /// </summary>
     public static partial class SampleItemsRegistry
@@ -31,8 +31,8 @@ namespace FireGame.Prototypes.Logic
     // ============================================================================ 3. 물풍선 → 물풍선 폭우 (items-b.js:69-157)
     public sealed class BalloonItem : SampleItem
     {
-        /// <summary>샘플 화면 반폭·반높이(px): 벽 튕김은 소방관 둘레 이 상자.</summary>
-        public const float HalfW = 240f, HalfH = 135f;
+        /// <summary>숲 화면 반폭·반높이(px): 벽 튕김은 소방관 둘레 이 상자(SurvivorSim.SViewHalfW/H).</summary>
+        public const float HalfW = SurvivorSim.SViewHalfW, HalfH = SurvivorSim.SViewHalfH;
 
         // items-b.js:91
         public static readonly int[] BalN = { 0, 1, 2, 2, 3, 3, 3 };
@@ -131,7 +131,9 @@ namespace FireGame.Prototypes.Logic
         private static Bal MkBal(SurvivorSim s, int lv, float a, bool small)
         {
             float v = BalSpeed[lv];
-            return new Bal { X = s.PX, Y = s.PY - 10f, Vx = (float)Math.Cos(a) * v, Vy = (float)Math.Sin(a) * v, B = 0, Max = small ? 2 : BalBounce[lv], R = small ? BalR[lv] * 0.7f : BalR[lv], Sq = 0f, Slosh = s.Rnd(0f, 6f), Lv = lv, Split = lv >= 6 && !small };
+            // 광각 노즐: 풍선 몸도 커진다(맞힘·그림 모두 b.R).
+            float r = BalR[lv] * s.SWide;
+            return new Bal { X = s.PX, Y = s.PY - 10f, Vx = (float)Math.Cos(a) * v, Vy = (float)Math.Sin(a) * v, B = 0, Max = small ? 2 : BalBounce[lv], R = small ? r * 0.7f : r, Sq = 0f, Slosh = s.Rnd(0f, 6f), Lv = lv, Split = lv >= 6 && !small };
         }
 
         // items-b.js:96-115 (샘플 HOUSE 벽은 숲에 없어 뺐다)
@@ -180,13 +182,14 @@ namespace FireGame.Prototypes.Logic
                 b.B++;
                 b.Sq = 1f;
                 int lv = b.Lv;
-                float R = BalRR[lv] * (b.Max == 2 ? 0.75f : 1f);
+                // 폭발 반경: SHitArea가 광각 노즐을 곱한다. 물보라·고리는 같은 배율로 키운다(W).
+                float R = BalRR[lv] * (b.Max == 2 ? 0.75f : 1f), W = R * s.SWide;
                 s.SHitArea(b.X, b.Y, R, BalDmg[lv], 100f + (lv * 20f));
-                s.SplashFx(b.X, b.Y, R, 6 + (lv * 2));
+                s.SplashFx(b.X, b.Y, W, 6 + (lv * 2));
                 s.HitFx(b.X, b.Y, lv, 0.7f);
                 if (lv >= 5)
                 {
-                    s.Ring(b.X, b.Y, 0.35f, R * 1.8f, lv >= 6 ? new Rgb(255, 255, 255) : new Rgb(255, 215, 110), 4f);
+                    s.Ring(b.X, b.Y, 0.35f, W * 1.8f, lv >= 6 ? new Rgb(255, 255, 255) : new Rgb(255, 215, 110), 4f);
                     s.SShake = Math.Max(s.SShake, 2.5f);
                 }
                 // 최고급: 튕길 때마다 작은 풍선 둘로 갈라진다
@@ -257,7 +260,7 @@ namespace FireGame.Prototypes.Logic
                 {
                     r.Done = true;
                     RainBursts++;
-                    RubberBurst(s, r.X, r.Y, 11f, 6);
+                    RubberBurst(s, r.X, r.Y, 11f * s.SWide, 6);
                     s.SHitArea(r.X, r.Y, 40f, 6f, 160f);
                     s.HitFx(r.X, r.Y, 6, 0.5f);
                     s.SShake = Math.Max(s.SShake, 3f);
@@ -320,8 +323,9 @@ namespace FireGame.Prototypes.Logic
         // items-b.js:221-234
         private static bool ExtStep(SurvivorSim s, Ext b, float dt)
         {
+            // 광각 노즐: 나가는 거리·맞힘 반경이 커진다(그림은 위치를 따르고 몸 크기도 같은 배율).
             int lv = b.Lv;
-            float R = ExtR[lv];
+            float w = s.SWide, R = ExtR[lv] * w;
             b.K += dt / ExtSpd[lv];
             b.Spin += dt * (16f + (lv * 3f));
             float o = (float)Math.Sin(Math.PI * SampleB.Clamp(b.K, 0f, 1f)) * R, side = (float)Math.Sin(SurvivorSim.Tau * b.K) * R * 0.35f;
@@ -346,7 +350,7 @@ namespace FireGame.Prototypes.Logic
             foreach (Enemy m in s.SAlive().ToArray())
             {
                 float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
-                if (SurvivorSim.Hypot(mx - b.X, my - b.Y) < SurvivorSim.SR(m) + ExtHitR[lv] && !(SurvivorSim.Cd(m, b.Key) > 0f))
+                if (SurvivorSim.Hypot(mx - b.X, my - b.Y) < SurvivorSim.SR(m) + (ExtHitR[lv] * w) && !(SurvivorSim.Cd(m, b.Key) > 0f))
                 {
                     SurvivorSim.SetCd(m, b.Key, 0.25f);
                     float L = SurvivorSim.Hypot(mx - b.X, my - b.Y);
@@ -382,6 +386,7 @@ namespace FireGame.Prototypes.Logic
             // 회오리: 몹 떼를 쫓아 떠돌며 빨아들이고 하늘로 띄운다.
             // 몹이 없을 때 샘플 {x:260,y:120} → 소방관(200,165) 기준 (+60, −45).
             Twister T = Tw;
+            float tw = s.SWide;
             if (!s.SCrowd(out float cx, out float cy))
             {
                 cx = s.PX + 60f;
@@ -397,13 +402,13 @@ namespace FireGame.Prototypes.Logic
                 float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
                 float dx = T.X - mx, dy = T.Y - my, L = SurvivorSim.Hypot(dx, dy);
                 if (L == 0f) L = 1f;
-                if (L < 200f)
+                if (L < 200f * tw)
                 {
-                    float k = 1f - (L / 200f);
+                    float k = 1f - (L / (200f * tw));
                     mx += ((dx / L * 200f) - (dy / L * 200f)) * k * dt;
                     my += ((dy / L * 200f) + (dx / L * 200f)) * k * dt;
                     SurvivorSim.SetS(m, mx, my);
-                    if (L < 44f)
+                    if (L < 44f * tw)
                     {
                         float vz = s.Rnd(320f, 420f), vx = s.Rnd(-120f, 120f), vy = s.Rnd(-60f, 60f);
                         s.SLaunch(m, vz, vx, vy);
@@ -413,7 +418,7 @@ namespace FireGame.Prototypes.Logic
             }
             for (int i = 0; i < 2; i++)
             {
-                float a = s.Rnd(0f, SurvivorSim.Tau), r = s.Rnd(10f, 60f);
+                float a = s.Rnd(0f, SurvivorSim.Tau), r = s.Rnd(10f, 60f) * tw;
                 SPart p = s.Part(SPartKind.Powder, T.X + ((float)Math.Cos(a) * r), T.Y + ((float)Math.Sin(a) * r * 0.4f));
                 p.Vz = s.Rnd(40f, 120f);
                 p.Life = 0.8f;
@@ -463,7 +468,8 @@ namespace FireGame.Prototypes.Logic
                 while (Mines.Count > MineMax[lv]) Mines.RemoveAt(0);
                 DropT = MineDrop[lv];
             }
-            float R = MineR[lv];
+            // 광각 노즐: 어는 반경·밟는 반경·얼음 길 폭이 커진다(그림도 같은 배율).
+            float w = s.SWide, R = MineR[lv] * w;
             foreach (Mine mi in Mines)
             {
                 mi.Arm -= dt;
@@ -472,7 +478,7 @@ namespace FireGame.Prototypes.Logic
                 {
                     foreach (Enemy m in s.SAlive().ToArray())
                     {
-                        if (!(SurvivorSim.Hypot(SurvivorSim.SX(m.Pos) - mi.X, SurvivorSim.SY(m.Pos) - mi.Y) < SurvivorSim.SR(m) + 10f + lv && !(m.SFrozen > 0f))) continue;
+                        if (!(SurvivorSim.Hypot(SurvivorSim.SX(m.Pos) - mi.X, SurvivorSim.SY(m.Pos) - mi.Y) < SurvivorSim.SR(m) + ((10f + lv) * w) && !(m.SFrozen > 0f))) continue;
                         if (lv >= 6) mi.Cool = 0.35f;
                         else mi.Used = true;
                         Triggers++;
@@ -522,7 +528,7 @@ namespace FireGame.Prototypes.Logic
                     float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
                     foreach (Enemy o in s.SAlive().ToArray())
                     {
-                        if (o != m && !(o.SFrozen > 0f) && SurvivorSim.Hypot(SurvivorSim.SX(o.Pos) - mx, SurvivorSim.SY(o.Pos) - my) < 38f)
+                        if (o != m && !(o.SFrozen > 0f) && SurvivorSim.Hypot(SurvivorSim.SX(o.Pos) - mx, SurvivorSim.SY(o.Pos) - my) < 38f * w)
                         {
                             o.SFrozen = 0.3f;
                             s.Glow(SurvivorSim.SX(o.Pos), SurvivorSim.SY(o.Pos), 0.25f, 22f, new Rgb(200, 245, 255));
@@ -540,7 +546,7 @@ namespace FireGame.Prototypes.Logic
                     foreach (Enemy m in s.SAlive().ToArray())
                     {
                         float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
-                        if (!(m.SFrozen > 0f) && SurvivorSim.SegDist(mx, my, A.X, A.Y, B.X, B.Y) < SurvivorSim.SR(m) + 13f)
+                        if (!(m.SFrozen > 0f) && SurvivorSim.SegDist(mx, my, A.X, A.Y, B.X, B.Y) < SurvivorSim.SR(m) + (13f * w))
                         {
                             m.SFrozen = 0.6f;
                             s.Glow(mx, my, 0.3f, 26f, new Rgb(170, 240, 255));

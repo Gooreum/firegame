@@ -427,7 +427,8 @@ namespace FireGame.Prototypes.EditorTools
             // 숲 개편(2026-10-08, 승인 샘플 그대로): 아이콘 카드, Lv1·Lv3·Lv5·Lv6 레벨업 연출, 구조대원 합류, 풀장비 판.
             failures += SurvivorShot(dir, "f01_cards", view => view.Sim.PendingChoices != null && view.Sim.PendingChoices.Exists(Loadout.IsEvolution), 40, false, null, 2, view =>
             {
-                Pick(view, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Sprinkler, UpgradeId.Sprinkler, UpgradeId.Tank, UpgradeId.Tank, UpgradeId.Tank, UpgradeId.Tank);
+                // 숲 진화는 짝 보조가 있어야 나온다(물대포 Lv5 + 고압 노즐 → 고압 방수포).
+                Pick(view, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Hose, UpgradeId.Sprinkler, UpgradeId.Sprinkler, UpgradeId.Nozzle, UpgradeId.Wide, UpgradeId.Feed, UpgradeId.Boots);
                 view.Sim.DropGem(view.Sim.Player, view.Sim.XpToNext);
             });
             failures += ForestLevelShot(dir, "f02_lv1", UpgradeId.Balloon, 1);
@@ -673,14 +674,9 @@ namespace FireGame.Prototypes.EditorTools
             new KeyValuePair<string, UpgradeId>("balloon", UpgradeId.Balloon),
             new KeyValuePair<string, UpgradeId>("extinguisher", UpgradeId.Extinguisher),
             new KeyValuePair<string, UpgradeId>("mine", UpgradeId.Mine),
-            new KeyValuePair<string, UpgradeId>("foam", UpgradeId.Foam),
             new KeyValuePair<string, UpgradeId>("bubble", UpgradeId.Bubble),
             new KeyValuePair<string, UpgradeId>("manhole", UpgradeId.Manhole),
             new KeyValuePair<string, UpgradeId>("chain", UpgradeId.Chain),
-            new KeyValuePair<string, UpgradeId>("whip", UpgradeId.Whip),
-            new KeyValuePair<string, UpgradeId>("tank", UpgradeId.Tank),
-            new KeyValuePair<string, UpgradeId>("boots", UpgradeId.Boots),
-            new KeyValuePair<string, UpgradeId>("suit", UpgradeId.Suit),
         };
 
         /// <summary>샘플 core.js SEG: 레벨별 길이(초). AT[lv] = 그 레벨이 시작하는 장면 시각.</summary>
@@ -762,19 +758,13 @@ namespace FireGame.Prototypes.EditorTools
                         {
                             acc -= SurvivorSim.Dt;
                             sceneT += SurvivorSim.Dt;
-                            // 샘플 지뢰·장화 장면은 소방관이 8자로 걷는다(items-b.js:307-308, items-d.js:175-179). 나머지는 제자리.
+                            // 샘플 지뢰 장면은 소방관이 8자로 걷는다(items-b.js:307-308). 나머지는 제자리.
                             float wx = 200f, wy = 160f;
                             if (id == "mine")
                             {
                                 walk += SurvivorSim.Dt;
                                 wx = 215f + (Mathf.Cos(walk) * 95f);
                                 wy = 150f + (Mathf.Sin(walk * 2f) * 55f);
-                            }
-                            else if (id == "boots")
-                            {
-                                walk += SurvivorSim.Dt * 0.85f * sim.SampleSpeed;
-                                wx = 245f + (Mathf.Cos(walk) * 130f);
-                                wy = 145f + (Mathf.Sin(walk * 2f) * 70f);
                             }
                             sim.Player = new Vec2(p0.X + ((wx - 200f) * SurvivorSim.Px), p0.Y - ((wy - 160f) * SurvivorSim.Px));
                             sim.Hp = sim.MaxHp;

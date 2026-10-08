@@ -5,99 +5,64 @@ using UnityEngine;
 namespace FireGame.Prototypes
 {
     /// <summary>
-    /// 숲 개편(2026-10-08, 승인 샘플 그대로): tools/levelup-art/items-a.js 물대포·회전 스프링클러의 그리기를 줄 단위로 옮겼다.
+    /// 숲 개편(2026-10-08, 승인 샘플 그대로): tools/levelup-art/items-a.js 회전 스프링클러의 그리기를 줄 단위로 옮겼다. 물대포는 고압 방수포 대폭발 고리만(펌프에서 옮김).
     /// 바닥 층 = 샘플 drawGround, 공중 층 = 샘플 ents(y 순) + drawAir. 상태는 Logic/SampleItems.A.cs.
     /// </summary>
     public sealed partial class SurvivorView
     {
         partial void DrawGroundA(SampleCanvas g, SampleItem it, int lv)
         {
-            if (it is SprinklerItem sp) SprinklerDrawGround(g, sp, lv);
+            if (it is HoseItem h) HoseNovaGround(g, h, lv);
+            else if (it is SprinklerItem sp) SprinklerDrawGround(g, sp, lv);
         }
 
         partial void DrawAirA(SampleCanvas g, SampleItem it, int lv)
         {
-            if (it is HoseItem h) HoseDrawAir(g, h, lv);
-            else if (it is SprinklerItem sp)
+            if (it is SprinklerItem sp)
             {
                 SprinklerEnts(g, sp, lv);
                 SprinklerDrawAir(g, sp, lv);
             }
         }
 
-        // ---------------------------------------------------------------- 1. 물대포 → 고압 방수포
-        // items-a.js:50-68
-        private void HoseDrawAir(SampleCanvas g, HoseItem h, int lv)
+        // ---------------------------------------------------------------- 1. 물대포 → 고압 방수포(대폭발만, 펌프 items-d.js:135-144에서 옮김)
+        private void HoseNovaGround(SampleCanvas g, HoseItem h, int lv)
         {
-            float t = _sim.ST;
-            float px = _sim.PX, py = _sim.PY, sx = px + 6f, sy = py - 6f, sg = 1f + (h.Surge * 0.9f);
-            foreach (Enemy m in h.Tg) TierStream(g, sx, sy, SurvivorSim.SX(m.Pos), SurvivorSim.SY(m.Pos) - 4f, (3f + (lv * 1.3f)) * sg * (lv >= 6 ? 0.8f : 1f), Mathf.Min(lv, 5));
-            // 꿰뚫는 꼬리(Lv3~)
-            if (lv >= 3)
-            {
-                foreach (Enemy m in h.Tg)
-                {
-                    float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
-                    int L5 = Mathf.Min(lv, 5);
-                    float dx = mx - px, dy = my - py, L = Mathf.Sqrt((dx * dx) + (dy * dy));
-                    if (L == 0f) L = 1f;
-                    float reach = 60f + (L5 * 14f);
-                    g.Save();
-                    g.Lighter = true;
-                    SampleCanvas.Paint lg = Linear(mx, my, mx + (dx / L * reach), my + (dy / L * reach));
-                    lg.AddColorStop(0f, C(SurvivorSim.TierOf(lv).Core, 0.8f));
-                    lg.AddColorStop(1f, C(SurvivorSim.TierOf(lv).Core, 0f));
-                    g.StrokeStyle = lg;
-                    g.LineWidth = 2f + L5;
-                    g.RoundCap = true;
-                    g.BeginPath();
-                    g.MoveTo(mx, my - 4f);
-                    g.LineTo(mx + (dx / L * reach), my - 4f + (dy / L * reach));
-                    g.Stroke();
-                    g.Restore();
-                }
-            }
-            TierGlow(g, sx, sy, 6f + lv, lv);
-            if (lv < 6) return;
-            float a = h.HasA ? h.A : -1f, x1 = px + (Mathf.Cos(a) * 330f), y1 = py + (Mathf.Sin(a) * 330f);
+            if (lv != 6) return;
+            float px = _sim.PX, py = _sim.PY, t = _sim.ST, w = _sim.SWide;
+            float k = 1f - (Mathf.Max(0f, h.Boom) / HoseItem.BoomEvery);
+            // 차오르는 압력 고리: 터지기 직전 빨라지고 밝아진다.
             g.Save();
-            g.RoundCap = true;
             g.Lighter = true;
-            g.StrokeStyle = Hsla(SHue(), 100f, 70f, 0.35f);
-            g.LineWidth = 64f;
+            float r = HoseItem.BoomR * w * (1f - (k * 0.75f));
+            g.StrokeStyle = Hsla(SHue(), 100f, 70f, 0.15f + (k * 0.6f));
+            g.LineWidth = 2f + (k * 4f);
+            g.SetLineDash(new[] { 8f, 6f });
+            g.LineDashOffset = -t * 80f;
             g.BeginPath();
-            g.MoveTo(sx, sy);
-            g.LineTo(x1, y1);
-            g.Stroke();
-            g.StrokeStyle = C(80, 170, 255, 0.55f);
-            g.LineWidth = 44f;
-            g.Stroke();
-            g.StrokeStyle = C(160, 220, 255, 0.8f);
-            g.LineWidth = 26f;
-            g.Stroke();
-            g.StrokeStyle = C(255, 255, 255, 0.95f);
-            g.LineWidth = 10f;
-            g.Stroke();
-            g.Lighter = false;
-            g.StrokeStyle = C(255, 255, 255, 0.9f);
-            g.LineWidth = 2.5f;
-            g.SetLineDash(new[] { 14f, 16f });
-            g.LineDashOffset = -t * 700f;
-            g.BeginPath();
-            g.MoveTo(sx, sy);
-            g.LineTo(x1, y1);
+            g.Ellipse(px, py, r, r * 0.62f, 0f, 0f, Tau);
             g.Stroke();
             g.SetLineDash(null);
-            // 노즐 앞 빛 덩어리
-            g.Lighter = true;
-            SampleCanvas.Paint gl = Radial(sx, sy, 0f, sx, sy, 40f);
-            gl.AddColorStop(0f, C(255, 255, 255, 0.95f));
-            gl.AddColorStop(0.4f, C(255, 230, 160, 0.5f));
-            gl.AddColorStop(1f, C(255, 200, 100, 0f));
-            g.FillStyle = gl;
-            g.BeginPath();
-            g.Arc(sx, sy, 40f, 0f, Tau);
-            g.Fill();
+            foreach (SamplePtD b in h.Booms)
+            {
+                float e = SurvivorSim.Ease(b.K / 0.8f), a = 1f - (b.K / 0.8f), br = 150f * w * e;
+                for (int j = 0; j < 3; j++)
+                {
+                    g.StrokeStyle = Hsla(SHue(j * 120f), 100f, 70f, a);
+                    g.LineWidth = 10f - (j * 3f);
+                    g.BeginPath();
+                    g.Ellipse(b.X, b.Y + 4f, br * (1f - (j * 0.12f)), br * 0.62f * (1f - (j * 0.12f)), 0f, 0f, Tau);
+                    g.Stroke();
+                }
+                float gr = Mathf.Max(0.01f, br);
+                SampleCanvas.Paint gl = Radial(b.X, b.Y, 0f, b.X, b.Y, gr);
+                gl.AddColorStop(0f, C(160, 220, 255, 0.35f * a));
+                gl.AddColorStop(1f, C(160, 220, 255, 0f));
+                g.FillStyle = gl;
+                g.BeginPath();
+                g.Arc(b.X, b.Y, gr, 0f, Tau);
+                g.Fill();
+            }
             g.Restore();
         }
 
@@ -153,7 +118,7 @@ namespace FireGame.Prototypes
         private void SprinklerDrawGround(SampleCanvas g, SprinklerItem sp, int lv)
         {
             float t = _sim.ST, px = _sim.PX, py = _sim.PY;
-            float R = SprinklerItem.RTab[lv];
+            float R = SprinklerItem.RTab[lv] * _sim.SWide;
             Tier T = SurvivorSim.TierOf(lv);
             g.Save();
             g.StrokeStyle = C(T.Glow, 0.18f + (lv * 0.04f));
@@ -201,12 +166,12 @@ namespace FireGame.Prototypes
                 if (h.HasJet) TierStream(g, h.X, h.Y - 6f, h.JetX1, h.JetY1 - 6f, 2f + (lv * 0.6f), lv, 4f);
             }
             if (lv != 6) return;
-            const float R = 80f;
+            float w = _sim.SWide, R = SprinklerItem.RTab[6] * w;
             g.Save();
             g.RoundCap = true;
             for (int j = 0; j < 8; j++)
             {
-                float a = sp.Jet + (j * Tau / 8f), x0 = px + (Mathf.Cos(a) * R), y0 = py - 6f + (Mathf.Sin(a) * R * 0.72f), x1 = px + (Mathf.Cos(a) * (R + 150f)), y1 = py - 6f + (Mathf.Sin(a) * (R + 150f) * 0.72f);
+                float a = sp.Jet + (j * Tau / 8f), x0 = px + (Mathf.Cos(a) * R), y0 = py - 6f + (Mathf.Sin(a) * R * 0.72f), x1 = px + (Mathf.Cos(a) * (R + (150f * w))), y1 = py - 6f + (Mathf.Sin(a) * (R + (150f * w)) * 0.72f);
                 g.Lighter = true;
                 g.StrokeStyle = Hsla(SHue(j * 45f), 100f, 65f, 0.45f);
                 g.LineWidth = 16f;

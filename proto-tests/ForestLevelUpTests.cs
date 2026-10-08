@@ -7,7 +7,7 @@ using Xunit;
 namespace FireGame.Prototypes.Tests
 {
     /// <summary>
-    /// 숲 개편(2026-10-08, 승인 샘플 그대로): 칸 제한 없음 · 13종 모두 Lv5 다음 Lv6 최고급(짝 조건 없음) · 보조 Lv6 셋 · 구조대원.
+    /// 숲 개편(2026-10-08): 칸 제한 없음 · 무기 8 + 수치형 보조 5 · 무기 Lv5 + 짝 보조면 Lv6 최고급 · 레벨 피해 배율 · 구조대원.
     /// 숲(2스테이지)에서만 켜지고 다른 스테이지는 그대로다.
     /// </summary>
     public class ForestLevelUpTests
@@ -52,9 +52,9 @@ namespace FireGame.Prototypes.Tests
         public void Forest_NoSlotCap_EveryItemStillOffered()
         {
             var l = new Loadout { Free = true };
-            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.Sprinkler, UpgradeId.Balloon, UpgradeId.Mine, UpgradeId.Foam, UpgradeId.Chain, UpgradeId.Tank, UpgradeId.Boots, UpgradeId.Suit }) l.Add(id);
+            foreach (UpgradeId id in new[] { UpgradeId.Hose, UpgradeId.Sprinkler, UpgradeId.Balloon, UpgradeId.Mine, UpgradeId.Chain, UpgradeId.Boots, UpgradeId.Suit, UpgradeId.Nozzle }) l.Add(id);
             HashSet<UpgradeId> seen = Offered(l);
-            foreach (UpgradeId id in new[] { UpgradeId.Extinguisher, UpgradeId.Bubble, UpgradeId.Manhole, UpgradeId.Whip }) Assert.Contains(id, seen);
+            foreach (UpgradeId id in new[] { UpgradeId.Extinguisher, UpgradeId.Bubble, UpgradeId.Manhole, UpgradeId.Feed, UpgradeId.Wide }) Assert.Contains(id, seen);
         }
 
         [Fact]
@@ -65,39 +65,245 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(new HashSet<UpgradeId> { UpgradeId.Hose, UpgradeId.Chain, UpgradeId.Mine, UpgradeId.Suit }, Offered(l));
         }
 
+        // --- 아이템 정리(2026-10-08): 무기 8 + 수치형 보조 5 ---
+        private static readonly UpgradeId[] FreeCut = { UpgradeId.Tank, UpgradeId.OverPump, UpgradeId.Whip, UpgradeId.Whirl, UpgradeId.Foam, UpgradeId.Avalanche, UpgradeId.JetBoots, UpgradeId.PhoenixSuit };
+        private static readonly UpgradeId[] NewPassives = { UpgradeId.Nozzle, UpgradeId.Feed, UpgradeId.Wide };
+
         [Fact]
-        public void Forest_WeaponLv5_WithoutPair_ForcesLv6Card()
+        public void Forest_Offers_NoCutItems_AndTheNewPassives()
         {
+            // 판 내내 고른다: 처음(물대포만)부터 무기·보조 다 Lv5까지.
             var l = new Loadout { Free = true };
-            for (int i = 0; i < Loadout.MaxLevel; i++) l.Add(UpgradeId.Hose);
-            Assert.Equal(0, l.Level(UpgradeId.Tank));
-            var rng = new Rng(3);
-            for (int i = 0; i < 50; i++) Assert.Contains(UpgradeId.Cannon, SurvivorUpgrades.Roll(l, 2, ref rng));
+            l.Add(UpgradeId.Hose);
+            var seen = new HashSet<UpgradeId>();
+            var rng = new Rng(5);
+            for (int i = 0; i < 400; i++)
+            {
+                List<UpgradeId> cards = SurvivorUpgrades.Roll(l, 2, ref rng);
+                foreach (UpgradeId id in cards) seen.Add(id);
+                if (cards.Count > 0) l.Add(cards[i % cards.Count]);
+            }
+            foreach (UpgradeId id in FreeCut) Assert.DoesNotContain(id, seen);
+            foreach (UpgradeId id in NewPassives) Assert.Contains(id, seen);
+            foreach (UpgradeId id in FreeCut) Assert.False(l.CanTake(id), id + "는 숲에서 못 든다");
         }
 
         [Fact]
-        public void Forest_PassiveLv5_OffersPassiveLv6_AndKeepsItsPower()
+        public void Town_NeverOffersNewPassives()
+        {
+            var l = new Loadout();
+            l.Add(UpgradeId.Hose);
+            Assert.All(NewPassives, id => Assert.DoesNotContain(id, Offered(l)));
+            Assert.All(NewPassives, id => Assert.False(l.CanTake(id)));
+            Assert.All(NewPassives, id => Assert.True(Loadout.IsPassive(id)));
+        }
+
+        [Fact]
+        public void Forest_PassivesHaveNoLv6()
         {
             var sim = Quiet();
-            Take(sim, UpgradeId.Tank, Loadout.MaxLevel);
+            foreach (UpgradeId p in new[] { UpgradeId.Boots, UpgradeId.Suit, UpgradeId.Nozzle, UpgradeId.Feed, UpgradeId.Wide }) Take(sim, p, Loadout.MaxLevel);
+            HashSet<UpgradeId> seen = Offered(sim.Build);
+            Assert.DoesNotContain(UpgradeId.JetBoots, seen);
+            Assert.DoesNotContain(UpgradeId.PhoenixSuit, seen);
+            Assert.Empty(sim.Build.ReadyEvolutions());
+            Assert.Equal(5, sim.Build.PassiveCount);
+        }
+
+        /// <summary>구슬을 먹어 레벨업한 카드(화면 경로).</summary>
+        private static List<UpgradeId> NextCards(SurvivorSim sim)
+        {
+            sim.DropGem(sim.Player, sim.XpToNext);
+            for (int i = 0; i < 3 && sim.PendingChoices == null; i++) sim.Step(0f, 0f);
+            Assert.NotNull(sim.PendingChoices);
+            List<UpgradeId> cards = sim.PendingChoices;
+            return cards;
+        }
+
+        [Fact]
+        public void Forest_BalloonLv5_NeedsWide_ForBalloonStorm()
+        {
+            var sim = Quiet();
+            Take(sim, UpgradeId.Balloon, Loadout.MaxLevel);
+            Assert.False(sim.Build.Ready(UpgradeId.BalloonStorm), "광각 노즐 없이 물풍선 폭우가 나오면 안 된다");
+            Assert.DoesNotContain(UpgradeId.BalloonStorm, NextCards(sim));
+            sim.Choose(0);
+            if (sim.Build.Level(UpgradeId.Wide) == 0) Take(sim, UpgradeId.Wide);
+            Assert.True(sim.Build.Ready(UpgradeId.BalloonStorm));
+            List<UpgradeId> cards = NextCards(sim);
+            Assert.Contains(UpgradeId.BalloonStorm, cards);
+            sim.Choose(cards.IndexOf(UpgradeId.BalloonStorm));
+            Assert.Equal(6, sim.SampleLevel(UpgradeId.Balloon));
+        }
+
+        [Fact]
+        public void Forest_WeaponLv5_CardNamesItsPair()
+        {
+            Assert.Contains("진화 짝: 광각 노즐", SurvivorUpgrades.DescribeFree(UpgradeId.Balloon, 5));
+            Assert.Contains("진화 짝: 고압 노즐", SurvivorUpgrades.DescribeFree(UpgradeId.Hose, 5));
+            Assert.DoesNotContain("진화 짝", SurvivorUpgrades.DescribeFree(UpgradeId.Balloon, 4));
+            Assert.DoesNotContain("진화 짝", SurvivorUpgrades.DescribeFree(UpgradeId.BalloonStorm, 6));
+        }
+
+        /// <summary>몹 없이 오른쪽으로 쥐고 쏜다(감독 몹은 지운다).</summary>
+        private static void Spray(SurvivorSim sim, float seconds, System.Action each = null)
+        {
+            int ticks = (int)System.Math.Round(seconds / SurvivorSim.Dt);
+            for (int i = 0; i < ticks; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Aim = new Vec2(1f, 0f);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+                each?.Invoke();
+            }
+        }
+
+        [Fact]
+        public void Forest_HoseLv1to5_IsTheAimedStreamOnly()
+        {
+            var sim = Quiet();
+            for (int lv = 1; lv <= Loadout.MaxLevel; lv++)
+            {
+                if (lv > 1) Take(sim, UpgradeId.Hose);
+                bool shot = false;
+                Spray(sim, 0.5f, () => shot |= sim.Shots.Exists(s => s.Kind == ShotKind.Drop));
+                Assert.True(shot, "Lv" + lv + " 겨눈 물줄기");
+                Assert.DoesNotContain(sim.SampleItems, it => it is HoseItem);
+                Assert.Null(sim.SampleItemOf(UpgradeId.Hose));
+            }
+            // 펌프 몫은 물대포 레벨이 갖는다.
+            Assert.Equal(1f + (0.15f * 5f), sim.Build.HoseRange, 3);
+        }
+
+        [Fact]
+        public void Forest_Cannon_FiresJet_AndNovaEvery2_2s()
+        {
+            var sim = Quiet();
+            Take(sim, UpgradeId.Hose, Loadout.MaxLevel - 1);
+            Take(sim, UpgradeId.Nozzle);
+            List<UpgradeId> cards = NextCards(sim);
+            Assert.Contains(UpgradeId.Cannon, cards);
+            sim.Choose(cards.IndexOf(UpgradeId.Cannon));
+            bool jet = false, drop = false;
+            Spray(sim, 1f, () =>
+            {
+                jet |= sim.Shots.Exists(s => s.Kind == ShotKind.Jet);
+                drop |= sim.Shots.Exists(s => s.Kind == ShotKind.Drop);
+            });
+            Assert.True(jet, "고압 방수포는 모두 꿰뚫는 Jet 한 줄기");
+            Assert.False(drop);
+            var h = Assert.IsType<HoseItem>(sim.SampleItemOf(UpgradeId.Hose));
+            // 첫 대폭발 1.2초, 그 뒤 2.2초마다(급수 펌프 없음): 1.2 · 3.4 · 5.6초.
+            Spray(sim, 1.2f + (HoseItem.BoomEvery * 2f) + 0.25f - 1f);
+            Assert.Equal(3, h.Novas);
+        }
+
+        [Fact]
+        public void Forest_LevelDamageMultiplier_BalloonLv3_OneShotsEmber()
+        {
+            Assert.Equal(new[] { 1f, 1f, 1.4f, 1.9f, 2.4f, 3f, 3.6f }, SurvivorSim.SLvMul);
+            var sim = new SurvivorSim(1, Forest, new List<UpgradeId>()) { Guardian = false, Reports = false };
+            sim.Enemies.Clear();
+            sim.Structures.Clear();
+            Take(sim, UpgradeId.Balloon, 3);
+            // 레벨업 밀치기(DoBurst)가 지나간 뒤에 세운다.
+            for (int i = 0; i < 30; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+            }
+            Enemy e = sim.Spawn(EnemyKind.Ember, SurvivorSim.FromS(sim.PX + 70f, sim.PY - 10f));
+            e.Speed = 0f;
+            bool partial = false;
+            for (int i = 0; i < 600 && !e.Dead; i++)
+            {
+                sim.Enemies.RemoveAll(o => o != e);
+                sim.Hp = sim.MaxHp;
+                sim.Step(0f, 0f);
+                partial |= !e.Dead && e.Hp < e.MaxHp;
+            }
+            Assert.True(e.Dead, "물풍선이 닿아야");
+            Assert.False(partial, "Lv3 물풍선(3 × 1.4) 한 방에 작은 요괴가 쓰러져야");
+        }
+
+        [Fact]
+        public void Forest_NozzleLv5_HitsHalfAgainHarder()
+        {
+            float Lost(int nozzle)
+            {
+                var sim = Quiet();
+                Take(sim, UpgradeId.Nozzle, nozzle);
+                Enemy e = sim.Spawn(EnemyKind.Ember, sim.Player);
+                e.MaxHp = e.Hp = 1e6f;
+                sim.SHit(e, 1f);
+                return (1e6f - e.Hp) / sim.SDamageScale;
+            }
+            float plain = Lost(0), strong = Lost(Loadout.MaxLevel);
+            // 치명(2배)이 어느 쪽에든 낄 수 있다.
+            float ratio = strong / plain;
+            Assert.True(System.Math.Abs(ratio - 1.5f) < 0.01f || System.Math.Abs(ratio - 3f) < 0.01f || System.Math.Abs(ratio - 0.75f) < 0.01f, "고압 노즐 Lv5 = 1.5배: " + ratio);
+        }
+
+        [Fact]
+        public void Forest_WideLv5_BalloonBlastIsHalfAgainBigger()
+        {
+            var sim = Quiet();
+            Take(sim, UpgradeId.Wide, Loadout.MaxLevel);
+            Assert.Equal(1.5f, sim.SWide, 3);
+            // 폭발(SHitArea) 반경 30px → 45px: 45px 떨어진 몹이 맞는다(광각 노즐 없으면 안 맞는다).
+            foreach (bool wide in new[] { false, true })
+            {
+                var s2 = wide ? sim : Quiet();
+                s2.Enemies.Clear();
+                // 불씨 반지름 ≈ 9px: 가운데가 45px 떨어지면 30+9엔 안 닿고 45+9엔 닿는다.
+                Enemy e = s2.Spawn(EnemyKind.Ember, SurvivorSim.FromS(s2.PX + 45f, s2.PY));
+                e.MaxHp = e.Hp = 1e6f;
+                int n = s2.SHitArea(s2.PX, s2.PY, 30f, 1f);
+                Assert.Equal(wide ? 1 : 0, n);
+            }
+            // 물풍선 몸도 1.5배.
+            Take(sim, UpgradeId.Balloon);
+            var b = Assert.IsType<BalloonItem>(sim.SampleItemOf(UpgradeId.Balloon));
+            for (int i = 0; i < 40 && b.B.Count == 0; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+            }
+            Assert.NotEmpty(b.B);
+            Assert.Equal(BalloonItem.BalR[1] * 1.5f, b.B[0].R, 3);
+        }
+
+        [Fact]
+        public void Forest_BootsAndSuit_ArePureStats_NoSampleItem()
+        {
+            var sim = Quiet();
+            float hp = sim.MaxHp;
             Take(sim, UpgradeId.Boots, Loadout.MaxLevel);
             Take(sim, UpgradeId.Suit, Loadout.MaxLevel);
-            HashSet<UpgradeId> seen = Offered(sim.Build);
-            Assert.Contains(UpgradeId.OverPump, seen);
-            Assert.Contains(UpgradeId.JetBoots, seen);
-            Assert.Contains(UpgradeId.PhoenixSuit, seen);
-
-            float range = sim.Build.HoseRange;
-            float speed = sim.Build.SpeedScale;
-            float hp = sim.MaxHp;
-            Take(sim, UpgradeId.OverPump);
-            Take(sim, UpgradeId.JetBoots);
-            Take(sim, UpgradeId.PhoenixSuit);
-            Assert.Equal(range, sim.Build.HoseRange);
-            Assert.Equal(speed, sim.Build.SpeedScale);
-            Assert.Equal(hp, sim.MaxHp);
-            Assert.Equal(3, sim.Build.PassiveCount);
-            Assert.Equal(1, sim.Build.WeaponCount);
+            Spray(sim, 0.2f);
+            Assert.Null(sim.SampleItemOf(UpgradeId.Boots));
+            Assert.Null(sim.SampleItemOf(UpgradeId.Suit));
+            Assert.DoesNotContain(sim.SampleItems, it => it.Base == UpgradeId.Boots || it.Base == UpgradeId.Suit);
+            Assert.Equal(1.5f, sim.Build.SpeedScale, 3);
+            Assert.Equal(0.5f, sim.Build.HeatScale, 3);
+            Assert.Equal(hp + 50f, sim.MaxHp, 3);
+            // 이동은 SpeedScale 그대로: 같은 시간 1.5배 멀리.
+            float Walk(SurvivorSim s)
+            {
+                float x0 = s.Player.X;
+                s.Spraying = false;
+                for (int i = 0; i < 10; i++)
+                {
+                    s.Enemies.Clear();
+                    s.Hp = s.MaxHp;
+                    s.Step(1f, 0f);
+                }
+                return s.Player.X - x0;
+            }
+            float slow = Walk(Quiet()), fast = Walk(sim);
+            Assert.Equal(1.5f, fast / slow, 2);
         }
 
         [Fact]

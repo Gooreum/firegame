@@ -2,7 +2,7 @@ using System;
 
 namespace FireGame.Prototypes.Logic
 {
-    /// <summary>숲 샘플 아이템을 만든다(아이템별 클래스는 SampleItems.*.cs). 아직 옮기지 않은 아이템은 null.</summary>
+    /// <summary>숲 샘플 아이템을 만든다(아이템별 클래스는 SampleItems.*.cs). 샘플 동작이 없는 아이템(수치형 보조 등)은 null.</summary>
     public static partial class SampleItemsRegistry
     {
         public static SampleItem Make(UpgradeId id)
@@ -11,7 +11,6 @@ namespace FireGame.Prototypes.Logic
             MakeA(id, ref made);
             MakeB(id, ref made);
             MakeC(id, ref made);
-            MakeD(id, ref made);
             if (made != null) made.Base = id;
             return made;
         }
@@ -19,6 +18,5 @@ namespace FireGame.Prototypes.Logic
         static partial void MakeA(UpgradeId id, ref SampleItem made);
         static partial void MakeB(UpgradeId id, ref SampleItem made);
         static partial void MakeC(UpgradeId id, ref SampleItem made);
-        static partial void MakeD(UpgradeId id, ref SampleItem made);
     }
 }
