@@ -303,6 +303,9 @@ namespace FireGame.Prototypes
         private Pool _roofGlow;
         private Pool _roofFire;
         private Pool _bars;
+
+        /// <summary>바의 색 막대(체력·진압·마감). 바탕(_bars)과 풀을 나눠 늘 바탕 위에 그린다(한 풀이면 거리순이라 치우친 막대가 바탕 뒤로 숨었다).</summary>
+        private Pool _barFills;
         private readonly List<TextMesh> _signs = new List<TextMesh>();
         private readonly List<TextMesh> _helps = new List<TextMesh>();
 
@@ -1053,7 +1056,8 @@ namespace FireGame.Prototypes
             {
                 Vector3 at = W(h.Pos);
                 // 숲: 샘플 무기의 맞힌 자리·처치는 규칙이 샘플 hitFx·poof로 낸다(SurvivorView.Sample이 그린다).
-                if (Free && (h.Source == HitSource.Sample || h.Killed)) continue;
+                // 겨누는 물대포(2026-10-08)는 예전 맞힘·물보라·처치 연출을 그대로 쓴다.
+                if (Free && (h.Source == HitSource.Sample || (h.Killed && h.Source != HitSource.Hose))) continue;
                 WeaponHit(h, at);
                 // 맨홀 물기둥에 쓰러진 요괴는 하늘로 날아갔다 떨어지며 터진다(샘플).
                 if (h.Killed && h.Source == HitSource.Geyser && IsYokai(h.Kind)) Fling(at, h.Kind, h.From);
@@ -1759,6 +1763,12 @@ namespace FireGame.Prototypes
         }
 
         /// <summary>깊이를 남기는 컷아웃 머티리얼(입체 면·나무·차·사람).</summary>
+        /// <summary>바용 스프라이트 머티리얼: 지정한 렌더 큐에 그린다.</summary>
+        private static Material BarMaterial(int queue)
+        {
+            return new Material(Shader.Find("Sprites/Default")) { renderQueue = queue };
+        }
+
         private static Material Cutout()
         {
             if (_cutout != null) return _cutout;
@@ -2028,7 +2038,10 @@ namespace FireGame.Prototypes
             else
             {
                 t = NewText();
-                t.GetComponent<MeshRenderer>().sortingOrder = 23;
+                // 바 위 글자("30%")는 바보다 위(큐 3462).
+                MeshRenderer tr = t.GetComponent<MeshRenderer>();
+                tr.sortingOrder = 48;
+                tr.material.renderQueue = 3462;
                 _tags.Add(t);
             }
             _tagsUsed++;
@@ -2723,10 +2736,12 @@ namespace FireGame.Prototypes
             // 머리 위 체력 바(건물 내구도 바와 같은 풀). 최대 체력이 크면 조금 길다. 30% 밑이면 깜빡인다.
             float hpRatio = Mathf.Clamp01(_sim.Hp / _sim.MaxHp);
             float hpW = 1.5f * _sim.MaxHp / SurvivorSim.BaseMaxHp;
-            Vector3 hpBar = at + Up(PersonTall + 0.45f);
-            _bars.PutRot(hpBar, Billboard, hpW + 0.08f, 0.22f, new Color(0f, 0f, 0f, 0.7f));
+            float hpK = Free ? 1.3f : 1f;
+            hpW *= hpK;
+            Vector3 hpBar = at + Up((PersonTall * (Free ? SamplePersonScale : 1f)) + 0.45f);
+            _bars.PutRot(hpBar, Billboard, hpW + 0.08f, 0.22f * hpK, new Color(0f, 0f, 0f, 0.7f));
             bool lowHp = hpRatio < 0.3f && Mathf.Sin(_time * 10f) < 0f;
-            _bars.PutRot(hpBar + new Vector3(-(hpW * (1f - hpRatio)) / 2f, 0f, 0f) + (Billboard * new Vector3(0f, 0f, -0.01f)), Billboard, Mathf.Max(0.01f, hpW * hpRatio), 0.14f,
+            _barFills.PutRot(hpBar + new Vector3(-(hpW * (1f - hpRatio)) / 2f, 0f, 0f) + (Billboard * new Vector3(0f, 0f, -0.01f)), Billboard, Mathf.Max(0.01f, hpW * hpRatio), 0.14f * hpK,
                 lowHp ? new Color(1f, 0.6f, 0.5f) : new Color(0.9f, 0.25f, 0.2f));
             _playerGlow.transform.localPosition = at;
             float r = 2f * _sim.Magnet * 0.5f;
@@ -4567,11 +4582,11 @@ namespace FireGame.Prototypes
                 Vector3 front = Billboard * new Vector3(0f, 0f, -0.01f);
                 float put = Mathf.Clamp01(1f - st.Fire);
                 _bars.PutRot(bar, Billboard, bw + 0.08f, 0.3f, new Color(0f, 0f, 0f, 0.8f));
-                _bars.PutRot(bar + new Vector3(-(bw * (1f - put)) / 2f, 0f, 0f) + front, Billboard, Mathf.Max(0.01f, bw * put), 0.22f,
+                _barFills.PutRot(bar + new Vector3(-(bw * (1f - put)) / 2f, 0f, 0f) + front, Billboard, Mathf.Max(0.01f, bw * put), 0.22f,
                     Color.Lerp(new Color(0.3f, 0.6f, 1f), new Color(0.55f, 0.9f, 1f), put));
                 // 안 찬 자리는 불빛으로 일렁인다: "아직 이만큼 탄다". 한 방 물(증기·물폭탄)이 들어오면 한 칸이 확 찬다.
                 float rest = bw * (1f - put);
-                if (rest > 0.02f) _bars.PutRot(bar + new Vector3((bw * put) / 2f, 0f, 0f) + front, Billboard, rest, 0.22f,
+                if (rest > 0.02f) _barFills.PutRot(bar + new Vector3((bw * put) / 2f, 0f, 0f) + front, Billboard, rest, 0.22f,
                     new Color(1f, 0.45f + (0.2f * Mathf.Sin((_time * 9f) + seed)), 0.15f, 0.9f));
                 // 마감: 얇은 바(초록→빨강), 5초 밑이면 깜빡. 글자는 게이지 안 한 줄("30%", 10초 밑이면 "30% · 7초 · 2명" — 밑엔 "살려줘!" 말풍선이 있다).
                 float left = _sim.Deadline(st);
@@ -4581,18 +4596,18 @@ namespace FireGame.Prototypes
                 Tag(bar + (Billboard * new Vector3(0f, 0f, -0.03f)), label, urgent ? new Color(1f, 0.75f, 0.65f) : Color.white, 0.032f);
                 // 증기 충전: 게이지 바로 밑 흰 금. 다 차면 증기 폭발로 한 칸이 찬다.
                 float charge = Mathf.Clamp01(st.HoseHold / SurvivorSim.SteamHold);
-                if (charge > 0.02f) _bars.PutRot(bar + Up(-0.2f) + new Vector3(-(bw * (1f - charge)) / 2f, 0f, 0f) + front, Billboard, bw * charge, 0.07f, new Color(1f, 1f, 1f, 0.85f));
+                if (charge > 0.02f) _barFills.PutRot(bar + Up(-0.2f) + new Vector3(-(bw * (1f - charge)) / 2f, 0f, 0f) + front, Billboard, bw * charge, 0.07f, new Color(1f, 1f, 1f, 0.85f));
                 Vector3 dl = bar + Up(-0.34f);
                 bool blink = left < 5f && Mathf.Sin(_time * 10f) < 0f;
                 _bars.PutRot(dl, Billboard, bw + 0.08f, 0.14f, new Color(0f, 0f, 0f, 0.7f));
-                _bars.PutRot(dl + new Vector3(-(bw * (1f - fill)) / 2f, 0f, 0f) + front, Billboard, Mathf.Max(0.01f, bw * fill), 0.09f,
+                _barFills.PutRot(dl + new Vector3(-(bw * (1f - fill)) / 2f, 0f, 0f) + front, Billboard, Mathf.Max(0.01f, bw * fill), 0.09f,
                     blink ? Color.white : Color.Lerp(new Color(1f, 0.2f, 0.1f), new Color(0.45f, 0.95f, 0.4f), fill));
             }
             else if (st.Integrity < 0.999f)
             {
                 _bars.PutRot(bar, Billboard, bw + 0.08f, 0.22f, new Color(0f, 0f, 0f, 0.7f));
                 float fill = Mathf.Clamp01(st.Integrity);
-                _bars.PutRot(bar + new Vector3(-(bw * (1f - fill)) / 2f, 0f, 0f) + (Billboard * new Vector3(0f, 0f, -0.01f)), Billboard, Mathf.Max(0.01f, bw * fill), 0.14f,
+                _barFills.PutRot(bar + new Vector3(-(bw * (1f - fill)) / 2f, 0f, 0f) + (Billboard * new Vector3(0f, 0f, -0.01f)), Billboard, Mathf.Max(0.01f, bw * fill), 0.14f,
                     Color.Lerp(new Color(1f, 0.25f, 0.15f), new Color(0.45f, 0.95f, 0.4f), fill));
             }
         }
@@ -4738,7 +4753,9 @@ namespace FireGame.Prototypes
             _pools.Add(_walls);
             _roofGlow = AddPool("RoofGlow", "Effects/glow", 8, true);
             _roofFire = AddPool("RoofFire", "Effects/fire_02", 11);
-            _bars = new Pool(_world, "Bar", Art.White, 19, null);
+            // 바는 숲 샘플 공중·앞 층(큐 3400~3445) 위, 화면 층(3480) 아래: 연출에 덮이지 않는다.
+            _bars = new Pool(_world, "Bar", Art.White, 46, BarMaterial(3460));
+            _barFills = new Pool(_world, "BarFill", Art.White, 47, BarMaterial(3461));
             _edgeArrows = new Pool(_world, "EdgeArrow", ArrowSprite(), 22, null);
             _pools.Add(_edgeArrows);
             _arrowBacks = new Pool(_world, "ArrowBack", DiscSprite(), 21, null);
@@ -4748,6 +4765,7 @@ namespace FireGame.Prototypes
             _pools.Add(_roofs);
             _pools.Add(_roofTrim);
             _pools.Add(_bars);
+            _pools.Add(_barFills);
             _groundGlow = AddPool("GroundGlow", "Effects/glow", 3, true);
             _shadows = AddPool("Shadow", "Effects/glow", 4);
             _motes = new Pool(_world, "Mote", Art.White, 21, null);
@@ -5700,7 +5718,7 @@ namespace FireGame.Prototypes
 
         /// <summary>
         /// 숲 카드(2026-10-08): 판 위에 큰 아이콘(승인 샘플 icon 그림) + 별 6칸 + NEW!/Lv N/Lv5 MAX/Lv6 최고급 + 샘플 문구.
-        /// Lv6 카드는 노랑 판 + 무지개 빛. "진화"·짝 조합 표기는 없다(숲은 짝 조건이 없다).
+        /// Lv6 카드는 노랑 판 + 무지개 빛. 무기 Lv5 카드는 문구에 "진화 짝: ○○" 한 줄(DescribeFree), Lv6 카드는 짝을 들었을 때만 나온다.
         /// </summary>
         private void FreeCard(RectTransform rect, UpgradeId id, int index)
         {

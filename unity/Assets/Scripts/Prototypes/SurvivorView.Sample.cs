@@ -16,13 +16,16 @@ namespace FireGame.Prototypes
     {
         private const float SampleH = 270f;
 
-        /// <summary>숲에서 3D 사람(소방관·대원)을 키우는 배율: 위에서 내려다본 사람이 샘플 소방관(화면 높이 12%)과 같게.</summary>
-        private const float SamplePersonScale = 1.75f;
+        /// <summary>숲에서 3D 사람(소방관·대원)을 키우는 배율. 카메라를 덜 당긴 만큼(270→380px) 1.75에서 줄였다.</summary>
+        private const float SamplePersonScale = 1.4f;
 
         private Vector3 _personScale = Vector3.one;
 
-        /// <summary>숲 직교 카메라 반높이(샘플 화면 높이 270px).</summary>
-        private const float SampleHalf = SampleH * SurvivorSim.Px / 2f;
+        /// <summary>숲 카메라가 보는 세로 px(월드). 샘플 270은 너무 가깝다는 지적(2026-10-08)으로 380. 화면 고정 층(HUD)은 SampleH를 그대로 쓴다.</summary>
+        private const float ViewH = 380f;
+
+        /// <summary>숲 직교 카메라 반높이(ViewH px).</summary>
+        private const float SampleHalf = ViewH * SurvivorSim.Px / 2f;
 
         private static readonly float TiltCos = Mathf.Cos(Tilt * Mathf.Deg2Rad);
 
@@ -59,6 +62,12 @@ namespace FireGame.Prototypes
         private float SampleW
         {
             get { return SampleH * (_worldCam != null && _worldCam.aspect > 0.1f ? _worldCam.aspect : 16f / 9f); }
+        }
+
+        /// <summary>숲 카메라가 보는 가로 px(월드).</summary>
+        private float ViewW
+        {
+            get { return SampleW * ViewH / SampleH; }
         }
 
         private void BuildSampleLayers()
@@ -201,7 +210,7 @@ namespace FireGame.Prototypes
             _sim.SShake *= Mathf.Pow(0.002f, dt);
 
             Vector2 cam = SCamCenter();
-            float w = SampleW;
+            float w = ViewW;
             SampleCanvas g = _sg;
 
             // 바닥 층: 아이템 바닥 그림 → Lv6 어두움 → 광선 → 발밑 등급 고리.
@@ -213,7 +222,7 @@ namespace FireGame.Prototypes
             if (_sim.SDark > 0f)
             {
                 g.FillStyle = C(8, 4, 20, _sim.SDark);
-                g.FillRect(cam.x - (w / 2f) - 40f, cam.y - (SampleH / 2f / TiltCos) - 40f, w + 80f, (SampleH / TiltCos) + 80f);
+                g.FillRect(cam.x - (w / 2f) - 40f, cam.y - (ViewH / 2f / TiltCos) - 40f, w + 80f, (ViewH / TiltCos) + 80f);
             }
             DrawRays(g);
             DrawCrewGround(g);
@@ -241,7 +250,7 @@ namespace FireGame.Prototypes
             if (_sim.SFlash > 0f)
             {
                 _ss.FillStyle = C(_sim.SFlashColor, _sim.SFlash * 0.55f);
-                _ss.FillRect(0f, 0f, w, SampleH);
+                _ss.FillRect(0f, 0f, SampleW, SampleH);
             }
             DrawSampleHud(_ss, dt);
             DrawCrewScreen(_ss);
@@ -252,8 +261,9 @@ namespace FireGame.Prototypes
             if (_worldCam == null) return;
             _sForward = _world.InverseTransformDirection(_worldCam.transform.forward);
             Vector3 camLocal = _world.InverseTransformPoint(_worldCam.transform.position);
-            Vector3 focus = GroundAt(new Vector3(0.5f, 0.5f, 0f));
-            _sNear = Mathf.Max(0f, Vector3.Dot(focus - camLocal, _sForward) - (_worldCam.nearClipPlane + 0.8f));
+            // 기운 카메라라 화면 아래쪽 땅이 가장 가깝다: 가운데 기준으로 당기면 아래 절반이 near에 잘린다. 화면 아래 바깥(그림이 넘치는 몫)을 기준으로 당긴다.
+            Vector3 nearest = GroundAt(new Vector3(0.5f, -0.3f, 0f));
+            _sNear = Mathf.Max(0f, Vector3.Dot(nearest - camLocal, _sForward) - (_worldCam.nearClipPlane + 0.8f));
             foreach (SampleLayer l in _sLayers)
             {
                 System.Func<Vector2, Vector3> map = l.Kind == 0 ? (System.Func<Vector2, Vector3>)SGround : l.Kind == 1 ? SAir : SScreen;
@@ -796,7 +806,7 @@ namespace FireGame.Prototypes
             // Lv1: 카드가 화면 아래(샘플 화면 W/2, H+30)에서 날아온다.
             if (f.Fly && f.Age < 0.35f)
             {
-                float sx = cam.x, sy = cam.y + (((SampleH / 2f) + 30f) / TiltCos);
+                float sx = cam.x, sy = cam.y + (((ViewH / 2f) + 30f) / TiltCos);
                 float u = SurvivorSim.Ease(f.Age / 0.35f);
                 float x = Mathf.Lerp(sx, px, u), y = Mathf.Lerp(sy, py - 30f, u) - (Mathf.Sin(u * Mathf.PI) * 60f);
                 for (int i = 1; i <= 8; i++)
@@ -948,7 +958,6 @@ namespace FireGame.Prototypes
             DrawGroundA(g, it, lv);
             DrawGroundB(g, it, lv);
             DrawGroundC(g, it, lv);
-            DrawGroundD(g, it, lv);
         }
 
         private void DrawItemAir(SampleCanvas g, SampleItem it, int lv)
@@ -956,16 +965,13 @@ namespace FireGame.Prototypes
             DrawAirA(g, it, lv);
             DrawAirB(g, it, lv);
             DrawAirC(g, it, lv);
-            DrawAirD(g, it, lv);
         }
 
         partial void DrawGroundA(SampleCanvas g, SampleItem it, int lv);
         partial void DrawGroundB(SampleCanvas g, SampleItem it, int lv);
         partial void DrawGroundC(SampleCanvas g, SampleItem it, int lv);
-        partial void DrawGroundD(SampleCanvas g, SampleItem it, int lv);
         partial void DrawAirA(SampleCanvas g, SampleItem it, int lv);
         partial void DrawAirB(SampleCanvas g, SampleItem it, int lv);
         partial void DrawAirC(SampleCanvas g, SampleItem it, int lv);
-        partial void DrawAirD(SampleCanvas g, SampleItem it, int lv);
     }
 }
