@@ -22,9 +22,11 @@ namespace FireGame.Prototypes
         private void BuildCrewHud()
         {
             _crewTitle = UiKit.OutlinedLabel(_hud, "CrewTitle", "구조대원", 46, Color.white, TextAnchor.MiddleLeft);
-            UiKit.Place(_crewTitle.rectTransform, new Vector2(0f, 1f), new Vector2(56f, -248f), new Vector2(260f, 56f));
+            UiKit.Place(_crewTitle.rectTransform, new Vector2(0f, 1f), (new Vector2(56f, -248f) * HudK) + HudTopUi, new Vector2(260f, 56f));
+            _crewTitle.rectTransform.localScale = Vector3.one * HudK;
             _crewCount = UiKit.OutlinedLabel(_hud, "CrewCount", "", 46, Hex("#ffd9a8"), TextAnchor.MiddleLeft);
-            UiKit.Place(_crewCount.rectTransform, new Vector2(0f, 1f), new Vector2(280f, -248f), new Vector2(200f, 56f));
+            UiKit.Place(_crewCount.rectTransform, new Vector2(0f, 1f), (new Vector2(280f, -248f) * HudK) + HudTopUi, new Vector2(200f, 56f));
+            _crewCount.rectTransform.localScale = Vector3.one * HudK;
             _crewX = UiKit.OutlinedLabel(_hud, "CrewX", "", 68, Color.white, TextAnchor.MiddleCenter);
             UiKit.Place(_crewX.rectTransform, new Vector2(0.5f, 1f), new Vector2(368f, -304f), new Vector2(220f, 90f));
             foreach (Text t in new[] { _crewTitle, _crewCount, _crewX }) t.gameObject.SetActive(false);
@@ -217,6 +219,9 @@ namespace FireGame.Prototypes
             if (show)
             {
                 const float Y0 = 50f;
+                g.Save();
+                g.Translate(0f, HudTop);
+                g.Scale(HudK, HudK);
                 g.FillStyle = C(10, 14, 28, 0.8f);
                 g.BeginPath();
                 g.RoundRect(6f, Y0, 232f, 42f, 9f);
@@ -225,6 +230,7 @@ namespace FireGame.Prototypes
                 g.LineWidth = 1.5f;
                 g.Stroke();
                 for (int i = 0; i < SurvivorSim.MaxCrew; i++) HelmetIcon(g, 20f + (i * 20f), Y0 + 28f, 6.2f, i < n, i == n - 1 ? _sim.CrewHudGlow : 0f);
+                g.Restore();
                 _crewCount.text = n + " / " + SurvivorSim.MaxCrew;
                 _crewCount.color = n >= 5 ? Hex("#ffe27a") : Hex("#ffd9a8");
             }

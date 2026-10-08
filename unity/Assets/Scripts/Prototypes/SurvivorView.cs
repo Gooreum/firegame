@@ -306,6 +306,9 @@ namespace FireGame.Prototypes
 
         /// <summary>바의 색 막대(체력·진압·마감). 바탕(_bars)과 풀을 나눠 늘 바탕 위에 그린다(한 풀이면 거리순이라 치우친 막대가 바탕 뒤로 숨었다).</summary>
         private Pool _barFills;
+
+        /// <summary>간판 뒤 검은 판: 간판 글자 아래(order 19, 기본 큐). 바(_bars)는 연출 위로 올라가서 따로 둔다.</summary>
+        private Pool _signPlates;
         private readonly List<TextMesh> _signs = new List<TextMesh>();
         private readonly List<TextMesh> _helps = new List<TextMesh>();
 
@@ -4184,7 +4187,7 @@ namespace FireGame.Prototypes
                         {
                             Vector4 b = _signBoards[sign];
                             Vector3 board = new Vector3(b.x, b.y, 0f) + Up(b.z) + (Billboard * new Vector3(0f, 0f, 0.02f));
-                            _bars.PutRot(board, Billboard, b.w, 0.62f, new Color(0.12f, 0.1f, 0.1f, 0.85f));
+                            _signPlates.PutRot(board, Billboard, b.w, 0.62f, new Color(0.12f, 0.1f, 0.1f, 0.85f));
                         }
                         DrawTrapped(st, _helps[sign], i);
                         sign++;
@@ -4756,6 +4759,7 @@ namespace FireGame.Prototypes
             // 바는 숲 샘플 공중·앞 층(큐 3400~3445) 위, 화면 층(3480) 아래: 연출에 덮이지 않는다.
             _bars = new Pool(_world, "Bar", Art.White, 46, BarMaterial(3460));
             _barFills = new Pool(_world, "BarFill", Art.White, 47, BarMaterial(3461));
+            _signPlates = new Pool(_world, "SignPlate", Art.White, 19, null);
             _edgeArrows = new Pool(_world, "EdgeArrow", ArrowSprite(), 22, null);
             _pools.Add(_edgeArrows);
             _arrowBacks = new Pool(_world, "ArrowBack", DiscSprite(), 21, null);
@@ -4766,6 +4770,7 @@ namespace FireGame.Prototypes
             _pools.Add(_roofTrim);
             _pools.Add(_bars);
             _pools.Add(_barFills);
+            _pools.Add(_signPlates);
             _groundGlow = AddPool("GroundGlow", "Effects/glow", 3, true);
             _shadows = AddPool("Shadow", "Effects/glow", 4);
             _motes = new Pool(_world, "Mote", Art.White, 21, null);

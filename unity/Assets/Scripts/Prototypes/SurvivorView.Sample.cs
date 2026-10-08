@@ -16,6 +16,14 @@ namespace FireGame.Prototypes
     {
         private const float SampleH = 270f;
 
+        /// <summary>왼쪽 위 아이템 칸·헬멧 칸 배율: 샘플 그대로면 화면 1/3을 덮어 맵이 안 보였다(사용자).</summary>
+        private const float HudK = 0.6f;
+
+        /// <summary>줄인 칸을 경험치 바 아래로 내리는 몫(샘플 화면 px). UI 글자는 1px = 4(1080/270).</summary>
+        private const float HudTop = 8f;
+
+        private static readonly Vector2 HudTopUi = new Vector2(0f, -HudTop * 4f);
+
         /// <summary>숲에서 3D 사람(소방관·대원)을 키우는 배율. 카메라를 덜 당긴 만큼(270→380px) 1.75에서 줄였다.</summary>
         private const float SamplePersonScale = 1.4f;
 
@@ -80,9 +88,11 @@ namespace FireGame.Prototypes
             AddSampleLayer(_ss, 48, 2);
 
             _hudName = UiKit.OutlinedLabel(_hud, "SampleHudName", "", 48, Color.white, TextAnchor.MiddleLeft);
-            UiKit.Place(_hudName.rectTransform, new Vector2(0f, 1f), new Vector2(176f, -72f), new Vector2(520f, 60f));
+            UiKit.Place(_hudName.rectTransform, new Vector2(0f, 1f), (new Vector2(176f, -72f) * HudK) + HudTopUi, new Vector2(520f, 60f));
+            _hudName.rectTransform.localScale = Vector3.one * HudK;
             _hudLv = UiKit.OutlinedLabel(_hud, "SampleHudLv", "", 34, new Color(0.65f, 0.77f, 0.9f), TextAnchor.MiddleLeft);
-            UiKit.Place(_hudLv.rectTransform, new Vector2(0f, 1f), new Vector2(512f, -132f), new Vector2(200f, 44f));
+            UiKit.Place(_hudLv.rectTransform, new Vector2(0f, 1f), (new Vector2(512f, -132f) * HudK) + HudTopUi, new Vector2(200f, 44f));
+            _hudLv.rectTransform.localScale = Vector3.one * HudK;
             _hudBand = UiKit.OutlinedLabel(_hud, "SampleHudBand", "", 42, new Color(0.91f, 0.96f, 1f), TextAnchor.MiddleCenter);
             UiKit.Place(_hudBand.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 64f), new Vector2(1600f, 64f));
             foreach (Text t in new[] { _hudName, _hudLv, _hudBand }) t.gameObject.SetActive(false);
@@ -923,6 +933,9 @@ namespace FireGame.Prototypes
                 return;
             }
             float t = _sim.ST;
+            g.Save();
+            g.Translate(0f, HudTop);
+            g.Scale(HudK, HudK);
             g.FillStyle = C(10, 14, 28, 0.78f);
             g.BeginPath();
             g.RoundRect(6f, 6f, 168f, 40f, 9f);
@@ -933,6 +946,7 @@ namespace FireGame.Prototypes
             TierGlow(g, 26f, 26f, 12f, lv);
             Icon(g, _hudItem, 26f, 26f, 12f, lv);
             for (int i = 1; i <= 6; i++) StarShape(g, 48f + ((i - 1) * 13f), 33f, i == 6 ? 5.2f : 4.6f, i <= lv ? (i == 6 ? "rainbow" : lv >= 5 ? "gold" : "blue") : "off", t + i);
+            g.Restore();
             UpgradeId shown = lv >= 6 ? (Loadout.EvolutionOf(_hudItem) ?? _hudItem) : _hudItem;
             _hudName.text = SurvivorUpgrades.Name(shown);
             _hudName.color = lv >= 6 ? Hex("#ffe9a8") : Color.white;
