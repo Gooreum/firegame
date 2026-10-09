@@ -72,6 +72,9 @@ namespace FireGame.Prototypes
         /// <summary>Kenney 배(Watercraft)의 뱃머리를 모델 +Z(ItemModels의 앞)로 돌리는 각. 넣어 보고 c70 캡처로 정한다(docs §25).</summary>
         public const float BoatYaw = 0f;
 
+        /// <summary>FIREGAME_FITLOG=1이면 Fit이 경계·축척을 로그로 찍는다(캡처 디버그).</summary>
+        public static readonly bool LogFit = System.Environment.GetEnvironmentVariable("FIREGAME_FITLOG") == "1";
+
         /// <summary>
         /// 모델을 모델 축 루트(ItemModels.Root, 위 +Y 앞 +Z) 안에 넣는다(2026-10-10 Kenney 디자인 패스). 바닥 가운데를 at에,
         /// 발자국 w(X)×d(Z) 안에 균일 축척. stretch면 X·Z를 따로 늘여 발자국을 꽉 채운다(지붕·좌판처럼 단색 저폴리는 늘여도 된다).
@@ -84,22 +87,37 @@ namespace FireGame.Prototypes
             GameObject prefab = Load(path);
             if (prefab == null || root == null) return null;
             GameObject go = Object.Instantiate(prefab, root.transform, false);
-            go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
-            Bounds b = Measure(go);
+            // FBX 루트가 가져오기 회전·축척을 갖고 있으면(Fantasy Town 지붕·판자) 그 위에 yaw를 곱한다: 덮어쓰면 납작한 지붕이 벽처럼 선다.
+            Quaternion baseRot = prefab.transform.localRotation;
+            Vector3 baseScale = prefab.transform.localScale;
+            go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f) * baseRot;
+            Bounds b = MeasureIn(go, root.transform);
+            Bounds first = b;
             float sx = w / Mathf.Max(0.001f, b.size.x);
             float sz = d / Mathf.Max(0.001f, b.size.z);
             float s = Mathf.Min(sx, sz);
             Vector3 scale = stretch ? new Vector3(sx, s, sz) : Vector3.one * s;
-            go.transform.localScale = scale;
-            b = Measure(go);
+            go.transform.localScale = Vector3.Scale(baseScale, scale);
+            b = MeasureIn(go, root.transform);
+            // 처음 잰 경계가 실제와 다른 모델이 있다(Place와 같다 — 얇은 지붕·판자는 Z가 몇 배로 늘어났다): 한 번 더 재서 발자국에 맞춘다.
+            float fixX = w / Mathf.Max(0.001f, b.size.x);
+            float fixZ = d / Mathf.Max(0.001f, b.size.z);
+            float fix = Mathf.Min(fixX, fixZ);
+            if (Mathf.Abs(fixX - 1f) > 0.01f || Mathf.Abs(fixZ - 1f) > 0.01f)
+            {
+                scale = stretch ? new Vector3(scale.x * fixX, scale.y * fix, scale.z * fixZ) : scale * fix;
+                go.transform.localScale = Vector3.Scale(baseScale, scale);
+                b = MeasureIn(go, root.transform);
+            }
             if (maxHeight > 0f && b.size.y > maxHeight)
             {
                 scale.y *= maxHeight / b.size.y;
-                go.transform.localScale = scale;
-                b = Measure(go);
+                go.transform.localScale = Vector3.Scale(baseScale, scale);
+                b = MeasureIn(go, root.transform);
             }
             go.transform.localPosition += new Vector3(at.x - b.center.x, at.y - b.min.y, at.z - b.center.z);
             size = b.size;
+            if (LogFit) Debug.Log("[ProtoShots] Fit " + path + " 목표 " + w.ToString("F2") + "x" + d.ToString("F2") + " 첫경계 " + first.size.ToString("F2") + "@" + first.center.ToString("F2") + " 끝경계 " + b.size.ToString("F2") + "@" + b.center.ToString("F2") + " 축척 " + go.transform.localScale.ToString("F2") + " 루트 " + root.transform.position.ToString("F2") + "/" + root.transform.rotation.eulerAngles.ToString("F0"));
             return go;
         }
 
@@ -195,6 +213,30 @@ namespace FireGame.Prototypes
                 Recolored[key] = tex;
             }
             t.SetBaseMap(tex);
+        }
+
+        /// <summary>go의 렌더러 경계를 frame 기준 좌표로 잰다(월드 AABB 여덟 모서리를 frame 안으로 옮겨 다시 감싼다. 90° 회전이면 정확하다).</summary>
+        private static Bounds MeasureIn(GameObject go, Transform frame)
+        {
+            var b = new Bounds(Vector3.zero, Vector3.zero);
+            bool first = true;
+            foreach (Renderer r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                Bounds wb = r is SkinnedMeshRenderer skin && skin.sharedMesh != null ? TransformBounds(skin.transform, skin.sharedMesh.bounds) : r.bounds;
+                Vector3 e = wb.extents;
+                for (int i = 0; i < 8; i++)
+                {
+                    Vector3 corner = wb.center + new Vector3((i & 1) == 0 ? -e.x : e.x, (i & 2) == 0 ? -e.y : e.y, (i & 4) == 0 ? -e.z : e.z);
+                    Vector3 lp = frame.InverseTransformPoint(corner);
+                    if (first)
+                    {
+                        b = new Bounds(lp, Vector3.zero);
+                        first = false;
+                    }
+                    else b.Encapsulate(lp);
+                }
+            }
+            return b;
         }
 
         private static Bounds Measure(GameObject go)
