@@ -2412,10 +2412,7 @@ namespace FireGame.Prototypes.Logic
                 s.Launching = false;
                 // 숲(2026-10-10): 불을 끈 집의 갇힌 사람은 스스로 나온다(구조로 센다, 대원 합류). 숲엔 아이템 구조가 없어
                 // 문 앞 2초를 못 채우고 끄면 사람이 집 안에 남아 다음 신고 때 연기를 마셨다(숙련 봇 구조 0.5 · 잃음 11.4/17, docs §24).
-                if (Build.Free)
-                {
-                    while (s.Residents > 0) RescueOne(s);
-                }
+                if (Build.Free) ReleaseResidents(s);
                 // 불을 끈 보상: 건물은 큰 구슬, 작은 것은 작은 구슬. 건물 진화는 콤보를 크게 잇는다.
                 if (s.IsBuilding) ComboAdd(ComboPerDouse);
                 DropGem(s.Door, (s.IsBuilding ? 8 : 3) * ComboMult);
@@ -3432,6 +3429,32 @@ namespace FireGame.Prototypes.Logic
             // 숲: 구한 사람이 방화복 대원이 되어 뒤에 줄을 선다(8명까지). 다 찼으면 예전처럼 뛰어 나간다.
             if (JoinCrew(s.Door)) return;
             for (int k = 0; k < n; k++) Civilians.Add(new Civilian { Pos = new Vec2(s.Door.X + ((k - ((n - 1) / 2f)) * 0.5f), s.Door.Y), Life = 1.5f });
+        }
+
+        /// <summary>
+        /// 숲: 꺼진 집의 갇힌 사람이 스스로 나온다. 구조로 세고 대원이 되지만, 문 앞 구조(RescueOne)와 달리 경험치·체력은 안 준다 —
+        /// 대화재 신고마다 주민이 하나씩 늘어 한 판에 44명이 나오며 체력 220·경험치 880을 주니 숲이 싱거워졌다(아슬 14 → 3, docs §24).
+        /// 랜드마크(제재소)를 다 비우는 절정 보상만 그대로.
+        /// </summary>
+        private void ReleaseResidents(Structure s)
+        {
+            int n = s.Residents;
+            if (n <= 0) return;
+            s.Residents = 0;
+            Rescued += n;
+            JustRescued = true;
+            RescuedFrom.Add(s);
+            if (Finale && s == Landmark)
+            {
+                Xp += LandmarkXp;
+                JustLandmarkSaved = true;
+                Stats.Events++;
+            }
+            for (int k = 0; k < n; k++)
+            {
+                if (JoinCrew(s.Door)) continue;
+                Civilians.Add(new Civilian { Pos = new Vec2(s.Door.X + ((k - ((n - 1) / 2f)) * 0.5f), s.Door.Y), Life = 1.5f });
+            }
         }
 
         private void Damage(Enemy e, float amount, Vec2 knock, bool show, HitSource source = HitSource.Hose, Vec2 from = default)

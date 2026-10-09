@@ -439,6 +439,7 @@ namespace FireGame.Prototypes.Tests
         public void Forest_DousedHouse_ReleasesResidents()
         {
             var sim = Quiet();
+            int xp = sim.Xp;
             Structure house = IgniteAndDouse(sim, 2, 0.35f);
             Assert.Equal(0, house.Residents);
             Assert.Equal(2, sim.Rescued);
@@ -446,6 +447,9 @@ namespace FireGame.Prototypes.Tests
             Assert.True(sim.JustRescued);
             Assert.Contains(house, sim.RescuedFrom);
             Assert.Equal(2, sim.CrewList.Count + sim.Civs.Count);
+            // 문 앞 구조와 달리 공짜: 구조 경험치(20×2)·체력 회복은 없다(끈 집 구슬 8×콤보는 주울 수 있다).
+            Assert.True(sim.Xp < xp + 40, "꺼진 집 사람은 구조 경험치를 안 줘야: " + (sim.Xp - xp));
+            Assert.Equal(0f, sim.Stats.HealRescue);
         }
 
         [Fact]
