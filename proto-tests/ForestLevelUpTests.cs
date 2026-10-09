@@ -460,6 +460,67 @@ namespace FireGame.Prototypes.Tests
             Assert.Equal(1f - (0.2f * 1.5f), h2.Fire, 3);
         }
 
+        /// <summary>아이템 하나만 든 숲 판: 레벨업 밀치기가 지나간 뒤 몹 하나(제자리)와 그 자리의 타는 집을 세운다.</summary>
+        private static SurvivorSim OneItemOneHouse(UpgradeId id, float sdx, float sdy, out Enemy mob, out Structure house)
+        {
+            var sim = new SurvivorSim(1, Forest, new List<UpgradeId>()) { Guardian = false, Reports = false };
+            sim.Enemies.Clear();
+            sim.Structures.Clear();
+            Take(sim, id, 1);
+            for (int i = 0; i < 30; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Step(0f, 0f);
+            }
+            Vec2 at = SurvivorSim.FromS(sim.PX + sdx, sim.PY + sdy);
+            mob = sim.Spawn(EnemyKind.Ember, at);
+            mob.Speed = 0f;
+            house = new Structure { Kind = StructureKind.House, Name = "산장", Pos = at, Half = new Vec2(2f, 1.5f), Integrity = 100f, Fire = 1f };
+            sim.Structures.Add(house);
+            return sim;
+        }
+
+        private static void RunKeeping(SurvivorSim sim, Enemy keep, float seconds)
+        {
+            int ticks = (int)System.Math.Round(seconds / SurvivorSim.Dt);
+            for (int i = 0; i < ticks; i++)
+            {
+                sim.Enemies.RemoveAll(o => o != keep);
+                sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Step(0f, 0f);
+            }
+        }
+
+        [Fact]
+        public void Forest_BalloonBlast_DousesHouse()
+        {
+            // 몹이 없으면 풍선은 -1.2rad(위·오른쪽)로 날아간다: 그 길 60px에 선 몹에 튕기며 터지고, 몹 자리의 집이 젖는다.
+            var sim = OneItemOneHouse(UpgradeId.Balloon, 60f * 0.362f, -10f - (60f * 0.932f), out Enemy mob, out Structure house);
+            RunKeeping(sim, mob, 2f);
+            Assert.True(house.Fire < 0.95f, "물풍선 폭발이 집을 적셔야: " + house.Fire);
+        }
+
+        [Fact]
+        public void Forest_SprinklerHead_WetsHouse()
+        {
+            // Lv1 머리 둘은 반경 44px(세로 ×0.72)로 돈다: 소방관을 덮은 집(가로 53·세로 40px)은 머리가 늘 위를 지난다.
+            var sim = OneItemOneHouse(UpgradeId.Sprinkler, 0f, 0f, out Enemy mob, out Structure house);
+            sim.Enemies.Clear();
+            RunKeeping(sim, null, 2f);
+            // 2초 × 머리 둘 × 0.2/s = 0.8, 불 자람 0.08 → 0.3 근처.
+            Assert.True(house.Fire < 0.7f, "스프링클러 머리가 집을 적셔야: " + house.Fire);
+        }
+
+        [Fact]
+        public void Forest_ChainHop_WetsHouse()
+        {
+            // 사슬은 (PX+6, PY-10)에서 270px 안 가장 가까운 몹으로 튄다: 60px 오른쪽 몹 자리의 집이 젖는다.
+            var sim = OneItemOneHouse(UpgradeId.Chain, 60f, 0f, out Enemy mob, out Structure house);
+            RunKeeping(sim, mob, 2f);
+            Assert.True(house.Fire < 0.95f, "물 사슬이 튄 자리의 집이 젖어야: " + house.Fire);
+        }
+
         [Fact]
         public void Forest_STimeScale_IsTheTimePartOfDamageScale()
         {

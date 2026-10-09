@@ -547,6 +547,9 @@ namespace FireGame.Prototypes.Logic
         public static readonly float[] Shake = { 0f, 1.5f, 2f, 2.5f, 3f, 4f, 6f };
         public static readonly float[] Cool = { 0f, 0.95f, 0.9f, 0.85f, 0.75f, 0.65f, 0.5f };
 
+        /// <summary>번개가 튄 자리 둘레(30px)의 건물 불을 줄이는 양(마을 사슬 0.6의 절반 — 레벨 배율로 자란다).</summary>
+        public const float ChainSoak = 0.3f;
+
         // items-c.js:320-324 chainPick
         public static List<Pt> ChainPick(SurvivorSim s, float x, float y, int hops, HashSet<Enemy> skip)
         {
@@ -606,6 +609,7 @@ namespace FireGame.Prototypes.Logic
                     {
                         Pt p = pts[i + 1];
                         s.SHit(p.M, dmg, s.Rnd(-40f, 40f), s.Rnd(-40f, 40f));
+                        s.SSoakArea(p.X, p.Y, 30f, ChainSoak);
                         s.HitFx(p.X, p.Y, lv, 0.6f);
                         if (lv == 6)
                         {

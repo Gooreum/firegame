@@ -39,6 +39,9 @@ namespace FireGame.Prototypes.Logic
         public static readonly int[] BalBounce = { 0, 4, 5, 6, 7, 8, 8 };
         public static readonly float[] BalR = { 0f, 10f, 11f, 12.5f, 13.5f, 15f, 15f };
         public static readonly float[] BalDmg = { 0f, 2f, 2.4f, 3f, 3.6f, 4.5f, 4.5f };
+
+        /// <summary>폭발 한 번이 건물 불을 줄이는 양(마을 물풍선 0.8의 절반 — 레벨 배율로 Lv5면 ×3 = 1.2).</summary>
+        public const float BalSoak = 0.4f;
         public static readonly float[] BalRR = { 0f, 24f, 28f, 33f, 38f, 46f, 46f };
         public static readonly float[] BalCd = { 0f, 1.5f, 1.4f, 1.25f, 1.1f, 1f, 1f };
         public static readonly float[] BalSpeed = { 0f, 230f, 245f, 260f, 275f, 290f, 290f };
@@ -185,6 +188,7 @@ namespace FireGame.Prototypes.Logic
                 // 폭발 반경: SHitArea가 광각 노즐을 곱한다. 물보라·고리는 같은 배율로 키운다(W).
                 float R = BalRR[lv] * (b.Max == 2 ? 0.75f : 1f), W = R * s.SWide;
                 s.SHitArea(b.X, b.Y, R, BalDmg[lv], 100f + (lv * 20f));
+                s.SSoakArea(b.X, b.Y, R, BalSoak);
                 s.SplashFx(b.X, b.Y, W, 6 + (lv * 2));
                 s.HitFx(b.X, b.Y, lv, 0.7f);
                 if (lv >= 5)
@@ -208,6 +212,7 @@ namespace FireGame.Prototypes.Logic
             {
                 RubberBurst(s, b.X, b.Y, b.R, b.Lv);
                 s.SHitArea(b.X, b.Y, BalRR[b.Lv] * 1.3f, BalDmg[b.Lv], 160f);
+                s.SSoakArea(b.X, b.Y, BalRR[b.Lv] * 1.3f, BalSoak);
                 return false;
             }
             return true;
@@ -262,6 +267,7 @@ namespace FireGame.Prototypes.Logic
                     RainBursts++;
                     RubberBurst(s, r.X, r.Y, 11f * s.SWide, 6);
                     s.SHitArea(r.X, r.Y, 40f, 6f, 160f);
+                    s.SSoakArea(r.X, r.Y, 40f, BalSoak * 0.5f);
                     s.HitFx(r.X, r.Y, 6, 0.5f);
                     s.SShake = Math.Max(s.SShake, 3f);
                 }
@@ -276,6 +282,9 @@ namespace FireGame.Prototypes.Logic
         // items-b.js:219
         public static readonly int[] ExtN = { 0, 1, 1, 2, 2, 3, 4 };
         public static readonly float[] ExtR = { 0f, 105f, 125f, 140f, 160f, 185f, 185f };
+
+        /// <summary>분말 구름이 건물 위를 지나는 동안 초당 줄이는 불(레벨 배율로 자란다).</summary>
+        public const float ExtSoak = 0.15f;
         public static readonly float[] ExtDmg = { 0f, 2.2f, 2.6f, 3f, 3.4f, 3.8f, 4.2f };
         public static readonly float[] ExtHitR = { 0f, 13f, 15f, 17f, 19f, 22f, 22f };
         public static readonly float[] ExtCd = { 0f, 1.3f, 1.2f, 1.15f, 1.05f, 1f, 1f };
@@ -347,6 +356,8 @@ namespace FireGame.Prototypes.Logic
                 p.Life = 0.45f + (l5 * 0.05f);
                 p.Size = s.Rnd(3f, 3.5f + (l5 * 0.6f));
             }
+            // 구름이 타는 건물 위를 지나면 적신다(숲 건물 적시기, docs §23).
+            s.SSoakArea(b.X, b.Y, ExtHitR[lv], ExtSoak * dt);
             foreach (Enemy m in s.SAlive().ToArray())
             {
                 float mx = SurvivorSim.SX(m.Pos), my = SurvivorSim.SY(m.Pos);
