@@ -1353,6 +1353,12 @@ namespace FireGame.Prototypes
                 ShowAlert("재 박쥐 떼가 날아온다!", new Color(1f, 0.55f, 0.4f));
                 GameAudio.Play(Cue.SecondIgnition);
             }
+            // 레벨 단계(2026-10-10): 내가 세지면 몹도 세진다는 걸 띠로 읽힌다. 마을은 제 시간표라 엘리트가 붙는 단계 2·3만.
+            if (_sim.JustTier && (!_sim.Guardian || _sim.Tier >= 2))
+            {
+                ShowAlert("Lv" + _sim.Level + " · " + SurvivorSim.TierText(_sim.Tier), new Color(0.8f, 0.55f, 1f));
+                GameAudio.Play(Cue.SecondIgnition);
+            }
             if (_sim.JustWave)
             {
                 ShowAlert("불길이 사방에서 몰려온다!", new Color(1f, 0.6f, 0.3f));
@@ -1807,6 +1813,9 @@ namespace FireGame.Prototypes
                 float flicker = 1f + (0.09f * Mathf.Sin((_time * 14f) + (i * 1.7f)));
                 bool hit = e.HitFlash > 0f;
                 float foot = e.Kind == EnemyKind.Blaze ? 1.8f : e.Kind == EnemyKind.Oil ? 1.7f : 1f;
+                // 엘리트(레벨 단계): 발밑 보라 고리가 돌고 몸은 더 보랗다(DrawYokai·DrawPet이 _drawElite를 본다). 체력 막대는 switch 뒤.
+                _drawElite = e.Elite;
+                if (e.Elite) _auras.Put(at + new Vector3(0f, -0.05f, 0f), (e.Radius * 2.8f) + 0.6f, _time * 40f, new Color(0.6f, 0.2f, 1f, 0.45f));
                 _shadows.Put(at + new Vector3(0f, -0.1f, 0f), foot, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
                 // 물을 먹을수록 불이 쪼그라든다(체력 비례).
                 float life = 0.55f + (0.45f * Mathf.Clamp01(e.Hp / Mathf.Max(0.01f, e.MaxHp)));
@@ -1976,6 +1985,8 @@ namespace FireGame.Prototypes
                         break;
                     }
                 }
+                if (e.Elite && e.Kind != EnemyKind.Bear && e.Kind != EnemyKind.Hwama) DrawHealthBar(at + Up((e.Radius * 2.2f) + 0.8f), 1.6f, e.Hp / Mathf.Max(1f, e.MaxHp), new Color(0.75f, 0.35f, 1f));
+                _drawElite = false;
             }
         }
 

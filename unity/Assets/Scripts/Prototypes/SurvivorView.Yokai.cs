@@ -86,6 +86,9 @@ namespace FireGame.Prototypes
         private int _petsDrawn;
         private const int MaxPets = 90;
 
+        /// <summary>지금 그리는 몹이 엘리트인가(DrawEnemies가 몹마다 켜고 끈다): 보라를 더 섞는다.</summary>
+        private bool _drawElite;
+
         /// <summary>불에 홀린 동물 요괴(10/8 제안): 몹 종류별 Cube Pets. null이면 예전 그림(불씨 화살·풍등은 동물이 아니다).</summary>
         private static string PetModel(EnemyKind kind)
         {
@@ -125,7 +128,7 @@ namespace FireGame.Prototypes
             _shadows.Put(at + new Vector3(0f, -0.1f, 0f), body * 0.95f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
             Models3D.Pose(pet, at + Up(bob), new Vector3(face, -0.5f, 0f));
             Models3D.Play(pet, hopRate >= 5f ? "run" : "walk", Mathf.Clamp(hopRate / 9f, 0.5f, 2f), _time + i);
-            Color tint = hit ? new Color(1.6f, 1.6f, 1.6f) : Color.Lerp(Color.white, YokaiPurple, wet ? 0f : 0.5f);
+            Color tint = hit ? new Color(1.6f, 1.6f, 1.6f) : Color.Lerp(Color.white, YokaiPurple, wet ? 0f : _drawElite ? 0.8f : 0.5f);
             Models3D.Tint(pet, tint);
             Vector3 top = at + Up(bob + body);
             float flick = 1f + (0.18f * Mathf.Sin((_time * 22f) + (i * 2.1f)));
@@ -147,7 +150,7 @@ namespace FireGame.Prototypes
             _petsDrawn++;
             Models3D.Pose(pet, at, new Vector3(Mathf.Cos(headDeg * Mathf.Deg2Rad), Mathf.Sin(headDeg * Mathf.Deg2Rad), 0f));
             Models3D.Play(pet, "run", 1.2f, _time + i);
-            Color tint = hit ? new Color(1.6f, 1.6f, 1.6f) : Color.Lerp(Color.white, YokaiPurple, wet ? 0f : 0.5f);
+            Color tint = hit ? new Color(1.6f, 1.6f, 1.6f) : Color.Lerp(Color.white, YokaiPurple, wet ? 0f : _drawElite ? 0.8f : 0.5f);
             Models3D.Tint(pet, tint);
             Vector3 top = at + Up(body);
             float flick = 1f + (0.18f * Mathf.Sin((_time * 22f) + (i * 2.1f)));
