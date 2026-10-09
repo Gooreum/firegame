@@ -60,31 +60,25 @@ namespace FireGame.Prototypes
         // ------------------------------------------------------------------
 
         /// <summary>
-        /// 가게 몸체: 벽 상자(깊이 0.7h, 뒤로 물림) + 평지붕과 낮은 난간 + 앞 유리 진열창 둘 + 가운데 문 + 간판 띠.
-        /// awning이 있으면 진열창 위로 앞이 낮은 줄무늬 차양(a·b 번갈아).
+        /// 가게 몸체(2026-10-10 Kenney 디자인 패스): Kenney City Kit Commercial 상가 한 채(깊이 0.7h, 뒤로 물림, 발자국에 늘여 맞추고
+        /// 키는 wallTop까지 누른다) + 간판 띠. awning이 있으면 앞이 낮은 줄무늬 차양(a·b 번갈아). 전엔 벽 상자·평지붕·난간·진열창·문을
+        /// 코드 상자 아홉으로 쌓았다("프로그래머가 쌓은 상자", docs §25). wall·roof는 모델이 제 색을 쓰므로 이제 안 쓴다(호출부 유지).
         /// </summary>
         private static ShopFrame ShopBody(GameObject root, float w, float h, Color wall, Color roof, Color sign, float wallTop, Color? awningA = null, Color? awningB = null)
         {
             float depth = h * 0.7f;
             float mid = -(h - depth) / 2f;
             float front = mid + (depth / 2f);
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, wallTop / 2f, mid), new Vector3(w * 0.94f, wallTop, depth), wall);
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, wallTop + 0.04f, mid), new Vector3(w * 0.96f, 0.08f, depth + 0.04f), roof);
-            // 난간: 지붕 둘레 낮은 턱(벽색보다 어둡게).
-            Color rim = wall * 0.82f;
-            for (int side = -1; side <= 1; side += 2)
+            GameObject body = Models3D.Fit("Commercial/" + ShopModel(root.name), root, new Vector3(0f, 0f, mid), w * 0.94f, depth, out Vector3 bodySize, wallTop + 0.1f, 0f, true);
+            if (body != null) wallTop = bodySize.y;
+            else
             {
-                ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, wallTop + 0.12f, mid + (side * depth / 2f)), new Vector3(w * 0.96f, 0.14f, 0.06f), rim);
-                ItemModels.Part(PrimitiveType.Cube, root, new Vector3(side * w * 0.48f, wallTop + 0.12f, mid), new Vector3(0.06f, 0.14f, depth), rim);
+                // 모델이 없으면 예전 상자 몸체.
+                ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, wallTop / 2f, mid), new Vector3(w * 0.94f, wallTop, depth), wall);
+                ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, wallTop + 0.04f, mid), new Vector3(w * 0.96f, 0.08f, depth + 0.04f), roof);
             }
-            // 간판 띠 + 진열창 둘 + 문.
+            // 간판 띠(앞벽 위).
             ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, wallTop - 0.18f, front + 0.03f), new Vector3(w * 0.9f, 0.28f, 0.06f), sign);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                ItemModels.Part(PrimitiveType.Cube, root, new Vector3(side * w * 0.27f, 0.58f, front + 0.02f), new Vector3(w * 0.3f, 0.62f, 0.04f), Paint);
-                ItemModels.Part(PrimitiveType.Cube, root, new Vector3(side * w * 0.27f, 0.58f, front + 0.04f), new Vector3(w * 0.27f, 0.54f, 0.03f), Glass);
-            }
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 0.42f, front + 0.03f), new Vector3(0.5f, 0.84f, 0.05f), Dark);
             if (awningA.HasValue)
             {
                 const int stripes = 8;
@@ -96,6 +90,30 @@ namespace FireGame.Prototypes
                 }
             }
             return new ShopFrame { Top = wallTop + 0.08f, Mid = mid, Depth = depth, Front = front, Yard = front + ((h / 2f - front) / 2f) };
+        }
+
+        /// <summary>
+        /// 가게(루트 이름)별 Kenney 상가. 낮고 넓은 것(e·j·k·n)은 넓은 가게, 좁은 것(a·b·c·g·h)은 작은 가게, d는 지붕에 상자가 있는 1층.
+        /// 몸체 색은 키트 그대로(흰 벽)라 가게는 지붕 상징물·차양·마당으로 읽힌다(§19 규칙).
+        /// </summary>
+        private static string ShopModel(string kind)
+        {
+            switch (kind)
+            {
+                case "ConvenienceStore": return "building-e";
+                case "Bakery": return "building-n";
+                case "Florist": return "building-d";
+                case "Barber": return "building-a";
+                case "Laundry": return "building-g";
+                case "SnackBar": return "building-j";
+                case "Cafe": return "building-n";
+                case "Bookstore": return "building-h";
+                case "Butcher": return "building-b";
+                case "Salon": return "building-c";
+                case "Hardware": return "building-k";
+                case "ChickenShop": return "building-e";
+            }
+            return "building-d";
         }
 
         /// <summary>실외기: 회색 상자 + 위 검은 팬.</summary>
@@ -213,11 +231,10 @@ namespace FireGame.Prototypes
             // 파라솔 탁자 둘(왼쪽), 냉동고와 음료 상자(오른쪽).
             ParasolTable(root, new Vector3(-w * 0.36f, 0f, f.Yard), new Color(0.2f, 0.62f, 0.32f), Red, 0.75f);
             ParasolTable(root, new Vector3(-w * 0.17f, 0f, f.Yard + 0.12f), new Color(0.2f, 0.62f, 0.32f), new Color(0.3f, 0.55f, 0.95f), 0.75f);
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(w * 0.2f, 0.22f, f.Yard - 0.05f), new Vector3(0.7f, 0.44f, 0.42f), Paint);
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(w * 0.2f, 0.45f, f.Yard - 0.05f), new Vector3(0.62f, 0.03f, 0.34f), new Color(0.6f, 0.88f, 1f));
-            for (int k = 0; k < 4; k++) ItemModels.Part(PrimitiveType.Sphere, root, new Vector3(w * 0.2f + ((k - 1.5f) * 0.14f), 0.47f, f.Yard - 0.05f), new Vector3(0.1f, 0.05f, 0.1f), goods[k]);
-            for (int k = 0; k < 3; k++) ItemModels.Part(PrimitiveType.Cube, root, new Vector3(w * 0.33f, 0.11f + (k * 0.2f), f.Yard + 0.25f), new Vector3(0.36f, 0.18f, 0.28f), k % 2 == 0 ? Red : new Color(0.15f, 0.4f, 0.85f));
-            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(w * 0.08f + 0.35f, 0.2f, f.Yard + 0.3f), new Vector3(0.22f, 0.2f, 0.22f), new Color(0.2f, 0.45f, 0.3f));
+            // 아이스크림 냉동고 + 쇼핑 카트 + 과일 진열대(Kenney Mini Market).
+            Models3D.Fit("Market/freezer", root, new Vector3(w * 0.2f, 0f, f.Yard - 0.05f), 0.75f, 0.5f, out _);
+            Models3D.Fit("Market/shopping-cart", root, new Vector3(w * 0.36f, 0f, f.Yard + 0.2f), 0.45f, 0.6f, out _, 0f, 20f);
+            Models3D.Fit("Market/display-fruit", root, new Vector3(w * 0.05f, 0f, f.Yard + 0.25f), 0.5f, 0.5f, out _);
             height = 2.25f;
             return root;
         }
@@ -227,24 +244,13 @@ namespace FireGame.Prototypes
         {
             GameObject root = ItemModels.Root("Bakery", parent);
             ShopFrame f = ShopBody(root, w, h, Brick, new Color(0.42f, 0.27f, 0.2f), Cream, 1.3f, new Color(0.5f, 0.3f, 0.18f), Cream);
-            // 거대 식빵: 누운 캡슐 몸 + 위 껍질 + 칼집 셋.
-            Vector3 loaf = new Vector3(-w * 0.12f, f.Top + 0.3f, f.Back);
-            ItemModels.Part(PrimitiveType.Capsule, root, loaf, new Vector3(0.75f, 0.85f, 0.65f), Crust, new Vector3(0f, 0f, 90f));
-            ItemModels.Part(PrimitiveType.Capsule, root, loaf + new Vector3(0f, 0.12f, 0f), new Vector3(0.62f, 0.75f, 0.55f), new Color(0.88f, 0.62f, 0.3f), new Vector3(0f, 0f, 90f));
-            for (int k = -1; k <= 1; k++) ItemModels.Part(PrimitiveType.Cube, root, loaf + new Vector3(k * 0.35f, 0.44f, 0f), new Vector3(0.06f, 0.04f, 0.45f), new Color(0.55f, 0.32f, 0.14f), new Vector3(0f, 25f, 0f));
-            // 바게트 둘(비스듬히).
-            for (int k = 0; k < 2; k++) ItemModels.Part(PrimitiveType.Capsule, root, new Vector3(w * 0.25f + (k * 0.22f), f.Top + 0.12f, f.Back + 0.1f), new Vector3(0.18f, 0.55f, 0.18f), Crust, new Vector3(90f, 30f + (k * 10f), 0f));
+            // 거대 식빵과 바게트 둘(Kenney Food Kit, 지붕 뒤쪽).
+            Models3D.Fit("Food/loaf", root, new Vector3(-w * 0.12f, f.Top, f.Back), 1.1f, 0.9f, out _, 0.8f, 20f);
+            for (int k = 0; k < 2; k++) Models3D.Fit("Food/loaf-baguette", root, new Vector3(w * 0.25f + (k * 0.22f), f.Top, f.Back + 0.1f), 1.0f, 0.4f, out _, 0.3f, 30f + (k * 10f));
             // 굴뚝(뒤 왼쪽).
             ItemModels.Part(PrimitiveType.Cube, root, new Vector3(-w * 0.4f, f.Top + 0.3f, f.Mid - (f.Depth * 0.35f)), new Vector3(0.3f, 0.6f, 0.3f), new Color(0.45f, 0.3f, 0.25f));
-            // 진열대 + 바구니 셋(둥근 빵·바게트·크루아상 색) + 입간판.
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(-w * 0.27f, 0.3f, f.Yard), new Vector3(w * 0.36f, 0.06f, 0.5f), DarkWood);
-            for (int side = -1; side <= 1; side += 2) ItemModels.Part(PrimitiveType.Cube, root, new Vector3(-w * 0.27f + (side * w * 0.16f), 0.15f, f.Yard), new Vector3(0.06f, 0.3f, 0.45f), DarkWood);
-            for (int k = 0; k < 3; k++)
-            {
-                var b = new Vector3(-w * 0.27f + ((k - 1) * 0.42f), 0.38f, f.Yard);
-                ItemModels.Part(PrimitiveType.Cylinder, root, b, new Vector3(0.36f, 0.06f, 0.36f), new Color(0.65f, 0.48f, 0.28f));
-                for (int j = 0; j < 3; j++) ItemModels.Part(PrimitiveType.Sphere, root, b + new Vector3((j - 1) * 0.1f, 0.08f, (j % 2) * 0.06f), new Vector3(0.14f, 0.1f, 0.12f), k == 1 ? new Color(0.92f, 0.7f, 0.35f) : Crust);
-            }
+            // 빵 진열대 둘(Kenney Mini Market) + 입간판.
+            for (int k = 0; k < 2; k++) Models3D.Fit("Market/display-bread", root, new Vector3(-w * 0.27f + ((k - 0.5f) * 0.8f), 0f, f.Yard), 0.75f, 0.55f, out _);
             SandwichBoard(root, new Vector3(w * 0.3f, 0f, f.Yard), Cream);
             Pot(root, new Vector3(w * 0.42f, 0f, f.Yard - 0.15f), 1f);
             height = f.Top + 0.75f;
@@ -346,16 +352,9 @@ namespace FireGame.Prototypes
         {
             GameObject root = ItemModels.Root("SnackBar", parent);
             ShopFrame f = ShopBody(root, w, h, new Color(0.95f, 0.78f, 0.25f), new Color(0.75f, 0.25f, 0.18f), Red, 1.3f, Red, new Color(0.98f, 0.82f, 0.2f));
-            // 거대 김밥 조각 셋: 김(검정) + 밥(흰) + 가운데 단무지·당근·시금치.
-            for (int k = 0; k < 3; k++)
-            {
-                var c = new Vector3((k - 1) * 0.95f, f.Top + 0.1f + (k == 1 ? 0.05f : 0f), f.Back);
-                ItemModels.Part(PrimitiveType.Cylinder, root, c, new Vector3(0.8f, 0.1f, 0.8f), new Color(0.1f, 0.12f, 0.1f));
-                ItemModels.Part(PrimitiveType.Cylinder, root, c + new Vector3(0f, 0.02f, 0f), new Vector3(0.68f, 0.1f, 0.68f), Paint);
-                ItemModels.Part(PrimitiveType.Cube, root, c + new Vector3(-0.1f, 0.1f, 0f), new Vector3(0.12f, 0.04f, 0.12f), new Color(0.98f, 0.85f, 0.2f));
-                ItemModels.Part(PrimitiveType.Cube, root, c + new Vector3(0.1f, 0.1f, 0.05f), new Vector3(0.1f, 0.04f, 0.1f), new Color(0.98f, 0.5f, 0.15f));
-                ItemModels.Part(PrimitiveType.Cube, root, c + new Vector3(0f, 0.1f, -0.12f), new Vector3(0.12f, 0.04f, 0.08f), Leaf);
-            }
+            // 거대 국그릇(Kenney Food Kit): 지붕 뒤 가운데, 양옆에 작은 그릇 둘.
+            Models3D.Fit("Food/bowl-broth", root, new Vector3(0f, f.Top, f.Back), 1.2f, 1.1f, out _, 0.7f);
+            for (int side = -1; side <= 1; side += 2) Models3D.Fit("Food/bowl-broth", root, new Vector3(side * 1.1f, f.Top, f.Back), 0.7f, 0.7f, out _, 0.4f, side * 30f);
             // 포장마차(왼쪽): 파란 수레 + 빨간 떡볶이 철판 + 흰 떡 + 어묵 솥.
             var cart = new Vector3(-w * 0.27f, 0f, f.Yard);
             ItemModels.Part(PrimitiveType.Cube, root, cart + new Vector3(0f, 0.3f, 0f), new Vector3(1.3f, 0.6f, 0.6f), new Color(0.2f, 0.4f, 0.75f));
@@ -375,17 +374,15 @@ namespace FireGame.Prototypes
         {
             GameObject root = ItemModels.Root("Cafe", parent);
             ShopFrame f = ShopBody(root, w, h, new Color(0.45f, 0.3f, 0.2f), new Color(0.3f, 0.22f, 0.16f), Cream, 1.35f);
-            // 거대 커피잔: 받침 + 흰 잔 + 커피 + 라테 하트 + 손잡이.
-            var c = new Vector3(-w * 0.05f, f.Top, f.Back);
-            ItemModels.Part(PrimitiveType.Cylinder, root, c + new Vector3(0f, 0.04f, 0f), new Vector3(1.3f, 0.04f, 1.1f), Paint);
-            ItemModels.Part(PrimitiveType.Cylinder, root, c + new Vector3(0f, 0.32f, 0f), new Vector3(0.85f, 0.28f, 0.8f), Paint);
-            ItemModels.Part(PrimitiveType.Cylinder, root, c + new Vector3(0f, 0.6f, 0f), new Vector3(0.72f, 0.01f, 0.68f), new Color(0.45f, 0.27f, 0.15f));
-            for (int side = -1; side <= 1; side += 2) ItemModels.Part(PrimitiveType.Sphere, root, c + new Vector3(side * 0.07f, 0.62f, 0.04f), new Vector3(0.18f, 0.02f, 0.16f), Cream, new Vector3(0f, side * 35f, 0f));
-            ItemModels.Part(PrimitiveType.Sphere, root, c + new Vector3(0f, 0.62f, -0.08f), new Vector3(0.12f, 0.02f, 0.12f), Cream);
-            ItemModels.Part(PrimitiveType.Cube, root, c + new Vector3(0.5f, 0.35f, 0f), new Vector3(0.2f, 0.28f, 0.08f), Paint);
-            // 테라스 둘 + 화분 둘.
-            ParasolTable(root, new Vector3(-w * 0.32f, 0f, f.Yard), Cream, new Color(0.45f, 0.3f, 0.2f));
-            ParasolTable(root, new Vector3(w * 0.28f, 0f, f.Yard), Cream, new Color(0.45f, 0.3f, 0.2f));
+            // 거대 커피잔(Kenney Food Kit): 지붕 뒤 가운데, 손잡이가 옆을 본다.
+            Models3D.Fit("Food/cup-coffee", root, new Vector3(-w * 0.05f, f.Top, f.Back), 1.3f, 1.3f, out _, 0.8f, 30f);
+            // 테라스(Kenney 파라솔 + 등받이 없는 의자 둘) 둘 + 화분 둘.
+            for (int side = -1; side <= 1; side += 2)
+            {
+                var t = new Vector3(side < 0 ? -w * 0.32f : w * 0.28f, 0f, f.Yard);
+                Models3D.Fit("Commercial/detail-parasol-a", root, t, 0.9f, 0.9f, out _, 1.0f);
+                for (int k = -1; k <= 1; k += 2) Models3D.Fit("Fantasy/stall-stool", root, t + new Vector3(k * 0.38f, 0f, 0.1f), 0.25f, 0.25f, out _);
+            }
             Pot(root, new Vector3(-0.45f, 0f, f.Front + 0.2f), 1.1f);
             Pot(root, new Vector3(0.45f, 0f, f.Front + 0.2f), 1.1f);
             height = f.Top + 0.65f;
@@ -427,16 +424,8 @@ namespace FireGame.Prototypes
         {
             GameObject root = ItemModels.Root("Butcher", parent);
             ShopFrame f = ShopBody(root, w, h, new Color(0.93f, 0.93f, 0.92f), new Color(0.65f, 0.2f, 0.2f), Red, 1.3f, Red, Paint);
-            // 거대 뼈다귀 고기: 붉은 살 + 흰 비계 테 + 양끝 뼈 혹.
-            var c = new Vector3(-w * 0.08f, f.Top + 0.22f, f.Back);
-            ItemModels.Part(PrimitiveType.Sphere, root, c, new Vector3(1.3f, 0.36f, 0.95f), new Color(0.98f, 0.85f, 0.8f));
-            ItemModels.Part(PrimitiveType.Sphere, root, c + new Vector3(0f, 0.05f, 0f), new Vector3(1.15f, 0.34f, 0.82f), new Color(0.75f, 0.15f, 0.15f));
-            ItemModels.Part(PrimitiveType.Capsule, root, c + new Vector3(0f, 0.06f, 0f), new Vector3(0.18f, 1.0f, 0.18f), Bone, new Vector3(0f, 0f, 90f));
-            for (int side = -1; side <= 1; side += 2)
-            {
-                ItemModels.Part(PrimitiveType.Sphere, root, c + new Vector3(side * 1.0f, 0.06f, 0.08f), new Vector3(0.22f, 0.2f, 0.22f), Bone);
-                ItemModels.Part(PrimitiveType.Sphere, root, c + new Vector3(side * 1.0f, 0.06f, -0.08f), new Vector3(0.22f, 0.2f, 0.22f), Bone);
-            }
+            // 거대 통햄(Kenney Food Kit): 지붕 뒤, 길이가 가로를 본다.
+            Models3D.Fit("Food/whole-ham", root, new Vector3(-w * 0.08f, f.Top, f.Back), 1.5f, 1.0f, out _, 0.8f, 90f);
             AirUnit(root, new Vector3(w * 0.36f, f.Top, f.Mid - (f.Depth * 0.3f)));
             // 유리 진열장: 강철 상자 + 유리 윗면 아래 고기 판 여섯.
             var case0 = new Vector3(-w * 0.18f, 0f, f.Yard);
@@ -511,13 +500,8 @@ namespace FireGame.Prototypes
         {
             GameObject root = ItemModels.Root("ChickenShop", parent);
             ShopFrame f = ShopBody(root, w, h, new Color(0.96f, 0.62f, 0.22f), new Color(0.72f, 0.33f, 0.12f), new Color(0.98f, 0.85f, 0.2f), 1.3f, Red, new Color(0.98f, 0.85f, 0.2f));
-            // 거대 닭다리: 튀김옷 살(두툼한 타원 둘) + 뼈 + 끝 혹 둘.
-            var c = new Vector3(-w * 0.12f, f.Top + 0.25f, f.Back);
-            ItemModels.Part(PrimitiveType.Sphere, root, c, new Vector3(1.15f, 0.48f, 0.8f), new Color(0.78f, 0.45f, 0.15f), new Vector3(0f, -12f, 0f));
-            ItemModels.Part(PrimitiveType.Sphere, root, c + new Vector3(-0.12f, 0.1f, -0.05f), new Vector3(0.8f, 0.36f, 0.6f), new Color(0.88f, 0.58f, 0.22f), new Vector3(0f, -12f, 0f));
-            ItemModels.Part(PrimitiveType.Capsule, root, c + new Vector3(0.75f, -0.02f, 0.15f), new Vector3(0.16f, 0.4f, 0.16f), Bone, new Vector3(0f, -12f, 90f));
-            ItemModels.Part(PrimitiveType.Sphere, root, c + new Vector3(1.12f, -0.02f, 0.28f), new Vector3(0.2f, 0.18f, 0.2f), Bone);
-            ItemModels.Part(PrimitiveType.Sphere, root, c + new Vector3(1.15f, -0.02f, 0.1f), new Vector3(0.2f, 0.18f, 0.2f), Bone);
+            // 거대 통닭(Kenney Food Kit): 지붕 뒤, 비스듬히.
+            Models3D.Fit("Food/turkey", root, new Vector3(-w * 0.1f, f.Top, f.Back), 1.6f, 1.2f, out _, 0.8f, -12f);
             // 배달 오토바이 둘(왼쪽): 빨간 몸 + 검은 안장 + 흰 배달통 + 바퀴.
             for (int k = 0; k < 2; k++)
             {
