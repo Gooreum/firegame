@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FireGame.Prototypes
 {
     /// <summary>
-    /// 숲·항구·공단 건물 앞마당 소품. 같은 종류 건물(목공소·산장·숲 식당은 같은 통나무집, 선구점·어구 창고·통조림 공장은 같은 창고,
+    /// 숲·항구·공단 건물 앞마당 소품. 같은 종류 건물(목공소·산장·숲 식당은 같은 나무벽 집, 선구점·어구 창고·통조림 공장은 같은 창고,
     /// 공단은 Kenney 공장)이 이름 말고는 똑같아, 문 앞(남쪽, 모델 +Z) 0.8칸에 이름에 맞는 소품을 놓는다.
     /// 문 자리(|x| &lt; 0.45)는 비운다. 판정 없는 그림이다.
     /// </summary>
@@ -131,65 +131,39 @@ namespace FireGame.Prototypes
 
         private static void Firewood(GameObject root, Vector3 at)
         {
-            for (int r = 0; r < 3; r++)
-            {
-                for (int k = 0; k < 3 - r; k++) ItemModels.Part(PrimitiveType.Cylinder, root, at + new Vector3((k - ((2 - r) / 2f)) * 0.2f, 0.09f + (r * 0.16f), 0f), new Vector3(0.18f, 0.3f, 0.18f), k % 2 == 0 ? Wood : Wood * 1.1f, new Vector3(90f, 0f, 0f));
-            }
-            ItemModels.Part(PrimitiveType.Cylinder, root, at + new Vector3(0.5f, 0.12f, 0f), new Vector3(0.3f, 0.12f, 0.3f), DarkWood);
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0.5f, 0.32f, 0f), new Vector3(0.05f, 0.25f, 0.05f), DarkWood, new Vector3(0f, 0f, 25f));
+            Models3D.Fit("Survival/resource-wood", root, at, 0.7f, 0.5f, out _);
+            Models3D.Fit("Survival/bucket", root, at + new Vector3(0.5f, 0f, 0.1f), 0.28f, 0.28f, out _);
         }
 
         private static void Canoe(GameObject root, Vector3 at, Color hull)
         {
-            ItemModels.Part(PrimitiveType.Capsule, root, at + new Vector3(0f, 0.15f, 0f), new Vector3(0.38f, 0.75f, 0.24f), hull, new Vector3(0f, 0f, 90f));
-            ItemModels.Part(PrimitiveType.Capsule, root, at + new Vector3(0f, 0.22f, 0f), new Vector3(0.28f, 0.65f, 0.18f), DarkWood, new Vector3(0f, 0f, 90f));
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0.1f, 0.3f, 0.12f), new Vector3(0.9f, 0.03f, 0.06f), Wood, new Vector3(0f, 20f, 0f));
+            Models3D.Fit("Watercraft/boat-row-small", root, at, 0.5f, 1.1f, out _, 0f, 70f);
         }
 
         private static void Workbench(GameObject root, Vector3 at)
         {
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0f, 0.42f, 0f), new Vector3(1.0f, 0.08f, 0.5f), Wood);
-            for (int sx = -1; sx <= 1; sx += 2)
-            {
-                for (int sz = -1; sz <= 1; sz += 2) ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(sx * 0.42f, 0.2f, sz * 0.18f), new Vector3(0.07f, 0.4f, 0.07f), DarkWood);
-            }
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0.35f, 0.52f, 0f), new Vector3(0.16f, 0.12f, 0.2f), Steel);
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(-0.15f, 0.48f, 0.05f), new Vector3(0.45f, 0.04f, 0.14f), new Color(0.88f, 0.72f, 0.48f), new Vector3(0f, 15f, 0f));
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(-0.2f, 0.48f, -0.12f), new Vector3(0.25f, 0.03f, 0.06f), Red);
+            Models3D.Fit("Survival/workbench", root, at, 0.9f, 0.8f, out _);
         }
 
         private static void Sawhorse(GameObject root, Vector3 at)
         {
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0f, 0.4f, 0f), new Vector3(0.08f, 0.08f, 0.7f), Wood);
-            for (int sz = -1; sz <= 1; sz += 2)
-            {
-                for (int sx = -1; sx <= 1; sx += 2) ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(sx * 0.1f, 0.2f, sz * 0.28f), new Vector3(0.05f, 0.42f, 0.05f), Wood, new Vector3(0f, 0f, -sx * 15f));
-            }
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0f, 0.47f, 0f), new Vector3(0.7f, 0.05f, 0.22f), new Color(0.88f, 0.72f, 0.48f), new Vector3(0f, 80f, 0f));
+            Models3D.Fit("Survival/workbench-grind", root, at, 0.7f, 0.8f, out _, 0f, 20f);
         }
 
         private static void Planks(GameObject root, Vector3 at)
         {
-            for (int k = 0; k < 4; k++) ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3((k % 2) * 0.03f, 0.04f + (k * 0.07f), 0f), new Vector3(0.3f, 0.06f, 0.75f), new Color(0.85f, 0.68f, 0.45f));
+            Models3D.Fit("Survival/resource-planks", root, at, 0.5f, 0.8f, out _);
         }
 
         private static void Grill(GameObject root, Vector3 at)
         {
-            ItemModels.Part(PrimitiveType.Capsule, root, at + new Vector3(0f, 0.45f, 0f), new Vector3(0.38f, 0.3f, 0.32f), Dark, new Vector3(0f, 0f, 90f));
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0f, 0.55f, 0f), new Vector3(0.55f, 0.02f, 0.26f), new Color(1f, 0.45f, 0.1f));
-            for (int k = -1; k <= 1; k += 2) ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(k * 0.2f, 0.17f, 0f), new Vector3(0.04f, 0.34f, 0.3f), Dark);
-            for (int k = 0; k < 3; k++) ItemModels.Part(PrimitiveType.Capsule, root, at + new Vector3((k - 1) * 0.15f, 0.59f, 0f), new Vector3(0.07f, 0.09f, 0.07f), new Color(0.6f, 0.3f, 0.15f), new Vector3(90f, 0f, 0f));
+            Models3D.Fit("Survival/campfire-stand", root, at, 0.9f, 0.8f, out _);
         }
 
         private static void PicnicTable(GameObject root, Vector3 at)
         {
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0f, 0.4f, 0f), new Vector3(0.9f, 0.05f, 0.4f), Wood);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0f, 0.22f, side * 0.35f), new Vector3(0.9f, 0.05f, 0.16f), Wood);
-                ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(side * 0.35f, 0.2f, 0f), new Vector3(0.05f, 0.4f, 0.8f), DarkWood, new Vector3(0f, 0f, 0f));
-            }
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0.1f, 0.44f, 0f), new Vector3(0.4f, 0.02f, 0.3f), new Color(0.85f, 0.2f, 0.2f));
+            Models3D.Fit("Fantasy/stall-bench", root, at + new Vector3(0f, 0f, -0.25f), 1.0f, 0.3f, out _, 0f, 90f);
+            Models3D.Fit("Fantasy/stall-bench", root, at + new Vector3(0f, 0f, 0.25f), 1.0f, 0.3f, out _, 0f, 90f);
         }
 
         private static void Flagpole(GameObject root, Vector3 at)
@@ -202,21 +176,12 @@ namespace FireGame.Prototypes
 
         private static void NoticeBoard(GameObject root, Vector3 at)
         {
-            for (int side = -1; side <= 1; side += 2) ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(side * 0.42f, 0.45f, 0f), new Vector3(0.07f, 0.9f, 0.07f), DarkWood);
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0f, 0.62f, 0f), new Vector3(0.9f, 0.5f, 0.05f), new Color(0.75f, 0.58f, 0.38f), new Vector3(-20f, 0f, 0f));
-            Color[] notes = { Paint, new Color(0.98f, 0.9f, 0.4f), new Color(0.6f, 0.85f, 1f), Paint };
-            for (int k = 0; k < 4; k++) ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(((k % 2) - 0.5f) * 0.4f, 0.55f + ((k / 2) * 0.18f), 0.04f - ((k / 2) * 0.06f)), new Vector3(0.28f, 0.14f, 0.02f), notes[k], new Vector3(-20f, 0f, 0f));
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0f, 0.92f, -0.05f), new Vector3(1.05f, 0.05f, 0.25f), new Color(0.3f, 0.45f, 0.3f));
+            Models3D.Fit("Survival/signpost", root, at, 0.7f, 0.3f, out _, 1.1f);
         }
 
         private static void WaterTank(GameObject root, Vector3 at)
         {
-            for (int sx = -1; sx <= 1; sx += 2)
-            {
-                for (int sz = -1; sz <= 1; sz += 2) ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(sx * 0.22f, 0.3f, sz * 0.18f), new Vector3(0.06f, 0.6f, 0.06f), Steel);
-            }
-            ItemModels.Part(PrimitiveType.Cylinder, root, at + new Vector3(0f, 0.85f, 0f), new Vector3(0.6f, 0.28f, 0.6f), new Color(0.25f, 0.5f, 0.85f));
-            ItemModels.Part(PrimitiveType.Cylinder, root, at + new Vector3(0f, 1.14f, 0f), new Vector3(0.5f, 0.02f, 0.5f), Paint);
+            for (int k = 0; k < 2; k++) Models3D.Fit("Survival/barrel", root, at + new Vector3((k - 0.5f) * 0.5f, 0f, 0f), 0.45f, 0.45f, out _);
         }
 
         private static void Bicycle(GameObject root, Vector3 at, Color frame)

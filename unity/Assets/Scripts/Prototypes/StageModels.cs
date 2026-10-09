@@ -463,43 +463,31 @@ namespace FireGame.Prototypes
         // 장식(판정 없음): BuildGround가 구조물을 피해 세운다. 모두 yaw 0, 크기 1 = 1칸.
         // ------------------------------------------------------------------
 
-        /// <summary>텐트: 두 장이 마루에서 만나는 삼각 천막(앞이 열려 어둡다). 폭 1.4·깊이 1.6·높이 0.9.</summary>
+        /// <summary>텐트(Kenney Survival Kit): 주황 천이면 tent, 아니면 캔버스 천막. 폭 1.4·깊이 1.6.</summary>
         public static GameObject Tent(Transform parent, Color cloth)
         {
             GameObject root = ItemModels.Root("Tent", parent);
-            const float ridge = 0.9f;
-            float slope = Mathf.Sqrt(0.7f * 0.7f + ridge * ridge) + 0.05f;
-            float tilt = Mathf.Atan2(ridge, 0.7f) * Mathf.Rad2Deg;
-            for (int side = -1; side <= 1; side += 2)
-            {
-                ItemModels.Part(PrimitiveType.Cube, root, new Vector3(side * 0.35f, ridge / 2f, 0f), new Vector3(slope, 0.05f, 1.6f), cloth, new Vector3(0f, 0f, side * tilt));
-            }
-            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, ridge, 0f), new Vector3(0.06f, 0.9f, 0.06f), DarkWood, new Vector3(90f, 0f, 0f));
-            ItemModels.Part(PrimitiveType.Cube, root, new Vector3(0f, 0.3f, 0.78f), new Vector3(0.5f, 0.6f, 0.04f), Dark);
+            bool orange = cloth.r > cloth.b;
+            Models3D.Fit(orange ? "Survival/tent" : "Survival/tent-canvas", root, Vector3.zero, 1.4f, 1.6f, out _, 0f, orange ? 0f : 180f, true);
             return root;
         }
 
-        /// <summary>모닥불: 돌 여섯 고리 + 장작 셋 + 가운데 주황 불씨 구. 지름 약 1.1.</summary>
+        /// <summary>모닥불(Kenney Survival Kit 화덕) + 가운데 주황 불씨 구. 지름 약 1.1.</summary>
         public static GameObject Campfire(Transform parent)
         {
             GameObject root = ItemModels.Root("Campfire", parent);
-            for (int k = 0; k < 6; k++)
-            {
-                float a = k * Mathf.PI / 3f;
-                ItemModels.Part(PrimitiveType.Sphere, root, new Vector3(Mathf.Cos(a) * 0.5f, 0.1f, Mathf.Sin(a) * 0.5f), new Vector3(0.24f, 0.2f, 0.24f), Stone);
-            }
-            for (int k = 0; k < 3; k++) ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.12f, 0f), new Vector3(0.12f, 0.35f, 0.12f), DarkWood, new Vector3(90f, k * 60f, 0f));
-            ItemModels.Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.2f, 0f), new Vector3(0.3f, 0.25f, 0.3f), new Color(1f, 0.5f, 0.15f));
+            Models3D.Fit("Survival/campfire-pit", root, Vector3.zero, 1.1f, 1.1f, out Vector3 size);
+            ItemModels.Part(PrimitiveType.Sphere, root, new Vector3(0f, size.y + 0.1f, 0f), new Vector3(0.3f, 0.25f, 0.3f), new Color(1f, 0.5f, 0.15f));
             return root;
         }
 
-        /// <summary>장작 더미: 통나무 셋(둘 위 하나), 길이 1.6.</summary>
+        /// <summary>장작 더미(Kenney Survival Kit 통나무): 둘 위 하나, 길이 1.6.</summary>
         public static GameObject LogPile(Transform parent)
         {
             GameObject root = ItemModels.Root("LogPile", parent);
-            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.17f, -0.18f), new Vector3(0.34f, 0.8f, 0.34f), Wood, new Vector3(0f, 0f, 90f));
-            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.17f, 0.18f), new Vector3(0.34f, 0.8f, 0.34f), Wood, new Vector3(0f, 0f, 90f));
-            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.46f, 0f), new Vector3(0.34f, 0.75f, 0.34f), Wood * 1.1f, new Vector3(0f, 0f, 90f));
+            Models3D.Fit("Survival/tree-log", root, new Vector3(0f, 0f, -0.2f), 1.6f, 0.4f, out Vector3 size, 0f, 90f);
+            Models3D.Fit("Survival/tree-log", root, new Vector3(0f, 0f, 0.2f), 1.6f, 0.4f, out _, 0f, 90f);
+            Models3D.Fit("Survival/tree-log-small", root, new Vector3(0.1f, size.y - 0.05f, 0f), 1.1f, 0.4f, out _, 0f, 90f);
             return root;
         }
 
