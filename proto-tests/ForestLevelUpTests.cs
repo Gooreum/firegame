@@ -521,6 +521,69 @@ namespace FireGame.Prototypes.Tests
             Assert.True(house.Fire < 0.95f, "물 사슬이 튄 자리의 집이 젖어야: " + house.Fire);
         }
 
+        /// <summary>Lv1 물대포를 오른쪽 1.5칸의 큰 체력 몹에 0.3초 뿌려 잃은 체력(시드 같으니 치명 판정도 같다).</summary>
+        private static float HoseLost(int stage, float time)
+        {
+            var sim = Quiet(stage);
+            sim.Time = time;
+            Enemy e = sim.Spawn(EnemyKind.Ember, SurvivorSim.FromS(sim.PX + 40f, sim.PY));
+            e.Speed = 0f;
+            e.MaxHp = e.Hp = 1e6f;
+            int ticks = (int)System.Math.Round(0.3f / SurvivorSim.Dt);
+            for (int i = 0; i < ticks; i++)
+            {
+                sim.Enemies.RemoveAll(o => o != e);
+                sim.Hp = sim.MaxHp;
+                sim.Aim = new Vec2(1f, 0f);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+            }
+            return 1e6f - e.Hp;
+        }
+
+        /// <summary>Lv1 물대포를 위쪽 3칸 다 탄 집에 1초 뿌려 줄어든 불.</summary>
+        private static float HoseDoused(int stage, float time)
+        {
+            var sim = Quiet(stage);
+            sim.Time = time;
+            Structure house = BurningHouse(sim, 0f, 1.5f + 3f);
+            int ticks = (int)System.Math.Round(1f / SurvivorSim.Dt);
+            for (int i = 0; i < ticks; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                sim.Aim = new Vec2(0f, 1f);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+            }
+            return 1f - house.Fire;
+        }
+
+        [Fact]
+        public void Forest_HoseVsMob_GrowsWithTime()
+        {
+            float early = HoseLost(Forest, 0f), late = HoseLost(Forest, 180f);
+            Assert.True(early > 0f, "물대포가 몹에 닿아야");
+            // 3:00의 몹은 ×3.25 질기다: 물대포도 ×3.25.
+            Assert.InRange(late / early, 3.1f, 3.4f);
+        }
+
+        [Fact]
+        public void Forest_HoseVsBuilding_DoesNotGrowWithTime()
+        {
+            float early = HoseDoused(Forest, 0f), late = HoseDoused(Forest, 180f);
+            Assert.True(early > 0.05f, "물대포가 집을 적셔야: " + early);
+            Assert.Equal(early, late, 3);
+        }
+
+        [Fact]
+        public void Town_HoseVsMob_StaysFlat()
+        {
+            float early = HoseLost(1, 0f), late = HoseLost(1, 180f);
+            Assert.True(early > 0f);
+            Assert.Equal(early, late, 2);
+        }
+
         [Fact]
         public void Forest_STimeScale_IsTheTimePartOfDamageScale()
         {

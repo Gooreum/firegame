@@ -2293,7 +2293,10 @@ namespace FireGame.Prototypes.Logic
                     // 큰 불·기름 방울은 무거워서 절반만 밀린다.
                     float push = s.Hose ? HoseKnock * (1f - (s.Age / s.Life)) : 2.5f;
                     if (e.Kind == EnemyKind.Blaze || e.Kind == EnemyKind.Oil) push *= 0.5f;
-                    Damage(e, s.Damage, new Vec2(dir.X * push, dir.Y * push), true, HitSource.Hose, s.From);
+                    // 숲: 몹은 시간이 갈수록 질겨지고(STimeScale) 샘플 아이템은 SDamageScale로 같이 자란다. 물대포도 같이 자라야 레벨업이 느껴진다.
+                    // 건물엔 안 곱한다(SoakStructures는 s.Damage 그대로) — 건물은 질겨지지 않는다(docs §23).
+                    float dmg = s.Hose && Build.Free ? s.Damage * STimeScale : s.Damage;
+                    Damage(e, dmg, new Vec2(dir.X * push, dir.Y * push), true, HitSource.Hose, s.From);
                     s.Pierce--;
                     if (s.Pierce <= 0)
                     {
