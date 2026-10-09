@@ -112,6 +112,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>대화재 고리의 큰 불: 레벨만큼 질기고 물줄기·장막·방화복에 거의 안 밀린다(3:00의 장비를 뚫고 몸에 닿는 압력).</summary>
         public bool Heavy;
 
+        /// <summary>레벨 단계 엘리트(체력 3배·몸 1.3배, docs §25). 뷰가 오라·체력 막대를 단다.</summary>
+        public bool Elite;
+
         /// <summary>갈매기: 불을 떨어뜨리고 바다로 돌아가는 중. 게: 건물에 불을 지핀 뒤 소방관을 쫓는 중.</summary>
         public bool Dropped;
 
@@ -295,6 +298,9 @@ namespace FireGame.Prototypes.Logic
     {
         /// <summary>레벨업한 시각들.</summary>
         public readonly List<float> LevelTimes = new List<float>();
+
+        /// <summary>레벨 단계로 나온 엘리트 수.</summary>
+        public int Elites;
 
         /// <summary>진화한 수와 첫 진화 시각(없으면 -1).</summary>
         public int Evolutions;
@@ -1248,8 +1254,8 @@ namespace FireGame.Prototypes.Logic
         /// <summary>작은 불 몹(불씨·다트·다람쥐·박쥐)이 닿아 있을 때 초당 피해. 큰 불·기름 방울은 10.</summary>
         public const float SmallTouch = 5f;
 
-        /// <summary>테스트용: 적을 직접 놓는다.</summary>
-        public Enemy Spawn(EnemyKind kind, Vec2 at)
+        /// <summary>테스트용: 적을 직접 놓는다. directed면 감독 스폰(레벨 단계 2부터 엘리트 승격이 걸린다 — 테스트용 직접 스폰은 안 걸린다).</summary>
+        public Enemy Spawn(EnemyKind kind, Vec2 at, bool directed = false)
         {
             var e = new Enemy { Kind = kind, Pos = at };
             float scale = Stage.EnemyHp * (1f + ((Time / 120f) * (Time / 120f)));
@@ -1277,6 +1283,7 @@ namespace FireGame.Prototypes.Logic
                 case EnemyKind.Bear: e.MaxHp = 60f * scale; e.Speed = 2f; e.Radius = 0.9f; e.Touch = 15f; e.Xp = 20; e.Heavy = true; break;
                 case EnemyKind.Hwama: e.MaxHp = BossHp; e.Speed = 0.9f; e.Radius = 1.8f; e.Touch = 25f; e.Xp = 100; e.Heavy = true; break;
             }
+            if (directed && Tier >= 2 && IsEliteKind(kind) && Rand() < EliteChance * (Tier - 1)) MakeElite(e);
             if (IsRaider(kind)) RaidersSpawned++;
             e.Hp = e.MaxHp;
             Enemies.Add(e);
@@ -1335,6 +1342,7 @@ namespace FireGame.Prototypes.Logic
             JustChest = false;
             JustRescued = false;
             JustWave = false;
+            JustTier = false;
             JustComboTier = false;
             ComboEnded = 0;
             JustWindShift = false;
@@ -1398,6 +1406,11 @@ namespace FireGame.Prototypes.Logic
         /// <summary>스폰 감독: 시간이 갈수록 많이, 1·2·3분엔 포위, 4분엔 보스.</summary>
         private void Direct()
         {
+            if (Tier > TierShown)
+            {
+                TierShown = Tier;
+                JustTier = true;
+            }
             // 불은 이제 주로 건물에서 나온다. 가장자리에서 몰려오는 불은 예전(3→35)보다 훨씬 적다.
             // 첫 1분이 한산하지 않게 시작은 EarlySpawn배, 끝(4:00)은 그대로 8배다.
             float rate = Stage.SpawnRate * (EarlySpawn + ((8f - EarlySpawn) * (float)Math.Pow(Math.Min(Time / RunTime, 1f), 1.5)));
@@ -1408,7 +1421,7 @@ namespace FireGame.Prototypes.Logic
                 if (Enemies.Count >= MaxEnemies) continue;
                 EnemyKind kind = PickKind();
                 // 불 갈매기·불 게는 바다 쪽에서 온다(물 위를 건너니 부두에서 쏴야 한다).
-                Spawn(kind, kind == EnemyKind.Gull || kind == EnemyKind.Crab ? SeaPoint() : SpawnPoint(SpawnDistance));
+                Spawn(kind, kind == EnemyKind.Gull || kind == EnemyKind.Crab ? SeaPoint() : SpawnPoint(SpawnDistance), true);
             }
 
             if (_wavesDone < 3 && Time >= 60f * (_wavesDone + 1))
@@ -1467,6 +1480,7 @@ namespace FireGame.Prototypes.Logic
             }
 
             if (Guardian && Reports) DirectTownMobs();
+            else if (Reports) DirectGuestMobs();   // 마을 아닌 스테이지: 레벨 단계에 따라 손님 몹(불쥐 줄·불풍선·불곰)
 
             float[] bigTimes = BigTimes;
             while (Reports && _bigDone < bigTimes.Length && Time >= bigTimes[_bigDone])
@@ -1802,8 +1816,9 @@ namespace FireGame.Prototypes.Logic
             float shore = sea + Stage.GullShare + Stage.CrabShare;
             if (Time >= PopperFrom && r < shore + Stage.PopperShare) return EnemyKind.Popper;
             if (Time >= PopperFrom && r < shore + Stage.PopperShare + Stage.LanternShare) return EnemyKind.SkyLantern;
-            // 마을(수호자): 55초부터 횃불 도깨비가 섞인다.
-            if (r > 1f - GoblinShare) return EnemyKind.Goblin;
+            // 마을(수호자): 55초부터 횃불 도깨비가 섞인다. 다른 스테이지: 레벨 단계 2부터 손님 도깨비 10%.
+            float goblin = Guardian ? GoblinShare : Tier >= 2 ? GuestGoblinShare : 0f;
+            if (r > 1f - goblin) return EnemyKind.Goblin;
             return EnemyKind.Ember;
         }
 

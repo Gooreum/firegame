@@ -50,6 +50,91 @@ namespace FireGame.Prototypes.Logic
         public const int BossRatLine = 5;
         public const int BossGems = 12;
 
+        // --- 레벨 단계(2026-10-10, docs §25): 시간이 아니라 내 레벨이 몹을 부른다. 봇은 3:00에 Lv 19~21이라 단계 3이 2:40쯤. ---
+        public const int TierLv1 = 6;
+        public const int TierLv2 = 12;
+        public const int TierLv3 = 18;
+
+        /// <summary>단계 2부터 (Tier − 1) × 이만큼의 확률로 엘리트(체력 3배)로 나온다.</summary>
+        public const float EliteChance = 0.15f;
+
+        /// <summary>마을 아닌 스테이지의 손님 몹: 단계 2부터 가장자리 스폰의 도깨비 몫, 단계별 불쥐 줄·불풍선·불곰 간격(초).</summary>
+        public const float GuestGoblinShare = 0.1f;
+        public const float GuestRatEvery = 22f;
+        public const float GuestBalloonEvery = 30f;
+        public const float GuestBearEvery = 50f;
+
+        /// <summary>몹 단계: 0 = Lv1~5, 1 = Lv6~(불쥐 줄), 2 = Lv12~(도깨비·불풍선·엘리트), 3 = Lv18~(불곰, 엘리트 2배).</summary>
+        public int Tier
+        {
+            get { return Level >= TierLv3 ? 3 : Level >= TierLv2 ? 2 : Level >= TierLv1 ? 1 : 0; }
+        }
+
+        /// <summary>한 틱 신호: 단계가 올랐다(뷰가 띠로 알린다). TierShown은 마지막으로 알린 단계.</summary>
+        public bool JustTier;
+        public int TierShown;
+
+        private float _guestRatClock;
+        private float _guestBalloonClock;
+        private float _guestBearClock;
+
+        /// <summary>엘리트가 될 수 있는 종류: 작은 불씨·쥐·풍등은 빼고 몸이 있는 놈들.</summary>
+        public static bool IsEliteKind(EnemyKind k)
+        {
+            return k == EnemyKind.Blaze || k == EnemyKind.Goblin || k == EnemyKind.Oil || k == EnemyKind.Crab || k == EnemyKind.Squirrel || k == EnemyKind.Gull || k == EnemyKind.Popper;
+        }
+
+        /// <summary>엘리트: 체력 3배·몸 1.3배·조금 느리고 경험치 4배. Heavy(잘 안 밀린다)도 켠다.</summary>
+        public void MakeElite(Enemy e)
+        {
+            e.Elite = true;
+            e.Heavy = true;
+            e.MaxHp *= 3f;
+            e.Hp = e.MaxHp;
+            e.Radius *= 1.3f;
+            e.Speed *= 0.9f;
+            e.Xp *= 4;
+            Stats.Elites++;
+        }
+
+        /// <summary>단계 띠 문구(뷰).</summary>
+        public static string TierText(int tier)
+        {
+            switch (tier)
+            {
+                case 1: return "불쥐 떼가 온다";
+                case 2: return "도깨비·불풍선이 섞인다 · 엘리트 출현";
+                case 3: return "불곰이 온다";
+            }
+            return "";
+        }
+
+        /// <summary>마을 아닌 스테이지의 손님 몹(Direct가 부른다): 단계 1 불쥐 줄(22초, 단계만큼 길다), 단계 2 불풍선(30초), 단계 3 불곰(50초, 잡으면 상자). 도깨비는 PickKind 몫.</summary>
+        private void DirectGuestMobs()
+        {
+            int tier = Tier;
+            if (tier >= 1 && Time >= _guestRatClock)
+            {
+                _guestRatClock = Time + GuestRatEvery;
+                Vec2 from = SpawnPoint(SpawnDistance);
+                Structure goal = RaidGoal(from, null);
+                if (goal != null) SpawnRatLine(from, goal, RatLineStart + tier);
+            }
+            if (tier >= 2 && Time >= _guestBalloonClock)
+            {
+                _guestBalloonClock = Time + GuestBalloonEvery;
+                Structure goal = RandomUnburnt(Player, 20f);
+                if (goal != null && Enemies.Count < MaxEnemies) Spawn(EnemyKind.FireBalloon, SpawnPoint(SpawnDistance)).Goal = goal;
+            }
+            if (tier >= 3 && Time >= _guestBearClock)
+            {
+                _guestBearClock = Time + GuestBearEvery;
+                Vec2 from = SpawnPoint(SpawnDistance);
+                Structure goal = RaidGoal(from, null);
+                if (goal != null && Enemies.Count < MaxEnemies) Spawn(EnemyKind.Bear, from).Goal = goal;
+            }
+        }
+
         /// <summary>이번 판의 습격(그림·측정용). 지난 것도 남는다.</summary>
         public readonly List<Raid> Raids = new List<Raid>();
 
