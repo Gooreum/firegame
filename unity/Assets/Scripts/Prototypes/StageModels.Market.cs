@@ -26,12 +26,12 @@ namespace FireGame.Prototypes
             switch (name)
             {
                 case "과일 노점":
-                    Fruit(root, half, y, z);
+                    FruitKenney(root, half, y, z);
                     break;
                 case "호떡집":
                 {
                     Plate(root, new Vector3(-half * 0.35f, y, z), half * 1.1f, 0.6f, Griddle);
-                    for (int k = 0; k < 8; k++) ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(-half * 0.35f + (((k % 4) - 1.5f) * 0.24f), y + 0.05f, z + (((k / 4) - 0.5f) * 0.26f)), new Vector3(0.2f, 0.02f, 0.2f), k % 3 == 0 ? new Color(0.62f, 0.38f, 0.18f) : Crust);
+                    for (int k = 0; k < 3; k++) Models3D.Fit("Food/pancakes", root, new Vector3(-half * 0.35f + ((k - 1) * 0.36f), y + 0.04f, z), 0.34f, 0.34f, out _, 0f, k * 40f);
                     Stack(root, new Vector3(half * 0.6f, y, z), 0.24f, 5, Paint);   // 종이컵 묶음
                     break;
                 }
@@ -55,12 +55,7 @@ namespace FireGame.Prototypes
                     var pot = new Vector3(-half * 0.15f, y, z);
                     ItemModels.Part(PrimitiveType.Cube, root, pot + new Vector3(0f, 0.1f, 0f), new Vector3(half * 1.3f, 0.2f, 0.62f), Steel);
                     ItemModels.Part(PrimitiveType.Cube, root, pot + new Vector3(0f, 0.2f, 0f), new Vector3(half * 1.2f, 0.01f, 0.54f), Broth);
-                    for (int k = 0; k < 12; k++)
-                    {
-                        var at = pot + new Vector3((((k % 6) - 2.5f) * 0.18f), 0.32f, (((k / 6) - 0.5f) * 0.24f));
-                        ItemModels.Part(PrimitiveType.Cube, root, at, new Vector3(0.12f, 0.18f, 0.04f), new Color(0.88f, 0.72f, 0.45f), new Vector3(0f, 0f, 8f));
-                        ItemModels.Part(PrimitiveType.Cylinder, root, at + new Vector3(0f, 0.14f, 0f), new Vector3(0.015f, 0.08f, 0.015f), Wood);
-                    }
+                    for (int k = 0; k < 6; k++) Models3D.Fit("Food/skewer", root, pot + new Vector3((k - 2.5f) * 0.18f, 0.2f, ((k % 2) - 0.5f) * 0.2f), 0.12f, 0.12f, out _, 0f, 90f + (k * 15f), true);
                     Stack(root, new Vector3(half * 0.8f, y, z), 0.2f, 4, Paint);
                     break;
                 }
@@ -69,12 +64,7 @@ namespace FireGame.Prototypes
                     var grill = new Vector3(-half * 0.1f, y, z);
                     ItemModels.Part(PrimitiveType.Cube, root, grill + new Vector3(0f, 0.08f, 0f), new Vector3(half * 1.5f, 0.16f, 0.5f), Griddle);
                     ItemModels.Part(PrimitiveType.Cube, root, grill + new Vector3(0f, 0.165f, 0f), new Vector3(half * 1.4f, 0.01f, 0.42f), Ember);
-                    for (int k = 0; k < 8; k++)
-                    {
-                        float x = ((k - 3.5f) * 0.17f);
-                        ItemModels.Part(PrimitiveType.Cylinder, root, grill + new Vector3(x, 0.2f, 0f), new Vector3(0.015f, 0.3f, 0.015f), Wood, new Vector3(90f, 0f, 0f));
-                        for (int j = 0; j < 3; j++) ItemModels.Part(PrimitiveType.Cube, root, grill + new Vector3(x, 0.22f, (j - 1) * 0.12f), new Vector3(0.09f, 0.08f, 0.09f), j == 1 ? new Color(0.35f, 0.6f, 0.25f) : new Color(0.55f, 0.25f, 0.12f));
-                    }
+                    for (int k = 0; k < 6; k++) Models3D.Fit("Food/skewer", root, grill + new Vector3((k - 2.5f) * 0.2f, 0.17f, 0f), 0.12f, 0.5f, out _, 0f, 90f);
                     break;
                 }
                 case "분식집":
@@ -112,13 +102,8 @@ namespace FireGame.Prototypes
                 {
                     // 색 음료 컵 여덟(빨대) + 얼음 아이스박스.
                     Color[] drinks = { Apple, Banana, new Color(0.4f, 0.8f, 0.3f), Orange, new Color(0.55f, 0.3f, 0.75f), new Color(0.35f, 0.7f, 1f) };
-                    for (int k = 0; k < 8; k++)
-                    {
-                        var cup = new Vector3(-half * 0.75f + ((k % 4) * 0.22f), y, z + (((k / 4) - 0.5f) * 0.28f));
-                        ItemModels.Part(PrimitiveType.Cylinder, root, cup + new Vector3(0f, 0.12f, 0f), new Vector3(0.14f, 0.12f, 0.14f), new Color(0.88f, 0.95f, 1f));
-                        ItemModels.Part(PrimitiveType.Cylinder, root, cup + new Vector3(0f, 0.2f, 0f), new Vector3(0.12f, 0.04f, 0.12f), drinks[k % drinks.Length]);
-                        ItemModels.Part(PrimitiveType.Cylinder, root, cup + new Vector3(0.03f, 0.32f, 0f), new Vector3(0.015f, 0.1f, 0.015f), Paint, new Vector3(0f, 0f, 10f));
-                    }
+                    for (int k = 0; k < 6; k++) Models3D.Fit("Food/soda-bottle", root, new Vector3(-half * 0.75f + ((k % 3) * 0.22f), y, z + (((k / 3) - 0.5f) * 0.28f)), 0.16f, 0.16f, out _, 0.45f);
+                    for (int k = 0; k < 4; k++) Models3D.Fit("Food/can", root, new Vector3(-half * 0.05f + ((k % 2) * 0.2f), y, z + (((k / 2) - 0.5f) * 0.26f)), 0.17f, 0.17f, out _);
                     var box = new Vector3(half * 0.55f, y, z);
                     ItemModels.Part(PrimitiveType.Cube, root, box + new Vector3(0f, 0.12f, 0f), new Vector3(0.6f, 0.24f, 0.45f), new Color(0.2f, 0.45f, 0.85f));
                     ItemModels.Part(PrimitiveType.Cube, root, box + new Vector3(0f, 0.245f, 0f), new Vector3(0.52f, 0.01f, 0.37f), new Color(0.85f, 0.95f, 1f));
@@ -183,7 +168,29 @@ namespace FireGame.Prototypes
             }
         }
 
-        /// <summary>과일 노점: 나무 상자 여섯(3×2)에 사과·귤·바나나·수박·포도·딸기.</summary>
+        /// <summary>과일 노점(Kenney Food Kit): 나무 상자 여섯(3×2)에 사과·귤·바나나·수박·귤·사과 모델을 올린다.</summary>
+        private static void FruitKenney(GameObject root, float half, float y, float z)
+        {
+            float cw = half * 2f / 3f;
+            const float cd = 0.36f;
+            string[] fruits = { "apple", "orange", "banana", "watermelon", "orange", "apple" };
+            for (int k = 0; k < 6; k++)
+            {
+                var c = new Vector3(-half + (cw * ((k % 3) + 0.5f)), y, z + (((k / 3) - 0.5f) * (cd + 0.03f)));
+                ItemModels.Part(PrimitiveType.Cube, root, c + new Vector3(0f, 0.06f, 0f), new Vector3(cw - 0.05f, 0.12f, cd), Wood);
+                ItemModels.Part(PrimitiveType.Cube, root, c + new Vector3(0f, 0.121f, 0f), new Vector3(cw - 0.11f, 0.01f, cd - 0.06f), DarkWood);
+                float top = y + 0.11f;
+                string f = fruits[k];
+                if (f == "watermelon") Models3D.Fit("Food/watermelon", root, c + new Vector3(0f, top, 0f), cw - 0.12f, cd - 0.08f, out _, 0.3f, 20f);
+                else
+                {
+                    // 작은 과일은 2×2로 네 개.
+                    for (int j = 0; j < 4; j++) Models3D.Fit("Food/" + f, root, c + new Vector3((((j % 2) - 0.5f) * (cw - 0.14f) / 2f), top, (((j / 2) - 0.5f) * (cd - 0.1f) / 2f)), (cw - 0.16f) / 2f, (cd - 0.12f) / 2f, out _, 0f, (j * 50f) + (k * 30f));
+                }
+            }
+        }
+
+        /// <summary>과일 노점: 나무 상자 여섯(3×2)에        /// <summary>과일 노점: 나무 상자 여섯(3×2)에 사과·귤·바나나·수박·포도·딸기.</summary>
         private static void Fruit(GameObject root, float half, float y, float z)
         {
             float cw = half * 2f / 3f;
