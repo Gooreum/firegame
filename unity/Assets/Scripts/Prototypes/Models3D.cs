@@ -152,7 +152,8 @@ namespace FireGame.Prototypes
             var anim = go != null ? go.GetComponent<Animation>() : null;
             if (anim == null) return;
             string name = Armature + clip;
-            AnimationState state = anim[name];
+            // Quaternius는 "CharacterArmature|Idle", Kenney Cube Pets는 "idle"·"walk"·"run"(2026-10-10 몹 디자인 패스).
+            AnimationState state = anim[name] ?? anim[clip.ToLowerInvariant()];
             if (state == null) return;
             state.speed = speed;
             if (Application.isPlaying)

@@ -1670,6 +1670,7 @@ namespace FireGame.Prototypes
 
             foreach (Pool p in _pools) p.Begin();
             _people.Begin();
+            if (_pets != null) _pets.Begin();
             foreach (ModelPool m in _modelPools) m.Begin();
             foreach (RibbonPool r in _ribbons) r.Begin(_time);
             DetectHosed();
@@ -1696,6 +1697,7 @@ namespace FireGame.Prototypes
             foreach (Pool p in _pools) p.End();
             EndTags();
             _people.End();
+            if (_pets != null) _pets.End();
             foreach (ModelPool m in _modelPools) m.End();
             foreach (RibbonPool r in _ribbons) r.End();
 
@@ -1790,6 +1792,7 @@ namespace FireGame.Prototypes
 
         private void DrawEnemies()
         {
+            _petsDrawn = 0;
             // 수호자 결과 장면: 하루가 끝나면 불 몹은 김을 내며 사그라든다(모인 사람들과 마을이 보이게).
             if (EnemiesFaded()) return;
             for (int i = 0; i < _sim.Enemies.Count; i++)
@@ -1823,7 +1826,7 @@ namespace FireGame.Prototypes
                     {
                         // 보라 요괴(작은 놈): 가는 쪽을 보며 통통 튄다.
                         float face = (e.Goal != null ? e.Goal.Pos.X : _sim.Player.X) < e.Pos.X ? -1f : 1f;
-                        DrawYokai(at, i, hit, 0.75f * (hit ? 1.12f : 1f), false, face);
+                        DrawYokai(e.Kind, at, i, hit, 0.75f * (hit ? 1.12f : 1f), false, face, 9f, _enemyWet.ContainsKey(e));
                         break;
                     }
                     case EnemyKind.Blaze:
@@ -1832,7 +1835,7 @@ namespace FireGame.Prototypes
                         float face = _sim.Player.X < e.Pos.X ? -1f : 1f;
                         float heavy = e.Heavy ? 1.25f : 1f;
                         if (e.Heavy) _auras.Put(at + new Vector3(0f, -0.05f, 0f), 2.4f * heavy, _time * 40f, new Color(0.55f, 0.1f, 0.8f, 0.7f));
-                        DrawYokai(at, i, hit, 1.1f * heavy * (hit ? 1.06f : 1f), true, face, 6f);
+                        DrawYokai(e.Kind, at, i, hit, 1.1f * heavy * (hit ? 1.06f : 1f), true, face, 6f, _enemyWet.ContainsKey(e));
                         break;
                     }
                     case EnemyKind.Squirrel:

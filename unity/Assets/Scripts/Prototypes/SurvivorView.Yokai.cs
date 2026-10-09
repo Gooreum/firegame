@@ -59,7 +59,7 @@ namespace FireGame.Prototypes
                 _flung[k] = f;
                 float h = Mathf.Sin(t * Mathf.PI) * 4f;
                 bool big = f.Kind == EnemyKind.Blaze || f.Kind == EnemyKind.Bear;
-                DrawYokai(ground + Up(h), k, t < 0.15f, big ? 1.1f : 0.75f, big, Mathf.Sin(f.Age * 30f) > 0f ? 1f : -1f, 30f);
+                DrawYokai(f.Kind, ground + Up(h), k, t < 0.15f, big ? 1.1f : 0.75f, big, Mathf.Sin(f.Age * 30f) > 0f ? 1f : -1f, 30f);
             }
         }
 
@@ -71,6 +71,7 @@ namespace FireGame.Prototypes
             _yokaiFlame = new Pool(_world, "YokaiFlame", SkillSprite("flame_tuft"), 10, Additive);
             _yokaiFlame.Upright = true;
             _pools.Add(_yokaiFlame);
+            _pets = new PersonPool(_world, 1f);
         }
 
         /// <summary>요괴로 그리는 몹: 가장자리 불씨·큰 불과 마을 몹 다섯.</summary>
@@ -80,10 +81,61 @@ namespace FireGame.Prototypes
                 || kind == EnemyKind.FireBalloon || kind == EnemyKind.Bear || kind == EnemyKind.Hwama;
         }
 
+        /// <summary>몹 모델 풀(Kenney Cube Pets, 2026-10-10): 키 1 = 몸 지름 1칸. 한 프레임 MaxPets까지, 넘치면 예전 스프라이트.</summary>
+        private PersonPool _pets;
+        private int _petsDrawn;
+        private const int MaxPets = 90;
+
+        /// <summary>불에 홀린 동물 요괴(10/8 제안): 몹 종류별 Cube Pets. null이면 예전 그림(불씨 화살·풍등은 동물이 아니다).</summary>
+        private static string PetModel(EnemyKind kind)
+        {
+            switch (kind)
+            {
+                case EnemyKind.Ember: return "Pets/animal-chick";     // 불씨 = 불병아리
+                case EnemyKind.Blaze: return "Pets/animal-tiger";     // 큰 불 = 불호랑이
+                case EnemyKind.Rat: return "Pets/animal-beaver";
+                case EnemyKind.Goblin: return "Pets/animal-monkey";   // 횃불 던지는 원숭이
+                case EnemyKind.FireBalloon: return "Pets/animal-koala";
+                case EnemyKind.Bear: return "Pets/animal-polar";
+                case EnemyKind.Hwama: return "Pets/animal-lion";      // 갈기 = 불
+                case EnemyKind.Squirrel: return "Pets/animal-fox";
+                case EnemyKind.Bat: return "Pets/animal-bee";
+                case EnemyKind.Oil: return "Pets/animal-hog";
+                case EnemyKind.Popper: return "Pets/animal-bunny";
+                case EnemyKind.Crab: return "Pets/animal-crab";
+                case EnemyKind.Gull: return "Pets/animal-parrot";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 몹 몸을 Cube Pets 모델로(2026-10-10): 가는 쪽을 보되 살짝 카메라 쪽, 뛰는 속도에 맞춰 run/walk. 색 규칙(보라 = 몹)은 반만 —
+        /// 동물이 읽히게 보라를 절반 섞고, 맞으면 하얗게 번쩍, 젖으면 제 색으로 돌아온다. 모델이 없거나 상한을 넘으면 예전 스프라이트.
+        /// </summary>
         /// <param name="body">몸 지름(칸).</param>
         /// <param name="face">왼쪽을 보면 -1.</param>
         /// <returns>머리 꼭대기 자리(소품을 얹는다).</returns>
-        private Vector3 DrawYokai(Vector3 at, int i, bool hit, float body, bool big, float face, float hopRate = 9f)
+        private Vector3 DrawYokai(EnemyKind kind, Vector3 at, int i, bool hit, float body, bool big, float face, float hopRate = 9f, bool wet = false)
+        {
+            string path = PetModel(kind);
+            GameObject pet = path != null && _pets != null && _petsDrawn < MaxPets ? _pets.Get(path, body) : null;
+            if (pet == null) return DrawYokaiSprite(at, i, hit, body, big, face, hopRate);
+            _petsDrawn++;
+            float bob = Mathf.Abs(Mathf.Sin((_time * hopRate) + (i * 1.3f))) * 0.1f * body;
+            _shadows.Put(at + new Vector3(0f, -0.1f, 0f), body * 0.95f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
+            Models3D.Pose(pet, at + Up(bob), new Vector3(face, -0.5f, 0f));
+            Models3D.Play(pet, hopRate >= 5f ? "run" : "walk", Mathf.Clamp(hopRate / 9f, 0.5f, 2f), _time + i);
+            Color tint = hit ? new Color(1.6f, 1.6f, 1.6f) : Color.Lerp(Color.white, YokaiPurple, wet ? 0f : 0.5f);
+            Models3D.Tint(pet, tint);
+            Vector3 top = at + Up(bob + body);
+            float flick = 1f + (0.18f * Mathf.Sin((_time * 22f) + (i * 2.1f)));
+            float tuft = body * 0.75f * flick;
+            _yokaiFlame.Put(top + Up(tuft * 0.25f), tuft, 0f, Color.white, SkillSprite("flame_tuft"));
+            return top;
+        }
+
+        /// <summary>예전 그림(10/8 승인 샘플의 보라 요괴 스프라이트): 모델이 없거나 상한을 넘을 때.</summary>
+        private Vector3 DrawYokaiSprite(Vector3 at, int i, bool hit, float body, bool big, float face, float hopRate = 9f)
         {
             float size = body / YokaiBodyShare;
             float bob = Mathf.Abs(Mathf.Sin((_time * hopRate) + (i * 1.3f))) * 0.14f * body;

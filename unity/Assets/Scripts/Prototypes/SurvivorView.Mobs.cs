@@ -148,7 +148,7 @@ namespace FireGame.Prototypes
                 case EnemyKind.Rat:
                 {
                     // 불쥐 → 작은 요괴: 더 작고 더 빨리 통통 튀며 한 줄로 달린다.
-                    DrawYokai(at, i, hit, 0.6f, false, face, 16f);
+                    DrawYokai(e.Kind, at, i, hit, 0.6f, false, face, 16f);
                     MarkGoal(e.Goal);
                     break;
                 }
@@ -156,7 +156,7 @@ namespace FireGame.Prototypes
                 {
                     // 도깨비 → 횃불 든 요괴: 예고만큼 횃불이 커지고 빛난다(다 차면 던진다).
                     float windup = Mathf.Clamp01(e.Phase / SurvivorSim.GoblinWindup);
-                    Vector3 top = DrawYokai(at, i, hit, 0.95f, false, face, 7f);
+                    Vector3 top = DrawYokai(e.Kind, at, i, hit, 0.95f, false, face, 7f);
                     Vector3 torch = at + new Vector3(face * 0.55f, 0f, 0f) + Up(0.9f + (0.25f * windup));
                     _mobGlow.Put(torch + Up(0.3f), (1f + (1.6f * windup)) * flicker, 0f, new Color(1f, 0.5f, 0.1f, 0.3f + (0.4f * windup)));
                     _yokai.Put(torch, (0.9f + (0.5f * windup)) * face, (Mathf.Sin(_time * 7f) * 8f) - (face * 20f * windup), Color.white, SkillSprite("torch"));
@@ -172,7 +172,7 @@ namespace FireGame.Prototypes
                     Vector3 high = at + Up(1.4f + bob);
                     bool blink = fuse > 0f && Mathf.Repeat(_time * (4f + (10f * fuse)), 1f) < 0.5f;
                     _shadows.Put(at, 1.1f, 0f, new Color(0f, 0f, 0f, 0.25f), null, 0.5f);
-                    DrawYokai(high, i, hit, 0.55f, false, face, 2f);
+                    DrawYokai(e.Kind, high, i, hit, 0.55f, false, face, 2f);
                     _yokai.Put(high + Up(0.55f), 1.9f * punch, bob * 20f, blink ? new Color(1f, 0.55f, 0.45f) : Color.white, SkillSprite("fire_balloon"));
                     if (fuse > 0f) _mobGlow.Put(at, SurvivorSim.FireBalloonBlast * 2f * (0.6f + (0.4f * fuse)), 0f, new Color(1f, 0.3f, 0.1f, 0.15f + (0.25f * fuse)));
                     MarkGoal(e.Goal, fuse);
@@ -182,7 +182,7 @@ namespace FireGame.Prototypes
                 {
                     // 불곰 → 큰 뿔 요괴(엘리트): 쿵쿵 걷고 발밑에 불 고리, 머리 위 체력 막대.
                     _auras.Put(at, 3f, _time * 40f, new Color(0.6f, 0.2f, 1f, 0.45f));
-                    Vector3 top = DrawYokai(at, i, hit, 2f, true, face, 5f);
+                    Vector3 top = DrawYokai(e.Kind, at, i, hit, 2f, true, face, 5f);
                     MarkGoal(e.Goal);
                     DrawHealthBar(top + Up(0.6f), 2.2f, e.Hp / Mathf.Max(1f, e.MaxHp), new Color(0.75f, 0.35f, 1f));
                     break;
@@ -193,7 +193,7 @@ namespace FireGame.Prototypes
                     float breathe = 1f + (0.05f * Mathf.Sin(_time * 3f));
                     _groundGlow.Put(at, 7f * breathe, 0f, new Color(0.6f, 0.2f, 1f, 0.35f));
                     _mobGlow.Put(at + Up(2.5f), 7f * flicker, 0f, new Color(0.7f, 0.3f, 1f, 0.35f));
-                    Vector3 top = DrawYokai(at, i, hit, 4.2f * breathe, true, face, 2.5f);
+                    Vector3 top = DrawYokai(e.Kind, at, i, hit, 4.2f * breathe, true, face, 2.5f);
                     _yokai.Put(top + Up(0.2f), 2.2f * breathe, 0f, Color.white, SkillSprite("crown"));
                     if (Random.value < 0.3f) Emit("Effects/smoke_02", top, new Vector3(Random.Range(-1f, 1f), Random.Range(0.5f, 1.5f), 0f), 0.5f, 1.4f, 1.2f, 3f, new Color(0.35f, 0.25f, 0.45f, 0.5f), new Color(0.3f, 0.2f, 0.4f, 0f), 0f);
                     DrawHealthBar(top + Up(2f), 5f, e.Hp / Mathf.Max(1f, e.MaxHp), new Color(0.75f, 0.3f, 1f));
