@@ -504,27 +504,7 @@ namespace FireGame.Prototypes.Logic
             return n;
         }
 
-        /// <summary>
-        /// 숲 아이템의 한 방 물: 샘플 px (x,y) 둘레 r(px, 광각 노즐이 곱해진다) 안의 타는 구조물 불을 soak만큼 줄인다(저항 없음 — 마을 물풍선·사슬과 같다).
-        /// 레벨 배율(SLvMul)·고압 노즐이 곱해져 레벨이 오를수록 건물이 빨리 꺼진다. 숲 이식 때 사라졌던 "건물 적시기" 역할(docs §22·§23).
-        /// 돌려주는 값은 적신 구조물 수(시험용).
-        /// </summary>
-        public int SSoakArea(float x, float y, float r, float soak)
-        {
-            int n = 0;
-            Vec2 at = FromS(x, y);
-            float reach = r * SWide * Px;
-            float water = soak * SLvMul[SCurLv] * Build.NozzleScale;
-            foreach (Structure st in Structures)
-            {
-                if (!st.Burning || !st.Within(at, reach)) continue;
-                Soak(st, water, false);
-                n++;
-            }
-            return n;
-        }
-
-        /// <summary>몹이 질겨지는 시간 배율(1 → 2:00에 2 → 3:00에 3.25). SDamageScale의 시간 몫이며 숲 물대포 몹 피해에도 곱한다.</summary>
+        /// <summary>몹이 질겨지는 시간 배율(1 → 2:00에 2 → 3:00에 3.25). SDamageScale의 시간 몫.</summary>
         public float STimeScale
         {
             get { return 1f + ((Time / 120f) * (Time / 120f)); }

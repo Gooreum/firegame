@@ -39,9 +39,6 @@ namespace FireGame.Prototypes.Logic
         public const float BoomEvery = 2.2f;
         public const float BoomR = 140f;
 
-        /// <summary>대폭발 한 번이 둘레 건물 불을 줄이는 양(Lv6 배율 ×3.6 = 0.9를 2.2초마다).</summary>
-        public const float NovaSoak = 0.25f;
-
         public float Boom;
         public readonly List<SamplePtD> Booms = new List<SamplePtD>();
 
@@ -65,7 +62,6 @@ namespace FireGame.Prototypes.Logic
                 Booms.Add(new SamplePtD(x, y));
                 Novas++;
                 s.SHitArea(x, y, BoomR, 12f, 380f);
-                s.SSoakArea(x, y, BoomR, NovaSoak);
                 s.SplashFx(x, y, 90f * w, 40);
                 s.Prism(x, y, 0.6f, 150f * w);
                 s.Glow(x, y, 0.4f, 150f * w, new Rgb(200, 235, 255));
@@ -92,9 +88,6 @@ namespace FireGame.Prototypes.Logic
         private static readonly float[] Spin = { 0f, 2.4f, 2.6f, 2.8f, 3.3f, 3.6f, 3.8f };
         private static readonly float[] Dmg = { 0f, 2.1f, 2.1f, 2.2f, 2.6f, 4.2f, 4.2f };
         private static readonly float[] SpCd = { 0f, 0.34f, 0.3f, 0.25f, 0.2f, 0.15f, 0.15f };
-
-        /// <summary>머리가 타는 건물 위를 지나는 동안 초당 줄이는 불(마을 0.4/s의 절반 — 레벨 배율로 자란다).</summary>
-        public const float SprinklerSoak = 0.2f;
         private static readonly string[] SjKey = { "sj0", "sj1", "sj2", "sj3" };
         private static readonly string[] JKey = { "j0", "j1", "j2", "j3", "j4", "j5", "j6", "j7" };
 
@@ -148,8 +141,6 @@ namespace FireGame.Prototypes.Logic
                 float a = Ang + (i * SurvivorSim.Tau / n), x = px + ((float)Math.Cos(a) * R), y = py + ((float)Math.Sin(a) * R * 0.72f);
                 var h = new Head { X = x, Y = y, A = a };
                 Heads.Add(h);
-                // 머리가 타는 집 위를 지나면 적신다(숲 건물 적시기, docs §23).
-                s.SSoakArea(x, y, 15f + (lv * 1.5f), SprinklerSoak * dt);
                 if (s.Rnd(0f, 1f) < dt * (14f + (lv * 8f)))
                 {
                     float sa = a + (s.ST * 8f) + s.Rnd(-0.3f, 0.3f);
