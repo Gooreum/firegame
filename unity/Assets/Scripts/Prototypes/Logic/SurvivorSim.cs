@@ -2371,6 +2371,7 @@ namespace FireGame.Prototypes.Logic
                 s.BlazeClock = 6f;
                 s.SpreadClock = Stage.SpreadEvery;
                 s.RescueHold = 0f;
+                s.Smoke = 0f;
                 // 가스통은 터지고, 불꽃 가판대는 로켓을 쏜다: 둘 다 같은 퓨즈.
                 if (s.Kind == StructureKind.Gas || s.Kind == StructureKind.Fireworks) s.Fuse = GasFuse;
             }
@@ -2397,6 +2398,8 @@ namespace FireGame.Prototypes.Logic
                 s.Fire = 0f;
                 s.Fuse = -1f;
                 s.HoseHold = 0f;
+                // 연기 계수도 지운다: 안 지우면 껐다 다시 붙은 집이 3초 만에 사람을 잃었다(2026-10-10, docs §24).
+                s.Smoke = 0f;
                 s.Warned = false;
                 Doused.Add(s);
                 // 물 위에서 끈 배는 바다로 돌아간다(TickBoats가 북쪽으로 돌린다). 끈 가판대는 로켓을 멈춘다.

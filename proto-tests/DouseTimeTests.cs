@@ -190,6 +190,60 @@ namespace FireGame.Prototypes.Tests
             Assert.InRange(t, 0.5f, 3f);
         }
 
+        /// <summary>가게를 안 끄고 seconds초 둔다(적은 치우고 체력은 채운다).</summary>
+        private static void Idle(SurvivorSim sim, float seconds)
+        {
+            int ticks = (int)System.Math.Round(seconds / SurvivorSim.Dt);
+            for (int i = 0; i < ticks; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Spraying = false;
+                sim.Step(0f, 0f);
+            }
+        }
+
+        // --- 연기 계수 리셋(2026-10-10): 껐다 다시 붙은 집이 3초 만에 사람을 잃던 버그 ---
+        [Fact]
+        public void Smoke_ResetsWhenDoused()
+        {
+            // Lv5 물대포: 끄는 동안(연기는 불이 0.6 밑으로 내려갈 때까지 계속 쌓인다) 13초를 안 넘게.
+            SurvivorSim sim = Quiet();
+            Take(sim, UpgradeId.Hose, Loadout.MaxLevel - sim.Build.Level(UpgradeId.Hose));
+            Structure shop = ShopAbove(sim, 3f, 2);
+            sim.Ignite(shop, 1f);
+            Idle(sim, 5f);
+            Assert.Equal(0, sim.CiviliansLost);
+            Assert.InRange(shop.Smoke, 4.5f, 5.5f);
+            DouseSeconds(sim, shop, 40f, out _);
+            Assert.False(shop.Burning);
+            Assert.Equal(0, sim.CiviliansLost);
+            Assert.Equal(0f, shop.Smoke);
+            // 다시 붙어 10초: 고치기 전엔 3초 만에 한 명을 잃었다.
+            shop.Wet = 0f;
+            sim.Ignite(shop, 1f);
+            Idle(sim, 10f);
+            Assert.Equal(0, sim.CiviliansLost);
+            Assert.Equal(2, shop.Residents);
+            // 연기 규칙 자체는 그대로: 13초를 넘기면 한 명.
+            Idle(sim, 3.5f);
+            Assert.Equal(1, sim.CiviliansLost);
+        }
+
+        [Fact]
+        public void Smoke_ResetsOnFreshIgnite()
+        {
+            SurvivorSim sim = Quiet();
+            Structure shop = ShopAbove(sim, 3f, 2);
+            sim.Ignite(shop, 1f);
+            Idle(sim, 10f);
+            Assert.InRange(shop.Smoke, 9.5f, 10.5f);
+            shop.Fire = 0f;
+            Assert.True(sim.Ignite(shop, 0.35f));
+            Assert.Equal(0f, shop.Smoke);
+        }
+
         /// <summary>
         /// 숲 끄는 시간 표(docs §23): 건물 물 0.5(전)·0.7(후) × 물대포 Lv1·Lv3·Lv5. 출력은 문서에 옮긴다.
         /// dotnet test proto-tests --filter Forest_DouseSecondsReport --logger "console;verbosity=detailed"
