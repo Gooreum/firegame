@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using FireGame.Core.Sim;
 using FireGame.Prototypes.Logic;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace FireGame.Prototypes.Tests
 {
@@ -11,9 +12,16 @@ namespace FireGame.Prototypes.Tests
     /// </summary>
     public class DouseTimeTests
     {
-        private static SurvivorSim Quiet()
+        private readonly ITestOutputHelper _out;
+
+        public DouseTimeTests(ITestOutputHelper output)
         {
-            var sim = new SurvivorSim(1) { Guardian = false };
+            _out = output;
+        }
+
+        private static SurvivorSim Quiet(int stage = 1)
+        {
+            var sim = new SurvivorSim(1, stage) { Guardian = false };
             sim.Enemies.Clear();
             sim.Structures.Clear();
             sim.Reports = false;
@@ -146,14 +154,74 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
-        public void Forest_UsesHalfBuildingWater_OtherStagesUseTheDefault()
+        public void Forest_UsesMoreBuildingWater_OtherStagesUseTheDefault()
         {
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(1).BuildingWater);
-            Assert.Equal(0.5f, SurvivorStages.Get(2).BuildingWater);
+            // 2026-10-09: 숲은 물대포만 건물을 끄므로 0.7(docs §23).
+            Assert.Equal(0.7f, SurvivorStages.Get(2).BuildingWater);
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(3).BuildingWater);
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(4).BuildingWater);
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(5).BuildingWater);
             Assert.True(SurvivorSim.BuildingWater <= 0.3f, "건물 물 비율이 커서 끄는 시간이 짧다: " + SurvivorSim.BuildingWater);
+        }
+
+        // --- 숲(2026-10-09): 폰에서 "건물 불이 너무 안 꺼진다" — 물대포만으로 다 탄 집을 끄는 시간 ---
+        [Fact]
+        public void Forest_FullBlaze_Lv1Hose_UnderSevenSeconds()
+        {
+            SurvivorSim sim = Quiet(2);
+            Structure house = ShopAbove(sim, 3f);
+            sim.Ignite(house, 1f);
+            float t = DouseSeconds(sim, house, 30f, out int bursts);
+            Assert.False(house.Burning, "숲 다 탄 집이 30초를 뿌려도 안 꺼졌다");
+            Assert.InRange(t, 3f, 7f);
+        }
+
+        [Fact]
+        public void Forest_FullBlaze_Lv5Hose_UnderThreeSeconds()
+        {
+            SurvivorSim sim = Quiet(2);
+            Take(sim, UpgradeId.Hose, Loadout.MaxLevel - sim.Build.Level(UpgradeId.Hose));
+            Assert.Equal(Loadout.MaxLevel, sim.Build.Level(UpgradeId.Hose));
+            Structure house = ShopAbove(sim, 3f);
+            sim.Ignite(house, 1f);
+            float t = DouseSeconds(sim, house, 30f, out _);
+            Assert.False(house.Burning);
+            Assert.InRange(t, 0.5f, 3f);
+        }
+
+        /// <summary>
+        /// 숲 끄는 시간 표(docs §23): 건물 물 0.5(전)·0.7(후) × 물대포 Lv1·Lv3·Lv5. 출력은 문서에 옮긴다.
+        /// dotnet test proto-tests --filter Forest_DouseSecondsReport --logger "console;verbosity=detailed"
+        /// </summary>
+        [Fact]
+        public void Forest_DouseSecondsReport()
+        {
+            StageRules forest = SurvivorStages.Get(2);
+            float keep = forest.BuildingWater;
+            try
+            {
+                foreach (float water in new[] { 0.5f, keep })
+                {
+                    forest.BuildingWater = water;
+                    string line = "건물 물 " + water.ToString("0.0") + ":";
+                    foreach (int lv in new[] { 1, 3, 5 })
+                    {
+                        SurvivorSim sim = Quiet(2);
+                        Take(sim, UpgradeId.Hose, lv - sim.Build.Level(UpgradeId.Hose));
+                        Structure house = ShopAbove(sim, 3f);
+                        sim.Ignite(house, 1f);
+                        float t = DouseSeconds(sim, house, 40f, out int bursts);
+                        Assert.False(house.Burning);
+                        line += " Lv" + lv + " " + t.ToString("0.0") + "초(증기 " + bursts + ")";
+                    }
+                    _out.WriteLine(line);
+                }
+            }
+            finally
+            {
+                forest.BuildingWater = keep;
+            }
         }
     }
 }
