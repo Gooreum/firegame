@@ -64,9 +64,9 @@ namespace FireGame.Prototypes.Tests
         [Fact]
         public void Forest_UsesHalfBuildingWater_OtherStagesUseTheDefault()
         {
-            // 숲의 압력은 번짐이라 건물 물은 마을의 두 배, 마을·공단은 BuildingWater.
+            // 숲의 압력은 번짐이라 건물 물은 마을보다 크다(0.5 → 2026-10-09 0.7, docs §23: 숲은 물대포만 건물을 끈다), 마을·공단은 BuildingWater.
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(1).BuildingWater);
-            Assert.Equal(0.5f, SurvivorStages.Get(2).BuildingWater);
+            Assert.Equal(0.7f, SurvivorStages.Get(2).BuildingWater);
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(3).BuildingWater);
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(4).BuildingWater);
             Assert.Equal(SurvivorSim.BuildingWater, SurvivorStages.Get(5).BuildingWater);
