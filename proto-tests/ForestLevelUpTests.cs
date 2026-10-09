@@ -414,6 +414,58 @@ namespace FireGame.Prototypes.Tests
             Assert.True(best >= 5, "숲은 칸이 없으니 5종 이상 들어야:" + log);
         }
 
+        // --- 꺼진 집의 사람(2026-10-10): 숲에선 불을 끄면 갇힌 사람이 스스로 나온다 ---
+        /// <summary>위쪽 3칸 집(주민 residents)을 fire로 붙이고 물대포로 끌 때까지 뿌린다(최대 limit초).</summary>
+        private static Structure IgniteAndDouse(SurvivorSim sim, int residents, float fire, float limit = 30f)
+        {
+            var house = new Structure { Kind = StructureKind.House, Name = "산장", Pos = new Vec2(sim.Player.X, sim.Player.Y + 1.5f + 3f), Half = new Vec2(2f, 1.5f), Integrity = 100f, Residents = residents };
+            sim.Structures.Add(house);
+            sim.Ignite(house, fire);
+            int max = (int)(limit / SurvivorSim.Dt);
+            for (int i = 0; i < max && house.Burning; i++)
+            {
+                sim.Enemies.Clear();
+                sim.Hp = sim.MaxHp;
+                if (sim.PendingChoices != null) sim.Choose(0);
+                sim.Aim = new Vec2(0f, 1f);
+                sim.Spraying = true;
+                sim.Step(0f, 0f);
+            }
+            Assert.False(house.Burning, "집이 안 꺼졌다");
+            return house;
+        }
+
+        [Fact]
+        public void Forest_DousedHouse_ReleasesResidents()
+        {
+            var sim = Quiet();
+            Structure house = IgniteAndDouse(sim, 2, 0.35f);
+            Assert.Equal(0, house.Residents);
+            Assert.Equal(2, sim.Rescued);
+            Assert.Equal(0, sim.CiviliansLost);
+            Assert.True(sim.JustRescued);
+            Assert.Contains(house, sim.RescuedFrom);
+            Assert.Equal(2, sim.CrewList.Count + sim.Civs.Count);
+        }
+
+        [Fact]
+        public void Forest_DousedHouse_NoResidents_RescuesNobody()
+        {
+            var sim = Quiet();
+            IgniteAndDouse(sim, 0, 0.35f);
+            Assert.Equal(0, sim.Rescued);
+            Assert.False(sim.JustRescued);
+        }
+
+        [Fact]
+        public void Town_DousedHouse_KeepsResidents()
+        {
+            var sim = Quiet(1);
+            Structure house = IgniteAndDouse(sim, 2, 0.35f);
+            Assert.Equal(2, house.Residents);
+            Assert.Equal(0, sim.Rescued);
+        }
+
         [Fact]
         public void Forest_STimeScale_IsTheTimePartOfDamageScale()
         {

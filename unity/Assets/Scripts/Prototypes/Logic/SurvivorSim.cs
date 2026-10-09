@@ -2410,6 +2410,12 @@ namespace FireGame.Prototypes.Logic
                     if (!s.Tanker) Xp += BoatXp;
                 }
                 s.Launching = false;
+                // 숲(2026-10-10): 불을 끈 집의 갇힌 사람은 스스로 나온다(구조로 센다, 대원 합류). 숲엔 아이템 구조가 없어
+                // 문 앞 2초를 못 채우고 끄면 사람이 집 안에 남아 다음 신고 때 연기를 마셨다(숙련 봇 구조 0.5 · 잃음 11.4/17, docs §24).
+                if (Build.Free)
+                {
+                    while (s.Residents > 0) RescueOne(s);
+                }
                 // 불을 끈 보상: 건물은 큰 구슬, 작은 것은 작은 구슬. 건물 진화는 콤보를 크게 잇는다.
                 if (s.IsBuilding) ComboAdd(ComboPerDouse);
                 DropGem(s.Door, (s.IsBuilding ? 8 : 3) * ComboMult);
