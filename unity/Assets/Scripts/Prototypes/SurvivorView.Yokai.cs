@@ -134,6 +134,28 @@ namespace FireGame.Prototypes
             return top;
         }
 
+        /// <summary>
+        /// 방향각으로 그리는 동물 요괴(다람쥐·박쥐·기름·폭죽·게·갈매기 — 전엔 코드 실루엣). headDeg는 땅 위 진행각(도). 그림자는 호출부가 그린다.
+        /// 모델이 없거나 상한을 넘으면 보라 요괴 스프라이트. 머리 꼭대기를 돌려준다.
+        /// </summary>
+        private Vector3 DrawPet(EnemyKind kind, Vector3 at, int i, bool hit, float body, float headDeg, bool wet)
+        {
+            string path = PetModel(kind);
+            GameObject pet = path != null && _pets != null && _petsDrawn < MaxPets ? _pets.Get(path, body) : null;
+            float face = Mathf.Cos(headDeg * Mathf.Deg2Rad) < 0f ? -1f : 1f;
+            if (pet == null) return DrawYokaiSprite(at, i, hit, body, body > 1.2f, face, 9f);
+            _petsDrawn++;
+            Models3D.Pose(pet, at, new Vector3(Mathf.Cos(headDeg * Mathf.Deg2Rad), Mathf.Sin(headDeg * Mathf.Deg2Rad), 0f));
+            Models3D.Play(pet, "run", 1.2f, _time + i);
+            Color tint = hit ? new Color(1.6f, 1.6f, 1.6f) : Color.Lerp(Color.white, YokaiPurple, wet ? 0f : 0.5f);
+            Models3D.Tint(pet, tint);
+            Vector3 top = at + Up(body);
+            float flick = 1f + (0.18f * Mathf.Sin((_time * 22f) + (i * 2.1f)));
+            float tuft = body * 0.7f * flick;
+            _yokaiFlame.Put(top + Up(tuft * 0.25f), tuft, 0f, Color.white, SkillSprite("flame_tuft"));
+            return top;
+        }
+
         /// <summary>예전 그림(10/8 승인 샘플의 보라 요괴 스프라이트): 모델이 없거나 상한을 넘을 때.</summary>
         private Vector3 DrawYokaiSprite(Vector3 at, int i, bool hit, float body, bool big, float face, float hopRate = 9f)
         {

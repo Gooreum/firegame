@@ -1848,7 +1848,7 @@ namespace FireGame.Prototypes
                         float wag = Mathf.Sin((_time * 14f) + i) * 0.12f;
                         float bob = 1f + (0.08f * Mathf.Sin((_time * 18f) + i));
                         _enemyGlow.Put(at, 1.5f * life, 0f, new Color(1f, 0.45f, 0.1f, 0.35f));
-                        _bats.Put(at + new Vector3(0f, 0.08f, 0f) + (side * wag), 1.45f * punch * bob, head * Mathf.Rad2Deg, hit ? water : new Color(0.95f, 0.5f, 0.15f), SquirrelSprite());
+                        DrawPet(e.Kind, at + (side * wag), i, hit, 1.0f, head * Mathf.Rad2Deg, _enemyWet.ContainsKey(e));
                         _darts.Put(at + (back * 0.5f) + new Vector3(0f, 0.35f, 0f) + (side * wag), 0.7f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_dartSheet, _time, i, 18f));
                         if (!hit) _enemyCore.Put(at + (new Vector3(Mathf.Cos(head), Mathf.Sin(head), 0f) * 0.25f), 0.4f * life, 0f, new Color(1f, 0.85f, 0.4f, 0.9f));
                         break;
@@ -1859,7 +1859,7 @@ namespace FireGame.Prototypes
                         float head = Mathf.Atan2(_sim.Player.Y - e.Pos.Y, _sim.Player.X - e.Pos.X) * Mathf.Rad2Deg;
                         float flap = 0.35f + (0.65f * Mathf.Abs(Mathf.Sin((_time * 16f) + e.Phase)));
                         _enemyGlow.Put(at, 1.3f, 0f, new Color(1f, 0.3f, 0.05f, 0.3f));
-                        _bats.Put(at, 1.3f * punch, head, hit ? water : new Color(0.55f, 0.2f, 0.15f), null, flap);
+                        DrawPet(e.Kind, at + Up(0.6f + (0.15f * flap)), i, hit, 0.8f, head, _enemyWet.ContainsKey(e));
                         if (!hit) _enemyCore.Put(at, 0.45f, 0f, new Color(1f, 0.6f, 0.2f, 0.9f));
                         if (Random.value < 0.04f)
                         {
@@ -1871,7 +1871,7 @@ namespace FireGame.Prototypes
                     {
                         // 기름 방울: 출렁이는 검보라 기름 덩어리 위로 보라·주황 불이 인다.
                         float wob = 1f + (0.08f * Mathf.Sin((_time * 5f) + i));
-                        _foam.Put(at + new Vector3(0f, 0.05f, 0f), 2.2f * life * wob, 0f, hit ? water : new Color(0.08f, 0.05f, 0.1f, 1f), Art.Get("Effects/glow"), 0.75f);
+                        DrawPet(e.Kind, at, i, hit, 1.6f * wob, Mathf.Atan2(_sim.Player.Y - e.Pos.Y, _sim.Player.X - e.Pos.X) * Mathf.Rad2Deg, _enemyWet.ContainsKey(e));
                         _enemyGlow.Put(at, 2.2f * flicker * life, 0f, new Color(0.85f, 0.25f, 0.75f, 0.4f));
                         _blazes.Put(at + new Vector3(0f, 0.15f, 0f), 1.9f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_oilSheet, _time, i));
                         if (Random.value < 0.05f)
@@ -1893,8 +1893,7 @@ namespace FireGame.Prototypes
                         float hop = ph < SurvivorSim.PopperHop ? Mathf.Sin(ph / SurvivorSim.PopperHop * Mathf.PI) * 0.8f : 0f;
                         Vector3 body = at + Up(0.35f + hop);
                         _enemyGlow.Put(at, 1.4f * flicker, 0f, new Color(1f, 0.4f, 0.15f, 0.3f));
-                        _enemyCore.Put(body, 0.5f * punch, 0f, hit ? water : new Color(0.9f, 0.15f, 0.1f, 1f), null, 1.9f);
-                        _enemyCore.Put(body + Up(0.5f), 0.52f * punch, 0f, hit ? water : new Color(1f, 0.85f, 0.3f, 1f), null, 0.3f);
+                        DrawPet(e.Kind, body - Up(0.35f), i, hit, 0.7f, Mathf.Atan2(_sim.Player.Y - e.Pos.Y, _sim.Player.X - e.Pos.X) * Mathf.Rad2Deg, _enemyWet.ContainsKey(e));
                         _darts.Put(body + Up(0.75f), 0.55f * flicker * punch, 0f, hit ? water : Color.white, FlameArt.Frame(_dartSheet, _time, i, 18f));
                         if (Random.value < 0.15f)
                         {
@@ -1919,7 +1918,7 @@ namespace FireGame.Prototypes
                         float dive = e.Dropped || e.Goal == null ? 1f : Mathf.Clamp01(e.Goal.DistanceTo(e.Pos) / 6f);
                         Vector3 high = at + Up(e.Dropped ? 2.1f : Mathf.Lerp(0.6f, 1.6f, dive));
                         _shadows.Put(at + new Vector3(0f, -0.1f, 0f), 1.2f * (0.6f + (0.4f * dive)), 0f, new Color(0f, 0f, 0f, 0.2f), null, 0.5f);
-                        _bats.Put(high, 2.0f * punch, head, hit ? water : Color.white, GullSprite(), flap);
+                        DrawPet(e.Kind, high, i, hit, 1.2f, head, _enemyWet.ContainsKey(e));
                         if (!e.Dropped)
                         {
                             // 물고 있는 불: 몸 밑에서 흔들리고 연기를 끈다.
@@ -1945,7 +1944,7 @@ namespace FireGame.Prototypes
                         float wiggle = 1f + (0.08f * Mathf.Sin(_time * 12f + i));
                         _shadows.Put(at + new Vector3(0f, -0.1f, 0f), 1.5f, 0f, new Color(0f, 0f, 0f, 0.35f), null, 0.5f);
                         _enemyGlow.Put(at, 1.8f * flicker * life, 0f, new Color(1f, 0.3f, 0.1f, 0.3f));
-                        _bats.Put(at + Up(0.12f), 1.7f * punch, head, hit ? water : Color.white, CrabSprite(), wiggle);
+                        DrawPet(e.Kind, at, i, hit, 1.3f * wiggle, head, _enemyWet.ContainsKey(e));
                         if (!hit)
                         {
                             _enemyCore.Put(at + Up(0.3f) + new Vector3(0.15f, 0.1f, 0f), 0.45f * flicker * life, 0f, new Color(1f, 0.6f, 0.15f, 0.95f));
