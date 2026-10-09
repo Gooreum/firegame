@@ -413,5 +413,64 @@ namespace FireGame.Prototypes.Tests
             }
             Assert.True(best >= 5, "숲은 칸이 없으니 5종 이상 들어야:" + log);
         }
+
+        // --- 건물 적시기(2026-10-09): 숲 아이템이 건물 불을 줄인다 ---
+        /// <summary>플레이어에서 (dx, dy)칸 떨어진 타는 집.</summary>
+        private static Structure BurningHouse(SurvivorSim sim, float dx, float dy, float fire = 1f)
+        {
+            var s = new Structure { Kind = StructureKind.House, Name = "산장", Pos = new Vec2(sim.Player.X + dx, sim.Player.Y + dy), Half = new Vec2(2f, 1.5f), Integrity = 100f, Fire = fire };
+            sim.Structures.Add(s);
+            return s;
+        }
+
+        [Fact]
+        public void Forest_SSoakArea_ScalesWithLevelAndNozzle()
+        {
+            var sim = Quiet();
+            Structure house = BurningHouse(sim, 0f, 4f);
+            float hx = SurvivorSim.SX(house.Pos), hy = SurvivorSim.SY(house.Pos);
+            // 레벨 밖(SCurLv 0): 그대로 0.2.
+            sim.SCurLv = 0;
+            Assert.Equal(1, sim.SSoakArea(hx, hy, 10f, 0.2f));
+            Assert.Equal(0.8f, house.Fire, 3);
+            // Lv3(×1.9)·Lv5(×3.0).
+            sim.SCurLv = 3;
+            sim.SSoakArea(hx, hy, 10f, 0.2f);
+            Assert.Equal(0.8f - (0.2f * 1.9f), house.Fire, 3);
+            sim.SCurLv = 5;
+            sim.SSoakArea(hx, hy, 10f, 0.1f);
+            Assert.Equal(0.8f - (0.2f * 1.9f) - (0.1f * 3f), house.Fire, 3);
+            sim.SCurLv = 0;
+            // 둘레 밖(집 가장자리에서 3칸 = 80px, 반경 10px)이면 안 닿는다.
+            float before = house.Fire;
+            Assert.Equal(0, sim.SSoakArea(hx, hy + (4.5f / SurvivorSim.Px), 10f, 0.2f));
+            Assert.Equal(before, house.Fire);
+            // 안 타는 집은 세지 않고 젖지도 않는다.
+            house.Fire = 0f;
+            house.Wet = 0f;
+            Assert.Equal(0, sim.SSoakArea(hx, hy, 10f, 0.2f));
+            Assert.Equal(0f, house.Fire);
+            Assert.Equal(0f, house.Wet);
+            // 고압 노즐 Lv5(×1.5)가 물에도 곱해진다.
+            var nz = Quiet();
+            Take(nz, UpgradeId.Nozzle, Loadout.MaxLevel);
+            Structure h2 = BurningHouse(nz, 0f, 4f);
+            nz.SCurLv = 0;
+            nz.SSoakArea(SurvivorSim.SX(h2.Pos), SurvivorSim.SY(h2.Pos), 10f, 0.2f);
+            Assert.Equal(1f - (0.2f * 1.5f), h2.Fire, 3);
+        }
+
+        [Fact]
+        public void Forest_STimeScale_IsTheTimePartOfDamageScale()
+        {
+            var sim = Quiet();
+            Assert.Equal(1f, sim.STimeScale, 3);
+            Assert.Equal(0.5f, sim.SDamageScale, 3);
+            sim.Time = 120f;
+            Assert.Equal(2f, sim.STimeScale, 3);
+            Assert.Equal(1f, sim.SDamageScale, 3);
+            sim.Time = 180f;
+            Assert.Equal(3.25f, sim.STimeScale, 3);
+        }
     }
 }
