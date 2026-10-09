@@ -69,6 +69,40 @@ namespace FireGame.Prototypes
             return go;
         }
 
+        /// <summary>Kenney 배(Watercraft)의 뱃머리를 모델 +Z(ItemModels의 앞)로 돌리는 각. 넣어 보고 c70 캡처로 정한다(docs §25).</summary>
+        public const float BoatYaw = 0f;
+
+        /// <summary>
+        /// 모델을 모델 축 루트(ItemModels.Root, 위 +Y 앞 +Z) 안에 넣는다(2026-10-10 Kenney 디자인 패스). 바닥 가운데를 at에,
+        /// 발자국 w(X)×d(Z) 안에 균일 축척. stretch면 X·Z를 따로 늘여 발자국을 꽉 채운다(지붕·좌판처럼 단색 저폴리는 늘여도 된다).
+        /// maxHeight(0이면 제한 없음)보다 높으면 키(Y)만 누른다. yawDeg는 모델 Y축 회전.
+        /// 경계를 월드에서 재므로 루트가 아직 원점·무회전일 때(ItemModels.Place로 세우기 전) 불러야 한다. size = 놓인 (가로, 높이, 앞뒤). 모델이 없으면 null.
+        /// </summary>
+        public static GameObject Fit(string path, GameObject root, Vector3 at, float w, float d, out Vector3 size, float maxHeight = 0f, float yawDeg = 0f, bool stretch = false)
+        {
+            size = Vector3.zero;
+            GameObject prefab = Load(path);
+            if (prefab == null || root == null) return null;
+            GameObject go = Object.Instantiate(prefab, root.transform, false);
+            go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
+            Bounds b = Measure(go);
+            float sx = w / Mathf.Max(0.001f, b.size.x);
+            float sz = d / Mathf.Max(0.001f, b.size.z);
+            float s = Mathf.Min(sx, sz);
+            Vector3 scale = stretch ? new Vector3(sx, s, sz) : Vector3.one * s;
+            go.transform.localScale = scale;
+            b = Measure(go);
+            if (maxHeight > 0f && b.size.y > maxHeight)
+            {
+                scale.y *= maxHeight / b.size.y;
+                go.transform.localScale = scale;
+                b = Measure(go);
+            }
+            go.transform.localPosition += new Vector3(at.x - b.center.x, at.y - b.min.y, at.z - b.center.z);
+            size = b.size;
+            return go;
+        }
+
         /// <summary>키 tall(칸)인 사람. 발이 원점, 앞(+Z)이 카메라 쪽.</summary>
         public static GameObject Person(string path, Transform parent, float tall)
         {

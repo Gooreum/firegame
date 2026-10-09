@@ -18,9 +18,10 @@ namespace FireGame.Prototypes.EditorTools
             get { return assetPath.StartsWith(Root) && assetPath.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase); }
         }
 
+        /// <summary>애니메이션을 가져올 모델: Quaternius 사람과 Kenney Cube Pets(몹, 클립 idle·walk·run — 2026-10-10 docs §25).</summary>
         private bool Person
         {
-            get { return assetPath.Contains("/People/"); }
+            get { return assetPath.Contains("/People/") || assetPath.Contains("/Pets/"); }
         }
 
         private void OnPreprocessModel()
