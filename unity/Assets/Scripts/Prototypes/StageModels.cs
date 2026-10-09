@@ -505,21 +505,20 @@ namespace FireGame.Prototypes
             return root;
         }
 
-        /// <summary>정박한 작은 배: 파란 선체 흰 갑판(불배 선체 재사용), 0.8배.</summary>
+        /// <summary>정박한 작은 배(Kenney Watercraft): 어선·하우스보트·요트가 번갈아. 폭 1.2·길이 2.4.</summary>
         public static GameObject MooredBoat(Transform parent, int k)
         {
-            Color[] hulls = { new Color(0.2f, 0.4f, 0.7f), new Color(0.85f, 0.85f, 0.8f), new Color(0.2f, 0.5f, 0.45f) };
-            GameObject root = ItemModels.Hull(parent, "MooredBoat", hulls[k % hulls.Length], Paint, Dark);
+            string[] boats = { "boat-fishing-small", "boat-house-a", "boat-sail-a" };
+            GameObject root = ItemModels.Root("MooredBoat", parent);
+            Models3D.Fit("Watercraft/" + boats[k % boats.Length], root, Vector3.zero, 1.2f, 2.4f, out _, 0f, Models3D.BoatYaw);
             return root;
         }
 
-        /// <summary>부표: 빨간 구 + 흰 띠 + 작은 깃대. 지름 0.6.</summary>
+        /// <summary>부표(Kenney Watercraft 깃발 부표). 지름 0.6, 높이 1 이하.</summary>
         public static GameObject Buoy(Transform parent)
         {
             GameObject root = ItemModels.Root("Buoy", parent);
-            ItemModels.Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.2f, 0f), new Vector3(0.6f, 0.5f, 0.6f), new Color(0.86f, 0.16f, 0.12f));
-            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.25f, 0f), new Vector3(0.62f, 0.05f, 0.62f), Paint);
-            ItemModels.Part(PrimitiveType.Cylinder, root, new Vector3(0f, 0.6f, 0f), new Vector3(0.05f, 0.25f, 0.05f), Dark);
+            Models3D.Fit("Watercraft/buoy-flag", root, Vector3.zero, 0.6f, 0.6f, out _, 1.0f);
             return root;
         }
 

@@ -186,6 +186,9 @@ namespace FireGame.Prototypes
             "Industrial/building-k", "Industrial/building-l", "Industrial/building-m", "Industrial/building-r",
         };
         private static readonly string[] ContainerModels = { "Industrial/shipping-container-a", "Industrial/shipping-container-b", "Industrial/shipping-container-c" };
+
+        /// <summary>항구 부두의 화물 더미(Kenney Watercraft, 2026-10-10): 색 컨테이너와 쌓인 상자가 번갈아.</summary>
+        private static readonly string[] HarborCargo = { "Watercraft/cargo-container-a", "Watercraft/cargo-pile-a", "Watercraft/cargo-container-b", "Watercraft/cargo-container-c" };
         private static readonly string[] TownTrees = { "Nature/tree_default", "Nature/tree_oak", "Nature/tree_fat" };
         private static readonly string[] ForestTrees = { "Nature/tree_pineTallA", "Nature/tree_pineRoundA", "Nature/tree_cone" };
         private const float MaxHouseHeight = 2.4f;
@@ -3833,7 +3836,7 @@ namespace FireGame.Prototypes
                     }
                     else
                     {
-                        string kind = tank ? "Industrial/detail-tank" : ContainerModels[(i / 2) % ContainerModels.Length];
+                        string kind = tank ? "Industrial/detail-tank" : HarborCargo[(i / 2) % HarborCargo.Length];
                         d = Models3D.Place(kind, _root, new Vector3(p.X, p.Y, 0f), tank ? 1.6f : 2.4f, tank ? 1.6f : 1.2f, tank ? 0f : (i % 4 == 0 ? 0f : 90f), out _, tank ? 1.6f : 1.2f);
                     }
                     if (d != null) _ground.Add(d);

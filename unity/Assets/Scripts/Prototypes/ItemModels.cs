@@ -20,40 +20,41 @@ namespace FireGame.Prototypes
         private static readonly Dictionary<Color, Material> Mats = new Dictionary<Color, Material>();
         private static Material _template;
 
-        /// <summary>불배(항구): 어두운 적갈색 선체 + 뱃머리 쐐기 + 선실 + 굴뚝. 길이 약 2.4칸(앞 +Z), 폭 약 1.2칸.</summary>
+        /// <summary>불배(항구): Kenney Watercraft 터그보트(2026-10-10 디자인 패스, 전엔 코드 선체). 길이 약 2.4칸(앞 +Z), 폭 약 1.2칸.</summary>
         public static GameObject Boat(Transform parent)
         {
-            return Hull(parent, "BoatModel", new Color(0.45f, 0.22f, 0.14f), new Color(0.62f, 0.5f, 0.36f), Dark);
+            GameObject root = Root("BoatModel", parent);
+            if (Models3D.Fit("Watercraft/boat-tug-a", root, Vector3.zero, 1.2f, 2.4f, out _, 0f, Models3D.BoatYaw) == null)
+            {
+                Hull(root, new Color(0.45f, 0.22f, 0.14f), new Color(0.62f, 0.5f, 0.36f), Dark);
+            }
+            return root;
         }
 
-        /// <summary>유조선(항구 대화재): 어두운 적갈 선체 6×2.4(앞 +Z) + 녹슨 갑판 + 탱크 돔 셋 + 선미 조타실 + 굴뚝. 불배의 2.5배.</summary>
+        /// <summary>유조선(항구 대화재): Kenney Watercraft 화물선 6×2.4(앞 +Z). 불배의 2.5배.</summary>
         public static GameObject Tanker(Transform parent)
         {
             GameObject root = Root("TankerModel", parent);
-            var hull = new Color(0.4f, 0.12f, 0.1f);
-            var deck = new Color(0.55f, 0.3f, 0.2f);
-            var tank = new Color(0.75f, 0.72f, 0.65f);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.28f, -0.4f), new Vector3(2.2f, 0.56f, 5.0f), hull);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.28f, 2.1f), new Vector3(1.55f, 0.56f, 1.55f), hull, new Vector3(0f, 45f, 0f));
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.58f, -0.4f), new Vector3(2.0f, 0.06f, 4.8f), deck);
-            for (int k = -1; k <= 1; k++) Part(PrimitiveType.Sphere, root, new Vector3(0f, 0.55f, (k * 1.3f) + 0.3f), new Vector3(1.3f, 0.9f, 1.3f), tank);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 0.62f, 0.3f), new Vector3(0.12f, 0.1f, 4.0f), Steel);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 1.05f, -2.3f), new Vector3(1.5f, 0.9f, 1.0f), Paint);
-            Part(PrimitiveType.Cube, root, new Vector3(0f, 1.25f, -1.78f), new Vector3(1.2f, 0.3f, 0.06f), Glass);
-            Part(PrimitiveType.Cylinder, root, new Vector3(0f, 1.75f, -2.6f), new Vector3(0.3f, 0.35f, 0.3f), Dark);
+            Models3D.Fit("Watercraft/ship-cargo-a", root, Vector3.zero, 2.4f, 6.0f, out _, 0f, Models3D.BoatYaw);
             return root;
         }
 
         internal static GameObject Hull(Transform parent, string name, Color hull, Color deck, Color cabin)
         {
             GameObject root = Root(name, parent);
+            Hull(root, hull, deck, cabin);
+            return root;
+        }
+
+        /// <summary>코드 선체(모델이 없을 때): 상자 선체 + 뱃머리 쐐기 + 갑판 + 선실 + 굴뚝.</summary>
+        private static void Hull(GameObject root, Color hull, Color deck, Color cabin)
+        {
             Part(PrimitiveType.Cube, root, new Vector3(0f, 0.22f, -0.2f), new Vector3(1.1f, 0.44f, 1.9f), hull);
             Part(PrimitiveType.Cube, root, new Vector3(0f, 0.22f, 0.95f), new Vector3(0.78f, 0.44f, 0.78f), hull, new Vector3(0f, 45f, 0f));
             Part(PrimitiveType.Cube, root, new Vector3(0f, 0.46f, -0.2f), new Vector3(1.0f, 0.06f, 1.8f), deck);
             Part(PrimitiveType.Cube, root, new Vector3(0f, 0.72f, -0.55f), new Vector3(0.7f, 0.5f, 0.7f), cabin);
             Part(PrimitiveType.Cube, root, new Vector3(0f, 0.85f, -0.2f), new Vector3(0.6f, 0.22f, 0.1f), Glass);
             Part(PrimitiveType.Cylinder, root, new Vector3(0f, 1.1f, -0.75f), new Vector3(0.16f, 0.25f, 0.16f), Dark);
-            return root;
         }
 
         /// <summary>불꽃 가판대(야시장): 빨간 좌판 + 금색 천막 + 위로 선 발사관 다섯. 폭 약 1.8칸, 높이 약 1.4칸.</summary>

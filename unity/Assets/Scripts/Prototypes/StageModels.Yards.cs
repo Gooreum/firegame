@@ -215,23 +215,12 @@ namespace FireGame.Prototypes
 
         private static void FishCrates(GameObject root, Vector3 at)
         {
-            var blue = new Color(0.25f, 0.5f, 0.8f);
-            for (int k = 0; k < 4; k++)
-            {
-                var c = at + new Vector3(((k % 2) - 0.5f) * 0.48f, 0.1f + ((k / 2) * 0.2f), (k / 2) * -0.1f);
-                ItemModels.Part(PrimitiveType.Cube, root, c, new Vector3(0.44f, 0.18f, 0.32f), blue);
-                if (k >= 2)
-                {
-                    for (int f = -1; f <= 1; f++) ItemModels.Part(PrimitiveType.Capsule, root, c + new Vector3(f * 0.12f, 0.1f, 0f), new Vector3(0.08f, 0.13f, 0.06f), f == 0 ? new Color(0.85f, 0.45f, 0.35f) : new Color(0.6f, 0.65f, 0.75f), new Vector3(90f, 0f, 0f));
-                }
-            }
+            for (int k = 0; k < 2; k++) Models3D.Fit("Survival/box-large", root, at + new Vector3((k - 0.5f) * 0.55f, 0f, 0f), 0.5f, 0.9f, out _, 0f, k * 10f);
         }
 
         private static void IceBox(GameObject root, Vector3 at)
         {
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0f, 0.2f, 0f), new Vector3(0.7f, 0.4f, 0.45f), Paint);
-            ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3(0f, 0.41f, 0f), new Vector3(0.6f, 0.02f, 0.36f), new Color(0.82f, 0.95f, 1f));
-            for (int k = 0; k < 5; k++) ItemModels.Part(PrimitiveType.Cube, root, at + new Vector3((k - 2f) * 0.11f, 0.44f, (k % 2) * 0.08f - 0.04f), new Vector3(0.08f, 0.05f, 0.08f), new Color(0.9f, 0.97f, 1f), new Vector3(0f, k * 30f, 0f));
+            Models3D.Fit("Market/freezer", root, at, 0.9f, 0.6f, out _);
         }
 
         private static void NetPile(GameObject root, Vector3 at)
@@ -243,11 +232,11 @@ namespace FireGame.Prototypes
 
         private static void TrapTower(GameObject root, Vector3 at)
         {
+            float y = 0f;
             for (int k = 0; k < 3; k++)
             {
-                var c = at + new Vector3(0f, 0.13f + (k * 0.25f), 0f);
-                ItemModels.Part(PrimitiveType.Cube, root, c, new Vector3(0.5f, 0.22f, 0.4f), new Color(0.25f, 0.27f, 0.3f));
-                ItemModels.Part(PrimitiveType.Cube, root, c + new Vector3(0f, 0.115f, 0f), new Vector3(0.52f, 0.02f, 0.42f), new Color(0.98f, 0.55f, 0.15f));
+                Models3D.Fit("Survival/box", root, at + new Vector3(0f, y, 0f), 0.5f, 0.5f, out Vector3 size, 0f, k * 25f);
+                y += size.y;
             }
         }
 
