@@ -462,6 +462,33 @@ namespace FireGame.Prototypes.Tests
         }
 
         [Fact]
+        public void Forest_SmokeTime_IsTheDefault_AndTickUsesTheStageKnob()
+        {
+            // 손잡이는 스테이지 규칙(StageRules.SmokeTime)에 있지만 숲도 기본 13초다: 18초는 아슬을 11 → 8로 깎았다(docs §24).
+            for (int stage = 1; stage <= SurvivorStages.Count; stage++) Assert.Equal(SurvivorSim.SmokeTime, SurvivorStages.Get(stage).SmokeTime);
+            // 숲 집(주민 2) 다 탄 불: 12.5초엔 아무도 안 잃고 13.5초면 한 명.
+            var sim = Quiet();
+            var house = new Structure { Kind = StructureKind.House, Name = "산장", Pos = new Vec2(sim.Player.X + 12f, sim.Player.Y), Half = new Vec2(2f, 1.5f), Integrity = 100f, Residents = 2 };
+            sim.Structures.Add(house);
+            sim.Ignite(house, 1f);
+            void Idle(float seconds)
+            {
+                int ticks = (int)System.Math.Round(seconds / SurvivorSim.Dt);
+                for (int i = 0; i < ticks; i++)
+                {
+                    sim.Enemies.Clear();
+                    sim.Hp = sim.MaxHp;
+                    if (sim.PendingChoices != null) sim.Choose(0);
+                    sim.Step(0f, 0f);
+                }
+            }
+            Idle(12.5f);
+            Assert.Equal(0, sim.CiviliansLost);
+            Idle(1f);
+            Assert.Equal(1, sim.CiviliansLost);
+        }
+
+        [Fact]
         public void Town_DousedHouse_KeepsResidents()
         {
             var sim = Quiet(1);

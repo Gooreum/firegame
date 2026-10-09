@@ -3353,7 +3353,7 @@ namespace FireGame.Prototypes.Logic
                 if (s.Burning && s.Residents > 0 && s.Fire >= SmokeFire)
                 {
                     s.Smoke += Dt;
-                    if (s.Smoke >= SmokeTime)
+                    if (s.Smoke >= Stage.SmokeTime)
                     {
                         s.Smoke = 0f;
                         s.Residents--;

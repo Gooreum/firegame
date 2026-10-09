@@ -32,6 +32,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>건물이 꾸준한 물(호스·대원·포탑)을 먹는 비율. 한 방 물은 영향 없다.</summary>
         public float BuildingWater = SurvivorSim.BuildingWater;
 
+        /// <summary>큰 불(SmokeFire) 속에 갇힌 사람을 한 명씩 잃는 간격(초).</summary>
+        public float SmokeTime = SurvivorSim.SmokeTime;
+
         /// <summary>대화재(3:00~) 동안 바람 번짐 확률. 바람이 없는 스테이지에선 쓰지 않는다.</summary>
         public float FinaleWindChance = SurvivorSim.WindSpreadChance;
 
@@ -177,6 +180,8 @@ namespace FireGame.Prototypes.Logic
             // 숲의 압력은 번짐이다. 건물 물을 마을만큼 줄이면 집 7채 중 4채가 금방 무너져 봇이 0승이었다(docs §13) → 마을의 두 배.
             // 2026-10-09: 폰에서 "건물 불이 너무 안 꺼진다" — 숲은 물대포만 건물을 끄니 0.7(Lv1 다 탄 건물 ≈ 8초 → ≈ 6초, docs §23).
             BuildingWater = 0.7f,
+            // 연기 간격(SmokeTime)은 기본 13초 그대로: 18초로 재니 숙련 봇 잃음 3.3 → 2.6뿐인데 아슬이 11 → 8로 밴드 밖(docs §24).
+            // 사람을 덜 잃는 건 꺼진 집의 사람이 나오는 규칙(ReleaseResidents)과 연기 리셋이 맡는다.
             // 나무 수십 그루가 보통(×2) 간격으로 뱉으면 불씨 떼가 동네를 덮는다.
             TreeSpit = 4f,
             // 산불은 옮겨다닌다: 몸 둘레의 장막(박쥐·불씨)과 멀리 날아가는 드론이 답이고, 선 자리만 지키는 포탑은 못 따라간다.
