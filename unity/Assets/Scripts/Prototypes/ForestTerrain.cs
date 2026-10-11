@@ -6,16 +6,23 @@ using UnityEngine;
 namespace FireGame.Prototypes
 {
     /// <summary>
-    /// 숲 3D 땅(2026-10-12 샘플, docs §26): 그린 바닥 쿼드 대신 Kenney Nature Kit 타일을 1칸 격자에 깐다.
-    /// 평지는 얇은 풀 타일, 개울 둑과 바위 언덕은 흙 옆면이 있는 블록(cliff_block_rock)이라 높낮이가 보인다.
-    /// 개울 칸은 블록을 반 칸 내려 물을 채우고, 다리 둘·흙길·풀·꽃·돌 장식을 얹은 뒤 머티리얼별로 메시 하나로 합친다(폰: 타일 수천 개 → 드로우 콜 머티리얼 수만큼).
-    /// 자리는 로직(SurvivorForest의 CreekY·Rock*·PathHalf)과 같다 — 걸을 수 있는 땅은 모두 높이 0이라 몸·불·바닥 그림 층은 그대로다.
+    /// 숲 3D 땅(2026-10-12, docs §26): 높이 있는 지면 메시 한 장. 높이는 로직과 같은 SurvivorForest.Height
+    /// (걸어 오르는 언덕 위 건물, 북서 바위 절벽, 솟은 맵 가장자리, 파인 개울). 색은 높이·기울기로 칠한 텍스처
+    /// (평지 풀, 비탈 흙, 바위 꼭대기 돌, 개울 바닥 젖은 흙, 십자 흙길). 위에 다리 둘과 Nature Kit 풀·꽃·돌 장식을 얹어 머티리얼별로 합친다.
     /// 위쪽은 −Z(Models3D.Place와 같다).
     /// </summary>
     public static class ForestTerrain
     {
-        /// <summary>바위 언덕 높이(칸)와 개울 바닥 깊이.</summary>
-        public const float RockHeight = 2f, CreekDepth = 0.9f, WaterDepth = 0.45f;
+        /// <summary>메시가 덮는 범위(맵 밖까지 산등성이가 이어진다)와 격자 간격.</summary>
+        private const float From = -14f, To = 74f, Step = 0.5f;
+
+        /// <summary>개울 물 높이(땅 아래 칸).</summary>
+        public const float WaterDepth = 0.5f;
+
+        private const int TexSize = 1024;
+
+        /// <summary>음영용 빛 방향(땅 좌표 x 동, y 북, z 위): 북서쪽 위에서.</summary>
+        private static readonly Vector3 LightDir = new Vector3(-0.55f, 0.55f, 0.63f).normalized;
 
         private static readonly string[] Decor =
         {
@@ -23,47 +30,142 @@ namespace FireGame.Prototypes
             "stone_smallA", "stone_smallC", "mushroom_red", "mushroom_tanGroup", "stump_round", "log", "plant_bush", "stone_largeA",
         };
 
+        private static Texture2D _tex;
+
         public static List<GameObject> Build(Transform parent, List<Structure> structures)
         {
+            var result = new List<GameObject> { Ground(parent), Water(parent) };
             var temp = new GameObject("TerrainParts").transform;
             temp.SetParent(parent, false);
-            int n = (int)SurvivorSim.ArenaSize;
-            for (int y = 0; y < n; y++)
-            {
-                for (int x = 0; x < n; x++)
-                {
-                    var c = new Vector3(x + 0.5f, y + 0.5f, 0f);
-                    if (InRock(c))
-                    {
-                        // 언덕: 블록 두 단 + 바닥 한 단(가장자리 흙 옆면이 보인다).
-                        for (int k = 0; k < (int)RockHeight; k++) Block(temp, c, -RockHeight + k);
-                        continue;
-                    }
-                    if (InCreek(c))
-                    {
-                        Block(temp, c, CreekDepth);
-                        continue;
-                    }
-                    if (NextToCreek(c))
-                    {
-                        // 둑: 옆면이 있는 블록(개울 쪽으로 흙벽이 드러난다).
-                        Block(temp, c, 0f);
-                        if (OnPath(c)) Models3D.Place("Nature/ground_pathTile", temp, c + new Vector3(0f, 0f, -0.005f), 1f, 1f, 0f, out _);
-                        continue;
-                    }
-                    Models3D.Place(OnPath(c) ? "Nature/ground_pathTile" : "Nature/ground_grass", temp, c, 1f, 1f, 0f, out _);
-                }
-            }
             foreach (float bx in SurvivorForest.BridgeXs)
             {
-                // 다리: 개울을 남북으로 건너는 나무 다리(폭 3, 길이 개울 + 둑 한 칸씩).
-                Models3D.Place("Nature/bridge_wood", temp, new Vector3(bx, SurvivorForest.CreekY, 0.12f), SurvivorForest.BridgeHalf * 2f + 0.2f, (SurvivorForest.CreekHalf * 2f) + 1.6f, 90f, out _, 0.5f);
+                // 다리: 개울을 남북으로 건너는 나무 다리(폭 3, 길이 개울 + 둑).
+                Models3D.Place("Nature/bridge_wood", temp, new Vector3(bx, SurvivorForest.CreekY, 0.12f), (SurvivorForest.BridgeHalf * 2f) + 0.2f, (SurvivorForest.CreekHalf * 2f) + 1.6f, 90f, out _, 0.5f);
             }
             Scatter(temp, structures);
-            List<GameObject> merged = Merge(temp, parent);
+            result.AddRange(Merge(temp, parent));
             UiKit.Discard(temp.gameObject);
+            return result;
+        }
 
-            // 물: 개울 바닥 위 반투명 아닌 판(Lit, 반짝임). 다리 아래까지 한 장.
+        private static float H(float x, float y)
+        {
+            return SurvivorForest.Height(x, y);
+        }
+
+        /// <summary>기울기 크기(칸당 높이).</summary>
+        private static float Slope(float x, float y)
+        {
+            const float e = 0.3f;
+            float gx = (H(x + e, y) - H(x - e, y)) / (2f * e);
+            float gy = (H(x, y + e) - H(x, y - e)) / (2f * e);
+            return Mathf.Sqrt((gx * gx) + (gy * gy));
+        }
+
+        private static GameObject Ground(Transform parent)
+        {
+            int n = Mathf.RoundToInt((To - From) / Step) + 1;
+            var verts = new Vector3[n * n];
+            var uvs = new Vector2[n * n];
+            for (int j = 0; j < n; j++)
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    float x = From + (i * Step), y = From + (j * Step);
+                    verts[(j * n) + i] = new Vector3(x, y, -H(x, y));
+                    uvs[(j * n) + i] = new Vector2((x - From) / (To - From), (y - From) / (To - From));
+                }
+            }
+            var tris = new int[(n - 1) * (n - 1) * 6];
+            int t = 0;
+            for (int j = 0; j < n - 1; j++)
+            {
+                for (int i = 0; i < n - 1; i++)
+                {
+                    int a = (j * n) + i, b = a + 1, c = a + n, d = c + 1;
+                    tris[t++] = a; tris[t++] = c; tris[t++] = b;
+                    tris[t++] = b; tris[t++] = c; tris[t++] = d;
+                }
+            }
+            var mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32, name = "ForestGround" };
+            mesh.vertices = verts;
+            mesh.uv = uvs;
+            mesh.triangles = tris;
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            var go = new GameObject("ForestGround");
+            go.transform.SetParent(parent, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var mat = new Material(Models3D.LitShader) { name = "ForestGround" };
+            mat.SetTexture("_BaseMap", Paint());
+            mat.SetFloat("_Smoothness", 0f);
+            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+            return go;
+        }
+
+        /// <summary>높이·기울기로 칠한 땅 텍스처(한 번만 만든다).</summary>
+        private static Texture2D Paint()
+        {
+            if (_tex != null) return _tex;
+            var px = new Color32[TexSize * TexSize];
+            float mid = SurvivorSim.ArenaSize / 2f;
+            var grassLo = new Color(0.27f, 0.42f, 0.2f);
+            var grassHi = new Color(0.4f, 0.55f, 0.26f);
+            var forest = new Color(0.17f, 0.3f, 0.15f);
+            var dirt = new Color(0.5f, 0.37f, 0.24f);
+            var wet = new Color(0.25f, 0.2f, 0.15f);
+            var rock = new Color(0.52f, 0.52f, 0.5f);
+            for (int v = 0; v < TexSize; v++)
+            {
+                for (int u = 0; u < TexSize; u++)
+                {
+                    float x = From + ((u + 0.5f) / TexSize * (To - From));
+                    float y = From + ((v + 0.5f) / TexSize * (To - From));
+                    float h = H(x, y);
+                    float slope = Slope(x, y);
+                    float n1 = Noise(x * 0.25f, y * 0.25f), n2 = Noise(x * 1.3f + 50f, y * 1.3f + 50f);
+                    Color c = Color.Lerp(grassLo, grassHi, (n1 * 0.7f) + (n2 * 0.3f));
+                    // 높을수록 볕이 들어 밝고, 맵 밖 산등성이는 짙은 숲.
+                    c = Color.Lerp(c, c * 1.15f, Mathf.Clamp01(h / 2f));
+                    bool outside = x < 0f || y < 0f || x > SurvivorSim.ArenaSize || y > SurvivorSim.ArenaSize;
+                    if (outside) c = Color.Lerp(c, forest, Mathf.Clamp01(h / 2.5f));
+                    // 흙길(맵 안): 가장자리는 노이즈로 들쭉날쭉.
+                    float path = Mathf.Min(Mathf.Abs(x - mid), Mathf.Abs(y - mid));
+                    float edge = SurvivorForest.PathHalf + ((n2 - 0.5f) * 0.6f);
+                    if (!outside && path < edge) c = Color.Lerp(c, dirt * (0.9f + (0.15f * n1)), Mathf.Clamp01((edge - path) / 0.4f));
+                    // 비탈은 흙이 드러나고, 가파르면(절벽) 바위.
+                    // 완만한 비탈은 풀 그대로(음영이 높이를 말한다), 가파른 곳만 흙이 군데군데 드러난다.
+                    c = Color.Lerp(c, dirt * (0.85f + (0.2f * n2)), Mathf.Clamp01((slope - 1.1f) / 0.6f) * (0.35f + (0.5f * n2)));
+                    c = Color.Lerp(c, rock * (0.85f + (0.25f * n1)), Mathf.Clamp01((slope - 2.4f) / 1f));
+                    // 바위 언덕 꼭대기는 돌밭.
+                    if (x > SurvivorForest.RockX0 && x < SurvivorForest.RockX1 && y > SurvivorForest.RockY0 && y < SurvivorForest.RockY1)
+                        c = Color.Lerp(c, rock * (0.8f + (0.3f * n2)), 0.75f);
+                    // 지도식 음영: 북서쪽에서 해가 든다고 보고 비탈을 밝히고 어둡게 굽는다(평지 = 1).
+                    const float e = 0.3f;
+                    float gx = (H(x + e, y) - H(x - e, y)) / (2f * e), gy = (H(x, y + e) - H(x, y - e)) / (2f * e);
+                    var nrm = new Vector3(-gx, -gy, 1f).normalized;
+                    float shade = Vector3.Dot(nrm, LightDir) / LightDir.z;
+                    c *= Mathf.Clamp(0.4f + (0.6f * shade), 0.4f, 1.45f);
+                    // 개울 바닥은 젖은 흙.
+                    if (h < -0.05f) c = Color.Lerp(c, wet, Mathf.Clamp01(-h / 0.5f));
+                    c.a = 1f;
+                    px[(v * TexSize) + u] = c;
+                }
+            }
+            _tex = new Texture2D(TexSize, TexSize, TextureFormat.RGBA32, true)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                name = "ForestGround",
+                hideFlags = HideFlags.DontUnloadUnusedAsset,
+            };
+            _tex.SetPixels32(px);
+            _tex.Apply(true);
+            return _tex;
+        }
+
+        private static GameObject Water(Transform parent)
+        {
             GameObject water = GameObject.CreatePrimitive(PrimitiveType.Quad);
             water.name = "Creek";
             Collider col = water.GetComponent<Collider>();
@@ -71,90 +173,71 @@ namespace FireGame.Prototypes
             else Object.DestroyImmediate(col);
             water.transform.SetParent(parent, false);
             water.transform.localPosition = new Vector3(SurvivorSim.ArenaSize / 2f, SurvivorForest.CreekY, WaterDepth);
-            water.transform.localScale = new Vector3(SurvivorSim.ArenaSize, SurvivorForest.CreekHalf * 2f, 1f);
+            water.transform.localScale = new Vector3(To - From, (SurvivorForest.CreekHalf * 2f) + 0.6f, 1f);
             var wm = new Material(Models3D.LitShader) { name = "CreekWater" };
             wm.SetColor("_BaseColor", new Color(0.28f, 0.58f, 0.82f));
             wm.SetFloat("_Smoothness", 0.85f);
             water.GetComponent<MeshRenderer>().sharedMaterial = wm;
-            merged.Add(water);
-
-            // 맵 밖: 짙은 숲색 바닥을 넓게(가장자리가 허공으로 안 보이게).
-            GameObject outside = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            outside.name = "Outside";
-            col = outside.GetComponent<Collider>();
-            if (Application.isPlaying) Object.Destroy(col);
-            else Object.DestroyImmediate(col);
-            outside.transform.SetParent(parent, false);
-            // 개울 블록 바닥(CreekDepth + 1)보다 아래: 위에 두면 개울을 덮는다.
-            outside.transform.localPosition = new Vector3(SurvivorSim.ArenaSize / 2f, SurvivorSim.ArenaSize / 2f, CreekDepth + 1.05f);
-            outside.transform.localScale = new Vector3(SurvivorSim.ArenaSize * 3f, SurvivorSim.ArenaSize * 3f, 1f);
-            var om = new Material(Models3D.LitShader) { name = "Outside" };
-            om.SetColor("_BaseColor", new Color(0.16f, 0.3f, 0.16f));
-            om.SetFloat("_Smoothness", 0f);
-            outside.GetComponent<MeshRenderer>().sharedMaterial = om;
-            merged.Add(outside);
-            return merged;
+            return water;
         }
 
-        /// <summary>윗면이 top(−Z가 위)에 오는 1×1×1 흙 블록. Place의 at.z는 바닥이라 한 칸 아래(+1)를 준다.</summary>
-        private static void Block(Transform p, Vector3 c, float top)
-        {
-            Models3D.Place("Nature/cliff_block_rock", p, new Vector3(c.x, c.y, top + 1f), 1f, 1f, 0f, out _);
-        }
-
-        private static bool InRock(Vector3 c)
-        {
-            return c.x > SurvivorForest.RockX0 && c.x < SurvivorForest.RockX1 && c.y > SurvivorForest.RockY0 && c.y < SurvivorForest.RockY1;
-        }
-
-        private static bool InCreek(Vector3 c)
-        {
-            return Mathf.Abs(c.y - SurvivorForest.CreekY) < SurvivorForest.CreekHalf;
-        }
-
-        private static bool NextToCreek(Vector3 c)
-        {
-            return !InCreek(c) && Mathf.Abs(c.y - SurvivorForest.CreekY) < SurvivorForest.CreekHalf + 1f;
-        }
-
-        private static bool OnPath(Vector3 c)
-        {
-            float mid = SurvivorSim.ArenaSize / 2f;
-            return Mathf.Abs(c.x - mid) < SurvivorForest.PathHalf || Mathf.Abs(c.y - mid) < SurvivorForest.PathHalf;
-        }
-
-        /// <summary>풀·꽃·돌·버섯·그루터기를 해시로 흩뿌린다: 길·개울·건물·나무 발자국 밖. 언덕 위엔 돌·덤불.</summary>
+        /// <summary>풀·꽃·돌·버섯·그루터기를 해시로 흩뿌린다(땅 높이에): 길·개울·가파른 비탈·건물·나무 발자국 밖. 바위 언덕 위엔 돌·덤불.</summary>
         private static void Scatter(Transform p, List<Structure> structures)
         {
-            int n = (int)SurvivorSim.ArenaSize;
-            for (int i = 0; i < n * n * 3; i++)
+            float n = SurvivorSim.ArenaSize;
+            float mid = n / 2f;
+            for (int i = 0; i < 9000; i++)
             {
+                if (Hash(i * 3 + 3) > 0.25f) continue;
                 float x = Hash(i * 3 + 1) * n;
                 float y = Hash(i * 3 + 2) * n;
-                var c = new Vector3(x, y, 0f);
-                if (Hash(i * 3 + 3) > 0.22f) continue;
-                if (InCreek(c) || NextToCreek(c) && Mathf.Abs(y - SurvivorForest.CreekY) < SurvivorForest.CreekHalf + 0.3f || OnPath(c)) continue;
+                float h = H(x, y);
+                if (h < -0.02f || Slope(x, y) > 1.2f) continue;
+                if (Mathf.Abs(y - SurvivorForest.CreekY) < SurvivorForest.CreekHalf + 0.5f) continue;
+                if (Mathf.Min(Mathf.Abs(x - mid), Mathf.Abs(y - mid)) < SurvivorForest.PathHalf + 0.2f) continue;
                 var at = new Vec2(x, y);
                 if (structures.Exists(s => s.Kind != StructureKind.Water && s.Within(at, s.Kind == StructureKind.Tree ? 0.2f : 0.6f))) continue;
-                bool rock = InRock(c);
+                bool rock = x > SurvivorForest.RockX0 && x < SurvivorForest.RockX1 && y > SurvivorForest.RockY0 && y < SurvivorForest.RockY1;
                 string kind = rock ? (Hash(i + 7) < 0.5f ? "stone_largeA" : "plant_bush") : Decor[(int)(Hash(i * 7 + 5) * Decor.Length) % Decor.Length];
                 float k = 2.2f + Hash(i * 11) * 1.2f;
                 float size = kind == "stone_largeA" || kind == "log" || kind == "plant_bush" ? 1.0f : 0.45f;
-                c.z = rock ? -RockHeight : 0f;
-                Models3D.Place("Nature/" + kind, p, c, size * k * 0.5f, size * k * 0.5f, Hash(i * 13) * 360f, out _);
+                Models3D.Place("Nature/" + kind, p, new Vector3(x, y, -h + 0.05f), size * k * 0.5f, size * k * 0.5f, Hash(i * 13) * 360f, out _);
             }
+        }
+
+        private static float Noise(float x, float y)
+        {
+            int ix = Mathf.FloorToInt(x), iy = Mathf.FloorToInt(y);
+            float fx = x - ix, fy = y - iy;
+            fx = fx * fx * (3f - (2f * fx));
+            fy = fy * fy * (3f - (2f * fy));
+            float a = Mathf.Lerp(Hash2(ix, iy), Hash2(ix + 1, iy), fx);
+            float b = Mathf.Lerp(Hash2(ix, iy + 1), Hash2(ix + 1, iy + 1), fx);
+            return Mathf.Lerp(a, b, fy);
+        }
+
+        private static float Hash2(int x, int y)
+        {
+            return Hash((x * 73856093) ^ (y * 19349663));
+        }
+
+        private static float Hash(int i)
+        {
+            uint h = (uint)i * 2654435761u;
+            h ^= h >> 15;
+            h *= 2246822519u;
+            h ^= h >> 13;
+            return (h & 0xFFFFFF) / (float)0x1000000;
         }
 
         private static readonly Dictionary<Material, Material> Recolored = new Dictionary<Material, Material>();
 
-        /// <summary>Nature Kit 풀·흙 색이 화면 보정(PixelGrade)을 지나면 민트색으로 떠서, 땅 색만 숲답게 눌러 쓴다(원본 머티리얼은 나무가 같이 쓰니 복사본).</summary>
+        /// <summary>Nature Kit 풀·돌·나무 색이 화면 보정(PixelGrade)을 지나면 민트·흰색으로 떠서 숲답게 눌러 쓴다(원본은 나무가 같이 쓰니 복사본).</summary>
         private static Material Recolor(Material m)
         {
             if (m == null) return null;
             if (Recolored.TryGetValue(m, out Material done) && done != null) return done;
             Color? c = m.name.StartsWith("grass") ? new Color(0.36f, 0.56f, 0.24f)
-                : m.name.StartsWith("dirtDark") ? new Color(0.36f, 0.25f, 0.16f)
-                : m.name.StartsWith("dirt") ? new Color(0.55f, 0.39f, 0.25f)
                 : m.name.StartsWith("stone") ? new Color(0.56f, 0.57f, 0.6f)
                 : m.name == "wood" || m.name.StartsWith("wood ") ? new Color(0.62f, 0.43f, 0.26f)
                 : (Color?)null;
@@ -168,16 +251,7 @@ namespace FireGame.Prototypes
             return result;
         }
 
-        private static float Hash(int i)
-        {
-            uint h = (uint)i * 2654435761u;
-            h ^= h >> 15;
-            h *= 2246822519u;
-            h ^= h >> 13;
-            return (h & 0xFFFFFF) / (float)0x1000000;
-        }
-
-        /// <summary>MeshFilter를 머티리얼별로 모아 CombineMeshes(32비트 인덱스). 머티리얼 하나당 GameObject 하나(그림자 받기·드리우기).</summary>
+        /// <summary>MeshFilter를 머티리얼별로 모아 CombineMeshes(32비트 인덱스). 머티리얼 하나당 GameObject 하나.</summary>
         private static List<GameObject> Merge(Transform parts, Transform parent)
         {
             var groups = new Dictionary<Material, List<CombineInstance>>();
@@ -210,7 +284,6 @@ namespace FireGame.Prototypes
                 go.AddComponent<MeshRenderer>().sharedMaterial = g.Key;
                 result.Add(go);
             }
-            if (Models3D.LogFit) Debug.Log("[ForestTerrain] 합친 메시 " + result.Count + "개");
             return result;
         }
     }

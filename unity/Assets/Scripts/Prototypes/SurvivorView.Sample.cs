@@ -120,7 +120,9 @@ namespace FireGame.Prototypes
         /// <summary>샘플 px(월드) → 땅 위 자리.</summary>
         private static Vector3 SGround(Vector2 p)
         {
-            return new Vector3(p.x * SurvivorSim.Px, -p.y * SurvivorSim.Px, -0.02f);
+            float x = p.x * SurvivorSim.Px, y = -p.y * SurvivorSim.Px;
+            // 숲 지형: 바닥 그림 층도 땅 높이를 따라 언덕을 탄다.
+            return new Vector3(x, y, -0.02f) + Lift(x, y);
         }
 
         private Vector3 _sForward;

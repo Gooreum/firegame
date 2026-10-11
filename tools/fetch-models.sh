@@ -28,7 +28,7 @@ HOUSES="building-type-a building-type-c building-type-e building-type-h building
 CARS="sedan suv taxi van hatchback-sports firetruck"
 # 숲 3D 지형(2026-10-12, docs §26): 땅 타일·개울·다리·바위 언덕·장식
 NATURE="tree_default tree_oak tree_fat tree_pineRoundA tree_pineTallA tree_cone plant_bush plant_bushLarge rock_largeA rock_smallB \
-ground_grass ground_pathTile cliff_block_rock bridge_wood \
+bridge_wood \
 grass grass_large grass_leafs flower_redA flower_yellowA flower_purpleA stone_smallA stone_smallC stone_largeA mushroom_red mushroom_tanGroup stump_round log"
 INDUSTRIAL="building-b building-c building-e building-f building-k building-l building-m building-r detail-tank detail-tank-large shipping-container-a shipping-container-b shipping-container-c water-tower"
 # 이름=구글 드라이브 파일 ID (Quaternius FBX 폴더)

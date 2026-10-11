@@ -126,7 +126,8 @@ namespace FireGame.Prototypes.Logic
         /// <summary>광각 노즐: 숲 무기 범위·반경 배율. 규칙과 그림이 같은 값을 곱한다.</summary>
         public float SWide
         {
-            get { return Build.WideScale; }
+            // 높은 데서 쏘면 더 멀리(2026-10-12 숲 지형): 땅 높이 1칸마다 +HeightReach.
+            get { return Build.WideScale * (1f + (HeightReach * Math.Max(0f, GroundHeight(Player)))); }
         }
 
         /// <summary>샘플 s.player.moving: 이번 틱 소방관이 움직였나.</summary>

@@ -35,6 +35,53 @@ namespace FireGame.Prototypes.Logic
         /// <summary>북서 바위 언덕(높이 2칸 절벽, 못 올라간다).</summary>
         public const float RockX0 = 0f, RockX1 = 14f, RockY0 = 51f, RockY1 = 60f;
 
+        /// <summary>
+        /// 언덕(2026-10-12 "언덕에도 건물이 있고 올라갈 수 있어야"): 평평한 꼭대기 x0, x1, y0, y1 · 높이 · 비탈 폭. 비탈을 걸어 오른다.
+        /// 첫 줄은 북서 바위 언덕(비탈 0.5 = 절벽, 못 올라간다). 전망대·산장 능선, 숲 식당 언덕, 숲 속 언덕 둘(나무), 남동 둔덕,
+        /// 그리고 맵 밖 네 산등성이(가장자리가 솟는다). 뷰(ForestTerrain)와 규칙(Height)이 같은 표를 쓴다.
+        /// </summary>
+        public static readonly float[] Hills =
+        {
+            RockX0, RockX1, RockY0, RockY1, 3.2f, 0.6f,
+            8f, 16f, 13f, 31f, 2.8f, 2.8f,
+            44f, 52f, 12f, 20f, 2.4f, 2.6f,
+            16f, 24f, 48f, 55f, 3.2f, 3f,
+            36f, 44f, 49f, 55f, 2.6f, 2.8f,
+            50f, 56f, 3f, 8f, 2f, 2.5f,
+            -20f, -1f, -20f, 80f, 5f, 4f,
+            61f, 80f, -20f, 80f, 5f, 4f,
+            -20f, 80f, -20f, -1f, 5f, 4f,
+            -20f, 80f, 61f, 80f, 5f, 4f,
+        };
+
+        /// <summary>개울 바닥 깊이(칸). 다리 자리는 0(다리 위를 걷는다).</summary>
+        public const float CreekDepth = 0.9f;
+
+        /// <summary>땅 높이(칸, 위가 +). 언덕은 꼭대기에서 비탈 폭만큼 부드럽게(smoothstep) 내려오고, 개울은 파인다.</summary>
+        public static float Height(float x, float y)
+        {
+            float h = 0f;
+            for (int i = 0; i < Hills.Length; i += 6)
+            {
+                float dx = Math.Max(Math.Max(Hills[i] - x, x - Hills[i + 1]), 0f);
+                float dy = Math.Max(Math.Max(Hills[i + 2] - y, y - Hills[i + 3]), 0f);
+                float t = 1f - ((float)Math.Sqrt((dx * dx) + (dy * dy)) / Hills[i + 5]);
+                if (t <= 0f) continue;
+                h = Math.Max(h, Hills[i + 4] * t * t * (3f - (2f * t)));
+            }
+            float c = Math.Abs(y - CreekY);
+            if (c < CreekHalf + 0.4f)
+            {
+                foreach (float bx in BridgeXs)
+                {
+                    if (Math.Abs(x - bx) < BridgeHalf) return h;
+                }
+                float t = Math.Min(1f, (CreekHalf + 0.4f - c) / 0.8f);
+                h -= CreekDepth * t * t * (3f - (2f * t));
+            }
+            return h;
+        }
+
         private static readonly float[] Offsets =
         {
             0f, 0f, 1.8f, 0.6f, -1.6f, 1.2f, 0.7f, -1.8f, -1.3f, -1.4f, 2.2f, -1.6f, -2.4f, -0.2f,
@@ -70,6 +117,7 @@ namespace FireGame.Prototypes.Logic
                 x0 = bx + BridgeHalf;
             }
             Creek(list, x0, SurvivorSim.ArenaSize);
+            // 바위 언덕만 절벽(못 올라간다). 나머지 언덕은 걸어 오르는 땅이다(Height).
             list.Add(new Structure
             {
                 Kind = StructureKind.Water,

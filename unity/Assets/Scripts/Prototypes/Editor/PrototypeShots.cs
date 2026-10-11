@@ -144,6 +144,9 @@ namespace FireGame.Prototypes.EditorTools
             // 숲 3D 지형(2026-10-12, docs §26): 개울과 다리 둘, 북서 바위 언덕. 다리 앞에서 북쪽 몹이 다리로 몰린다.
             failures += SurvivorShot(dir, "t01_forest_creek", view => view.Sim.Time > 30f, 0, false, view => view.Frame(new Vector3(33f, 40f, 0f), 12f), 2, null, true, true);
             failures += SurvivorShot(dir, "t02_forest_rock", view => view.Sim.Time > 2f, 0, false, view => view.Frame(new Vector3(12f, 52f, 0f), 12f), 2);
+            // 걸어 오르는 언덕(2026-10-12): 전망대·산장이 선 서쪽 능선, 나무가 선 숲 속 언덕. 소방관이 능선 비탈을 오른다.
+            failures += SurvivorShot(dir, "t03_forest_ridge", view => view.Sim.Time > 2f, 0, false, view => view.Frame(new Vector3(15f, 22f, 0f), 12f), 2, view => view.Sim.Player = new Vec2(16f, 22f));
+            failures += SurvivorShot(dir, "t04_forest_hill", view => view.Sim.Time > 2f, 0, false, view => view.Frame(new Vector3(22f, 49f, 0f), 12f), 2);
             failures += SurvivorShot(dir, "c78_forest_yards", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(17f, 25f, 0f), 7f), 2);
             failures += SurvivorShot(dir, "c79_harbor_yards", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(30f, 33f, 0f), 11f), 4);
             failures += SurvivorShot(dir, "c80_factory_yards", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(14f, 36f, 0f), 7f), 3);

@@ -1756,7 +1756,7 @@ namespace FireGame.Prototypes
                     float ox = ((Hash01(seed + 3) - 0.5f) * st.Half.X * 1.6f) + (Mathf.Sin((_time * 2f) + seed) * 0.3f * rise);
                     float oy = (Hash01(seed + 4) - 0.5f) * st.Half.Y * 1.2f;
                     float fade = 1f - (rise / 4f);
-                    var at = new Vector3(st.Pos.X + ox, st.Pos.Y + oy, 0f) + Up(roof + 0.3f + rise);
+                    var at = new Vector3(st.Pos.X + ox, st.Pos.Y + oy, 0f) + Lift(st.Pos.X, st.Pos.Y) + Up(roof + 0.3f + rise);
                     _motes.Put(at, 0.1f, 0f, new Color(1f, 0.55f + (0.3f * Hash01(seed + 5)), 0.15f, fade));
                 }
             }
@@ -1766,9 +1766,18 @@ namespace FireGame.Prototypes
         {
             for (int i = 0; i < RoofRects.Count; i++)
             {
-                if (RoofRects[i].Contains(new Vector2(p.X, p.Y))) return new Vector3(p.X, p.Y, -RoofHeights[i] - 0.05f);
+                if (RoofRects[i].Contains(new Vector2(p.X, p.Y))) return new Vector3(p.X, p.Y, -RoofHeights[i] - 0.05f) + Lift(p.X, p.Y);
             }
-            return new Vector3(p.X, p.Y, 0f);
+            return new Vector3(p.X, p.Y, 0f) + Lift(p.X, p.Y);
+        }
+
+        /// <summary>땅 높이가 있는 맵(숲, 2026-10-12)인가. BuildGround가 정한다.</summary>
+        private static bool _terrain;
+
+        /// <summary>땅 높이만큼 올린다(위가 −Z). 높이 없는 맵은 0.</summary>
+        private static Vector3 Lift(float x, float y)
+        {
+            return _terrain ? new Vector3(0f, 0f, -SurvivorForest.Height(x, y)) : Vector3.zero;
         }
 
         /// <summary>땅에서 z칸 위(월드 위쪽은 −Z).</summary>
@@ -3787,6 +3796,7 @@ namespace FireGame.Prototypes
             bool factory = _sim.Stage.Number == 3;
             bool harbor = _sim.Stage.Number == 4;
             bool night = _sim.Stage.Number == 5;
+            _terrain = forest;
             // 야시장은 밤: 해를 낮추고 푸르게, 주변광을 어둡게. 다른 스테이지로 가면 되돌린다(등불·불꽃의 additive 글로우가 밤에 산다).
             // 밤 값(맵 특색 패스): 해 0.3·주변광 (0.2,0.22,0.34)·바닥 0.22·비네트 0.55가 겹쳐 "어둡기만 하고 보기 불편"했다 → 해 0.5, 주변광 (0.34,0.36,0.5), 비네트 0.3.
             if (_sun != null)
@@ -3918,7 +3928,7 @@ namespace FireGame.Prototypes
                     if (_sim.Structures.Exists(st => st.Within(p, 1.5f))) continue;
                     int k = i / 2;
                     GameObject d = k < 4 ? StageModels.Tent(_root, k % 2 == 0 ? new Color(0.9f, 0.5f, 0.2f) : new Color(0.3f, 0.55f, 0.8f)) : k < 6 ? StageModels.Campfire(_root) : StageModels.LogPile(_root);
-                    ItemModels.Place(d, new Vector3(p.X, p.Y, 0f), 0f, k < 4 ? new Vector3(Hash01(i + 200) - 0.5f, -1f, 0f) : Vector3.down, 1f);
+                    ItemModels.Place(d, new Vector3(p.X, p.Y, 0f) + Lift(p.X, p.Y), 0f, k < 4 ? new Vector3(Hash01(i + 200) - 0.5f, -1f, 0f) : Vector3.down, 1f);
                     _ground.Add(d);
                 }
                 // 덤불과 바위(판정 없음): 길과 구조물을 피해 흩어 둔다.
@@ -3932,7 +3942,7 @@ namespace FireGame.Prototypes
                     // 덤불·바위 모델(판정 없음).
                     string decor = rock ? (i % 2 == 0 ? "Nature/rock_largeA" : "Nature/rock_smallB") : (i % 2 == 0 ? "Nature/plant_bushLarge" : "Nature/plant_bush");
                     float width = rock ? 0.9f : 1.2f;
-                    GameObject d = Models3D.Place(decor, _root, new Vector3(at.x, at.y, 0f), width, width, Hash01((i * 3) + 5) * 360f, out _);
+                    GameObject d = Models3D.Place(decor, _root, new Vector3(at.x, at.y, 0f) + Lift(at.x, at.y), width, width, Hash01((i * 3) + 5) * 360f, out _);
                     if (d != null) _ground.Add(d);
                     Models3D.Tint(d, Color.white, rock ? (System.Func<string, Color?>)RockColor : NatureColor, 1);
                 }
@@ -4047,6 +4057,8 @@ namespace FireGame.Prototypes
                     go = Models3D.Place(kinds[i % kinds.Length], _root, at, 1.3f, 1.3f, Hash01(i + 70) * 360f, out size, 2.3f);
                 }
                 if (go == null) continue;
+                // 언덕 위 건물·나무는 땅 높이만큼 올린다(숲 지형).
+                go.transform.localPosition += Lift(st.Pos.X, st.Pos.Y);
                 _models.Add(go);
                 _structModels[i] = go;
                 _structSize[i] = size;
@@ -4117,7 +4129,7 @@ namespace FireGame.Prototypes
             Structure st = _sim.Structures[i];
             Vector3 size = i < _structSize.Length && _structSize[i].z > 0f ? _structSize[i] : new Vector3(st.Half.X * 2f, st.Half.Y * 2f, RoofHeight(i));
             float x = k == 0 ? 0f : (k == 1 ? -0.28f : 0.28f) * size.x;
-            return new Vector3(st.Pos.X + x, st.Pos.Y - (size.y / 2f) - 0.04f, -size.z * 0.35f);
+            return new Vector3(st.Pos.X + x, st.Pos.Y - (size.y / 2f) - 0.04f, -size.z * 0.35f) + Lift(st.Pos.X, st.Pos.Y);
         }
 
         /// <summary>가게·창고 이름표. 판마다 동네를 새로 깔므로 다시 만든다.</summary>
@@ -4153,7 +4165,7 @@ namespace FireGame.Prototypes
                 bool stall = i < _structModels.Length && _structModels[i] != null && _structModels[i].name == "Stall";
                 float signY = stall ? st.Pos.Y + (st.Half.Y * 0.8f) : st.Pos.Y - (st.Half.Y * 0.75f);
                 float signUp = stall ? roof + 0.1f : roof + 0.45f;
-                t.transform.localPosition = new Vector3(st.Pos.X, signY, 0f) + Up(signUp);
+                t.transform.localPosition = new Vector3(st.Pos.X, signY, 0f) + Lift(st.Pos.X, st.Pos.Y) + Up(signUp);
                 t.transform.localRotation = Billboard;
                 // 간판 판: 글자 뒤 짙은 띠(가게 색 대신 읽기 쉬운 어두운 판).
                 _signBoards.Add(new Vector4(st.Pos.X, signY, signUp, Mathf.Min(st.Half.X * 2f - 0.2f, (st.Name.Length * 0.62f) + 0.5f)));
@@ -4186,7 +4198,7 @@ namespace FireGame.Prototypes
             for (int i = 0; i < _sim.Structures.Count; i++)
             {
                 Structure st = _sim.Structures[i];
-                var at = new Vector3(st.Pos.X, st.Pos.Y, 0f);
+                var at = new Vector3(st.Pos.X, st.Pos.Y, 0f) + Lift(st.Pos.X, st.Pos.Y);
                 float w = st.Half.X * 2f;
                 float h = st.Half.Y * 2f;
                 float burnt = 1f - Mathf.Clamp01(st.Integrity);
@@ -4655,7 +4667,7 @@ namespace FireGame.Prototypes
             help.gameObject.SetActive(trapped);
             if (!trapped) return;
 
-            var at = new Vector3(st.Pos.X, st.Pos.Y, 0f);
+            var at = new Vector3(st.Pos.X, st.Pos.Y, 0f) + Lift(st.Pos.X, st.Pos.Y);
             float bob = Mathf.Abs(Mathf.Sin((_time * 7f) + seed));
             float hgt = RoofHeight(seed);
             // 갇힌 사람은 지붕 앞 가장자리에 서서 좌우로 몸을 뒤집으며 손을 흔들고, 첫 창은 불빛으로 번쩍인다.

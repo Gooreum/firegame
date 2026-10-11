@@ -94,5 +94,37 @@ namespace FireGame.Prototypes.Tests
             var p = new Vec2(10f, 10f);
             Assert.Equal(p, sim.RouteAround(new Vec2(50f, 10f), p));
         }
+
+        [Fact]
+        public void Heights_HillTopsHoldBuildings_CampIsFlat_CreekIsLow_BridgeIsLevel()
+        {
+            Assert.InRange(SurvivorForest.Height(12f, 16f), 2.7f, 2.9f);   // 전망대
+            Assert.InRange(SurvivorForest.Height(12f, 28f), 2.7f, 2.9f);   // 산장
+            Assert.InRange(SurvivorForest.Height(48f, 16f), 2.3f, 2.5f);   // 숲 식당
+            Assert.Equal(0f, SurvivorForest.Height(30f, 30f));
+            Assert.True(SurvivorForest.Height(10f, SurvivorForest.CreekY) < -0.5f);
+            Assert.Equal(0f, SurvivorForest.Height(30f, SurvivorForest.CreekY));
+        }
+
+        [Fact]
+        public void Slope_UphillIsSlower_DownhillIsFaster_FlatIsOne()
+        {
+            var sim = new SurvivorSim(1, Forest);
+            var side = new Vec2(17.5f, 22f);   // 능선 동쪽 비탈
+            Assert.True(sim.SlopeSpeed(side, -1f, 0f) < 0.9f, "오르막은 느리다");
+            Assert.True(sim.SlopeSpeed(side, 1f, 0f) > 1.05f, "내리막은 빠르다");
+            Assert.Equal(1f, sim.SlopeSpeed(new Vec2(30f, 30f), 1f, 0f));
+            Assert.Equal(1f, new SurvivorSim(1, 1).SlopeSpeed(side, -1f, 0f));
+        }
+
+        [Fact]
+        public void HighGround_ReachesFarther()
+        {
+            var sim = new SurvivorSim(1, Forest);
+            sim.Player = new Vec2(30f, 30f);
+            float flat = sim.SWide;
+            sim.Player = new Vec2(12f, 20f);
+            Assert.True(sim.SWide > flat * 1.15f, $"언덕 위 {sim.SWide:F2} vs 평지 {flat:F2}");
+        }
     }
 }

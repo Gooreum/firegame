@@ -1059,6 +1059,7 @@ namespace FireGame.Prototypes.Logic
             Structures = Stage.Map();
             HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
             if (Stage.Number == 2) Bridges.AddRange(SurvivorForest.Bridges());
+            HasTerrain = Stage.Number == 2;
             PlaceManholes();
             if (Stage.Links != null)
             {
@@ -1385,7 +1386,7 @@ namespace FireGame.Prototypes.Logic
             }
             if (len > 0.01f) Facing = new Vec2(mx / Math.Max(len, 1f), my / Math.Max(len, 1f));
             // 숲도 장화는 수치형(+10%/Lv, Build.SpeedScale).
-            float speed = BaseSpeed * Build.SpeedScale;
+            float speed = BaseSpeed * Build.SpeedScale * SlopeSpeed(Player, mx, my);
             Player.X = Clamp(Player.X + (mx * speed * Dt), 0.5f, ArenaSize - 0.5f);
             Player.Y = Clamp(Player.Y + (my * speed * Dt), 0.5f, ArenaSize - 0.5f);
             // 장화: 걷는 동안 젖은 발자국을 남긴다(연출용, 한 칸마다).
@@ -1857,6 +1858,38 @@ namespace FireGame.Prototypes.Logic
             return false;
         }
 
+        /// <summary>땅 높이가 있는 맵인가(숲, 2026-10-12). 높이 물리(비탈 속도·오르막 산불·높은 데 사거리)가 켜진다.</summary>
+        public bool HasTerrain { get; private set; }
+
+        /// <summary>비탈 속도 계수: 오르막 기울기 1당 이만큼 느려지고 내리막은 그 절반만큼 빨라진다.</summary>
+        public const float SlopeDrag = 0.9f, SlopeMin = 0.5f, SlopeMax = 1.3f;
+
+        /// <summary>오르막 산불: 높이 1칸 오를 때 바람 번짐 확률 배율 +UphillFire(내리막은 절반만큼 준다, 바닥 0.5).</summary>
+        public const float UphillFire = 0.8f;
+
+        /// <summary>높은 데 사거리: 땅 높이 1칸마다 숲 무기 범위 +HeightReach.</summary>
+        public const float HeightReach = 0.12f;
+
+        /// <summary>p의 땅 높이(칸). 높이 없는 맵은 0.</summary>
+        public float GroundHeight(Vec2 p)
+        {
+            return HasTerrain ? SurvivorForest.Height(p.X, p.Y) : 0f;
+        }
+
+        /// <summary>p에서 (dx,dy) 쪽으로 걸을 때 속도 배율: 오르막은 느리고 내리막은 빠르다.</summary>
+        public float SlopeSpeed(Vec2 p, float dx, float dy)
+        {
+            if (!HasTerrain) return 1f;
+            float len = (float)Math.Sqrt((dx * dx) + (dy * dy));
+            if (len < 0.001f) return 1f;
+            const float e = 0.25f;
+            float gx = (SurvivorForest.Height(p.X + e, p.Y) - SurvivorForest.Height(p.X - e, p.Y)) / (2f * e);
+            float gy = (SurvivorForest.Height(p.X, p.Y + e) - SurvivorForest.Height(p.X, p.Y - e)) / (2f * e);
+            float grade = ((gx * dx) + (gy * dy)) / len;
+            float f = grade > 0f ? 1f - (SlopeDrag * grade) : 1f - (SlopeDrag * 0.5f * grade);
+            return Clamp(f, SlopeMin, SlopeMax);
+        }
+
         /// <summary>다리(둑 끝 둘). 숲만 채운다 — 마을 강은 기존 규칙 그대로(봇은 30,30).</summary>
         public readonly List<Bridge> Bridges = new List<Bridge>();
 
@@ -2090,6 +2123,8 @@ namespace FireGame.Prototypes.Logic
                     e.Phase += Dt;
                     if (e.Phase - (float)Math.Floor(e.Phase) >= PopperHop) speed = 0f;
                 }
+                // 땅을 걷는 몹도 비탈을 탄다(나는 몹은 그대로).
+                if (HasTerrain && e.Kind != EnemyKind.Bat && e.Kind != EnemyKind.Gull && e.Kind != EnemyKind.SkyLantern) speed *= SlopeSpeed(e.Pos, dx, dy);
                 float vx = d > 0.01f ? dx / d * speed : 0f;
                 float vy = d > 0.01f ? dy / d * speed : 0f;
                 if (e.Kind == EnemyKind.Squirrel || e.Kind == EnemyKind.Bat || e.Kind == EnemyKind.Gull || e.Kind == EnemyKind.Crab)
@@ -3039,6 +3074,12 @@ namespace FireGame.Prototypes.Logic
                         Structure next = Downwind(s);
                         // 대화재 동안 숲은 바람이 거세진다(캠프를 덮치는 산불). 감독 단계마다 더.
                         float chance = Finale ? Stage.FinaleWindChance + (PressureWindStep * FinalePressure) : WindSpreadChance;
+                        // 산불은 오르막으로 잘 번진다(높이 차 1칸마다 +UphillFire, 내리막은 줄어든다).
+                        if (next != null && HasTerrain)
+                        {
+                            float dh = GroundHeight(next.Pos) - GroundHeight(s.Pos);
+                            chance *= Math.Max(0.5f, dh > 0f ? 1f + (UphillFire * dh) : 1f + (UphillFire * 0.5f * dh));
+                        }
                         if (next != null && Rand() < chance) Ignite(next, 0.3f);
                     }
                 }

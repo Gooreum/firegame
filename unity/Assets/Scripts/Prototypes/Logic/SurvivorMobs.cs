@@ -427,6 +427,7 @@ namespace FireGame.Prototypes.Logic
             float dx = chase.X - e.Pos.X;
             float dy = chase.Y - e.Pos.Y;
             float d = (float)Math.Sqrt((dx * dx) + (dy * dy));
+            if (e.Kind != EnemyKind.FireBalloon) speed *= SlopeSpeed(e.Pos, dx, dy);
             float vx = d > 0.01f ? dx / d * speed : 0f;
             float vy = d > 0.01f ? dy / d * speed : 0f;
             e.Pos.X += (vx + e.Knock.X) * Dt;
