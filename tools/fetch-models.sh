@@ -26,7 +26,10 @@ trap 'rm -rf "$WORK"' EXIT
 
 HOUSES="building-type-a building-type-c building-type-e building-type-h building-type-k building-type-m building-type-p building-type-t"
 CARS="sedan suv taxi van hatchback-sports firetruck"
-NATURE="tree_default tree_oak tree_fat tree_pineRoundA tree_pineTallA tree_cone plant_bush plant_bushLarge rock_largeA rock_smallB"
+# 숲 3D 지형(2026-10-12, docs §26): 땅 타일·개울·다리·바위 언덕·장식
+NATURE="tree_default tree_oak tree_fat tree_pineRoundA tree_pineTallA tree_cone plant_bush plant_bushLarge rock_largeA rock_smallB \
+ground_grass ground_pathTile cliff_block_rock bridge_wood \
+grass grass_large grass_leafs flower_redA flower_yellowA flower_purpleA stone_smallA stone_smallC stone_largeA mushroom_red mushroom_tanGroup stump_round log"
 INDUSTRIAL="building-b building-c building-e building-f building-k building-l building-m building-r detail-tank detail-tank-large shipping-container-a shipping-container-b shipping-container-c water-tower"
 # 이름=구글 드라이브 파일 ID (Quaternius FBX 폴더)
 PEOPLE="Worker_Male=1rS4HxTBJKur-T_BZRDsvv68J2zr278wn Worker_Female=1-l5q7N7Q7ggdALBt_FfZszpf2otp3-QH Casual_Male=1Ls3XUkHqIcz3HL9JaW-dNWNnLiQLdkrs Casual_Female=1AYI79-CtvncVV0DW0Mg6_9hRKpX8Y1Pe OldClassy_Male=1mPqpDpTXYlFNZEVaf2rx39_o65k2-AhW"

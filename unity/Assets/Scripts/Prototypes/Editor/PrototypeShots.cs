@@ -141,6 +141,9 @@ namespace FireGame.Prototypes.EditorTools
             failures += SurvivorShot(dir, "c77_market_row", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(30f, 20.5f, 0f), 11f), 5);
             failures += SurvivorShot(dir, "c77b_market_food", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(15f, 39f, 0f), 6f), 5);
             // 같은 종류 건물도 이름별 앞마당으로 구별되는가(숲 통나무집·항구 창고·공단 공장).
+            // 숲 3D 지형(2026-10-12, docs §26): 개울과 다리 둘, 북서 바위 언덕. 다리 앞에서 북쪽 몹이 다리로 몰린다.
+            failures += SurvivorShot(dir, "t01_forest_creek", view => view.Sim.Time > 30f, 0, false, view => view.Frame(new Vector3(33f, 40f, 0f), 12f), 2, null, true, true);
+            failures += SurvivorShot(dir, "t02_forest_rock", view => view.Sim.Time > 2f, 0, false, view => view.Frame(new Vector3(12f, 52f, 0f), 12f), 2);
             failures += SurvivorShot(dir, "c78_forest_yards", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(17f, 25f, 0f), 7f), 2);
             failures += SurvivorShot(dir, "c79_harbor_yards", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(30f, 33f, 0f), 11f), 4);
             failures += SurvivorShot(dir, "c80_factory_yards", view => view.Sim.Time > 3.5f, 0, false, view => view.Frame(new Vector3(14f, 36f, 0f), 7f), 3);

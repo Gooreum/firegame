@@ -33,6 +33,8 @@ namespace FireGame.Prototypes.EditorTools
             m.importCameras = false;
             m.importLights = false;
             m.importBlendShapes = false;
+            // 숲 3D 땅(ForestTerrain)이 Nature 타일을 런타임에 메시 하나로 합친다: 폰에선 읽기 가능해야 CombineMeshes가 된다.
+            m.isReadable = assetPath.Contains("/Nature/");
             m.importAnimation = Person;
             m.animationType = Person ? ModelImporterAnimationType.Legacy : ModelImporterAnimationType.None;
         }

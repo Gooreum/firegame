@@ -20,7 +20,8 @@ namespace FireGame.Prototypes
         private const float CameraSize = 9f;
 
         /// <summary>월드는 수직에서 이만큼 기운(땅에서 65°) 원근 카메라가 화면 해상도(세로 최대 MaxWorldHeight)로 그린다.</summary>
-        private const float Tilt = 25f;
+        // 25 → 35(2026-10-12 숲 3D 지형): 절벽·개울 옆면이 보이게 눕힌다. 모든 스테이지 같은 각.
+        private const float Tilt = 35f;
         private const float WorldFov = 30f;
         private const int MaxWorldHeight = 1080;
 
@@ -3797,20 +3798,25 @@ namespace FireGame.Prototypes
             if (_worldCam != null) _worldCam.backgroundColor = night ? new Color(0.04f, 0.04f, 0.09f) : new Color(0.05f, 0.05f, 0.07f);
             int size = (int)SurvivorSim.ArenaSize;
             float mid = size / 2f;
-            // 바닥은 스테이지 전체를 그린 한 장(풀결·도로·광장·흙길이 이어진다). 해 그림자를 받는 Lit 쿼드에 깐다.
-            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            floor.name = "Ground";
-            Collider floorCollider = floor.GetComponent<Collider>();
-            if (Application.isPlaying) Object.Destroy(floorCollider);
-            else Object.DestroyImmediate(floorCollider);
-            floor.transform.SetParent(_root, false);
-            floor.transform.localPosition = new Vector3(mid, mid, 0.1f);
-            floor.transform.localScale = new Vector3(size, size, 1f);
-            var floorMat = new Material(Models3D.LitShader) { name = "GroundLit" };
-            floorMat.SetTexture("_BaseMap", GroundArt.Paint(_sim.Stage.Number, size, mid, SurvivorForest.PathHalf).texture);
-            floorMat.SetFloat("_Smoothness", 0f);
-            floor.GetComponent<MeshRenderer>().sharedMaterial = floorMat;
-            _ground.Add(floor);
+            // 숲(2026-10-12): 그린 바닥 대신 Nature Kit 3D 땅(개울·다리·바위 언덕, ForestTerrain).
+            if (forest) _ground.AddRange(ForestTerrain.Build(_root, _sim.Structures));
+            else
+            {
+                // 바닥은 스테이지 전체를 그린 한 장(풀결·도로·광장·흙길이 이어진다). 해 그림자를 받는 Lit 쿼드에 깐다.
+                GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                floor.name = "Ground";
+                Collider floorCollider = floor.GetComponent<Collider>();
+                if (Application.isPlaying) Object.Destroy(floorCollider);
+                else Object.DestroyImmediate(floorCollider);
+                floor.transform.SetParent(_root, false);
+                floor.transform.localPosition = new Vector3(mid, mid, 0.1f);
+                floor.transform.localScale = new Vector3(size, size, 1f);
+                var floorMat = new Material(Models3D.LitShader) { name = "GroundLit" };
+                floorMat.SetTexture("_BaseMap", GroundArt.Paint(_sim.Stage.Number, size, mid, SurvivorForest.PathHalf).texture);
+                floorMat.SetFloat("_Smoothness", 0f);
+                floor.GetComponent<MeshRenderer>().sharedMaterial = floorMat;
+                _ground.Add(floor);
+            }
             // 숲은 나무 사이로 햇빛 띠가 더 진하다.
             Material screen = _worldScreen.GetComponent<MeshRenderer>().sharedMaterial;
             if (screen.HasProperty("_ShaftColor")) screen.SetColor("_ShaftColor", new Color(1f, 0.92f, 0.7f, forest ? 0.1f : 0.06f));
