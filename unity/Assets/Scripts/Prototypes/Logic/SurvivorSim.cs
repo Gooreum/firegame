@@ -1058,6 +1058,7 @@ namespace FireGame.Prototypes.Logic
             Guardian = Stage.Guardian;
             Structures = Stage.Map();
             HasWater = Structures.Exists(s => s.Kind == StructureKind.Water);
+            if (Stage.Number == 2) Bridges.AddRange(SurvivorForest.Bridges());
             PlaceManholes();
             if (Stage.Links != null)
             {
@@ -1856,6 +1857,45 @@ namespace FireGame.Prototypes.Logic
             return false;
         }
 
+        /// <summary>다리(둑 끝 둘). 숲만 채운다 — 마을 강은 기존 규칙 그대로(봇은 30,30).</summary>
+        public readonly List<Bridge> Bridges = new List<Bridge>();
+
+        /// <summary>from→to가 개울(바위 언덕 말고)을 지나면 다리로 돌아간다: 가까운 둑 끝까지, 닿았거나 이미 다리 위면 건너편 끝까지(2026-10-12, docs §26).</summary>
+        public Vec2 RouteAround(Vec2 from, Vec2 to)
+        {
+            if (Bridges.Count == 0 || !CrossesWater(from, to, false)) return to;
+            Vec2 n = to;
+            Vec2 f = to;
+            bool on = false;
+            float bestD = float.MaxValue;
+            foreach (Bridge b in Bridges)
+            {
+                // 끝은 둑으로 고른다(다리 가운데 기준 같은 쪽): 가까운 끝 = from 쪽, 먼 끝 = to 쪽.
+                // 직선이 다리 틈을 지나면 건너편 끝도 "물을 안 건넌다"로 보이니 물로 재지 않는다.
+                Vec2 near = SameSide(b, from, b.A) ? b.A : b.B;
+                Vec2 far = SameSide(b, to, b.A) ? b.A : b.B;
+                // 다리 위(두 끝 사이, 폭 안)면 그 다리로 to 쪽 끝까지 간다 — 가운데를 넘는 순간 둑이 뒤집혀 흔들리지 않게.
+                bool onThis = Math.Abs(from.X - b.A.X) < SurvivorForest.BridgeHalf && from.DistanceTo(b.A) + from.DistanceTo(b.B) <= b.A.DistanceTo(b.B) + 0.3f;
+                float d = onThis ? -1f : from.DistanceTo(near) + far.DistanceTo(to);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    n = near;
+                    f = far;
+                    on = onThis;
+                }
+            }
+            return on || from.DistanceTo(n) < 1f ? f : n;
+        }
+
+        /// <summary>p와 end가 다리 가운데를 기준으로 같은 쪽인가.</summary>
+        private static bool SameSide(Bridge b, Vec2 p, Vec2 end)
+        {
+            float mx = (b.A.X + b.B.X) / 2f;
+            float my = (b.A.Y + b.B.Y) / 2f;
+            return ((p.X - mx) * (end.X - mx)) + ((p.Y - my) * (end.Y - my)) >= 0f;
+        }
+
         /// <summary>강이 있는 맵인가(생성 때 한 번 센다).</summary>
         public bool HasWater { get; private set; }
 
@@ -1878,10 +1918,16 @@ namespace FireGame.Prototypes.Logic
         /// <summary>a→b 선분이 물 사각형을 지나는가(slab 검사). 건물 불과 바람 번짐은 강을 못 건넌다.</summary>
         private bool CrossesWater(Vec2 a, Vec2 b)
         {
+            return CrossesWater(a, b, true);
+        }
+
+        /// <summary>cliffs가 false면 바위 언덕(Cliff)은 빼고 개울·강만 본다(다리 길찾기).</summary>
+        public bool CrossesWater(Vec2 a, Vec2 b, bool cliffs)
+        {
             if (!HasWater) return false;
             foreach (Structure s in Structures)
             {
-                if (s.Kind != StructureKind.Water) continue;
+                if (s.Kind != StructureKind.Water || (!cliffs && s.Cliff)) continue;
                 float t0 = 0f;
                 float t1 = 1f;
                 if (!Slab(a.X, b.X - a.X, s.Pos.X - s.Half.X, s.Pos.X + s.Half.X, ref t0, ref t1)) continue;
@@ -2031,6 +2077,8 @@ namespace FireGame.Prototypes.Logic
                         continue;
                     }
                 }
+                // 땅을 걷는 몹은 다리로 돈다(숲 개울, 물 밀어내기 예외 목록과 같다).
+                if (Bridges.Count > 0 && !e.Seeker && e.Kind != EnemyKind.Bat && e.Kind != EnemyKind.Gull && e.Kind != EnemyKind.Crab && e.Kind != EnemyKind.SkyLantern) chase = RouteAround(e.Pos, chase);
                 float dx = chase.X - e.Pos.X;
                 float dy = chase.Y - e.Pos.Y;
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));

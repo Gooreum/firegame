@@ -422,6 +422,8 @@ namespace FireGame.Prototypes.Logic
                 }
             }
 
+            // 숲 개울: 땅을 걷는 마을 몹은 다리로 돈다(불풍선은 난다).
+            if (e.Kind != EnemyKind.FireBalloon) chase = RouteAround(e.Pos, chase);
             float dx = chase.X - e.Pos.X;
             float dy = chase.Y - e.Pos.Y;
             float d = (float)Math.Sqrt((dx * dx) + (dy * dy));

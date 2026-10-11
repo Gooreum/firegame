@@ -33,6 +33,9 @@ namespace FireGame.Prototypes.Logic
         /// <summary>반 폭·반 높이.</summary>
         public Vec2 Half;
 
+        /// <summary>물 사각형 중 바위 언덕(절벽, 2026-10-12 숲 3D 지형): 못 지나가고 불도 못 넘지만 다리는 없다(다리 길찾기에서 뺀다).</summary>
+        public bool Cliff;
+
         /// <summary>0이면 안 탄다. 0~1 불 세기.</summary>
         public float Fire;
 

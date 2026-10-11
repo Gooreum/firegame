@@ -315,7 +315,9 @@ namespace FireGame.Prototypes.Logic
             {
                 // 강(마을): 목표가 건너편이면 다리 가운데(30,30)를 먼저 밟는다. 다리 줄(|y-30|<3.5)에 있으면 그냥 간다. 바다(항구)엔 다리가 없다.
                 float mid = SurvivorSim.ArenaSize / 2f;
-                if (_sim.HasWater && !_sim.Stage.Sea && Math.Sign(goal.Value.X - mid) != Math.Sign(p.X - mid) && Math.Abs(p.Y - mid) > 3.5f) goal = new Vec2(mid, mid);
+                // 숲 개울은 다리 둘(RouteAround).
+                if (_sim.Bridges.Count > 0) goal = _sim.RouteAround(p, goal.Value);
+                else if (_sim.HasWater && !_sim.Stage.Sea && Math.Sign(goal.Value.X - mid) != Math.Sign(p.X - mid) && Math.Abs(p.Y - mid) > 3.5f) goal = new Vec2(mid, mid);
                 float dx = goal.Value.X - p.X;
                 float dy = goal.Value.Y - p.Y;
                 float d = (float)Math.Sqrt((dx * dx) + (dy * dy));

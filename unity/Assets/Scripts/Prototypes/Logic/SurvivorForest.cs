@@ -26,6 +26,15 @@ namespace FireGame.Prototypes.Logic
         };
 
         /// <summary>무더기 안에서 나무 하나하나의 자리(중심에서 떨어진 칸).</summary>
+        /// <summary>개울(2026-10-12 숲 3D 지형, docs §26): 동서로 가로지르는 줄의 가운데 y·반폭, 다리 반폭. 숲 첫 줄(35.5)과 둘째 줄(46) 사이.</summary>
+        public const float CreekY = 40.5f, CreekHalf = 1.5f, BridgeHalf = 1.5f;
+
+        /// <summary>다리 가운데 x: 십자 흙길(30)과 동쪽(45).</summary>
+        public static readonly float[] BridgeXs = { 30f, 45f };
+
+        /// <summary>북서 바위 언덕(높이 2칸 절벽, 못 올라간다).</summary>
+        public const float RockX0 = 0f, RockX1 = 14f, RockY0 = 51f, RockY1 = 60f;
+
         private static readonly float[] Offsets =
         {
             0f, 0f, 1.8f, 0.6f, -1.6f, 1.2f, 0.7f, -1.8f, -1.3f, -1.4f, 2.2f, -1.6f, -2.4f, -0.2f,
@@ -53,6 +62,23 @@ namespace FireGame.Prototypes.Logic
             Add(list, StructureKind.Car, "캠핑카", 26f, 23f, 1f, 0.55f);
             Add(list, StructureKind.Car, "캠핑카", 34f, 23f, 1f, 0.55f);
 
+            // 개울: 다리 자리만 비우고 세 토막. 땅 몹·소방관은 못 건너고(다리로 돈다) 산불도 못 넘는다.
+            float x0 = 0f;
+            foreach (float bx in BridgeXs)
+            {
+                Creek(list, x0, bx - BridgeHalf);
+                x0 = bx + BridgeHalf;
+            }
+            Creek(list, x0, SurvivorSim.ArenaSize);
+            list.Add(new Structure
+            {
+                Kind = StructureKind.Water,
+                Name = "바위 언덕",
+                Cliff = true,
+                Pos = new Vec2((RockX0 + RockX1) / 2f, (RockY0 + RockY1) / 2f),
+                Half = new Vec2((RockX1 - RockX0) / 2f, (RockY1 - RockY0) / 2f),
+            });
+
             var mid = new Vec2(SurvivorSim.ArenaSize / 2f, SurvivorSim.ArenaSize / 2f);
             for (int c = 0; c < Clumps.Length; c += 2)
             {
@@ -63,12 +89,26 @@ namespace FireGame.Prototypes.Logic
                     if (at.DistanceTo(mid) < 7.5f) continue;
                     if (Math.Abs(at.X - mid.X) < PathHalf + 0.7f || Math.Abs(at.Y - mid.Y) < PathHalf + 0.7f) continue;
                     if (at.X < 1f || at.Y < 1f || at.X > SurvivorSim.ArenaSize - 1f || at.Y > SurvivorSim.ArenaSize - 1f) continue;
-                    if (list.Exists(s => s.Kind != StructureKind.Tree && s.Within(at, 1.4f))) continue;
+                    if (list.Exists(s => s.Kind == StructureKind.Water && s.Within(at, 0.8f))) continue;
+                    if (list.Exists(s => s.Kind != StructureKind.Tree && s.Kind != StructureKind.Water && s.Within(at, 1.4f))) continue;
                     if (list.Exists(s => s.Kind == StructureKind.Tree && s.Pos.DistanceTo(at) < 1.2f)) continue;
                     Add(list, StructureKind.Tree, "나무", at.X, at.Y, 0.6f, 0.6f);
                 }
             }
             return list;
+        }
+
+        /// <summary>다리 끝 둘(남·북 둑). 땅 몹·봇 길찾기(SurvivorSim.RouteAround)용.</summary>
+        public static List<Bridge> Bridges()
+        {
+            var list = new List<Bridge>();
+            foreach (float bx in BridgeXs) list.Add(new Bridge { A = new Vec2(bx, CreekY - CreekHalf - 0.8f), B = new Vec2(bx, CreekY + CreekHalf + 0.8f) });
+            return list;
+        }
+
+        private static void Creek(List<Structure> list, float xa, float xb)
+        {
+            list.Add(new Structure { Kind = StructureKind.Water, Name = "개울", Pos = new Vec2((xa + xb) / 2f, CreekY), Half = new Vec2((xb - xa) / 2f, CreekHalf) });
         }
 
         private static void House(List<Structure> list, string name, float x, float y, int residents)
@@ -80,5 +120,12 @@ namespace FireGame.Prototypes.Logic
         {
             list.Add(new Structure { Kind = kind, Name = name, Pos = new Vec2(x, y), Half = new Vec2(hx, hy) });
         }
+    }
+
+    /// <summary>다리: 둑 끝 둘(A 남, B 북).</summary>
+    public struct Bridge
+    {
+        public Vec2 A;
+        public Vec2 B;
     }
 }
